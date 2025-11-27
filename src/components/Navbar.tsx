@@ -1,0 +1,221 @@
+
+import React, { useState } from 'react';
+import { Logo } from './Logo';
+import { ViewType } from '../App';
+import { useLanguage } from '../contexts/LanguageContext';
+import { Language } from '../services/translations';
+
+interface NavbarProps {
+    currentView: ViewType;
+    setView: (view: ViewType) => void;
+    isLoggedIn: boolean;
+    isAdmin?: boolean; 
+    userCredits?: number; 
+    isProUser?: boolean; 
+    onLogin: () => void;
+    onLogout: () => void;
+    onGoProClick: () => void; 
+    onOpenHelp: () => void;
+}
+
+export const Navbar: React.FC<NavbarProps> = ({ currentView, setView, isLoggedIn, isAdmin, userCredits, isProUser, onLogin, onLogout, onGoProClick, onOpenHelp }) => {
+    const { language, setLanguage, t } = useLanguage();
+    const [isLangOpen, setIsLangOpen] = useState(false);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+    const languages: { code: Language; label: string; flag: string }[] = [
+        { code: 'it', label: 'ITA', flag: '🇮🇹' },
+        { code: 'en', label: 'ENG', flag: '🇬🇧' },
+        { code: 'fr', label: 'FRA', flag: '🇫🇷' },
+        { code: 'es', label: 'ESP', flag: '🇪🇸' },
+    ];
+
+    const navLinkClass = (view: ViewType) => `
+        relative cursor-pointer px-3 py-2 text-sm font-bold tracking-wide uppercase transition-all duration-300 group
+        ${currentView === view 
+            ? 'text-white' 
+            : 'text-white/70 hover:text-white'}
+    `;
+
+    const ActiveIndicator = ({ isActive }: { isActive: boolean }) => (
+        <span className={`absolute -bottom-1 left-1/2 -translate-x-1/2 h-0.5 bg-brand-accent transition-all duration-300 shadow-[0_0_10px_rgba(45,212,191,0.8)] ${isActive ? 'w-full opacity-100' : 'w-0 opacity-0 group-hover:w-2/3 group-hover:opacity-50'}`}></span>
+    );
+
+    return (
+        <nav className="fixed w-full z-50 top-0 left-0 border-b border-white/10 bg-[#0f172a]/80 backdrop-blur-xl transition-all duration-300 shadow-2xl">
+            <div className="max-w-[1800px] mx-auto px-6 h-20 flex items-center justify-between">
+                
+                {/* --- LEFT: BRANDING --- */}
+                <div className="flex items-center gap-3 cursor-pointer group shrink-0" onClick={() => setView('landing')}>
+                    <Logo className="w-10 h-10 relative z-10 transition-transform duration-700 ease-out group-hover:rotate-[360deg] filter drop-shadow-[0_0_8px_rgba(45,212,191,0.5)]" />
+                    <div className="flex flex-col justify-center">
+                        <div className="flex items-baseline gap-2">
+                            <span className="font-display font-black text-xl tracking-tight text-white leading-none group-hover:text-brand-accent transition-colors">
+                                Sonific<span className="text-brand-accent">A.R.T.</span>
+                            </span>
+                            <span className="text-[10px] font-mono text-brand-text-secondary/70 border border-white/10 px-1.5 rounded bg-white/5">
+                                v1.0
+                            </span>
+                        </div>
+                        <span className="text-[8px] uppercase tracking-[0.2em] text-brand-text-secondary hidden sm:block group-hover:text-white transition-colors">
+                            Framework Deterministico
+                        </span>
+                    </div>
+                </div>
+
+                {/* --- CENTER: MAIN NAVIGATION --- */}
+                <div className="hidden lg:flex items-center justify-center gap-8">
+                    {/* Home Link */}
+                    <button onClick={() => setView('landing')} className={navLinkClass('landing')}>
+                        {t.nav.home}
+                        <ActiveIndicator isActive={currentView === 'landing'} />
+                    </button>
+
+                    {/* Always Visible Request Access */}
+                    <button onClick={onGoProClick} className={`${navLinkClass('landing')} text-brand-accent hover:text-brand-accent-light flex items-center gap-2`}>
+                        <i className="fas fa-crown text-xs"></i>
+                        Richiedi Accesso PRO
+                        <ActiveIndicator isActive={false} />
+                    </button>
+
+                    {isLoggedIn ? (
+                        <>
+                            <button onClick={() => setView('sonification')} className={navLinkClass('sonification')}>
+                                {t.nav.sonify}
+                                <ActiveIndicator isActive={currentView === 'sonification'} />
+                            </button>
+                            <button onClick={() => setView('showcase')} className={navLinkClass('showcase')}>
+                                {t.nav.showcase}
+                                <ActiveIndicator isActive={currentView === 'showcase'} />
+                            </button>
+                            <button onClick={() => setView('verification')} className={navLinkClass('verification')}>
+                                {t.nav.verify}
+                                <ActiveIndicator isActive={currentView === 'verification'} />
+                            </button>
+                            <button onClick={() => setView('dashboard')} className={navLinkClass('dashboard')}>
+                                {t.nav.dashboard}
+                                <ActiveIndicator isActive={currentView === 'dashboard'} />
+                            </button>
+                            {isAdmin && (
+                                <button onClick={() => setView('admin')} className={`${navLinkClass('admin')} text-red-400 hover:text-red-300`}>
+                                    {t.nav.admin}
+                                    <ActiveIndicator isActive={currentView === 'admin'} />
+                                </button>
+                            )}
+                        </>
+                    ) : (
+                        // LOGGED OUT
+                        <button onClick={() => setView('showcase')} className={navLinkClass('showcase')}>
+                            {t.nav.showcase}
+                            <ActiveIndicator isActive={currentView === 'showcase'} />
+                        </button>
+                    )}
+                </div>
+
+                {/* --- RIGHT: ACTIONS --- */}
+                <div className="flex items-center gap-4 shrink-0">
+                    
+                    <button onClick={onOpenHelp} className="text-white/70 hover:text-brand-accent transition-colors" title="Guida Framework">
+                        <i className="fas fa-book-open text-lg"></i>
+                    </button>
+
+                    {/* Lang Selector Compact */}
+                    <div className="relative group">
+                        <button className="text-xs font-bold text-white/70 hover:text-white uppercase flex items-center gap-1">
+                            {language} <i className="fas fa-chevron-down text-[8px]"></i>
+                        </button>
+                        <div className="absolute top-full right-0 mt-2 w-24 bg-[#1e293b] border border-white/10 rounded shadow-xl overflow-hidden hidden group-hover:block pt-1">
+                            {languages.map((lang) => (
+                                <button
+                                    key={lang.code}
+                                    onClick={() => setLanguage(lang.code)}
+                                    className="w-full text-left px-3 py-2 text-xs text-white/80 hover:bg-white/10 hover:text-white"
+                                >
+                                    {lang.flag} {lang.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="h-6 w-px bg-white/20 mx-2 hidden sm:block"></div>
+
+                    {!isLoggedIn ? (
+                        <button 
+                            onClick={onLogin}
+                            className="hidden sm:block bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-wider px-6 py-2.5 rounded-full border border-white/20 transition-all hover:shadow-[0_0_15px_rgba(255,255,255,0.1)]"
+                        >
+                            {t.nav.login}
+                        </button>
+                    ) : (
+                        <div className="flex items-center gap-4">
+                            {/* CREDIT COUNTER */}
+                            <div 
+                                className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border backdrop-blur-md ${
+                                    isProUser ? 'bg-gradient-to-r from-yellow-500/20 to-amber-600/20 border-yellow-500/50 shadow-[0_0_10px_rgba(234,179,8,0.2)]' : 
+                                    (userCredits && userCredits > 0) ? 'bg-green-500/20 border-green-500/50' : 'bg-red-500/20 border-red-500/50'
+                                }`}
+                                title={isProUser ? "Crediti Illimitati" : `Crediti rimanenti: ${userCredits}`}
+                            >
+                                <i className={`fas ${isProUser ? 'fa-infinity' : 'fa-coins'} ${isProUser ? 'text-yellow-400' : 'text-white'} text-xs`}></i>
+                                <span className="text-xs font-bold font-mono text-white">
+                                    {isProUser ? 'PRO' : userCredits}
+                                </span>
+                            </div>
+
+                            <button 
+                                onClick={() => setView('profile')}
+                                className="hidden sm:flex w-9 h-9 rounded-full bg-gradient-to-br from-brand-accent to-purple-600 items-center justify-center text-white shadow-lg hover:scale-110 transition-transform border border-white/20"
+                            >
+                                <i className="fas fa-user text-xs"></i>
+                            </button>
+                            <button onClick={onLogout} className="hidden sm:block text-white/60 hover:text-red-400 transition-colors text-lg ml-2">
+                                <i className="fas fa-sign-out-alt"></i>
+                            </button>
+                        </div>
+                    )}
+
+                    <button 
+                        className="lg:hidden ml-2 text-white focus:outline-none"
+                        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                    >
+                        <i className={`fas ${isMobileMenuOpen ? 'fa-times' : 'fa-bars'} text-xl`}></i>
+                    </button>
+                </div>
+            </div>
+
+            {/* Mobile Menu */}
+            {isMobileMenuOpen && (
+                <div className="lg:hidden bg-[#0f172a] border-b border-white/10 animate-fade-in shadow-2xl absolute w-full left-0 top-20 z-50">
+                    <div className="p-4 space-y-2">
+                        <button onClick={() => { setView('landing'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">
+                            {t.nav.home}
+                        </button>
+                        <button onClick={() => { onGoProClick(); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-brand-accent font-bold bg-white/5 rounded-lg border border-brand-accent/20">
+                            Richiedi Accesso PRO
+                        </button>
+                        <button onClick={() => { setView('showcase'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">
+                            {t.nav.showcase}
+                        </button>
+                        {isLoggedIn && (
+                            <>
+                                <button onClick={() => { setView('sonification'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">{t.nav.sonify}</button>
+                                <button onClick={() => { setView('verification'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">{t.nav.verify}</button>
+                                <button onClick={() => { setView('dashboard'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">{t.nav.dashboard}</button>
+                                <div className="px-4 py-3 text-sm text-gray-400 flex items-center gap-2">
+                                    <i className="fas fa-coins text-brand-accent"></i>
+                                    Crediti: <span className="text-white font-mono">{isProUser ? 'Infiniti' : userCredits}</span>
+                                </div>
+                                <button onClick={() => { onLogout(); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-red-400 font-bold hover:bg-white/5 rounded-lg">Logout</button>
+                            </>
+                        )}
+                        {!isLoggedIn && (
+                            <button onClick={() => { onLogin(); setIsMobileMenuOpen(false); }} className="w-full text-center mt-4 bg-brand-accent text-brand-primary font-bold py-3 rounded-lg shadow-lg">
+                                {t.nav.login}
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
+        </nav>
+    );
+};

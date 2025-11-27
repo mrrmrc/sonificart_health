@@ -1,0 +1,20 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  
+  # Permetti l'accesso alla cartella API senza reindirizzamenti
+  RewriteRule ^api/ - [L,NC]
+
+  # Se il file richiesto esiste, servilo direttamente (immagini, js, css)
+  RewriteCond %{REQUEST_FILENAME} -f
+  RewriteRule ^ - [L]
+
+  # Altrimenti, reindirizza tutto a index.html (per React Router)
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+# Forza i MIME type corretti per evitare errori di caricamento moduli
+<IfModule mod_mime.c>
+  AddType application/javascript .js
+  AddType text/css .css
+</IfModule>
