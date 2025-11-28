@@ -1,11 +1,10 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { ImageUploader } from './components/ImageUploader';
 import { ConfigPanel } from './components/ConfigPanel';
 import { ProcessingView } from './components/ProcessingView';
 import { ResultsDashboard } from './components/ResultsDashboard';
 import { SonificationResult, ConfigSettings, ProcessingStep, Paradigm, ScanPatternOverride, User } from './types';
 import { sonifyImage, sonifyImageArtistic, sonifyImageHybrid } from './services/sonificationService';
-import { parseSacContainer } from './services/sacService';
 import { ParadigmToggle } from './components/ParadigmToggle';
 import { ImagePreview } from './components/ImagePreview';
 import { VerificationPortal } from './components/VerificationPortal';
@@ -94,6 +93,9 @@ export default function App() {
     const [oscClient, setOscClient] = useState<OSC | null>(null);
     const [oscStatus, setOscStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
     const [oscError, setOscError] = useState<string | null>(null);
+
+    // Helper: Is Unlimited?
+    const isUnlimited = user?.isPro || user?.isAdmin;
 
     useEffect(() => {
         const checkUser = async () => {
@@ -188,9 +190,9 @@ export default function App() {
             return;
         }
 
-        const creditCost = paradigm === 'scientific' ? 1 : 2;
+        const creditCost = isUnlimited ? 0 : (paradigm === 'scientific' ? 1 : 2);
 
-        if (!user.isPro && user.credits < creditCost) {
+        if (!isUnlimited && user.credits < creditCost) {
             const needed = creditCost;
             alert(`Crediti insufficienti. Questa operazione richiede ${needed} crediti, ma ne hai solo ${user.credits}. Richiedi l'accesso per continuare a creare senza limiti.`);
             setIsRequestAccessOpen(true);
@@ -257,7 +259,7 @@ export default function App() {
                 isLoggedIn={!!user}
                 isAdmin={user?.isAdmin}
                 userCredits={user?.credits}
-                isProUser={user?.isPro}
+                isProUser={isUnlimited}
                 onLogin={() => setIsLoginModalOpen(true)}
                 onLogout={async () => {
                     await api.logout();
@@ -330,7 +332,11 @@ export default function App() {
                                                             <div className="w-6 h-6 rounded bg-brand-accent text-black flex items-center justify-center text-xs font-bold">1</div>
                                                             Seleziona Paradigma (Lente Interpretativa)
                                                         </h3>
-                                                        <ParadigmToggle selectedParadigm={paradigm} onParadigmChange={handleParadigmChange} />
+                                                        <ParadigmToggle
+                                                            selectedParadigm={paradigm}
+                                                            onParadigmChange={handleParadigmChange}
+                                                            isPro={isUnlimited}
+                                                        />
                                                     </div>
 
                                                     <div className="border-t border-white/10 pt-6">
@@ -355,9 +361,20 @@ export default function App() {
                                                         <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
                                                             <div className="w-6 h-6 rounded bg-white text-black flex items-center justify-center text-xs font-bold">3</div>
                                                             Parametri Algoritmo
-                                                            <span className="ml-auto text-xs bg-brand-accent/10 text-brand-accent px-2 py-0.5 rounded">
-                                                                Costo: {paradigm === 'scientific' ? '1 CR' : '2 CR'}
-                                                            </span>
+
+                                                            {/* --- MODIFICA QUI: Nascondi se Pro/Admin --- */}
+                                                            {!isUnlimited && (
+                                                                <span className="ml-auto text-xs bg-brand-accent/10 text-brand-accent px-2 py-0.5 rounded">
+                                                                    Costo: {paradigm === 'scientific' ? '1 CR' : '2 CR'}
+                                                                </span>
+                                                            )}
+                                                            {isUnlimited && (
+                                                                <span className="ml-auto text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded flex items-center gap-1">
+                                                                    <i className="fas fa-infinity"></i> Licenza Attiva
+                                                                </span>
+                                                            )}
+                                                            {/* ------------------------------------------- */}
+
                                                         </h3>
                                                         <ConfigPanel
                                                             config={config}
@@ -369,14 +386,14 @@ export default function App() {
                                                             scanPatternOverride={scanPatternOverride}
                                                             onScanPatternOverrideChange={setScanPatternOverride}
                                                             onGoProClick={() => setIsRequestAccessOpen(true)}
-                                                            isProUser={!!user?.isPro}
+                                                            isProUser={!!isUnlimited}
                                                         />
                                                     </div>
                                                 ) : (
                                                     <ParadigmInfo
                                                         paradigm={paradigm}
                                                         onGoPro={() => setIsRequestAccessOpen(true)}
-                                                        isProUser={!!user?.isPro}
+                                                        isProUser={!!isUnlimited}
                                                     />
                                                 )}
                                             </div>

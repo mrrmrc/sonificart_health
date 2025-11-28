@@ -4,26 +4,16 @@ import { Paradigm } from '../types';
 interface ParadigmToggleProps {
   selectedParadigm: Paradigm;
   onParadigmChange: (paradigm: Paradigm) => void;
-  isUnlimited?: boolean; // Nuova prop opzionale
+  isPro?: boolean; // Nuova proprietà per capire se l'utente è PRO/Admin
 }
 
-export const ParadigmToggle: React.FC<ParadigmToggleProps> = ({ selectedParadigm, onParadigmChange, isUnlimited = false }) => {
+export const ParadigmToggle: React.FC<ParadigmToggleProps> = ({ selectedParadigm, onParadigmChange, isPro = false }) => {
   const getButtonClass = (paradigm: Paradigm) => {
     const base = "w-full py-2 px-4 text-sm font-bold rounded-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-brand-secondary flex items-center justify-center";
     if (paradigm === selectedParadigm) {
       return `${base} bg-brand-accent text-brand-primary shadow-lg`;
     }
     return `${base} bg-brand-primary/50 text-brand-text-secondary hover:bg-brand-secondary/70`;
-  };
-
-  // Helper per mostrare il costo o l'icona
-  const renderCostBadge = (cost: number) => {
-    if (isUnlimited) return null; // Nascondi costo se illimitato
-    return (
-      <span className="ml-2 bg-white/20 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
-        {cost} CR
-      </span>
-    );
   };
 
   return (
@@ -35,7 +25,8 @@ export const ParadigmToggle: React.FC<ParadigmToggleProps> = ({ selectedParadigm
       >
         <i className="fas fa-flask mr-2"></i>
         Scientifico
-        {renderCostBadge(1)}
+        {/* Mostra "1 CR" SOLO se NON è pro/admin */}
+        {!isPro && <span className="ml-2 bg-white/20 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">1 CR</span>}
       </button>
       <button
         onClick={() => onParadigmChange('hybrid')}
@@ -44,7 +35,7 @@ export const ParadigmToggle: React.FC<ParadigmToggleProps> = ({ selectedParadigm
       >
         <i className="fas fa-layer-group mr-2"></i>
         Ibrido
-        {renderCostBadge(2)}
+        {!isPro && <span className="ml-2 bg-yellow-500 text-yellow-900 text-[10px] font-bold px-1.5 py-0.5 rounded">2 CR</span>}
       </button>
       <button
         onClick={() => onParadigmChange('artistic')}
@@ -53,7 +44,7 @@ export const ParadigmToggle: React.FC<ParadigmToggleProps> = ({ selectedParadigm
       >
         <i className="fas fa-palette mr-2"></i>
         Artistico
-        {renderCostBadge(2)}
+        {!isPro && <span className="ml-2 bg-yellow-500 text-yellow-900 text-[10px] font-bold px-1.5 py-0.5 rounded">2 CR</span>}
       </button>
     </div>
   );
