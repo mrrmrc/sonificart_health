@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { SonificationResult, TransformedNoteEvent, User } from '../types';
 import { AudioPlayer } from './AudioPlayer';
@@ -51,26 +50,27 @@ const StatBar: React.FC<{ label: string; value: number; colorClass: string }> = 
 
 
 interface ResultsDashboardProps {
-  result: SonificationResult;
-  imageUrl: string;
-  onReset: () => void;
-  user: User | null;
-  onRequestAccess: () => void;
+    result: SonificationResult;
+    imageUrl: string;
+    onReset: () => void;
+    onSave: () => void; // NUOVA PROP AGGIUNTA
+    user: User | null;
+    onRequestAccess: () => void;
 }
 
-export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imageUrl, onReset, user, onRequestAccess }) => {
+export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imageUrl, onReset, onSave, user, onRequestAccess }) => {
     const [imageRenderInfo, setImageRenderInfo] = useState({ x: 0, y: 0, width: 0, height: 0 });
     const [playbackTime, setPlaybackTime] = useState(0);
     const [isPlaying, setIsPlaying] = useState(false);
     const [activeEvent, setActiveEvent] = useState<TransformedNoteEvent | null>(null);
-    
+
     // Video Export States
     const [isVideoRendering, setIsVideoRendering] = useState(false);
     const [videoProgress, setVideoProgress] = useState(0);
-    
+
     // Initialize generated video blob from result if it exists (from SAC)
     const [generatedVideoBlob, setGeneratedVideoBlob] = useState<Blob | null>(result.generatedVideoBlob || null);
-    
+
     // Video Metadata Modal States
     const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
     const [videoTitle, setVideoTitle] = useState("Composizione Sonora");
@@ -84,7 +84,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imag
     const isArtisticMode = !!result.musicGenerationPrompt;
     const isManualScan = useMemo(() => result.scanPattern.name.startsWith("Manuale:"), [result.scanPattern.name]);
     const isPro = !!user?.isPro;
-    
+
     const displayImage = result.standardizedImageUrl;
 
     const verificationUrl = useMemo(() => {
@@ -99,7 +99,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imag
         const imgAspect = naturalWidth / naturalHeight;
         const cAspect = cW / cH;
         let rW, rH, x, y;
-        if (imgAspect > cAspect) { rW = cW; rH = cW / imgAspect; x = 0; y = (cH - rH) / 2; } 
+        if (imgAspect > cAspect) { rW = cW; rH = cW / imgAspect; x = 0; y = (cH - rH) / 2; }
         else { rH = cH; rW = cH * imgAspect; y = 0; x = (cW - rW) / 2; }
         setImageRenderInfo({ x, y, width: rW, height: rH });
     }, []);
@@ -119,7 +119,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imag
     }, [calculateImageRect, displayImage]);
 
 
-    const melodyEvents = useMemo(() => 
+    const melodyEvents = useMemo(() =>
         result.audioOutput.events.filter(e => !e.isAccompaniment),
         [result.audioOutput.events]
     );
@@ -138,12 +138,12 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imag
             }
         }
         if (newEventIndex === -1 && playbackTime >= result.audioOutput.duration) {
-             newEventIndex = melodyEvents.length - 1;
+            newEventIndex = melodyEvents.length - 1;
         }
 
         if (newEventIndex !== -1) {
             if (!activeEvent || activeEvent.time !== melodyEvents[newEventIndex].time) {
-                 setActiveEvent(melodyEvents[newEventIndex]);
+                setActiveEvent(melodyEvents[newEventIndex]);
             }
             lastEventIndexRef.current = newEventIndex;
         }
@@ -154,11 +154,11 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imag
     const handleTimeUpdate = useCallback((time: number) => setPlaybackTime(time), []);
     const handlePlay = () => setIsPlaying(true);
     const handleStop = () => {
-      setIsPlaying(false);
-      if(audioRef.current && audioRef.current.ended) {
-          setActiveEvent(null);
-          lastEventIndexRef.current = 0;
-      }
+        setIsPlaying(false);
+        if (audioRef.current && audioRef.current.ended) {
+            setActiveEvent(null);
+            lastEventIndexRef.current = 0;
+        }
     };
 
     const copyPrompt = () => {
@@ -167,12 +167,12 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imag
             alert("Prompt copiato negli appunti!");
         }
     };
-    
+
     // MAIN BUTTON HANDLER
     const handleVideoAction = () => {
         if (generatedVideoBlob) {
             // Directly download if exists
-            saveAs(generatedVideoBlob, `kinetic_proof_${result.imageHash.substring(0,8)}.mp4`);
+            saveAs(generatedVideoBlob, `kinetic_proof_${result.imageHash.substring(0, 8)}.mp4`);
         } else {
             // Open modal to generate
             setIsVideoModalOpen(true);
@@ -183,15 +183,15 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imag
         setIsVideoModalOpen(false);
         setIsVideoRendering(true);
         setVideoProgress(0);
-        
+
         try {
             const blob = await generateSonificationVideo(
-                result, 
+                result,
                 (p) => setVideoProgress(p),
                 { title: videoTitle || "Opera Senza Titolo", author: videoAuthor || "Anonimo" }
             );
             setGeneratedVideoBlob(blob); // Save blob to state for SAC inclusion and immediate download
-            saveAs(blob, `kinetic_proof_${result.imageHash.substring(0,8)}.mp4`);
+            saveAs(blob, `kinetic_proof_${result.imageHash.substring(0, 8)}.mp4`);
         } catch (e) {
             console.error("Video generation failed:", e);
             alert("Errore nella generazione del video: " + (e instanceof Error ? e.message : String(e)));
@@ -209,7 +209,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imag
             const img = new Image();
             img.src = result.standardizedImageUrl;
             await new Promise(r => { img.onload = r; });
-            ctx?.drawImage(img, 0,0, 512, 512);
+            ctx?.drawImage(img, 0, 0, 512, 512);
 
             const sacContainer = await createSacContainer({
                 imageHash: result.imageHash,
@@ -225,7 +225,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imag
                 scanPattern: result.scanPattern,
                 videoBlob: generatedVideoBlob || undefined // Include video if generated
             });
-            
+
             saveAs(sacContainer.blob, sacContainer.fileName);
 
         } catch (e) {
@@ -251,8 +251,8 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imag
         });
         const total = events.length;
         return {
-            pitch: { low: (low/total)*100, mid: (midPitch/total)*100, high: (high/total)*100 },
-            dynamics: { soft: (soft/total)*100, mid: (midDynamics/total)*100, loud: (loud/total)*100 },
+            pitch: { low: (low / total) * 100, mid: (midPitch / total) * 100, high: (high / total) * 100 },
+            dynamics: { soft: (soft / total) * 100, mid: (midDynamics / total) * 100, loud: (loud / total) * 100 },
         };
     }, [result]);
 
@@ -270,12 +270,12 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imag
                         <p className="text-sm text-brand-text-secondary mb-6">
                             Generazione del file MP4 che certifica la causalità tra pixel e suono. Il video includerà la telemetria in sovraimpressione (Timestamp e Coordinate).
                         </p>
-                        
+
                         <div className="space-y-4 mb-6">
                             <div>
                                 <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">Titolo Opera (Metadata)</label>
-                                <input 
-                                    type="text" 
+                                <input
+                                    type="text"
                                     className="w-full bg-brand-primary border border-brand-secondary p-2 rounded text-white focus:border-brand-accent focus:outline-none"
                                     value={videoTitle}
                                     onChange={e => setVideoTitle(e.target.value)}
@@ -283,8 +283,8 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imag
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">Autore / Artista</label>
-                                <input 
-                                    type="text" 
+                                <input
+                                    type="text"
                                     className="w-full bg-brand-primary border border-brand-secondary p-2 rounded text-white focus:border-brand-accent focus:outline-none"
                                     value={videoAuthor}
                                     onChange={e => setVideoAuthor(e.target.value)}
@@ -293,13 +293,13 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imag
                         </div>
 
                         <div className="flex justify-end gap-3">
-                            <button 
+                            <button
                                 onClick={() => setIsVideoModalOpen(false)}
                                 className="px-4 py-2 rounded-md text-sm font-bold text-brand-text-secondary hover:text-white hover:bg-white/10 transition-colors"
                             >
                                 Annulla
                             </button>
-                            <button 
+                            <button
                                 onClick={startVideoGeneration}
                                 className="px-6 py-2 rounded-md text-sm font-bold bg-brand-accent text-brand-primary hover:bg-brand-accent-light transition-colors shadow-lg"
                             >
@@ -317,12 +317,12 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imag
                         <div className="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-brand-accent mx-auto mb-6"></div>
                         <h3 className="text-2xl font-bold text-white mb-2">Audit Forense in Corso...</h3>
                         <p className="text-brand-text-secondary text-sm mb-6">
-                            Sincronizzazione telemetria e generazione prova cinetica.<br/>
+                            Sincronizzazione telemetria e generazione prova cinetica.<br />
                             Tempo stimato: {(result.audioOutput.duration / 60).toFixed(1)} min.
                         </p>
                         <div className="w-full bg-brand-primary rounded-full h-4 border border-brand-secondary overflow-hidden">
-                            <div 
-                                className="bg-brand-accent h-full transition-all duration-200 ease-linear" 
+                            <div
+                                className="bg-brand-accent h-full transition-all duration-200 ease-linear"
                                 style={{ width: `${videoProgress}%` }}
                             ></div>
                         </div>
@@ -331,7 +331,8 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imag
                 </div>
             )}
 
-            <div className="text-center mb-6">
+            {/* PULSANTE INDIETRO SPOSTATO NEL BOX INTERATTIVO */}
+            <div className="text-center mb-6 hidden">
                 <button onClick={onReset} className="bg-brand-accent text-brand-primary font-bold py-2 px-6 rounded-full hover:bg-brand-accent-light transition-colors">
                     <i className="fas fa-arrow-left mr-2"></i> Sonifica un'altra immagine
                 </button>
@@ -341,14 +342,14 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imag
                 <div className="lg:col-span-3 space-y-4">
                     <div ref={containerRef} className="relative aspect-square bg-brand-primary/30 rounded-md overflow-hidden border border-brand-secondary group">
                         <img ref={imageRef} src={displayImage} alt="Standardized Analysis View" className="w-full h-full object-contain" />
-                        
+
                         <div className="absolute top-2 right-2 z-10 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                             <span className="bg-black/70 text-white text-[10px] px-2 py-1 rounded backdrop-blur-md border border-white/10 shadow-sm">
                                 Vista Analisi Standardizzata (512px)
                             </span>
                         </div>
 
-                        <ScanPathOverlay 
+                        <ScanPathOverlay
                             blocks={result.blockAnalysisResult.blocks}
                             gridSize={result.blockAnalysisResult.gridSize}
                             imageRect={imageRenderInfo}
@@ -359,7 +360,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imag
                             activeBlockPosition={activeEvent?.sourceBlock.position ?? null}
                         />
                     </div>
-                     <CursorLoupe 
+                    <CursorLoupe
                         activeEvent={activeEvent}
                         isPlaying={isPlaying}
                     />
@@ -396,20 +397,32 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imag
                                 </div>
                                 <div className="bg-brand-primary/30 p-3 rounded-lg border border-brand-secondary">
                                     <h5 className="text-sm text-brand-text-secondary mb-2 text-center">Profilo Sonoro Interattivo</h5>
-                                    <AudioPlayer audioRef={audioRef} audioUrl={result.audioOutput.audioUrl} onTimeUpdate={handleTimeUpdate} onPlay={handlePlay} onStop={handleStop}/>
+                                    <AudioPlayer audioRef={audioRef} audioUrl={result.audioOutput.audioUrl} onTimeUpdate={handleTimeUpdate} onPlay={handlePlay} onStop={handleStop} />
                                     <MusicSheet activeEvent={activeEvent} />
+
+                                    {/* --- NUOVI PULSANTI AZIONE --- */}
+                                    <div className="flex gap-3 mt-4 pt-3 border-t border-brand-secondary/30">
+                                        <button onClick={onReset} className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-300 py-2 rounded text-xs font-bold transition-colors border border-red-500/30">
+                                            <i className="fas fa-times mr-2"></i> ANNULLA
+                                        </button>
+                                        <button onClick={onSave} className="flex-1 bg-green-500/20 hover:bg-green-500/30 text-green-300 py-2 rounded text-xs font-bold transition-colors border border-green-500/30">
+                                            <i className="fas fa-save mr-2"></i> SALVA E ARCHIVIA
+                                        </button>
+                                    </div>
+                                    {/* --------------------------------- */}
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                 {isArtisticMode && result.musicGenerationPrompt && (
+                {/* ... Resto del codice invariato ... */}
+                {isArtisticMode && result.musicGenerationPrompt && (
                     <InfoCard title="💡 Concept & Interpretazione AI" icon="fa-wand-magic-sparkles" className="lg:col-span-3 relative overflow-hidden">
                         <div className='space-y-4'>
-                             <div>
+                            <div>
                                 <div className="flex justify-between items-center mb-1">
                                     <h5 className="text-brand-text-secondary text-xs font-bold">PROMPT GENERATIVO:</h5>
                                     <button onClick={copyPrompt} className="text-xs text-brand-accent hover:text-white transition-colors">
@@ -428,12 +441,12 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imag
                             </div>
                         </div>
                     </InfoCard>
-                 )}
-                 
-                 <InfoCard 
-                    title={isManualScan ? "Tipo Scansione" : "Selezione Culturale"} 
+                )}
+
+                <InfoCard
+                    title={isManualScan ? "Tipo Scansione" : "Selezione Culturale"}
                     icon={isManualScan ? "fa-layer-group" : "fa-globe-americas"}
-                 >
+                >
                     {isManualScan ? (
                         <>
                             <DataRow label="Pattern Scelto" value={<span className="text-brand-accent font-bold">{result.scanPattern.name.replace("Manuale: ", "")}</span>} />
@@ -451,15 +464,15 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imag
                             <DataRow label="Score" value={result.culturalSelectionResult.scoreBreakdown.total.toFixed(4)} />
                         </>
                     )}
-                 </InfoCard>
+                </InfoCard>
 
-                 <InfoCard title="Analisi & Sintesi" icon="fa-cogs">
+                <InfoCard title="Analisi & Sintesi" icon="fa-cogs">
                     <DataRow label="Griglia" value={`${result.blockAnalysisResult.gridSize}x${result.blockAnalysisResult.gridSize}`} />
                     <DataRow label="Eventi Audio" value={result.audioOutput.eventsCount} />
                     <DataRow label="Durata" value={`${result.audioOutput.duration.toFixed(2)}s`} />
                     <DataRow label="Qualità Audio" value="44.1kHz WAV" />
                 </InfoCard>
-                 <InfoCard title="Certificato Forense" icon="fa-fingerprint">
+                <InfoCard title="Certificato Forense" icon="fa-fingerprint">
                     <DataRow label="Image Hash" value={result.imageHash.substring(0, 16) + '...'} />
                     <DataRow label="Audio Hash" value={result.audioHash.substring(0, 16) + '...'} />
                     <DataRow label="Framework Ver." value="1.0" />
@@ -473,8 +486,8 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imag
                         ))
                     }
                 </InfoCard>
-                
-                 <InfoCard title="Validazione Crittografica (QR)" icon="fa-qrcode">
+
+                <InfoCard title="Validazione Crittografica (QR)" icon="fa-qrcode">
                     {isPro ? (
                         <QrCodeDisplay
                             data={verificationUrl}
@@ -496,7 +509,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imag
 
                 <InfoCard title="Download Artefatti" icon="fa-download">
                     <div className="flex flex-col gap-2 mt-2 relative">
-                        
+
                         {!isPro && (
                             <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] z-20 flex flex-col items-center justify-center rounded-lg text-center p-4 border border-brand-accent/20">
                                 <i className="fas fa-lock text-2xl text-brand-accent mb-2"></i>
@@ -514,8 +527,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imag
                         <button disabled={!isPro} onClick={() => saveAs(result.audioOutput.midiBlob, 'musical_notation.mid')} className="w-full bg-brand-accent/20 text-brand-accent py-1 rounded hover:bg-brand-accent/30 disabled:opacity-50">
                             <i className="fas fa-music mr-2"></i> Download MIDI (Multi-track)
                         </button>
-                        
-                        {/* MODIFIED VIDEO BUTTON - FORENSIC TERMINOLOGY */}
+
                         <button disabled={!isPro} onClick={handleVideoAction} className="w-full bg-purple-600/30 text-purple-300 py-1 rounded hover:bg-purple-600/50 border border-purple-500/30 relative overflow-hidden group disabled:opacity-50">
                             {generatedVideoBlob && <div className="absolute inset-0 bg-green-500/20"></div>}
                             <span className="relative z-10 flex items-center justify-center">
@@ -534,13 +546,13 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imag
                         )}
                     </div>
                 </InfoCard>
-                
+
                 {!isArtisticMode && (
                     <InfoCard title="Suite di Validazione" icon="fa-check-double" className="md:col-span-2 lg:col-span-1">
-                       <ValidationItem result={result.validationResult.determinism} />
-                       <ValidationItem result={result.validationResult.coverage} />
-                       <ValidationItem result={result.validationResult.robustness} />
-                       <ValidationItem result={result.validationResult.grid} />
+                        <ValidationItem result={result.validationResult.determinism} />
+                        <ValidationItem result={result.validationResult.coverage} />
+                        <ValidationItem result={result.validationResult.robustness} />
+                        <ValidationItem result={result.validationResult.grid} />
                     </InfoCard>
                 )}
             </div>

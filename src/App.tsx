@@ -362,7 +362,6 @@ export default function App() {
                                                             <div className="w-6 h-6 rounded bg-white text-black flex items-center justify-center text-xs font-bold">3</div>
                                                             Parametri Algoritmo
 
-                                                            {/* --- MODIFICA QUI: Nascondi se Pro/Admin --- */}
                                                             {!isUnlimited && (
                                                                 <span className="ml-auto text-xs bg-brand-accent/10 text-brand-accent px-2 py-0.5 rounded">
                                                                     Costo: {paradigm === 'scientific' ? '1 CR' : '2 CR'}
@@ -373,7 +372,6 @@ export default function App() {
                                                                     <i className="fas fa-infinity"></i> Licenza Attiva
                                                                 </span>
                                                             )}
-                                                            {/* ------------------------------------------- */}
 
                                                         </h3>
                                                         <ConfigPanel
@@ -412,7 +410,23 @@ export default function App() {
                                         <ResultsDashboard
                                             result={result}
                                             imageUrl={imageUrl}
-                                            onReset={() => { setResult(null); setImageFile(null); setImageUrl(null); }}
+
+                                            // AZIONE TASTO "ANNULLA"
+                                            onReset={() => {
+                                                setResult(null);
+                                                setImageFile(null);
+                                                setImageUrl(null);
+                                                window.scrollTo(0, 0);
+                                            }}
+
+                                            // AZIONE TASTO "SALVA" -> Va alla Dashboard
+                                            onSave={() => {
+                                                setResult(null);
+                                                setImageFile(null);
+                                                setImageUrl(null);
+                                                setView('dashboard');
+                                            }}
+
                                             user={user}
                                             onRequestAccess={() => setIsRequestAccessOpen(true)}
                                         />

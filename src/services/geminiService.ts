@@ -2,11 +2,17 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { MusicGenerationPrompt, Tradition, BlockAnalysisResult } from "../types";
 import { fileToBase64 } from "../utils/fileUtils";
 
+// --- CONFIGURAZIONE CHIAVE ---
+// Incolla qui la tua chiave Google Gemini (inizia con AIza...)
+const GOOGLE_API_KEY = "AIzaSyBtEtAu3W09-UAp7J0mc2x07HwvQt3UqAE";
+
 export async function describeImageContent(imageFile: File): Promise<string> {
-    if (!process.env.API_KEY) {
-        throw new Error("API_KEY environment variable not set");
+    // Controllo manuale della chiave
+    if (!GOOGLE_API_KEY || GOOGLE_API_KEY.includes("INSERISCI")) {
+        throw new Error("Chiave API Google mancante. Inseriscila nel file geminiService.ts");
     }
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+    const ai = new GoogleGenAI({ apiKey: GOOGLE_API_KEY });
 
     const base64Image = await fileToBase64(imageFile);
 
@@ -23,14 +29,14 @@ export async function describeImageContent(imageFile: File): Promise<string> {
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-2.0-flash', // Usa il modello flash che è più veloce ed economico
             contents: { parts: [imagePart, textPart] }
         });
-        // FIX: Add null check for response.text
         return response.text?.trim() || "Descrizione non disponibile";
     } catch (e) {
-        console.error("Errore nella chiamata all'API Gemini per la descrizione dell'immagine:", e);
-        throw new Error("Impossibile generare la descrizione dell'immagine dall'AI.");
+        console.error("Errore Gemini Descrizione:", e);
+        // Non blocchiamo tutto se fallisce la descrizione, torniamo un testo generico
+        return "Opera d'arte astratta e suggestiva.";
     }
 }
 
@@ -40,8 +46,6 @@ export async function generateMusicPromptFromAnalysis(
     analysisStats: BlockAnalysisResult['globalStats'],
     scanPatternName: string
 ): Promise<MusicGenerationPrompt> {
-    // This function remains for backward compatibility or Scientific mode
-    // For Stability AI we mostly use the Hybrid function below
     return generateMusicPromptFromAnalysisHybrid(tradition, analysisStats, scanPatternName, "Analisi Scientifica Pura");
 }
 
@@ -52,40 +56,38 @@ export async function generateMusicPromptFromAnalysisHybrid(
     scanPatternName: string,
     imageDescription: string
 ): Promise<MusicGenerationPrompt> {
-    if (!process.env.API_KEY) {
-        throw new Error("API_KEY environment variable not set");
+
+    if (!GOOGLE_API_KEY || GOOGLE_API_KEY.includes("INSERISCI")) {
+        throw new Error("Chiave API Google mancante.");
     }
 
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey: GOOGLE_API_KEY });
 
     const textPart = {
-        text: `RUOLO: Sei un esperto di Prompt Engineering per **STABILITY AI - STABLE AUDIO** (AI Music Generation).
-Il tuo obiettivo è creare i metadati perfetti per trasformare un'analisi visiva e culturale in una traccia musicale utilizzando Stability AI.
+        text: `RUOLO: Sei un esperto di Prompt Engineering per **STABILITY AI - STABLE AUDIO**.
+OBIETTIVO: Creare metadati musicali partendo da dati visivi.
 
-CONTESTO FORNITO:
-1.  **SOGGETTO VISIVO (Immagine Reale):** "${imageDescription}"
-2.  **DATI SCIENTIFICI (Analisi Colore/Tradizione):**
-    -   Tradizione: '${tradition.name}' (Carattere: '${tradition.character}')
-    -   Stats: Saturazione ${(analysisStats.avg_saturation * 100).toFixed(0)}%, Complessità ${analysisStats.avg_variance.toFixed(2)}
+INPUT:
+1.  **VISUAL:** "${imageDescription}"
+2.  **DATI:**
+    -   Tradizione: '${tradition.name}' ('${tradition.character}')
+    -   Saturazione ${(analysisStats.avg_saturation * 100).toFixed(0)}%, Varianza ${analysisStats.avg_variance.toFixed(2)}
     -   Scan: '${scanPatternName}'
 
-OBIETTIVO:
-Crea un prompt descrittivo ottimizzato per Stability AI (Stable Audio). Questo modello richiede descrizioni testuali fluide e dettagliate dell'atmosfera, degli strumenti e del genere.
+OUTPUT RICHIESTO (JSON):
+Genera un JSON valido con:
+- **main_prompt_ita**: Descrizione sintetica (IT).
+- **technical_parameters**: Parametri tecnici (BPM, Key).
+- **justification**: Motivo della scelta.
+- **stability_prompt**: Prompt INGLESE per Stability AI. (Es: "Atmospheric, [Instrument], [Mood], slow tempo").
+- **negative_prompt**: Elementi da evitare INGLESE.
 
-COMPITO RICHIESTO (Rispondi in JSON):
-Genera un oggetto JSON con i seguenti campi:
-- **main_prompt_ita**: Una descrizione sintetica in Italiano del concept (per l'utente).
-- **technical_parameters**: Parametri tecnici leggibili (BPM, Key, ecc).
-- **justification**: Perché hai scelto questo stile basandoti sui dati scientifici.
-- **stability_prompt**: Il prompt principale in INGLESE per Stability AI. Deve essere descrittivo. (Es: "Atmospheric, meditative drone music featuring [Instrument], [Mood], slow tempo, high quality").
-- **negative_prompt**: Elementi da evitare in INGLESE (Es: "drums, percussion, vocals, low quality").
-
-Rispondi SOLO con un oggetto JSON valido.`
+Rispondi SOLO con il JSON.`
     };
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-2.0-flash',
             contents: { parts: [textPart] },
             config: {
                 responseMimeType: "application/json",
@@ -95,27 +97,38 @@ Rispondi SOLO con un oggetto JSON valido.`
                         main_prompt_ita: { type: Type.STRING },
                         technical_parameters: { type: Type.STRING },
                         justification: { type: Type.STRING },
-                        stability_prompt: { type: Type.STRING, description: "Optimized prompt for Stability AI" },
-                        negative_prompt: { type: Type.STRING, description: "Negative prompt for Stability AI" }
+                        stability_prompt: { type: Type.STRING },
+                        negative_prompt: { type: Type.STRING }
                     },
                     required: ["main_prompt_ita", "technical_parameters", "justification", "stability_prompt", "negative_prompt"]
                 }
             }
         });
 
-        // FIX: Add null check for response.text
         const jsonText = response.text?.trim();
 
         if (!jsonText) {
-            throw new Error("Empty response from AI");
+            // Fallback manuale se l'AI risponde vuoto
+            return {
+                main_prompt_ita: "Composizione generata da analisi cromatica",
+                technical_parameters: "120 BPM, C Major",
+                justification: "Fallback algoritmico",
+                stability_prompt: "Ambient electronic soundscape, meditative, high quality",
+                negative_prompt: "drums, noise, low quality"
+            };
         }
 
-        const result = JSON.parse(jsonText) as MusicGenerationPrompt;
-
-        return result;
+        return JSON.parse(jsonText) as MusicGenerationPrompt;
 
     } catch (e) {
-        console.error("Errore nella chiamata all'API Gemini per il prompt Stability AI:", e);
-        throw new Error("Impossibile generare il prompt musicale per Stability AI.");
+        console.error("Errore Gemini Prompt:", e);
+        // Fallback di emergenza per non bloccare l'utente
+        return {
+            main_prompt_ita: "Generazione basata su algoritmi deterministici",
+            technical_parameters: "Auto BPM",
+            justification: "Errore connessione AI, uso parametri standard.",
+            stability_prompt: "Cinematic score, emotional, orchestral, clear sound",
+            negative_prompt: "percussion, text, speech"
+        };
     }
 }

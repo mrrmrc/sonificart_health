@@ -35,7 +35,6 @@ const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPub
             <div className="relative w-full max-w-lg bg-brand-secondary rounded-lg shadow-2xl border border-brand-secondary/50 animate-zoom-in p-6" onClick={e => e.stopPropagation()}>
                 <h3 className="text-xl font-bold text-white mb-4">Pubblica in Vetrina</h3>
                 <div className="mb-4 flex gap-4 items-center bg-brand-primary/50 p-3 rounded">
-                    {/* USO fixImage QUI */}
                     <img src={fixImage(entry.imageUrl)} className="w-16 h-16 object-cover rounded" alt="Preview" />
                     <div>
                         <p className="text-sm text-white font-bold">{entry.traditionName}</p>
@@ -68,9 +67,8 @@ const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPub
 };
 
 
-// --- Details Modal Component ---
+// --- DETAILS MODAL ---
 const HistoryDetailsModal: React.FC<{ entry: DashboardEntry; onClose: () => void }> = ({ entry, onClose }) => {
-    // Helper data sicura
     const safeDate = (dateVal: string | Date) => {
         const d = new Date(dateVal);
         return isNaN(d.getTime()) ? new Date() : d;
@@ -99,10 +97,9 @@ const HistoryDetailsModal: React.FC<{ entry: DashboardEntry; onClose: () => void
                     {/* Image Section */}
                     <div className="w-full md:w-1/2 bg-black/20 p-6 flex items-center justify-center border-b md:border-b-0 md:border-r border-brand-secondary/50">
                         <div className="relative group">
-                            {/* USO fixImage QUI */}
                             <img
                                 src={fixImage(entry.imageUrl)}
-                                alt="Sonification Result"
+                                alt="Result"
                                 className="max-w-full max-h-[400px] object-contain rounded-lg shadow-lg"
                             />
                         </div>
@@ -153,6 +150,7 @@ const HistoryDetailsModal: React.FC<{ entry: DashboardEntry; onClose: () => void
 };
 
 
+// --- HISTORY ITEM (LISTA) ---
 const HistoryItem: React.FC<{ item: DashboardEntry; onView: () => void; onPublishClick?: () => void; isPro?: boolean }> = ({ item, onView, onPublishClick, isPro }) => {
     const safeDate = (dateVal: string | Date) => {
         const d = new Date(dateVal);
@@ -161,11 +159,13 @@ const HistoryItem: React.FC<{ item: DashboardEntry; onView: () => void; onPublis
 
     return (
         <div className="bg-brand-secondary/50 p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center gap-4 animate-fade-in border border-transparent hover:border-brand-accent transition-all group">
-            {/* USO fixImage QUI */}
             <img
                 src={fixImage(item.imageUrl)}
                 alt="Sonification preview"
                 className="w-full sm:w-20 h-20 object-cover rounded-md bg-brand-primary"
+                onError={(e) => {
+                    (e.target as HTMLImageElement).src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+                }}
             />
             <div className="flex-grow min-w-0">
                 <p className="font-bold text-white text-sm capitalize truncate">{item.traditionName}</p>
@@ -175,4 +175,177 @@ const HistoryItem: React.FC<{ item: DashboardEntry; onView: () => void; onPublis
                         }`}>
                         {item.paradigm}
                     </span>
-                    <p className="text-xs text-brand-text-secondary"></p>
+                    <p className="text-xs text-brand-text-secondary">
+                        {safeDate(item.timestamp).toLocaleString()}
+                    </p>
+                </div>
+                <p className="font-mono text-[10px] text-brand-text-secondary/50 mt-1 truncate" title={item.id}>
+                    ID: {item.id}
+                </p>
+            </div>
+
+            <div className="flex gap-2 w-full sm:w-auto">
+                <button
+                    onClick={onView}
+                    className="flex-1 sm:flex-none bg-brand-primary hover:bg-brand-secondary text-brand-text-secondary text-xs font-bold py-2 px-4 rounded-md transition-colors border border-brand-secondary"
+                >
+                    <i className="fas fa-eye mr-1"></i> Dettagli
+                </button>
+
+                {isPro && onPublishClick && (
+                    <button
+                        onClick={onPublishClick}
+                        className="flex-1 sm:flex-none bg-purple-600/20 text-purple-300 hover:bg-purple-600 hover:text-white text-xs font-bold py-2 px-4 rounded-md transition-colors border border-purple-500/30"
+                        title="Pubblica sul tuo profilo pubblico"
+                    >
+                        <i className="fas fa-share-square mr-1"></i> Pubblica
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+};
+
+export const UserDashboard: React.FC = () => {
+    const [history, setHistory] = useState<DashboardEntry[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [selectedEntry, setSelectedEntry] = useState<DashboardEntry | null>(null);
+    const [publishingEntry, setPublishingEntry] = useState<DashboardEntry | null>(null);
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+    const loadHistory = useCallback(async () => {
+        setIsLoading(true);
+        try {
+            const user = await api.checkSession();
+            setCurrentUser(user);
+            const data = await api.getHistory();
+
+            if (Array.isArray(data)) {
+                setHistory(data);
+            } else {
+                setHistory([]);
+            }
+        } catch (error) {
+            console.error("Failed to load history:", error);
+            setError("Impossibile caricare la cronologia.");
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        loadHistory();
+    }, [loadHistory]);
+
+    const clearHistory = useCallback(async () => {
+        if (window.confirm("Sei sicuro di voler cancellare tutta la cronologia delle sonificazioni? Questa azione è irreversibile.")) {
+            try {
+                await api.clearHistory();
+                setHistory([]);
+            } catch (e) {
+                alert("Errore durante la cancellazione.");
+            }
+        }
+    }, []);
+
+    const handlePublish = async (metadata: { title: string; description: string; tags: string[] }) => {
+        if (!publishingEntry || !currentUser) return;
+
+        try {
+            await api.publishFromHistory(publishingEntry, metadata, currentUser);
+            alert("Opera pubblicata con successo sul tuo profilo!");
+            setPublishingEntry(null);
+        } catch (e) {
+            alert("Errore durante la pubblicazione.");
+            console.error(e);
+        }
+    };
+
+    if (isLoading) {
+        return (
+            <div className="max-w-4xl mx-auto py-12 text-center">
+                <div className="w-10 h-10 border-4 border-dashed rounded-full animate-spin border-brand-accent mx-auto"></div>
+                <p className="text-brand-text-secondary mt-4">Caricamento dashboard...</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="max-w-4xl mx-auto animate-fade-in pb-20">
+
+            {/* Storage Mode Indicator */}
+            <div className={`mb-6 p-3 rounded-md text-sm flex items-center gap-3 ${USE_MOCK_BACKEND ? 'bg-yellow-900/30 text-yellow-200 border border-yellow-700' : 'bg-green-900/30 text-green-200 border border-green-700'}`}>
+                <i className={`fas ${USE_MOCK_BACKEND ? 'fa-database' : 'fa-cloud'} text-lg`}></i>
+                <div>
+                    <strong>Modalità Archiviazione: {USE_MOCK_BACKEND ? 'Simulazione Locale' : 'Cloud Database'}</strong>
+                    <p className="text-xs opacity-80">
+                        {USE_MOCK_BACKEND
+                            ? 'I dati sono salvati nella memoria del tuo browser (localStorage).'
+                            : 'I dati sono sincronizzati in sicurezza sul server cloud.'}
+                    </p>
+                </div>
+            </div>
+
+            <div className="flex justify-between items-center mb-6">
+                <div className="text-left">
+                    <h2 className="text-3xl font-bold text-white">La Tua Dashboard</h2>
+                    <p className="text-brand-text-secondary">
+                        Sfoglia la cronologia delle tue sonificazioni recenti.
+                    </p>
+                </div>
+                {history.length > 0 && (
+                    <button
+                        onClick={clearHistory}
+                        className="bg-red-500/80 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-md text-sm"
+                    >
+                        <i className="fas fa-trash-alt mr-2"></i> Cancella Cronologia
+                    </button>
+                )}
+            </div>
+
+            {error && (
+                <div className="bg-red-900/50 p-4 rounded-lg text-center text-red-200 mb-6">
+                    {error}
+                </div>
+            )}
+
+            {history.length === 0 && !error ? (
+                <div className="text-center py-16 px-6 bg-brand-secondary/30 rounded-lg">
+                    <i className="fas fa-history text-5xl text-brand-text-secondary mb-4"></i>
+                    <h3 className="text-xl font-bold text-white">Nessuna Sonificazione Trovata</h3>
+                    <p className="text-brand-text-secondary">
+                        La cronologia è vuota. Inizia a sonificare un'immagine per vederla apparire qui.
+                    </p>
+                </div>
+            ) : (
+                <div className="space-y-4">
+                    {history.map(item => (
+                        <HistoryItem
+                            key={item.id}
+                            item={item}
+                            onView={() => setSelectedEntry(item)}
+                            onPublishClick={currentUser?.isPro ? () => setPublishingEntry(item) : undefined}
+                            isPro={currentUser?.isPro}
+                        />
+                    ))}
+                </div>
+            )}
+
+            {selectedEntry && (
+                <HistoryDetailsModal
+                    entry={selectedEntry}
+                    onClose={() => setSelectedEntry(null)}
+                />
+            )}
+
+            {publishingEntry && (
+                <PublishModal
+                    entry={publishingEntry}
+                    onClose={() => setPublishingEntry(null)}
+                    onPublish={handlePublish}
+                />
+            )}
+        </div>
+    );
+};
