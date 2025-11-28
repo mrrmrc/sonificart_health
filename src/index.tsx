@@ -1,8 +1,9 @@
 import React from 'react';
+import { StrictMode } from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App'; // Ora funzionerà perché App.tsx è nella stessa cartella src/
+import App from './App';
 import { LanguageProvider } from './contexts/LanguageContext';
-import './index.css'; // Ora funzionerà perché index.css è in src/
+import './index.css';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -11,9 +12,9 @@ if (!rootElement) {
 
 const root = ReactDOM.createRoot(rootElement);
 root.render(
-    <React.StrictMode>
+    <StrictMode>
         <LanguageProvider>
             <App />
         </LanguageProvider>
-    </React.StrictMode>
+    </StrictMode>
 );

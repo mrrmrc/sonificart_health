@@ -1,19 +1,35 @@
 <IfModule mod_rewrite.c>
   RewriteEngine On
-  RewriteBase /
   
-  # Permetti l'accesso alla cartella API senza reindirizzamenti
+  # --- CONFIGURAZIONE BASE ---
+  # Se il sito è in una sottocartella, cambia '/' con '/a/'
+  RewriteBase /
+
+  # --- INTERRUTTORE MANUTENZIONE ---
+  # Per attivare la manutenzione, togli il # davanti alla riga sotto
+  # DirectoryIndex maintenance.html index.html
+
+  # Per attivare l'APP, usa questa (Default):
+  DirectoryIndex index.html
+
+  # ---------------------------------------------------------
+
+  # 1. API PASS-THROUGH
+  # Non toccare le richieste verso la cartella API
   RewriteRule ^api/ - [L,NC]
 
-  # Se il file richiesto esiste, servilo direttamente (immagini, js, css)
+  # 2. FILE STATICI
+  # Se il file esiste (immagini, css, js), servilo direttamente
   RewriteCond %{REQUEST_FILENAME} -f
   RewriteRule ^ - [L]
 
-  # Altrimenti, reindirizza tutto a index.html (per React Router)
+  # 3. ROUTING REACT (SPA)
+  # Se il file non esiste, manda tutto a index.html (o app.html se hai rinominato)
   RewriteRule ^ index.html [L]
+
 </IfModule>
 
-# Forza i MIME type corretti per evitare errori di caricamento moduli
+# --- MIME TYPES (Anti-Errore JS) ---
 <IfModule mod_mime.c>
   AddType application/javascript .js
   AddType text/css .css
