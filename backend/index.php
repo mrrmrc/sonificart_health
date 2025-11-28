@@ -14,12 +14,11 @@ $db_host = 'localhost';
 $db_name = 'diq0p57p_sonificart';
 $db_user = 'diq0p57p_sonifico';
 $db_pass = 'DROPAxin2026!';
-$db_charset = 'utf8mb4'; // Fondamentale per evitare l'errore charset
+$db_charset = 'utf8mb4'; 
 
 // ==================================================================================
 // 2. SETUP HEADER E CORS
 // ==================================================================================
-// Assicuriamoci che l'header JSON venga inviato sempre, anche in caso di fatal error prima dell'output
 header("Access-Control-Allow-Origin: *"); 
 header("Content-Type: application/json; charset=UTF-8");
 header("Access-Control-Allow-Methods: GET,POST,PUT,DELETE,OPTIONS");
@@ -31,9 +30,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
 }
 
 // ==================================================================================
-// 3. CONNESSIONE DATABASE (CORRETTA)
+// 3. CONNESSIONE DATABASE
 // ==================================================================================
-// Costruzione corretta della stringa di connessione usando le variabili definite sopra
 $dsn = "mysql:host=$db_host;dbname=$db_name;charset=$db_charset";
 
 $options = [
@@ -43,10 +41,8 @@ $options = [
 ];
 
 try {
-    // Usiamo $db_user e $db_pass corretti
     $pdo = new PDO($dsn, $db_user, $db_pass, $options);
 } catch (\PDOException $e) {
-    // In caso di errore, restituiamo un JSON valido al 100%
     http_response_code(500);
     echo json_encode([
         "error" => "Errore di connessione al Database",
@@ -60,21 +56,17 @@ try {
 // ==================================================================================
 $action = $_GET['action'] ?? '';
 $method = $_SERVER['REQUEST_METHOD'];
-// Leggiamo l'input JSON in modo sicuro
 $rawInput = file_get_contents('php://input');
 $input = json_decode($rawInput, true) ?? [];
 
-// Gestione header authorization (compatibilità Apache/Nginx)
 $headers = getallheaders();
 $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
 
 function getUserIdFromToken($token, $input) {
-    // 1. Cerca nell'Authorization Header (metodo standard)
     if (strpos($token, 'Bearer ') === 0) {
         $t = substr($token, 7);
         if (strpos($t, 'user_') === 0) return str_replace('user_', '', $t);
     }
-    // 2. Se non trovato, cerca nel Body JSON (per hosting che filtrano header)
     if (isset($input['auth_token'])) {
         $t = $input['auth_token'];
         if (strpos($t, 'user_') === 0) return str_replace('user_', '', $t);
@@ -122,7 +114,7 @@ if ($action === 'login' && $method === 'POST') {
     }
 }
 
-// --- 2. REGISTRAZIONE ---
+// --- 2. REGISTRAZIONE (CON INVIO EMAIL) ---
 if ($action === 'register' && $method === 'POST') {
     $name = $input['name'] ?? '';
     $email = $input['email'] ?? '';
@@ -135,12 +127,54 @@ if ($action === 'register' && $method === 'POST') {
     }
 
     try {
+        // Inserimento Utente
         $stmt = $pdo->prepare("INSERT INTO users (name, email, password, credits, avatar_url) VALUES (?, ?, ?, 5, ?)");
         $avatar = "https://api.dicebear.com/7.x/avataaars/svg?seed=" . urlencode($name);
         $stmt->execute([$name, $email, $password, $avatar]);
         
         $id = $pdo->lastInsertId();
         $token = "user_" . $id; 
+
+        // --- INIZIO LOGICA EMAIL ---
+        $headersEmail = "MIME-Version: 1.0" . "\r\n";
+        $headersEmail .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+        $headersEmail .= "From: SonificART <mail@sonificart.com>" . "\r\n";
+        $headersEmail .= "Reply-To: mail@sonificart.com" . "\r\n";
+
+        // A. Email UTENTE
+        $subjectUser = "Benvenuto in SonificART! 🎨🎵";
+        $messageUser = "
+        <html>
+        <head><title>Benvenuto in SonificART</title></head>
+        <body style='font-family: Arial, sans-serif; color: #333; background-color: #f4f4f4; padding: 20px;'>
+            <div style='background-color: #fff; padding: 20px; border-radius: 8px; max-width: 600px; margin: 0 auto; border: 1px solid #ddd;'>
+                <h2 style='color: #8A2BE2;'>Benvenuto, $name!</h2>
+                <p>Grazie per esserti unito a <strong>SonificART</strong>.</p>
+                <p>Il tuo account è attivo e ti abbiamo regalato <strong>5 Crediti</strong> per iniziare a trasformare le tue immagini in musica.</p>
+                <hr style='border: 0; border-top: 1px solid #eee; margin: 20px 0;'>
+                <p><strong>Email registrata:</strong> $email</p>
+                <p>Accedi subito e crea la tua prima sonificazione!</p>
+                <br>
+                <p style='font-size: 12px; color: #999;'>SonificART Team</p>
+            </div>
+        </body>
+        </html>
+        ";
+        @mail($email, $subjectUser, $messageUser, $headersEmail);
+
+        // B. Email ADMIN
+        $subjectAdmin = "[SonificART] Nuovo Utente: $name";
+        $messageAdmin = "
+        <html><body>
+            <h3>Nuova Registrazione</h3>
+            <p><strong>Nome:</strong> $name</p>
+            <p><strong>Email:</strong> $email</p>
+            <p><strong>Data:</strong> " . date('d/m/Y H:i') . "</p>
+        </body></html>
+        ";
+        @mail("mail@sonificart.com", $subjectAdmin, $messageAdmin, $headersEmail);
+        // --- FINE LOGICA EMAIL ---
+
         sendResponse([
             "token" => $token, 
             "user" => [
@@ -156,7 +190,7 @@ if ($action === 'register' && $method === 'POST') {
     }
 }
 
-// --- 3. VETRINA PUBBLICA (SHOWCASE) - No Auth Required ---
+// --- 3. VETRINA PUBBLICA (SHOWCASE) ---
 if ($action === 'get_showcase' && $method === 'GET') {
     try {
         $stmt = $pdo->query("SELECT * FROM showcase WHERE is_public = 1 ORDER BY created_at DESC");
@@ -194,7 +228,6 @@ if ($action === 'get_showcase' && $method === 'GET') {
 // ==================================================================================
 $userId = getUserIdFromToken($authHeader, $input);
 if (!$userId) {
-    // Se l'azione richiede login ma non c'è token
     if ($action !== 'login' && $action !== 'register' && $action !== 'get_showcase') {
         sendResponse(["error" => "Non autorizzato. Token mancante o invalido."], 401);
     }
@@ -226,7 +259,6 @@ if ($action === 'check_session') {
 // --- 5. GESTIONE CREDITI ---
 if ($action === 'consume_credits' && $method === 'POST') {
     $cost = $input['cost'] ?? 1;
-    
     $stmt = $pdo->prepare("SELECT credits, is_pro FROM users WHERE id = ?");
     $stmt->execute([$userId]);
     $user = $stmt->fetch();
@@ -273,7 +305,6 @@ if ($action === 'get_history' && $method === 'POST') {
             "traditionName" => $h['tradition_name']
         ];
     }, $history);
-    
     sendResponse($mapped);
 }
 
@@ -283,7 +314,7 @@ if ($action === 'clear_history' && $method === 'POST') {
     sendResponse(["success" => true]);
 }
 
-// --- 7. PUBBLICAZIONE STORIA -> VETRINA ---
+// --- 7. PUBBLICAZIONE STORIA ---
 if ($action === 'publish_history' && $method === 'POST') {
     $entryId = $input['entryId'];
     $meta = $input['metadata'];
@@ -298,7 +329,6 @@ if ($action === 'publish_history' && $method === 'POST') {
         $author = $ustmt->fetch()['name'];
 
         $stmt = $pdo->prepare("INSERT INTO showcase (title, author_name, description, image_url, paradigm, tradition, tags, duration, notes_count, created_at, owner_id, is_public) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, 1)");
-        
         $tags = is_array($meta['tags']) ? implode(',', $meta['tags']) : $meta['tags'];
         
         $stmt->execute([
@@ -325,7 +355,6 @@ $stmt->execute([$userId]);
 $isAdmin = $stmt->fetchColumn();
 
 if ($isAdmin) {
-    
     if ($action === 'get_users' && $method === 'POST') {
         $stmt = $pdo->query("SELECT id, name, email, is_pro, is_admin, credits, avatar_url, created_at as registeredAt, created_at as lastLogin FROM users ORDER BY created_at DESC");
         $users = $stmt->fetchAll();
@@ -370,7 +399,6 @@ if ($isAdmin) {
     if ($action === 'get_stats' && $method === 'POST') {
         $totalUsers = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
         $totalSonifications = $pdo->query("SELECT COUNT(*) FROM history")->fetchColumn();
-        
         sendResponse([
             "totalUsers" => (int)$totalUsers,
             "activeUsers24h" => 5,
@@ -397,7 +425,7 @@ if ($isAdmin) {
         $email = $input['email'] ?? '';
         $password = $input['password'] ?? '';
         $isPro = (bool)($input['isPro'] ?? false);
-        $isAdminReg = (bool)($input['isAdmin'] ?? false); // Rinomino per evitare conflitto con $isAdmin della sessione
+        $isAdminReg = (bool)($input['isAdmin'] ?? false);
 
         $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
         $stmt->execute([$email]);
@@ -428,7 +456,6 @@ if ($isAdmin) {
 
         $fields = [];
         $params = [];
-
         if ($name !== null) { $fields[] = "name=?"; $params[] = $name; }
         if ($email !== null) { $fields[] = "email=?"; $params[] = $email; }
         if ($password !== null && !empty($password)) { $fields[] = "password=?"; $params[] = $password; }
@@ -454,13 +481,11 @@ if ($isAdmin) {
     }
 
 } else {
-    // Se userId è autenticato ma non è admin e tenta azioni admin
     if (strpos($action, 'admin_') === 0) {
         sendResponse(["error" => "Accesso negato. Richiede privilegi di amministratore."], 403);
     }
 }
 
-// Fallback se nessuna azione è stata intercettata
 if ($userId && !$action) {
     sendResponse(["message" => "SonificART API v1.0 Ready (Authenticated)"]);
 } elseif (!$action) {
