@@ -1,6 +1,3 @@
-
-
-
 export type ProcessingStatus = 'pending' | 'active' | 'completed';
 
 export type Paradigm = 'scientific' | 'artistic' | 'hybrid';
@@ -9,12 +6,12 @@ export type InstrumentType = 'sine' | 'square' | 'sawtooth' | 'triangle';
 
 // NEW: Enum for scan patterns for type safety
 export enum ScanPattern {
-  LINEAR = 'LINEAR',
-  INWARD_BOX_CLOCKWISE = 'INWARD_BOX_CLOCKWISE',
-  INWARD_BOX_COUNTER_CLOCKWISE = 'INWARD_BOX_COUNTER_CLOCKWISE',
-  BOUSTROPHEDON_LTR = 'BOUSTROPHEDON_LTR',
-  BOUSTROPHEDON_RTL = 'BOUSTROPHEDON_RTL',
-  SCANLINES_VERTICAL = 'SCANLINES_VERTICAL',
+    LINEAR = 'LINEAR',
+    INWARD_BOX_CLOCKWISE = 'INWARD_BOX_CLOCKWISE',
+    INWARD_BOX_COUNTER_CLOCKWISE = 'INWARD_BOX_COUNTER_CLOCKWISE',
+    BOUSTROPHEDON_LTR = 'BOUSTROPHEDON_LTR',
+    BOUSTROPHEDON_RTL = 'BOUSTROPHEDON_RTL',
+    SCANLINES_VERTICAL = 'SCANLINES_VERTICAL',
 }
 
 // NEW: Type for user override
@@ -22,26 +19,26 @@ export type ScanPatternOverride = ScanPattern | 'auto';
 
 
 export interface ProcessingStep {
-  id: number;
-  name: string;
-  status: ProcessingStatus;
+    id: number;
+    name: string;
+    status: ProcessingStatus;
 }
 
 export interface OscSettings {
-  enabled: boolean;
-  host: string;
-  port: number;
+    enabled: boolean;
+    host: string;
+    port: number;
 }
 
 export interface ConfigSettings {
-  pixelCount: number;
-  bpm: number;
-  noteDurationSeconds: number; // Duration of each note in seconds
-  osc: OscSettings;
-  // New settings for artistic arrangement
-  enableAccompaniment: boolean;
-  melodyInstrument: InstrumentType;
-  accompanimentInstrument: InstrumentType;
+    pixelCount: number;
+    bpm: number;
+    noteDurationSeconds: number; // Duration of each note in seconds
+    osc: OscSettings;
+    // New settings for artistic arrangement
+    enableAccompaniment: boolean;
+    melodyInstrument: InstrumentType;
+    accompanimentInstrument: InstrumentType;
 }
 
 export interface MusicalGenre {
@@ -68,74 +65,74 @@ export interface MusicGenerationPrompt {
 
 
 export interface Tradition {
-  id: number | string;
-  name: string;
-  cultural_family: string;
-  region: string;
-  description: string;
-  character: string;
-  // --- New fields for cultural transformation ---
-  scale_cents: number[];
-  // Scoring profile for cultural selection
-  profile: {
-    // 0-1 range for each
-    color_temp: number; // 0=warm, 1=cool
-    saturation: number; // 0=low, 1=high
-    hue_diversity: number; // 0=focused, 1=diverse
-  };
-  timing_profile?: {
-    rubato?: number; // e.g., 0.1 for 10% variation
-    swing?: number; // e.g., 1.2 for a swing factor
-  };
+    id: number | string;
+    name: string;
+    cultural_family: string;
+    region: string;
+    description: string;
+    character: string;
+    // --- New fields for cultural transformation ---
+    scale_cents: number[];
+    // Scoring profile for cultural selection
+    profile: {
+        // 0-1 range for each
+        color_temp: number; // 0=warm, 1=cool
+        saturation: number; // 0=low, 1=high
+        hue_diversity: number; // 0=focused, 1=diverse
+    };
+    timing_profile?: {
+        rubato?: number; // e.g., 0.1 for 10% variation
+        swing?: number; // e.g., 1.2 for a swing factor
+    };
 }
 
 export interface BlockData {
-  r: number;
-  g: number;
-  b: number;
-  position: { x: number; y: number; };
-  // More detailed analysis
-  hsv: { h: number; s: number; v: number };
-  lab: { l: number; a: number; b: number };
-  variance: number;
-  isFiller?: boolean;
+    r: number;
+    g: number;
+    b: number;
+    position: { x: number; y: number; };
+    // More detailed analysis
+    hsv: { h: number; s: number; v: number };
+    lab: { l: number; a: number; b: number };
+    variance: number;
+    isFiller?: boolean;
 }
 
 
 export interface UniversalMapping {
-  baseNote: number; // 0-11
-  noteName: string; // C, D, E...
-  confidence: number;
-  mappingType: 'hue' | 'luminosity' | 'fallback';
-  microtoneOffset: number; // in cents, [-50, 50]
+    baseNote: number; // 0-11
+    noteName: string; // C, D, E...
+    confidence: number;
+    mappingType: 'hue' | 'luminosity' | 'fallback';
+    microtoneOffset: number; // in cents, [-50, 50]
 }
 
 export interface MappedBlock {
-  blockData: BlockData;
-  mapping: UniversalMapping;
+    blockData: BlockData;
+    mapping: UniversalMapping;
 }
 
 export interface TransformedNoteEvent {
-  time: number; // in seconds from start
-  duration: number; // in seconds
-  
-  // Note info
-  baseNote: number; // original 0-11
-  transformedCents: number; // microtonal note in cents
-  midiFloat: number;
-  noteName: string;
-  
-  // Dynamics
-  velocity: number; // 1-127
-  expression: number; // 0-1 for CC (from L*)
-  chroma: number; // 0-1 for timbre richness (from C*)
-  articulation: 'staccato' | 'normal' | 'legato';
+    time: number; // in seconds from start
+    duration: number; // in seconds
 
-  // For visualization
-  sourceBlock: BlockData;
+    // Note info
+    baseNote: number; // original 0-11
+    transformedCents: number; // microtonal note in cents
+    midiFloat: number;
+    noteName: string;
 
-  // For arrangement
-  isAccompaniment?: boolean;
+    // Dynamics
+    velocity: number; // 1-127
+    expression: number; // 0-1 for CC (from L*)
+    chroma: number; // 0-1 for timbre richness (from C*)
+    articulation: 'staccato' | 'normal' | 'legato';
+
+    // For visualization
+    sourceBlock: BlockData;
+
+    // For arrangement
+    isAccompaniment?: boolean;
 }
 
 
@@ -187,7 +184,7 @@ export interface ValidationResult {
 
 export interface PerformanceMetrics {
     totalProcessingTime: number;
-    [key: string]: number; 
+    [key: string]: number;
 }
 
 export interface SacContainer {
@@ -212,7 +209,7 @@ export interface SonificationResult {
     audioHash: string; // Semantic hash (usually same as wav blob hash but kept for logic)
     configUsed: ConfigSettings;
     standardizedImageUrl: string;
-    
+
     // Phase results
     blockAnalysisResult: BlockAnalysisResult;
     culturalSelectionResult: CulturalSelectionResult;
@@ -221,17 +218,17 @@ export interface SonificationResult {
 
     // SAC file
     sacContainer: SacContainer;
-    
+
     // Metadata
     validationResult: ValidationResult;
     performanceMetrics: PerformanceMetrics;
-    
+
     // NEW: Physical file hashes for verification
     validationHashes: ValidationHashes;
 
     // Artistic mode data
     musicGenerationPrompt?: MusicGenerationPrompt | null;
-    
+
     // Generated AI Track (Optional)
     generatedAiTrackUrl?: string | null;
 
@@ -272,7 +269,8 @@ export interface DashboardEntry {
     paradigm: Paradigm;
     traditionName: string;
     // New field for single file verification
-    audioHash?: string; 
+    audioHash?: string;
+    audioUrl?: string | null; // <--- QUESTA È LA RIGA FONDAMENTALE CHE MANCAVA
     // NEW: Store all file hashes for verification
     validationHashes?: ValidationHashes;
 }
