@@ -159,9 +159,6 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, user, onD
                         {/* TASTI MODIFICA (SOLO AUTORE) */}
                         {isOwner && (
                             <div className="flex gap-2 mt-4">
-                                <button className="flex-1 bg-brand-primary text-white text-xs font-bold py-2 rounded border border-white/10 hover:bg-white/10 cursor-not-allowed opacity-50">
-                                    Modifica
-                                </button>
                                 <button onClick={handleDelete} className="flex-1 bg-red-500/20 text-red-400 text-xs font-bold py-2 rounded border border-red-500/30 hover:bg-red-500 hover:text-white transition-colors">
                                     Elimina Opera
                                 </button>
@@ -220,7 +217,7 @@ export const ShowcaseView: React.FC<{ user?: User | null }> = ({ user }) => {
                 <ProjectModal
                     project={selectedProject}
                     onClose={() => setSelectedProject(null)}
-                    user={user ?? null} // FIX: user ?? null converte undefined in null
+                    user={user ?? null} // <--- CORREZIONE APPLICATA QUI
                     onDelete={handleDelete}
                 />
             )}
