@@ -53,12 +53,15 @@ interface ResultsDashboardProps {
     result: SonificationResult;
     imageUrl: string;
     onReset: () => void;
-    onSave: () => void; // NUOVA PROP AGGIUNTA
+    onSave: () => void;
     user: User | null;
     onRequestAccess: () => void;
+    isHistoryView?: boolean; // Importante: flag per sapere se siamo in modalità "lettura"
 }
 
-export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imageUrl, onReset, onSave, user, onRequestAccess }) => {
+export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
+    result, imageUrl, onReset, onSave, user, onRequestAccess, isHistoryView = false
+}) => {
     const [imageRenderInfo, setImageRenderInfo] = useState({ x: 0, y: 0, width: 0, height: 0 });
     const [playbackTime, setPlaybackTime] = useState(0);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -331,13 +334,6 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imag
                 </div>
             )}
 
-            {/* PULSANTE INDIETRO SPOSTATO NEL BOX INTERATTIVO */}
-            <div className="text-center mb-6 hidden">
-                <button onClick={onReset} className="bg-brand-accent text-brand-primary font-bold py-2 px-6 rounded-full hover:bg-brand-accent-light transition-colors">
-                    <i className="fas fa-arrow-left mr-2"></i> Sonifica un'altra immagine
-                </button>
-            </div>
-
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
                 <div className="lg:col-span-3 space-y-4">
                     <div ref={containerRef} className="relative aspect-square bg-brand-primary/30 rounded-md overflow-hidden border border-brand-secondary group">
@@ -396,20 +392,32 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ result, imag
                                     </div>
                                 </div>
                                 <div className="bg-brand-primary/30 p-3 rounded-lg border border-brand-secondary">
-                                    <h5 className="text-sm text-brand-text-secondary mb-2 text-center">Profilo Sonoro Interattivo</h5>
+                                    <h5 className="text-sm text-brand-text-secondary mb-2 text-center">
+                                        {isHistoryView ? "Player Audio (Archivio)" : "Profilo Sonoro Interattivo"}
+                                    </h5>
                                     <AudioPlayer audioRef={audioRef} audioUrl={result.audioOutput.audioUrl} onTimeUpdate={handleTimeUpdate} onPlay={handlePlay} onStop={handleStop} />
                                     <MusicSheet activeEvent={activeEvent} />
 
-                                    {/* --- NUOVI PULSANTI AZIONE --- */}
+                                    {/* --- ZONA PULSANTI MODIFICATA E CORRETTA --- */}
                                     <div className="flex gap-3 mt-4 pt-3 border-t border-brand-secondary/30">
-                                        <button onClick={onReset} className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-300 py-2 rounded text-xs font-bold transition-colors border border-red-500/30">
-                                            <i className="fas fa-times mr-2"></i> ANNULLA
+                                        <button
+                                            onClick={onReset}
+                                            className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-300 py-2 rounded text-xs font-bold transition-colors border border-red-500/30 flex items-center justify-center gap-2"
+                                        >
+                                            <i className={`fas ${isHistoryView ? 'fa-arrow-left' : 'fa-times'}`}></i>
+                                            {isHistoryView ? "TORNA ALLA LISTA" : "ANNULLA"}
                                         </button>
-                                        <button onClick={onSave} className="flex-1 bg-green-500/20 hover:bg-green-500/30 text-green-300 py-2 rounded text-xs font-bold transition-colors border border-green-500/30">
-                                            <i className="fas fa-save mr-2"></i> SALVA E ARCHIVIA
-                                        </button>
+
+                                        {!isHistoryView && (
+                                            <button
+                                                onClick={onSave}
+                                                className="flex-1 bg-green-500/20 hover:bg-green-500/30 text-green-300 py-2 rounded text-xs font-bold transition-colors border border-green-500/30 flex items-center justify-center gap-2"
+                                            >
+                                                <i className="fas fa-save"></i> SALVA OPERA
+                                            </button>
+                                        )}
                                     </div>
-                                    {/* --------------------------------- */}
+                                    {/* ------------------------------------------- */}
                                 </div>
                             </div>
                         </div>
