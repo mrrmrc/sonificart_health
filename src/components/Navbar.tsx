@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Logo } from './Logo';
 import { ViewType } from '../App';
@@ -9,12 +8,12 @@ interface NavbarProps {
     currentView: ViewType;
     setView: (view: ViewType) => void;
     isLoggedIn: boolean;
-    isAdmin?: boolean; 
-    userCredits?: number; 
-    isProUser?: boolean; 
+    isAdmin?: boolean;
+    userCredits?: number;
+    isProUser?: boolean;
     onLogin: () => void;
     onLogout: () => void;
-    onGoProClick: () => void; 
+    onGoProClick: () => void;
     onOpenHelp: () => void;
 }
 
@@ -32,8 +31,8 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setView, isLoggedIn
 
     const navLinkClass = (view: ViewType) => `
         relative cursor-pointer px-3 py-2 text-sm font-bold tracking-wide uppercase transition-all duration-300 group
-        ${currentView === view 
-            ? 'text-white' 
+        ${currentView === view
+            ? 'text-white'
             : 'text-white/70 hover:text-white'}
     `;
 
@@ -44,7 +43,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setView, isLoggedIn
     return (
         <nav className="fixed w-full z-50 top-0 left-0 border-b border-white/10 bg-[#0f172a]/80 backdrop-blur-xl transition-all duration-300 shadow-2xl">
             <div className="max-w-[1800px] mx-auto px-6 h-20 flex items-center justify-between">
-                
+
                 {/* --- LEFT: BRANDING --- */}
                 <div className="flex items-center gap-3 cursor-pointer group shrink-0" onClick={() => setView('landing')}>
                     <Logo className="w-10 h-10 relative z-10 transition-transform duration-700 ease-out group-hover:rotate-[360deg] filter drop-shadow-[0_0_8px_rgba(45,212,191,0.5)]" />
@@ -65,16 +64,15 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setView, isLoggedIn
 
                 {/* --- CENTER: MAIN NAVIGATION --- */}
                 <div className="hidden lg:flex items-center justify-center gap-8">
-                    {/* Home Link */}
                     <button onClick={() => setView('landing')} className={navLinkClass('landing')}>
                         {t.nav.home}
                         <ActiveIndicator isActive={currentView === 'landing'} />
                     </button>
 
-                    {/* Always Visible Request Access */}
+                    {/* TESTO MODIFICATO QUI */}
                     <button onClick={onGoProClick} className={`${navLinkClass('landing')} text-brand-accent hover:text-brand-accent-light flex items-center gap-2`}>
                         <i className="fas fa-crown text-xs"></i>
-                        Richiedi Accesso PRO
+                        Richiedi Accesso
                         <ActiveIndicator isActive={false} />
                     </button>
 
@@ -104,7 +102,6 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setView, isLoggedIn
                             )}
                         </>
                     ) : (
-                        // LOGGED OUT
                         <button onClick={() => setView('showcase')} className={navLinkClass('showcase')}>
                             {t.nav.showcase}
                             <ActiveIndicator isActive={currentView === 'showcase'} />
@@ -114,12 +111,11 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setView, isLoggedIn
 
                 {/* --- RIGHT: ACTIONS --- */}
                 <div className="flex items-center gap-4 shrink-0">
-                    
+
                     <button onClick={onOpenHelp} className="text-white/70 hover:text-brand-accent transition-colors" title="Guida Framework">
                         <i className="fas fa-book-open text-lg"></i>
                     </button>
 
-                    {/* Lang Selector Compact */}
                     <div className="relative group">
                         <button className="text-xs font-bold text-white/70 hover:text-white uppercase flex items-center gap-1">
                             {language} <i className="fas fa-chevron-down text-[8px]"></i>
@@ -140,7 +136,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setView, isLoggedIn
                     <div className="h-6 w-px bg-white/20 mx-2 hidden sm:block"></div>
 
                     {!isLoggedIn ? (
-                        <button 
+                        <button
                             onClick={onLogin}
                             className="hidden sm:block bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-wider px-6 py-2.5 rounded-full border border-white/20 transition-all hover:shadow-[0_0_15px_rgba(255,255,255,0.1)]"
                         >
@@ -148,12 +144,10 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setView, isLoggedIn
                         </button>
                     ) : (
                         <div className="flex items-center gap-4">
-                            {/* CREDIT COUNTER */}
-                            <div 
-                                className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border backdrop-blur-md ${
-                                    isProUser ? 'bg-gradient-to-r from-yellow-500/20 to-amber-600/20 border-yellow-500/50 shadow-[0_0_10px_rgba(234,179,8,0.2)]' : 
-                                    (userCredits && userCredits > 0) ? 'bg-green-500/20 border-green-500/50' : 'bg-red-500/20 border-red-500/50'
-                                }`}
+                            <div
+                                className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border backdrop-blur-md ${isProUser ? 'bg-gradient-to-r from-yellow-500/20 to-amber-600/20 border-yellow-500/50 shadow-[0_0_10px_rgba(234,179,8,0.2)]' :
+                                        (userCredits && userCredits > 0) ? 'bg-green-500/20 border-green-500/50' : 'bg-red-500/20 border-red-500/50'
+                                    }`}
                                 title={isProUser ? "Crediti Illimitati" : `Crediti rimanenti: ${userCredits}`}
                             >
                                 <i className={`fas ${isProUser ? 'fa-infinity' : 'fa-coins'} ${isProUser ? 'text-yellow-400' : 'text-white'} text-xs`}></i>
@@ -162,7 +156,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setView, isLoggedIn
                                 </span>
                             </div>
 
-                            <button 
+                            <button
                                 onClick={() => setView('profile')}
                                 className="hidden sm:flex w-9 h-9 rounded-full bg-gradient-to-br from-brand-accent to-purple-600 items-center justify-center text-white shadow-lg hover:scale-110 transition-transform border border-white/20"
                             >
@@ -174,7 +168,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setView, isLoggedIn
                         </div>
                     )}
 
-                    <button 
+                    <button
                         className="lg:hidden ml-2 text-white focus:outline-none"
                         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                     >
@@ -190,8 +184,9 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setView, isLoggedIn
                         <button onClick={() => { setView('landing'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">
                             {t.nav.home}
                         </button>
+                        {/* TESTO MODIFICATO ANCHE QUI */}
                         <button onClick={() => { onGoProClick(); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-brand-accent font-bold bg-white/5 rounded-lg border border-brand-accent/20">
-                            Richiedi Accesso PRO
+                            Richiedi Accesso
                         </button>
                         <button onClick={() => { setView('showcase'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">
                             {t.nav.showcase}

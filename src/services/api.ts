@@ -42,6 +42,15 @@ export const api = {
         return data.user;
     },
 
+    requestAccess: async (data: any): Promise<void> => {
+        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        await fetch(`${API_BASE_URL}/index.php?action=request_access`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...data, auth_token: token })
+        });
+    },
+
     checkSession: async (): Promise<User | null> => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
         if (!token) return null;
@@ -129,7 +138,7 @@ export const api = {
         return await handleResponse(response);
     },
 
-    // --- ADMIN FUNCTIONS (CORRETTE) ---
+    // Admin functions
     updateShowcaseItem: async (item: ShowcaseProject) => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
         await fetch(`${API_BASE_URL}/index.php?action=admin_update_showcase`, {
@@ -166,10 +175,9 @@ export const api = {
         return await handleResponse(response);
     },
 
-    // Placeholder for unused but typed functions
-    adminCreateUser: async (u: any) => { },
-    updateUser: async (u: any) => { },
-    deleteUser: async (id: string) => { },
-    addShowcaseItem: async (item: any) => { },
+    adminCreateUser: async (u: any) => { const token = localStorage.getItem(STORAGE_KEYS.TOKEN); await fetch(`${API_BASE_URL}/index.php?action=admin_create_user`, { method: 'POST', body: JSON.stringify({ ...u, auth_token: token }) }); },
+    updateUser: async (u: any) => { const token = localStorage.getItem(STORAGE_KEYS.TOKEN); await fetch(`${API_BASE_URL}/index.php?action=admin_update_user`, { method: 'POST', body: JSON.stringify({ ...u, auth_token: token }) }); },
+    deleteUser: async (id: string) => { const token = localStorage.getItem(STORAGE_KEYS.TOKEN); await fetch(`${API_BASE_URL}/index.php?action=admin_delete_user`, { method: 'POST', body: JSON.stringify({ id, auth_token: token }) }); },
+    addShowcaseItem: async (item: any) => { const token = localStorage.getItem(STORAGE_KEYS.TOKEN); await fetch(`${API_BASE_URL}/index.php?action=admin_add_showcase`, { method: 'POST', body: JSON.stringify({ ...item, auth_token: token }) }); },
     registerArtifact: async () => { },
 };
