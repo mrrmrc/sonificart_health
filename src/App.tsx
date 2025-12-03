@@ -23,19 +23,24 @@ import { ParadigmInfo } from './components/ParadigmInfo';
 import { api } from './services/api';
 import OSC from 'osc-js';
 
+// Steps definitions
 const scientificSteps: ProcessingStep[] = [
     { id: 1, name: 'Image Standardization', status: 'pending' },
-    { id: 2, name: 'Hash Calculation', status: 'pending' },
+    { id: 2, name: 'Hash Calculation (SHA-256)', status: 'pending' },
     { id: 3, name: 'Block Analysis', status: 'pending' },
     { id: 4, name: 'Universal Mapping', status: 'pending' },
     { id: 5, name: 'Cultural Selection', status: 'pending' },
     { id: 6, name: 'Cultural Transformation', status: 'pending' },
-    { id: 7, name: 'Audio Synthesis', status: 'pending' },
+    { id: 7, name: 'Audio Synthesis & Export', status: 'pending' },
 ];
-const artisticSteps = scientificSteps; const hybridSteps = scientificSteps;
+
+const artisticSteps = scientificSteps;
+const hybridSteps = scientificSteps;
 
 const initialSettings: ConfigSettings = {
-    pixelCount: 1024, bpm: 120, noteDurationSeconds: 0.125,
+    pixelCount: 1024,
+    bpm: 120,
+    noteDurationSeconds: 0.125,
     osc: { enabled: false, host: '127.0.0.1', port: 9129 },
     enableAccompaniment: false, melodyInstrument: 'sine', accompanimentInstrument: 'triangle',
 };
@@ -57,9 +62,13 @@ export default function App() {
     const [isRequestAccessOpen, setIsRequestAccessOpen] = useState(false);
     const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
     const [helpInitialSection, setHelpInitialSection] = useState<string | undefined>(undefined);
+
+    // OSC State (REINSERITO)
     const [oscClient, setOscClient] = useState<OSC | null>(null);
     const [oscStatus, setOscStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
     const [oscError, setOscError] = useState<string | null>(null);
+
+    // STATO PER MODALITÀ STORIA
     const [isViewingHistory, setIsViewingHistory] = useState(false);
 
     const isUnlimited = user?.isPro || user?.isAdmin;
@@ -87,12 +96,46 @@ export default function App() {
     const handleConfigChange = (newConfig: Partial<ConfigSettings>) => setConfig(prev => ({ ...prev, ...newConfig }));
     const handleParadigmChange = (newParadigm: Paradigm) => setParadigm(newParadigm);
 
+    // --- OSC CONNECTION LOGIC (REINSERITO) ---
+    useEffect(() => {
+        if (config.osc.enabled && oscStatus === 'disconnected') {
+            setOscStatus('connecting');
+            setOscError(null);
+            const osc = new OSC({ plugin: new OSC.WebsocketClientPlugin({ host: config.osc.host, port: config.osc.port }) });
+
+            osc.on('open', () => setOscStatus('connected'));
+            osc.on('error', (err: any) => {
+                console.error("OSC Error:", err);
+                setOscStatus('error');
+                setOscError("Connessione fallita. Controlla che il bridge WebSocket sia attivo.");
+            });
+            osc.on('close', () => setOscStatus('disconnected'));
+
+            try {
+                osc.open();
+                setOscClient(osc);
+            } catch (e) {
+                setOscStatus('error');
+            }
+        } else if (!config.osc.enabled && oscClient) {
+            oscClient.close();
+            setOscClient(null);
+            setOscStatus('disconnected');
+        }
+
+        return () => {
+            if (oscClient) oscClient.close();
+        };
+    }, [config.osc.enabled, config.osc.host, config.osc.port]);
+
+    // --- CARICAMENTO DALLA STORIA ---
     const handleLoadHistoryItem = (entry: DashboardEntry) => {
         const fixImg = (url: string) => {
             if (url.startsWith('data:') || url.startsWith('http')) return url;
             return `data:image/jpeg;base64,${url}`;
         };
 
+        // Ricostruzione oggetto risultato per la visualizzazione
         const reconstructedResult: SonificationResult = {
             imageHash: entry.id,
             audioHash: "ARCHIVED",
@@ -102,7 +145,18 @@ export default function App() {
             configUsed: config,
             blockAnalysisResult: { blocks: [], gridSize: 32, totalPixelsAnalyzed: 0, coveragePercentage: 100, analysisMethod: "", blockSize: 0, globalStats: { avg_L: 50, avg_a: 0, avg_b: 0, avg_saturation: 0.5, hue_diversity: 0.5, avg_variance: 0 } },
             culturalSelectionResult: {
-                tradition: { id: 'archived', name: entry.traditionName || "Sconosciuta", region: "Global", description: "Dati storici", baseFrequency: 440, cultural_family: "Archivio", character: "Archived", scale_cents: [], profile: { color_temp: 0, saturation: 0, hue_diversity: 0 } } as any,
+                // FIX: cast as any per evitare problemi di tipi
+                tradition: {
+                    id: 'archived',
+                    name: entry.traditionName || "Sconosciuta",
+                    region: "Global",
+                    description: "Dati storici",
+                    baseFrequency: 440,
+                    cultural_family: "Archivio",
+                    character: "Archived",
+                    scale_cents: [],
+                    profile: { color_temp: 0, saturation: 0, hue_diversity: 0 }
+                } as any,
                 scoreBreakdown: { total: 1, colorTemperature: 0, saturation: 0, hueDiversity: 0 }
             },
             audioOutput: {
@@ -127,15 +181,18 @@ export default function App() {
 
     const startSonification = async () => {
         if (!imageFile || !user) { setIsLoginModalOpen(true); return; }
+
         setIsProcessing(true);
         setResult(null);
         setIsViewingHistory(false);
+
         try {
             await new Promise(r => setTimeout(r, 500));
             let res: SonificationResult;
             if (paradigm === 'scientific') res = await sonifyImage(imageFile, config, () => { }, oscClient, scanPatternOverride);
             else if (paradigm === 'artistic') res = await sonifyImageArtistic(imageFile, config, () => { }, oscClient, scanPatternOverride);
             else res = await sonifyImageHybrid(imageFile, config, () => { }, oscClient, scanPatternOverride);
+
             if (user) await api.saveSonification(res, paradigm);
             setResult(res);
         } catch (error) { console.error(error); alert("Errore elaborazione"); }
@@ -145,18 +202,35 @@ export default function App() {
     return (
         <div className="min-h-screen flex flex-col bg-transparent text-brand-text-primary font-sans antialiased selection:bg-brand-accent selection:text-white overflow-x-hidden">
             <GlobalBackground />
-            <Navbar currentView={view} setView={(newView) => { if (newView === 'sonification') resetEditorState(); setView(newView); }} isLoggedIn={!!user} isAdmin={user?.isAdmin} userCredits={user?.credits} isProUser={isUnlimited} onLogin={() => setIsLoginModalOpen(true)} onLogout={async () => { await api.logout(); setUser(null); resetEditorState(); setView('landing'); }} onGoProClick={() => setIsRequestAccessOpen(true)} onOpenHelp={() => { setHelpInitialSection(undefined); setIsHelpModalOpen(true); }} />
+            <Navbar
+                currentView={view}
+                setView={(newView) => {
+                    if (newView === 'sonification') resetEditorState();
+                    setView(newView);
+                }}
+                isLoggedIn={!!user}
+                isAdmin={user?.isAdmin}
+                userCredits={user?.credits}
+                isProUser={isUnlimited}
+                onLogin={() => setIsLoginModalOpen(true)}
+                onLogout={async () => { await api.logout(); setUser(null); resetEditorState(); setView('landing'); }}
+                onGoProClick={() => setIsRequestAccessOpen(true)}
+                onOpenHelp={() => { setHelpInitialSection(undefined); setIsHelpModalOpen(true); }}
+            />
 
             <main className="flex-grow w-full relative z-10">
                 {view === 'landing' && <LandingPage onGetStarted={() => { if (user) setView('sonification'); else setIsLoginModalOpen(true); }} onExplore={() => setView('showcase')} onOpenPricing={() => setIsRequestAccessOpen(true)} onOpenDocs={(section) => { setHelpInitialSection(section); setIsHelpModalOpen(true); }} />}
+
                 {view !== 'landing' && (
                     <div className="container mx-auto px-4 sm:px-6 lg:px-8 pt-40 pb-24 animate-fade-in">
                         {view === 'verification' && <VerificationPortal user={user} onLogin={() => setIsLoginModalOpen(true)} />}
-                        {/* MODIFICA QUI: Passo l'user alla Showcase */}
                         {view === 'showcase' && <ShowcaseView user={user} />}
                         {view === 'admin' && user?.isAdmin && <AdminPanel />}
                         {view === 'profile' && user && <PublicProfile user={user} />}
-                        {view === 'dashboard' && user && <UserDashboard onLoadEntry={handleLoadHistoryItem} />}
+
+                        {view === 'dashboard' && user && (
+                            <UserDashboard onLoadEntry={handleLoadHistoryItem} />
+                        )}
 
                         {view === 'sonification' && (
                             <div className="max-w-7xl mx-auto">
