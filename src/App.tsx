@@ -3,7 +3,7 @@ import { ImageUploader } from './components/ImageUploader';
 import { ConfigPanel } from './components/ConfigPanel';
 import { ProcessingView } from './components/ProcessingView';
 import { ResultsDashboard } from './components/ResultsDashboard';
-import { SonificationResult, ConfigSettings, ProcessingStep, Paradigm, ScanPatternOverride, User, DashboardEntry } from './types';
+import { SonificationResult, ConfigSettings, ProcessingStep, Paradigm, ScanPatternOverride, User, DashboardEntry, SacVerificationResult } from './types';
 import { sonifyImage, sonifyImageArtistic, sonifyImageHybrid } from './services/sonificationService';
 import { ParadigmToggle } from './components/ParadigmToggle';
 import { ImagePreview } from './components/ImagePreview';
@@ -22,6 +22,7 @@ import { GlobalBackground } from './components/GlobalBackground';
 import { ParadigmInfo } from './components/ParadigmInfo';
 import { api } from './services/api';
 import OSC from 'osc-js';
+import JSZip from 'jszip'; // Necessario per leggere il SAC
 
 // Steps definitions
 const scientificSteps: ProcessingStep[] = [
@@ -63,7 +64,7 @@ export default function App() {
     const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
     const [helpInitialSection, setHelpInitialSection] = useState<string | undefined>(undefined);
 
-    // OSC State (REINSERITO)
+    // OSC State
     const [oscClient, setOscClient] = useState<OSC | null>(null);
     const [oscStatus, setOscStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
     const [oscError, setOscError] = useState<string | null>(null);
@@ -96,7 +97,7 @@ export default function App() {
     const handleConfigChange = (newConfig: Partial<ConfigSettings>) => setConfig(prev => ({ ...prev, ...newConfig }));
     const handleParadigmChange = (newParadigm: Paradigm) => setParadigm(newParadigm);
 
-    // --- OSC CONNECTION LOGIC (REINSERITO) ---
+    // --- OSC CONNECTION LOGIC ---
     useEffect(() => {
         if (config.osc.enabled && oscStatus === 'disconnected') {
             setOscStatus('connecting');
@@ -128,14 +129,13 @@ export default function App() {
         };
     }, [config.osc.enabled, config.osc.host, config.osc.port]);
 
-    // --- CARICAMENTO DALLA STORIA ---
+    // --- CARICAMENTO DALLA STORIA (DB) ---
     const handleLoadHistoryItem = (entry: DashboardEntry) => {
         const fixImg = (url: string) => {
             if (url.startsWith('data:') || url.startsWith('http')) return url;
             return `data:image/jpeg;base64,${url}`;
         };
 
-        // Ricostruzione oggetto risultato per la visualizzazione
         const reconstructedResult: SonificationResult = {
             imageHash: entry.id,
             audioHash: "ARCHIVED",
@@ -145,7 +145,6 @@ export default function App() {
             configUsed: config,
             blockAnalysisResult: { blocks: [], gridSize: 32, totalPixelsAnalyzed: 0, coveragePercentage: 100, analysisMethod: "", blockSize: 0, globalStats: { avg_L: 50, avg_a: 0, avg_b: 0, avg_saturation: 0.5, hue_diversity: 0.5, avg_variance: 0 } },
             culturalSelectionResult: {
-                // FIX: cast as any per evitare problemi di tipi
                 tradition: {
                     id: 'archived',
                     name: entry.traditionName || "Sconosciuta",
@@ -177,6 +176,71 @@ export default function App() {
         setIsViewingHistory(true);
         setView('sonification');
         window.scrollTo(0, 0);
+    };
+
+    // --- CARICAMENTO DA FILE SAC (VERIFICATION PORTAL) ---
+    const handleLoadSacProject = async (file: File, verificationResult: SacVerificationResult) => {
+        try {
+            setIsProcessing(true);
+            const zip = await JSZip.loadAsync(file);
+
+            // 1. Estrai JSON Dati
+            const jsonFile = zip.file("sonification_data.json");
+            if (!jsonFile) throw new Error("File sonification_data.json mancante nel SAC.");
+            const jsonString = await jsonFile.async("string");
+            const jsonData = JSON.parse(jsonString);
+
+            // 2. Estrai Immagine Originale
+            const imgFile = zip.file("original_image.jpg") || zip.file("original_image.png");
+            let imgUrl = "";
+            if (imgFile) {
+                const imgBlob = await imgFile.async("blob");
+                imgUrl = URL.createObjectURL(imgBlob);
+            }
+
+            // 3. Estrai Audio WAV
+            const audioFile = zip.file("generated_audio.wav");
+            let audioUrl = "";
+            let audioBlob = new Blob();
+            if (audioFile) {
+                audioBlob = await audioFile.async("blob");
+                audioUrl = URL.createObjectURL(audioBlob);
+            }
+
+            // 4. Estrai MIDI
+            const midiFile = zip.file("musical_notation.mid");
+            const midiBlob = midiFile ? await midiFile.async("blob") : new Blob();
+
+            // 5. Ricostruisci il SonificationResult
+            // Uniamo i dati del JSON con i Blob estratti dal file
+            const reconstructedResult: SonificationResult = {
+                ...jsonData,
+                standardizedImageUrl: imgUrl || jsonData.standardizedImageUrl, // Usa blob se disponibile
+                audioOutput: {
+                    ...jsonData.audioOutput,
+                    audioUrl: audioUrl,
+                    audioWavBlob: audioBlob,
+                    midiBlob: midiBlob
+                },
+                sacContainer: { blob: file, fileName: file.name },
+                generatedVideoBlob: verificationResult.extractedVideoBlob // Usa il video estratto dalla verifica
+            };
+
+            setResult(reconstructedResult);
+            if (imgUrl) setImageUrl(imgUrl);
+            setParadigm(jsonData.paradigm);
+            setConfig(jsonData.configUsed);
+
+            setIsViewingHistory(true); // Trattalo come una visualizzazione "statica" (storica)
+            setView('sonification');
+            window.scrollTo(0, 0);
+
+        } catch (e) {
+            console.error("Errore caricamento SAC:", e);
+            alert("Impossibile caricare il progetto dal file SAC.");
+        } finally {
+            setIsProcessing(false);
+        }
     };
 
     const startSonification = async () => {
@@ -223,7 +287,9 @@ export default function App() {
 
                 {view !== 'landing' && (
                     <div className="container mx-auto px-4 sm:px-6 lg:px-8 pt-40 pb-24 animate-fade-in">
-                        {view === 'verification' && <VerificationPortal user={user} onLogin={() => setIsLoginModalOpen(true)} />}
+                        {/* Passo la nuova funzione al VerificationPortal */}
+                        {view === 'verification' && <VerificationPortal user={user} onLogin={() => setIsLoginModalOpen(true)} onLoadSacProject={handleLoadSacProject} />}
+
                         {view === 'showcase' && <ShowcaseView user={user} />}
                         {view === 'admin' && user?.isAdmin && <AdminPanel />}
                         {view === 'profile' && user && <PublicProfile user={user} />}

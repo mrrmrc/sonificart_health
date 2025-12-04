@@ -138,7 +138,9 @@ export const api = {
         return await handleResponse(response);
     },
 
-    // Admin functions
+    // --- ADMIN FUNCTIONS ---
+
+    // Modifica opera in vetrina (Titolo/Descrizione)
     updateShowcaseItem: async (item: ShowcaseProject) => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
         await fetch(`${API_BASE_URL}/index.php?action=admin_update_showcase`, {
@@ -148,6 +150,7 @@ export const api = {
         });
     },
 
+    // Elimina opera vetrina
     deleteShowcaseItem: async (id: string) => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
         await fetch(`${API_BASE_URL}/index.php?action=admin_delete_showcase`, {
@@ -157,6 +160,24 @@ export const api = {
         });
     },
 
+    // Gestione Richieste Accesso
+    getAccessRequests: async (): Promise<any[]> => {
+        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const response = await fetch(`${API_BASE_URL}/index.php?action=admin_get_requests`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auth_token: token }) });
+        return await handleResponse(response);
+    },
+
+    approveAccessRequest: async (id: string): Promise<void> => {
+        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        await fetch(`${API_BASE_URL}/index.php?action=admin_approve_request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, auth_token: token }) });
+    },
+
+    rejectAccessRequest: async (id: string): Promise<void> => {
+        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        await fetch(`${API_BASE_URL}/index.php?action=admin_reject_request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, auth_token: token }) });
+    },
+
+    // Stats & Users
     getSystemStats: async () => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
         const response = await fetch(`${API_BASE_URL}/index.php?action=get_stats`, { method: 'POST', body: JSON.stringify({ auth_token: token }) });
