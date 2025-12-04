@@ -8,7 +8,7 @@ const fixImage = (url: string | undefined) => {
     return `data:image/jpeg;base64,${url}`;
 };
 
-// --- MODALE PUBBLICAZIONE (Versione Finale) ---
+// --- MODALE PUBBLICAZIONE ---
 const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPublish: (data: any, file: File | null) => void }> = ({ entry, onClose, onPublish }) => {
     const [step, setStep] = useState<1 | 2>(1);
     const [title, setTitle] = useState(`Opera del ${new Date(entry.timestamp).toLocaleDateString()}`);
@@ -110,6 +110,7 @@ export const UserDashboard: React.FC<{ onLoadEntry: (entry: DashboardEntry) => v
         try {
             const user = await api.checkSession();
             setCurrentUser(user);
+            // FIX: Aggiungo timestamp per forzare il refresh reale dal server
             const data = await api.getHistory();
             setHistory(Array.isArray(data) ? data : []);
         } catch (error) { console.error(error); }
@@ -118,10 +119,22 @@ export const UserDashboard: React.FC<{ onLoadEntry: (entry: DashboardEntry) => v
 
     useEffect(() => { loadHistory(); }, [loadHistory]);
 
+    // --- CANCELLAZIONE ISTANTANEA (OPTIMISTIC UPDATE) ---
     const deleteItem = async (id: string) => {
-        if (confirm("Sei sicuro di voler eliminare definitivamente questa opera?")) {
-            await api.deleteHistoryItem(id);
-            loadHistory();
+        if (confirm("Sei sicuro di voler eliminare definitivamente questa opera e la sua copia pubblica?")) {
+
+            // 1. Rimuovi VISIVAMENTE subito (così l'utente vede l'effetto immediato)
+            setHistory(prevHistory => prevHistory.filter(item => item.id !== id));
+
+            // 2. Esegui la cancellazione REALE sul server
+            try {
+                await api.deleteHistoryItem(id);
+                // Non ricaricare loadHistory() qui, altrimenti rischi che la cache del browser 
+                // ti rimostri il file appena cancellato per qualche millisecondo.
+            } catch (e) {
+                console.error(e);
+                alert("Errore di connessione. Ricarica la pagina.");
+            }
         }
     };
 

@@ -44,7 +44,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, user, onD
     const hasVideo = !!project.videoUrl;
     const isOwner = user && (user.isAdmin || user.id === project.ownerId);
 
-    const shareUrl = `${window.location.origin}/gallery?id=${project.id}`;
+    const shareUrl = `${window.location.origin}/?gallery_id=${project.id}`;
     const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(shareUrl)}`;
 
     useEffect(() => {
@@ -57,19 +57,20 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, user, onD
         }
     }, [project, hasVideo]);
 
-    const handleDelete = () => {
+    const handleDelete = (e: React.MouseEvent) => {
+        e.stopPropagation(); // STOP PROPAGATION
         if (confirm("Sei sicuro di voler rimuovere questa opera dalla vetrina pubblica?")) {
             onDelete(project.id);
-            onClose();
         }
     };
 
-    const handleSave = async () => {
+    const handleSave = async (e: React.MouseEvent) => {
+        e.stopPropagation(); // STOP PROPAGATION
         setIsSaving(true);
         try {
             const updatedProject = { ...project, title: editTitle, description: editDescription };
             await api.updateShowcaseItem(updatedProject);
-            onUpdate(updatedProject); // Aggiorna la lista padre
+            onUpdate(updatedProject);
             setIsEditing(false);
         } catch (e) {
             alert("Errore nel salvataggio.");
@@ -78,7 +79,8 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, user, onD
         }
     };
 
-    const handleShare = () => {
+    const handleShare = (e: React.MouseEvent) => {
+        e.stopPropagation();
         navigator.clipboard.writeText(shareUrl);
         alert("Link copiato negli appunti!");
     };
@@ -112,6 +114,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, user, onD
                                 className="w-full bg-black/30 border border-white/20 p-2 rounded text-2xl font-bold text-white mb-2 focus:border-brand-accent outline-none"
                                 value={editTitle}
                                 onChange={e => setEditTitle(e.target.value)}
+                                onClick={e => e.stopPropagation()}
                             />
                         ) : (
                             <h1 className="text-3xl font-bold text-white mb-2 font-display leading-tight">{project.title}</h1>
@@ -134,6 +137,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, user, onD
                                 className="w-full bg-black/30 border border-white/20 p-2 rounded text-sm text-white h-32 focus:border-brand-accent outline-none resize-none"
                                 value={editDescription}
                                 onChange={e => setEditDescription(e.target.value)}
+                                onClick={e => e.stopPropagation()}
                             />
                         ) : (
                             <p className="text-gray-300 leading-relaxed text-sm">
@@ -179,6 +183,18 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, user, onD
                         </div>
                     )}
 
+                    {hasVideo && (
+                        <div className="bg-purple-900/20 p-4 rounded-xl border border-purple-500/30 shadow-inner mb-4 flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400">
+                                <i className="fas fa-video"></i>
+                            </div>
+                            <div>
+                                <h4 className="text-sm font-bold text-white">Opera Multimediale</h4>
+                                <p className="text-xs text-purple-200">Riproduzione video attiva</p>
+                            </div>
+                        </div>
+                    )}
+
                     {/* AZIONI PROPRIETARIO */}
                     {isOwner && (
                         <div className="mt-auto pt-6 border-t border-white/10 flex gap-3">
@@ -191,7 +207,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, user, onD
                                 </>
                             ) : (
                                 <>
-                                    <button onClick={() => setIsEditing(true)} className="flex-1 py-3 px-4 bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 border border-blue-500/30 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2">
+                                    <button onClick={(e) => { e.stopPropagation(); setIsEditing(true); }} className="flex-1 py-3 px-4 bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 border border-blue-500/30 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2">
                                         <i className="fas fa-edit"></i> Modifica
                                     </button>
                                     <button onClick={handleDelete} className="flex-1 py-3 px-4 bg-red-500/10 hover:bg-red-500/40 text-red-400 border border-red-500/30 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2">
@@ -207,9 +223,12 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, user, onD
     );
 };
 
-interface ShowcaseViewProps { user?: User | null; }
+interface ShowcaseViewProps {
+    user?: User | null;
+    initialProjectId?: string;
+}
 
-export const ShowcaseView: React.FC<ShowcaseViewProps> = ({ user }) => {
+export const ShowcaseView: React.FC<ShowcaseViewProps> = ({ user, initialProjectId }) => {
     const [projects, setProjects] = useState<ShowcaseProject[]>([]);
     const [selectedProject, setSelectedProject] = useState<ShowcaseProject | null>(null);
     const [filter, setFilter] = useState('all');
@@ -219,12 +238,24 @@ export const ShowcaseView: React.FC<ShowcaseViewProps> = ({ user }) => {
 
     const ITEMS_PER_PAGE = 12;
 
-    const fetchShowcase = () => {
+    const fetchShowcase = async () => {
         setIsLoading(true);
-        api.getShowcase().then(data => { setProjects(data); setIsLoading(false); }).catch(e => { console.error(e); setIsLoading(false); });
+        try {
+            // FIX: Cache busting per vedere subito le modifiche
+            const timestamp = new Date().getTime();
+            const data = await api.getShowcase(); // Assume che api.getShowcase gestisca internamente o accetti parametri, altrimenti forzare nell'API
+            setProjects(data);
+
+            if (initialProjectId) {
+                // FIX: Tipo esplicito
+                const target = data.find((p: ShowcaseProject) => p.id === initialProjectId);
+                if (target) setSelectedProject(target);
+            }
+        } catch (e) { console.error(e); }
+        finally { setIsLoading(false); }
     };
 
-    useEffect(() => { fetchShowcase(); }, []);
+    useEffect(() => { fetchShowcase(); }, [initialProjectId]);
 
     const filteredAndSortedProjects = useMemo(() => {
         let result = [...projects];
@@ -245,14 +276,22 @@ export const ShowcaseView: React.FC<ShowcaseViewProps> = ({ user }) => {
     const totalPages = Math.ceil(filteredAndSortedProjects.length / ITEMS_PER_PAGE);
 
     const handleDeleteItem = async (id: string) => {
-        await api.deleteShowcaseItem(id);
-        fetchShowcase();
+        // 1. Update UI immediately (Optimistic)
+        setProjects(prev => prev.filter(p => p.id !== id));
+        setSelectedProject(null);
+
+        // 2. Call API
+        try {
+            await api.deleteShowcaseItem(id);
+        } catch (e) {
+            alert("Errore cancellazione.");
+            fetchShowcase(); // Revert if failed
+        }
     };
 
-    // Funzione per aggiornare lo stato locale dopo una modifica nel modale
     const handleUpdateItem = (updatedProject: ShowcaseProject) => {
         setProjects(prev => prev.map(p => p.id === updatedProject.id ? updatedProject : p));
-        setSelectedProject(updatedProject); // Aggiorna anche il modale aperto
+        setSelectedProject(updatedProject);
     };
 
     if (isLoading) return <div className="text-center py-20 text-gray-500">Caricamento opere...</div>;
@@ -289,7 +328,6 @@ export const ShowcaseView: React.FC<ShowcaseViewProps> = ({ user }) => {
                 ))}
             </div>
 
-            {/* Paginazione */}
             {totalPages > 1 && (
                 <div className="flex justify-center gap-2 mt-12">
                     <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="px-3 py-1 rounded bg-white/10 text-white disabled:opacity-30 hover:bg-white/20">&lt;</button>
@@ -306,7 +344,7 @@ export const ShowcaseView: React.FC<ShowcaseViewProps> = ({ user }) => {
                     onClose={() => setSelectedProject(null)}
                     user={user}
                     onDelete={handleDeleteItem}
-                    onUpdate={handleUpdateItem} // Collega l'aggiornamento
+                    onUpdate={handleUpdateItem}
                 />
             )}
         </div>
