@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Logo } from './Logo';
-import { ViewType } from '../App';
 import { useLanguage } from '../contexts/LanguageContext';
 import { Language } from '../services/translations';
+import { ViewType } from '../types'; // Import Corretto
 
 interface NavbarProps {
     currentView: ViewType;
@@ -65,45 +65,44 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setView, isLoggedIn
                 {/* --- CENTER: MAIN NAVIGATION --- */}
                 <div className="hidden lg:flex items-center justify-center gap-8">
                     <button onClick={() => setView('landing')} className={navLinkClass('landing')}>
-                        {t.nav.home}
+                        {t('nav.home')}
                         <ActiveIndicator isActive={currentView === 'landing'} />
                     </button>
 
-                    {/* TESTO MODIFICATO QUI */}
                     <button onClick={onGoProClick} className={`${navLinkClass('landing')} text-brand-accent hover:text-brand-accent-light flex items-center gap-2`}>
                         <i className="fas fa-crown text-xs"></i>
-                        Richiedi Accesso
+                        {t('nav.access')}
                         <ActiveIndicator isActive={false} />
                     </button>
 
                     {isLoggedIn ? (
                         <>
                             <button onClick={() => setView('sonification')} className={navLinkClass('sonification')}>
-                                {t.nav.sonify}
+                                {t('nav.sonify')}
                                 <ActiveIndicator isActive={currentView === 'sonification'} />
                             </button>
                             <button onClick={() => setView('showcase')} className={navLinkClass('showcase')}>
-                                {t.nav.showcase}
+                                {t('nav.showcase')}
                                 <ActiveIndicator isActive={currentView === 'showcase'} />
                             </button>
                             <button onClick={() => setView('verification')} className={navLinkClass('verification')}>
-                                {t.nav.verify}
+                                {t('nav.verify')}
                                 <ActiveIndicator isActive={currentView === 'verification'} />
                             </button>
                             <button onClick={() => setView('dashboard')} className={navLinkClass('dashboard')}>
-                                {t.nav.dashboard}
+                                {t('nav.dashboard')}
                                 <ActiveIndicator isActive={currentView === 'dashboard'} />
                             </button>
                             {isAdmin && (
                                 <button onClick={() => setView('admin')} className={`${navLinkClass('admin')} text-red-400 hover:text-red-300`}>
-                                    {t.nav.admin}
+                                    {t('nav.admin')}
                                     <ActiveIndicator isActive={currentView === 'admin'} />
                                 </button>
                             )}
                         </>
                     ) : (
                         <button onClick={() => setView('showcase')} className={navLinkClass('showcase')}>
-                            {t.nav.showcase}
+                            {t('nav.showcase')}
                             <ActiveIndicator isActive={currentView === 'showcase'} />
                         </button>
                     )}
@@ -116,21 +115,31 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setView, isLoggedIn
                         <i className="fas fa-book-open text-lg"></i>
                     </button>
 
-                    <div className="relative group">
-                        <button className="text-xs font-bold text-white/70 hover:text-white uppercase flex items-center gap-1">
-                            {language} <i className="fas fa-chevron-down text-[8px]"></i>
+                    {/* LINGUA (FIXED: Usa onClick invece di hover) */}
+                    <div className="relative">
+                        <button
+                            onClick={() => setIsLangOpen(!isLangOpen)}
+                            className="text-xs font-bold text-white/70 hover:text-white uppercase flex items-center gap-1 bg-white/5 px-2 py-1 rounded border border-white/10"
+                        >
+                            {languages.find(l => l.code === language)?.flag} {language} <i className="fas fa-chevron-down text-[8px]"></i>
                         </button>
-                        <div className="absolute top-full right-0 mt-2 w-24 bg-[#1e293b] border border-white/10 rounded shadow-xl overflow-hidden hidden group-hover:block pt-1">
-                            {languages.map((lang) => (
-                                <button
-                                    key={lang.code}
-                                    onClick={() => setLanguage(lang.code)}
-                                    className="w-full text-left px-3 py-2 text-xs text-white/80 hover:bg-white/10 hover:text-white"
-                                >
-                                    {lang.flag} {lang.label}
-                                </button>
-                            ))}
-                        </div>
+
+                        {isLangOpen && (
+                            <>
+                                <div className="fixed inset-0 z-10" onClick={() => setIsLangOpen(false)}></div>
+                                <div className="absolute top-full right-0 mt-2 w-28 bg-[#1e293b] border border-white/10 rounded-lg shadow-xl overflow-hidden z-20 animate-fade-in">
+                                    {languages.map((lang) => (
+                                        <button
+                                            key={lang.code}
+                                            onClick={() => { setLanguage(lang.code); setIsLangOpen(false); }}
+                                            className={`w-full text-left px-4 py-2.5 text-xs font-bold hover:bg-white/10 transition-colors flex items-center gap-2 ${language === lang.code ? 'text-brand-accent bg-white/5' : 'text-white/80'}`}
+                                        >
+                                            <span>{lang.flag}</span> {lang.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </>
+                        )}
                     </div>
 
                     <div className="h-6 w-px bg-white/20 mx-2 hidden sm:block"></div>
@@ -140,13 +149,13 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setView, isLoggedIn
                             onClick={onLogin}
                             className="hidden sm:block bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-wider px-6 py-2.5 rounded-full border border-white/20 transition-all hover:shadow-[0_0_15px_rgba(255,255,255,0.1)]"
                         >
-                            {t.nav.login}
+                            {t('nav.login')}
                         </button>
                     ) : (
                         <div className="flex items-center gap-4">
                             <div
                                 className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border backdrop-blur-md ${isProUser ? 'bg-gradient-to-r from-yellow-500/20 to-amber-600/20 border-yellow-500/50 shadow-[0_0_10px_rgba(234,179,8,0.2)]' :
-                                        (userCredits && userCredits > 0) ? 'bg-green-500/20 border-green-500/50' : 'bg-red-500/20 border-red-500/50'
+                                    (userCredits && userCredits > 0) ? 'bg-green-500/20 border-green-500/50' : 'bg-red-500/20 border-red-500/50'
                                     }`}
                                 title={isProUser ? "Crediti Illimitati" : `Crediti rimanenti: ${userCredits}`}
                             >
@@ -182,20 +191,19 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setView, isLoggedIn
                 <div className="lg:hidden bg-[#0f172a] border-b border-white/10 animate-fade-in shadow-2xl absolute w-full left-0 top-20 z-50">
                     <div className="p-4 space-y-2">
                         <button onClick={() => { setView('landing'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">
-                            {t.nav.home}
+                            {t('nav.home')}
                         </button>
-                        {/* TESTO MODIFICATO ANCHE QUI */}
                         <button onClick={() => { onGoProClick(); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-brand-accent font-bold bg-white/5 rounded-lg border border-brand-accent/20">
-                            Richiedi Accesso
+                            {t('nav.access')}
                         </button>
                         <button onClick={() => { setView('showcase'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">
-                            {t.nav.showcase}
+                            {t('nav.showcase')}
                         </button>
                         {isLoggedIn && (
                             <>
-                                <button onClick={() => { setView('sonification'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">{t.nav.sonify}</button>
-                                <button onClick={() => { setView('verification'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">{t.nav.verify}</button>
-                                <button onClick={() => { setView('dashboard'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">{t.nav.dashboard}</button>
+                                <button onClick={() => { setView('sonification'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">{t('nav.sonify')}</button>
+                                <button onClick={() => { setView('verification'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">{t('nav.verify')}</button>
+                                <button onClick={() => { setView('dashboard'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">{t('nav.dashboard')}</button>
                                 <div className="px-4 py-3 text-sm text-gray-400 flex items-center gap-2">
                                     <i className="fas fa-coins text-brand-accent"></i>
                                     Crediti: <span className="text-white font-mono">{isProUser ? 'Infiniti' : userCredits}</span>
@@ -205,7 +213,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setView, isLoggedIn
                         )}
                         {!isLoggedIn && (
                             <button onClick={() => { onLogin(); setIsMobileMenuOpen(false); }} className="w-full text-center mt-4 bg-brand-accent text-brand-primary font-bold py-3 rounded-lg shadow-lg">
-                                {t.nav.login}
+                                {t('nav.login')}
                             </button>
                         )}
                     </div>

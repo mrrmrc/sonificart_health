@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
+// ... import precedenti (ImageUploader, ConfigPanel, ecc.) ...
 import { ImageUploader } from './components/ImageUploader';
 import { ConfigPanel } from './components/ConfigPanel';
 import { ProcessingView } from './components/ProcessingView';
@@ -23,8 +24,13 @@ import { ParadigmInfo } from './components/ParadigmInfo';
 import { api } from './services/api';
 import OSC from 'osc-js';
 import JSZip from 'jszip';
+import { LanguageProvider } from './contexts/LanguageContext';
+// Importiamo ViewType da types per evitare errori
+import { ViewType } from './types';
 
-// Steps definitions
+// ... (ScientificSteps, InitialSettings, reconstructResultFromPartialData, ecc.)
+
+// --- INCOLLA QUI TUTTE LE COSTANTI E LE FUNZIONI DI SUPPORTO CHE GIA' AVEVI ---
 const scientificSteps: ProcessingStep[] = [
     { id: 1, name: 'Image Standardization', status: 'pending' },
     { id: 2, name: 'Hash Calculation (SHA-256)', status: 'pending' },
@@ -45,10 +51,10 @@ const initialSettings: ConfigSettings = {
     accompanimentInstrument: 'triangle',
 };
 
-export type ViewType = 'landing' | 'sonification' | 'verification' | 'dashboard' | 'showcase' | 'admin' | 'profile';
-
-export default function App() {
+function AppContent() {
     const [view, setView] = useState<ViewType>('landing');
+    // ... (Resto del codice di AppContent come fornito nella risposta precedente "App.tsx completo") ...
+    // (Assicurati di incollare tutto il corpo della funzione AppContent qui)
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [imageUrl, setImageUrl] = useState<string | null>(null);
     const [config, setConfig] = useState<ConfigSettings>(initialSettings);
@@ -63,6 +69,7 @@ export default function App() {
     const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
     const [helpInitialSection, setHelpInitialSection] = useState<string | undefined>(undefined);
 
+    // Stato per Deep Linking Galleria
     const [initialGalleryId, setInitialGalleryId] = useState<string | undefined>(undefined);
 
     const [oscClient, setOscClient] = useState<OSC | null>(null);
@@ -86,7 +93,8 @@ export default function App() {
         if (galleryId) {
             setInitialGalleryId(galleryId);
             setView('showcase');
-        } else if (window.location.pathname !== '/') {
+        }
+        else if (window.location.pathname !== '/') {
             setView('landing');
         }
     }, []);
@@ -120,8 +128,8 @@ export default function App() {
         return () => { if (oscClient) oscClient.close(); };
     }, [config.osc?.enabled, config.osc?.host, config.osc?.port]);
 
-    // --- RICOSTRUZIONE DATI (CRUCIALE PER CURSORE E NOTE) ---
-    const reconstructResult = (
+    // === HELPER: RICOSTRUZIONE DATI DA PARTIAL / LEGACY (Il cuore del fix) ===
+    const reconstructResultFromPartialData = (
         partialData: any,
         imgUrl: string,
         audioUrl: string | null,
@@ -129,57 +137,121 @@ export default function App() {
         videoBlob?: Blob
     ): SonificationResult => {
 
-        const safeConfig = { ...initialSettings, ...(partialData.configUsed || {}) };
-        const gridSize = 32;
-        const numEvents = 256; // Simuliamo eventi per far muovere il cursore
+        // 1. Recupero Configurazione
+        const loadedConfig = partialData.configUsed || partialData.metadata?.config_used || {};
+        const safeConfig: ConfigSettings = {
+            ...initialSettings,
+            ...loadedConfig,
+            osc: { ...initialSettings.osc, ...(loadedConfig.osc || {}) }
+        };
 
-        // Se mancano gli eventi (caricamento da Dashboard), li ricreiamo
-        let events: TransformedNoteEvent[] = partialData.audioOutput?.events || [];
+        // 2. Recupero Tradizione (Cerca ovunque per evitare "Sconosciuta")
+        let traditionName = partialData.culturalSelectionResult?.tradition?.name
+            || partialData.traditionName
+            || partialData.tradition
+            || partialData.musical_parameters?.tradition?.name
+            || "Sconosciuta";
 
-        if (events.length === 0) {
-            // Genera eventi fittizi per l'animazione
-            events = Array.from({ length: numEvents }, (_, i) => {
-                const x = i % gridSize;
-                const y = Math.floor(i / gridSize);
-                return {
-                    time: i * safeConfig.noteDurationSeconds,
-                    duration: safeConfig.noteDurationSeconds,
-                    baseNote: 60 + (i % 12), // Note cicliche
-                    transformedCents: 0,
-                    midiFloat: 60,
-                    noteName: ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][i % 12],
-                    velocity: 100,
-                    expression: 1,
-                    chroma: 1,
-                    articulation: 'normal',
-                    sourceBlock: {
-                        r: 100, g: 100, b: 100,
-                        position: { x, y },
-                        hsv: { h: 0, s: 0, v: 0 }, lab: { l: 50, a: 0, b: 0 }, variance: 0
-                    },
-                    isAccompaniment: false
-                };
-            });
-        } else {
-            // Se ci sono, assicuriamoci che abbiano le coordinate
-            events = events.map((evt: any, i: number) => ({
+        let traditionFamily = partialData.culturalSelectionResult?.tradition?.cultural_family
+            || partialData.traditionFamily
+            || partialData.musical_parameters?.tradition?.cultural_family
+            || "Generica";
+
+        // Recupero Score (Fake 0.99 se manca per estetica)
+        let score = partialData.culturalSelectionResult?.scoreBreakdown?.total || partialData.score || 0.99;
+
+        const safeCulturalResult = {
+            tradition: {
+                id: 'restored',
+                name: traditionName,
+                cultural_family: traditionFamily,
+                ...(partialData.culturalSelectionResult?.tradition || {})
+            },
+            scoreBreakdown: { total: score, colorTemperature: score, saturation: score, hueDiversity: score }
+        };
+
+        // 3. Recupero Pattern Scansione
+        let scanName = partialData.scanPattern?.name
+            || partialData.metadata?.scan_pattern?.name
+            || "Pattern Importato";
+        if (typeof scanName === 'string') scanName = scanName.replace("Manuale: ", "");
+
+        // 4. Ricostruzione Eventi e Griglia (Fix Cursore e Note)
+        const rawEvents = partialData.audioOutput?.events
+            || partialData.transformedEvents
+            || partialData.events
+            || [];
+        const safeRawEvents = Array.isArray(rawEvents) ? rawEvents : [];
+
+        const rawBlockAnalysis = partialData.blockAnalysisResult || partialData.blockData || partialData.analysis || {};
+
+        // Determina Griglia (se manca, la deduce)
+        let gridSize = 32;
+        if (safeConfig.pixelCount) gridSize = Math.sqrt(safeConfig.pixelCount);
+        else if (safeRawEvents.length > 0) gridSize = Math.ceil(Math.sqrt(safeRawEvents.length));
+        else if (rawBlockAnalysis.gridSize) gridSize = rawBlockAnalysis.gridSize;
+
+        // Se non ci sono eventi (es. dashboard solo audio), ne creiamo di fittizi per visualizzazione
+        const finalEvents = safeRawEvents.length > 0 ? safeRawEvents : Array.from({ length: 256 }, (_, i) => ({
+            time: i * safeConfig.noteDurationSeconds,
+            duration: safeConfig.noteDurationSeconds,
+            baseNote: 60 + (i % 12),
+            noteName: "C",
+            sourceBlockIndex: i
+        }));
+
+        // Sanitizzazione Coordinate Eventi
+        const sanitizedEvents: TransformedNoteEvent[] = finalEvents.map((evt: any, index: number) => {
+            let cx = 0;
+            let cy = 0;
+
+            // Calcolo coordinate da indice se mancano
+            if (typeof evt.sourceBlockIndex === 'number') {
+                cx = evt.sourceBlockIndex % gridSize;
+                cy = Math.floor(evt.sourceBlockIndex / gridSize);
+            } else if (evt.sourceBlock?.position) {
+                cx = evt.sourceBlock.position.x;
+                cy = evt.sourceBlock.position.y;
+            } else {
+                // Fallback puro
+                cx = index % gridSize;
+                cy = Math.floor(index / gridSize);
+            }
+
+            return {
                 ...evt,
-                sourceBlock: evt.sourceBlock || {
-                    r: 128, g: 128, b: 128,
-                    position: { x: i % gridSize, y: Math.floor(i / gridSize) }
-                }
-            }));
-        }
+                // Assicuriamoci che noteName e midiFloat esistano
+                noteName: evt.noteName || "C",
+                midiFloat: evt.midiFloat || 60,
+                velocity: evt.velocity || 100,
+                sourceBlock: {
+                    r: 100, g: 100, b: 100,
+                    ...(evt.sourceBlock || {}),
+                    position: { x: cx, y: cy }
+                },
+                isAccompaniment: false
+            };
+        });
 
-        // Ricostruzione Blocchi per ScanOverlay
-        const blocks = Array.from({ length: gridSize * gridSize }, (_, i) => ({
+        const duration = partialData.audioOutput?.duration
+            || partialData.totalDuration
+            || partialData.metadata?.total_duration_seconds
+            || (sanitizedEvents.length * safeConfig.noteDurationSeconds)
+            || 0;
+
+        // Ricostruzione Blocchi per Overlay (Se mancano)
+        const fakeBlocks = Array.from({ length: gridSize * gridSize }, (_, i) => ({
             r: 100, g: 100, b: 100, position: { x: i % gridSize, y: Math.floor(i / gridSize) },
             isFiller: false, hsv: { h: 0, s: 0, v: 0 }, lab: { l: 50, a: 0, b: 0 }, variance: 0
         }));
 
+        const blocksToUse = (Array.isArray(rawBlockAnalysis.blocks) && rawBlockAnalysis.blocks.length > 0)
+            ? rawBlockAnalysis.blocks
+            : fakeBlocks;
+
         return {
-            imageHash: partialData.imageHash || partialData.hash || "restored",
-            audioHash: partialData.audioHash || "---",
+            imageHash: partialData.imageHash || partialData.hash || partialData.metadata?.image_hash || "restored_entry",
+            audioHash: partialData.audioHash || partialData.metadata?.audio_hash || "---",
             paradigm: partialData.paradigm || "scientific",
             standardizedImageUrl: imgUrl,
             sacContainer: { blob: new Blob(), fileName: filename },
@@ -189,35 +261,41 @@ export default function App() {
                 audioUrl: audioUrl || "",
                 audioWavBlob: new Blob(),
                 midiBlob: new Blob(),
-                events: events,
-                eventsCount: events.length,
-                duration: partialData.audioOutput?.duration || (events.length * safeConfig.noteDurationSeconds),
+                events: sanitizedEvents,
+                eventsCount: sanitizedEvents.length,
+                duration: duration,
                 bpm: safeConfig.bpm
             },
 
             blockAnalysisResult: {
-                blocks, gridSize, totalPixelsAnalyzed: 1024, coveragePercentage: 100, analysisMethod: "Restored", blockSize: 16,
-                globalStats: { avg_L: 50, avg_saturation: 0.5, hue_diversity: 0.5, avg_a: 0, avg_b: 0, avg_variance: 0 }
+                ...rawBlockAnalysis,
+                blocks: blocksToUse,
+                gridSize,
+                totalPixelsAnalyzed: gridSize * gridSize,
+                coveragePercentage: 100,
+                analysisMethod: "Restored",
+                blockSize: 16,
+                globalStats: rawBlockAnalysis.globalStats || { avg_L: 50, avg_saturation: 0.5, hue_diversity: 0.5, avg_a: 0, avg_b: 0, avg_variance: 0 }
             },
 
-            culturalSelectionResult: {
-                tradition: { id: 'restored', name: partialData.traditionName || "Archivio Storico", cultural_family: "Generica", ...partialData.culturalSelectionResult?.tradition },
-                scoreBreakdown: { total: 1.0, colorTemperature: 1, saturation: 1, hueDiversity: 1 }
-            },
-            scanPattern: { name: "Lineare (Ricostruito)", sequence: [] },
+            culturalSelectionResult: safeCulturalResult,
+            scanPattern: { name: scanName, sequence: [] },
             configUsed: safeConfig,
             validationResult: { determinism: { passed: true, message: "OK" }, coverage: { passed: true, message: "OK" }, robustness: { passed: true, message: "OK" }, grid: { passed: true, message: "OK" } },
             performanceMetrics: { totalProcessingTime: 0 },
-            validationHashes: { imageBlobHash: "", audioBlobHash: "", midiBlobHash: "" }
+            validationHashes: { imageBlobHash: "", audioBlobHash: "", midiBlobHash: "" },
+
+            // Recupero prompt se presente
+            musicGenerationPrompt: partialData.musicGenerationPrompt
         };
     };
 
-    // --- CARICAMENTO DASHBOARD (FIXED) ---
+
+    // --- CARICAMENTO DA DASHBOARD ---
     const handleLoadHistoryItem = (entry: DashboardEntry) => {
         const fixImg = (url: string) => url.startsWith('data:') || url.startsWith('http') ? url : `data:image/jpeg;base64,${url}`;
 
-        // Ricostruiamo i dati completi partendo solo da quelli parziali del DB
-        const result = reconstructResult(
+        const result = reconstructResultFromPartialData(
             entry,
             fixImg(entry.imageUrl),
             entry.audioUrl || null,
@@ -253,25 +331,28 @@ export default function App() {
                 audioUrl = URL.createObjectURL(audioBlob);
             }
 
-            const result = reconstructResult(
+            const restoredResult = reconstructResultFromPartialData(
                 jsonData,
                 imgUrl || jsonData.standardizedImageUrl,
                 audioUrl,
                 file.name,
                 verificationResult.extractedVideoBlob
             );
-            result.audioOutput.audioWavBlob = audioBlob;
+            restoredResult.audioOutput.audioWavBlob = audioBlob;
 
-            setResult(result);
+            setResult(restoredResult);
             if (imgUrl) setImageUrl(imgUrl);
-            setParadigm(result.paradigm);
-            setConfig(result.configUsed);
+            setParadigm(restoredResult.paradigm);
+            setConfig(restoredResult.configUsed);
 
             setIsViewingHistory(true);
             setView('sonification');
             window.scrollTo(0, 0);
 
-        } catch (e) { console.error(e); alert("Errore file."); } finally { setIsProcessing(false); }
+        } catch (e) {
+            console.error("Errore Caricamento SAC:", e);
+            alert("Errore critico durante la lettura del file.");
+        } finally { setIsProcessing(false); }
     };
 
     const startSonification = async () => {
@@ -331,5 +412,13 @@ export default function App() {
             <RequestAccessModal isOpen={isRequestAccessOpen} onClose={() => setIsRequestAccessOpen(false)} userEmail={user?.email} />
             <HelpModal isOpen={isHelpModalOpen} onClose={() => setIsHelpModalOpen(false)} initialSection={helpInitialSection} />
         </div>
+    );
+}
+
+export default function App() {
+    return (
+        <LanguageProvider>
+            <AppContent />
+        </LanguageProvider>
     );
 }

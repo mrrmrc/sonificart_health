@@ -1,14 +1,10 @@
 import React, { useState } from 'react';
-import { showcaseProjects } from '../data/showcaseData';
-import { ShowcaseProject } from '../types';
-import { generateParadigmPreview } from '../services/audioUtils';
-
-const fixImage = (url: string) => url.startsWith('data:') || url.startsWith('http') ? url : `data:image/jpeg;base64,${url}`;
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface LandingPageProps {
     onGetStarted: () => void;
     onExplore: () => void;
-    onOpenPricing: (plan?: string) => void; // Aggiornato per passare il piano
+    onOpenPricing: (plan?: string) => void;
     onOpenDocs: (section?: string) => void;
 }
 
@@ -23,6 +19,7 @@ const FeatureCard: React.FC<{ icon: string, title: string, desc: React.ReactNode
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onExplore, onOpenPricing, onOpenDocs }) => {
     const [billingCycle, setBillingCycle] = useState<'Mensile' | 'Annuale'>('Mensile');
+    const { t } = useLanguage();
 
     return (
         <div className="w-full font-sans overflow-x-hidden text-white selection:bg-brand-accent selection:text-brand-primary">
@@ -30,21 +27,31 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onExplor
             {/* HERO */}
             <div className="relative min-h-[85vh] flex flex-col justify-center items-center pt-32 pb-20 z-20 text-center px-6 overflow-hidden">
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-brand-accent/10 rounded-full blur-[120px] animate-pulse-glow pointer-events-none"></div>
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-md mb-8 shadow-lg"><span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span><span className="text-xs font-bold tracking-widest text-green-400 uppercase">Framework v1.0 Stable</span></div>
-                <h1 className="font-display text-6xl md:text-8xl lg:text-9xl font-black text-white mb-6 leading-tight tracking-tighter drop-shadow-2xl z-10">Il Suono <br /><span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-accent via-white to-purple-400">Dell'Invisibile</span></h1>
-                <p className="text-lg md:text-2xl text-brand-text-secondary max-w-3xl mx-auto font-light mb-12 z-10">Trasforma ogni pixel in frequenza. Il primo framework deterministico per la <strong className="text-white">sonificazione scientifica</strong> e <strong className="text-white">artistica</strong>.</p>
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-md mb-8 shadow-lg"><span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span><span className="text-xs font-bold tracking-widest text-green-400 uppercase">{t('landing.badge')}</span></div>
+
+                <h1 className="font-display text-6xl md:text-8xl lg:text-9xl font-black text-white mb-6 leading-tight tracking-tighter drop-shadow-2xl z-10">
+                    {t('landing.title_start')} <br />
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-accent via-white to-purple-400">
+                        {t('landing.title_end')}
+                    </span>
+                </h1>
+
+                <p className="text-lg md:text-2xl text-brand-text-secondary max-w-3xl mx-auto font-light mb-12 z-10">
+                    {t('landing.subtitle')}
+                </p>
+
                 <div className="flex flex-col sm:flex-row gap-6 z-10">
-                    <button onClick={onGetStarted} className="px-10 py-5 bg-brand-accent text-brand-primary font-black text-base md:text-lg rounded-full hover:bg-brand-accent-light hover:scale-105 transition-all flex items-center justify-center gap-3"><i className="fas fa-play"></i> INIZIA A CREARE</button>
-                    <button onClick={onExplore} className="px-10 py-5 bg-white/5 border border-white/10 text-white font-bold text-base md:text-lg rounded-full hover:bg-white/10 hover:border-white/30 transition-all flex items-center justify-center gap-3"><i className="fas fa-compass"></i> ESPLORA VETRINA</button>
+                    <button onClick={onGetStarted} className="px-10 py-5 bg-brand-accent text-brand-primary font-black text-base md:text-lg rounded-full hover:bg-brand-accent-light hover:scale-105 transition-all flex items-center justify-center gap-3"><i className="fas fa-play"></i> {t('landing.cta_start')}</button>
+                    <button onClick={onExplore} className="px-10 py-5 bg-white/5 border border-white/10 text-white font-bold text-base md:text-lg rounded-full hover:bg-white/10 hover:border-white/30 transition-all flex items-center justify-center gap-3"><i className="fas fa-compass"></i> {t('landing.cta_explore')}</button>
                 </div>
             </div>
 
             {/* FEATURES GRID */}
             <div className="w-full max-w-7xl mx-auto px-6 py-24 relative z-20">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    <FeatureCard icon="fa-microscope" title="Colorimetria CIE LAB D65" desc="Analisi percettivamente uniforme e scientificamente validata." color="teal" onClick={() => onOpenDocs('doc-colorimetry')} />
-                    <FeatureCard icon="fa-globe-americas" title="Database Etnomusicologico" desc="48 tradizioni musicali mondiali per un matching culturale preciso." color="purple" onClick={() => onOpenDocs('doc-database')} />
-                    <FeatureCard icon="fa-fingerprint" title="Determinismo Bit-Perfect" desc="Output sempre identico e certificato su blockchain simulata." color="blue" onClick={() => onOpenDocs('doc-determinism')} />
+                    <FeatureCard icon="fa-microscope" title={t('landing.features.color')} desc={t('landing.features.color_desc')} color="teal" onClick={() => onOpenDocs('doc-colorimetry')} />
+                    <FeatureCard icon="fa-globe-americas" title={t('landing.features.culture')} desc={t('landing.features.culture_desc')} color="purple" onClick={() => onOpenDocs('doc-database')} />
+                    <FeatureCard icon="fa-fingerprint" title={t('landing.features.deter')} desc={t('landing.features.deter_desc')} color="blue" onClick={() => onOpenDocs('doc-determinism')} />
                 </div>
             </div>
 

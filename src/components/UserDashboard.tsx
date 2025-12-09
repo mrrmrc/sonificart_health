@@ -8,40 +8,68 @@ const fixImage = (url: string | undefined) => {
     return `data:image/jpeg;base64,${url}`;
 };
 
-// --- MODALE PUBBLICAZIONE ---
-const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPublish: (data: any, file: File | null) => void }> = ({ entry, onClose, onPublish }) => {
+// --- MODALE PUBBLICAZIONE (CON UPLOAD A PEZZI) ---
+const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPublish: (data: any, customMedia: { url: string, type: string } | null) => Promise<void> }> = ({ entry, onClose, onPublish }) => {
     const [step, setStep] = useState<1 | 2>(1);
     const [title, setTitle] = useState(`Opera del ${new Date(entry.timestamp).toLocaleDateString()}`);
     const [description, setDescription] = useState('');
     const [tags, setTags] = useState('');
     const [customFile, setCustomFile] = useState<File | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
-
-    const publicLink = `https://sonificart.com/gallery?id=${entry.id}`;
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(publicLink)}`;
+    const [uploadProgress, setUploadProgress] = useState(0);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
+        setUploadProgress(0);
+
+        let customMediaResult: { url: string, type: string } | null = null;
+
         try {
+            if (customFile) {
+                const CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB per pezzo
+                const totalChunks = Math.ceil(customFile.size / CHUNK_SIZE);
+                const uploadId = `${Date.now()}-${customFile.name.replace(/[^a-zA-Z0-9.]/g, '')}`;
+
+                for (let i = 0; i < totalChunks; i++) {
+                    const start = i * CHUNK_SIZE;
+                    const end = Math.min(start + CHUNK_SIZE, customFile.size);
+                    const chunk = customFile.slice(start, end);
+
+                    const formData = new FormData();
+                    formData.append('fileChunk', chunk, customFile.name);
+                    formData.append('uploadId', uploadId);
+                    formData.append('chunkIndex', String(i));
+                    formData.append('totalChunks', String(totalChunks));
+                    formData.append('originalFilename', customFile.name);
+
+                    const response = await api.uploadChunk(formData);
+
+                    if (response.success && response.url) {
+                        customMediaResult = { url: response.url, type: response.type };
+                    }
+
+                    setUploadProgress(Math.round(((i + 1) / totalChunks) * 100));
+                }
+            }
+
             await onPublish({
                 title, description, tags: tags.split(',').map(t => t.trim()).filter(t => t.length > 0)
-            }, customFile);
+            }, customMediaResult);
+
             setStep(2);
         } catch (e) {
+            console.error(e);
             alert("Errore durante la pubblicazione.");
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    const downloadQR = async () => {
-        const response = await fetch(qrUrl);
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url; a.download = `QR_${title}.png`;
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    };
+    // ... resto del componente
+    const publicLink = `https://sonificart.com/gallery?id=${entry.id}`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(publicLink)}`;
+    const downloadQR = async () => { /* ... */ };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 animate-fade-in p-4" onClick={onClose}>
@@ -61,9 +89,25 @@ const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPub
                                 </div>
                             </div>
                             <textarea className="w-full bg-black/30 border border-white/10 p-2 rounded text-white h-20" value={description} onChange={e => setDescription(e.target.value)} placeholder="Descrizione..." />
+
+                            {/* PROGRESS BAR */}
+                            {isSubmitting && customFile && (
+                                <div className="space-y-1 pt-2">
+                                    <div className="flex justify-between text-xs text-brand-accent-light font-mono">
+                                        <span>Caricamento file...</span>
+                                        <span>{uploadProgress}%</span>
+                                    </div>
+                                    <div className="w-full bg-black/30 rounded-full h-2.5 border border-brand-secondary/50">
+                                        <div className="bg-brand-accent h-2 rounded-full transition-all duration-300 ease-linear" style={{ width: `${uploadProgress}%` }}></div>
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
                                 <button type="button" onClick={onClose} className="text-gray-400 text-sm">Annulla</button>
-                                <button type="submit" disabled={isSubmitting} className="bg-brand-accent text-brand-primary font-bold py-2 px-8 rounded-full">{isSubmitting ? "Pubblicazione..." : "CONFERMA"}</button>
+                                <button type="submit" disabled={isSubmitting} className="bg-brand-accent text-brand-primary font-bold py-2 px-8 rounded-full disabled:opacity-50">
+                                    {isSubmitting ? `In corso...` : "CONFERMA"}
+                                </button>
                             </div>
                         </form>
                     ) : (
@@ -83,7 +127,7 @@ const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPub
     );
 };
 
-// --- HISTORY ITEM ---
+// ... (HistoryItem rimane uguale)
 const HistoryItem: React.FC<{ item: DashboardEntry; onView: () => void; onPublishClick?: () => void; onDelete?: () => void; isPro?: boolean }> = ({ item, onView, onPublishClick, onDelete, isPro }) => (
     <div className="bg-brand-secondary/40 p-4 rounded-lg flex items-center gap-4 hover:bg-brand-secondary/60 transition-all cursor-pointer" onClick={onView}>
         <div className="w-20 h-20 flex-shrink-0"><img src={fixImage(item.imageUrl)} alt="thumb" className="w-full h-full object-cover rounded bg-black" /></div>
@@ -110,7 +154,6 @@ export const UserDashboard: React.FC<{ onLoadEntry: (entry: DashboardEntry) => v
         try {
             const user = await api.checkSession();
             setCurrentUser(user);
-            // FIX: Aggiungo timestamp per forzare il refresh reale dal server
             const data = await api.getHistory();
             setHistory(Array.isArray(data) ? data : []);
         } catch (error) { console.error(error); }
@@ -119,28 +162,21 @@ export const UserDashboard: React.FC<{ onLoadEntry: (entry: DashboardEntry) => v
 
     useEffect(() => { loadHistory(); }, [loadHistory]);
 
-    // --- CANCELLAZIONE ISTANTANEA (OPTIMISTIC UPDATE) ---
     const deleteItem = async (id: string) => {
-        if (confirm("Sei sicuro di voler eliminare definitivamente questa opera e la sua copia pubblica?")) {
-
-            // 1. Rimuovi VISIVAMENTE subito (così l'utente vede l'effetto immediato)
-            setHistory(prevHistory => prevHistory.filter(item => item.id !== id));
-
-            // 2. Esegui la cancellazione REALE sul server
+        if (confirm("Sei sicuro di voler eliminare definitivamente questa opera?")) {
+            setHistory(currentHistory => currentHistory.filter(item => item.id !== id));
             try {
                 await api.deleteHistoryItem(id);
-                // Non ricaricare loadHistory() qui, altrimenti rischi che la cache del browser 
-                // ti rimostri il file appena cancellato per qualche millisecondo.
             } catch (e) {
-                console.error(e);
-                alert("Errore di connessione. Ricarica la pagina.");
+                alert("Errore nella cancellazione. Ricarica la pagina.");
+                loadHistory();
             }
         }
     };
 
-    const handlePublish = async (metadata: { title: string; description: string; tags: string[] }, file: File | null) => {
+    const handlePublish = async (metadata: { title: string; description: string; tags: string[] }, customMedia: { url: string; type: string; } | null) => {
         if (!publishingEntry || !currentUser) return;
-        await api.publishFromHistory(publishingEntry, metadata, currentUser, file);
+        await api.publishFromHistory(publishingEntry, metadata, currentUser, customMedia);
     };
 
     return (

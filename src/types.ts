@@ -117,6 +117,8 @@ export interface TransformedNoteEvent {
     articulation: 'staccato' | 'normal' | 'legato';
     sourceBlock: BlockData;
     isAccompaniment?: boolean;
+    // Legacy support
+    sourceBlockIndex?: number;
 }
 
 
@@ -192,10 +194,7 @@ export interface SonificationResult {
     audioHash: string;
     configUsed: ConfigSettings;
     standardizedImageUrl: string;
-
-    // --- MODIFICA QUI: AGGIUNTO CAMPO PARADIGM ---
     paradigm: Paradigm;
-    // ---------------------------------------------
 
     blockAnalysisResult: BlockAnalysisResult;
     culturalSelectionResult: CulturalSelectionResult;
@@ -226,6 +225,11 @@ export interface ManifestData {
     created_at: string;
     framework_version: string;
     file_hashes: { [key: string]: { sha256: string, size_bytes: number } };
+    // Legacy support
+    sac_hash?: string;
+    hash?: string;
+    id?: string;
+    signature?: string;
 }
 
 export interface SacVerificationResult {
@@ -303,3 +307,6 @@ export interface ShowcaseProject {
     audioUrl?: string;
     videoUrl?: string;
 }
+
+// --- DEFINIZIONE SPOSTATA QUI PER EVITARE DIPENDENZE CIRCOLARI ---
+export type ViewType = 'landing' | 'sonification' | 'verification' | 'dashboard' | 'showcase' | 'admin' | 'profile';

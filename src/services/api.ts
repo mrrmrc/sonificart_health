@@ -7,12 +7,6 @@ const API_BASE_URL = 'https://sonificart.com/api';
 
 const STORAGE_KEYS = {
     TOKEN: 'sonificart_auth_token',
-    HISTORY: 'sonification_history',
-    SHOWCASE: 'sonificart_showcase',
-    USERS: 'sonificart_users',
-    STATS: 'sonificart_stats',
-    LOGS: 'sonificart_system_logs',
-    REGISTRY: 'sonificart_global_registry'
 };
 
 const handleResponse = async (response: Response) => {
@@ -88,38 +82,36 @@ export const api = {
         });
     },
 
-    uploadMediaFile: async (file: File): Promise<{ url: string, type: string }> => {
+    uploadChunk: async (formData: FormData): Promise<any> => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('auth_token', token || '');
+        if (token) formData.append('auth_token', token);
 
-        const response = await fetch(`${API_BASE_URL}/index.php?action=upload_media`, {
+        const response = await fetch(`${API_BASE_URL}/index.php?action=upload_chunk`, {
             method: 'POST',
-            body: formData
+            body: formData,
         });
-        return await handleResponse(response);
+        return handleResponse(response);
     },
 
-    publishFromHistory: async (entry: DashboardEntry, metadata: any, user: User, customMediaFile?: File | null) => {
+    publishFromHistory: async (entry: DashboardEntry, metadata: any, user: User, customMedia: { url: string, type: string } | null) => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        let customMediaUrl = null, customMediaType = null;
-
-        if (customMediaFile) {
-            const upload = await api.uploadMediaFile(customMediaFile);
-            customMediaUrl = upload.url;
-            customMediaType = upload.type;
-        }
-
         await fetch(`${API_BASE_URL}/index.php?action=publish_history`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ entryId: entry.id, metadata, customMediaUrl, customMediaType, auth_token: token })
+            body: JSON.stringify({
+                entryId: entry.id,
+                metadata,
+                customMediaUrl: customMedia?.url,
+                customMediaType: customMedia?.type,
+                auth_token: token
+            })
         });
     },
 
     getHistory: async () => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        const response = await fetch(`${API_BASE_URL}/index.php?action=get_history`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auth_token: token }) });
+        const response = await fetch(`${API_BASE_URL}/index.php?action=get_history&t=${new Date().getTime()}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auth_token: token })
+        });
         return await handleResponse(response);
     },
 
@@ -128,39 +120,30 @@ export const api = {
         await fetch(`${API_BASE_URL}/index.php?action=delete_history_item`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, auth_token: token }) });
     },
 
-    clearHistory: async () => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        await fetch(`${API_BASE_URL}/index.php?action=clear_history`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auth_token: token }) });
-    },
-
     getShowcase: async () => {
-        const response = await fetch(`${API_BASE_URL}/index.php?action=get_showcase`);
+        const response = await fetch(`${API_BASE_URL}/index.php?action=get_showcase&t=${new Date().getTime()}`);
         return await handleResponse(response);
     },
 
-    // --- ADMIN FUNCTIONS ---
+    // --- ADMIN FUNCTIONS (RIPRISTINATE) ---
 
-    // Modifica opera in vetrina (Titolo/Descrizione)
     updateShowcaseItem: async (item: ShowcaseProject) => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        await fetch(`${API_BASE_URL}/index.php?action=admin_update_showcase`, {
+        await fetch(`${API_BASE_URL}/index.php?action=update_showcase_item`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...item, auth_token: token })
         });
     },
 
-    // Elimina opera vetrina
     deleteShowcaseItem: async (id: string) => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        await fetch(`${API_BASE_URL}/index.php?action=admin_delete_showcase`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+        await fetch(`${API_BASE_URL}/index.php?action=delete_showcase_item`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id, auth_token: token })
         });
     },
 
-    // Gestione Richieste Accesso
     getAccessRequests: async (): Promise<any[]> => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
         const response = await fetch(`${API_BASE_URL}/index.php?action=admin_get_requests`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auth_token: token }) });
@@ -177,28 +160,36 @@ export const api = {
         await fetch(`${API_BASE_URL}/index.php?action=admin_reject_request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, auth_token: token }) });
     },
 
-    // Stats & Users
-    getSystemStats: async () => {
+    getSystemStats: async (): Promise<SystemStats> => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
         const response = await fetch(`${API_BASE_URL}/index.php?action=get_stats`, { method: 'POST', body: JSON.stringify({ auth_token: token }) });
         return await handleResponse(response);
     },
 
-    getSystemLogs: async () => {
+    getSystemLogs: async (): Promise<SystemLog[]> => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
         const response = await fetch(`${API_BASE_URL}/index.php?action=get_logs`, { method: 'POST', body: JSON.stringify({ auth_token: token }) });
         return await handleResponse(response);
     },
 
-    getAllUsers: async () => {
+    getAllUsers: async (): Promise<User[]> => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
         const response = await fetch(`${API_BASE_URL}/index.php?action=get_users`, { method: 'POST', body: JSON.stringify({ auth_token: token }) });
         return await handleResponse(response);
     },
 
-    adminCreateUser: async (u: any) => { const token = localStorage.getItem(STORAGE_KEYS.TOKEN); await fetch(`${API_BASE_URL}/index.php?action=admin_create_user`, { method: 'POST', body: JSON.stringify({ ...u, auth_token: token }) }); },
-    updateUser: async (u: any) => { const token = localStorage.getItem(STORAGE_KEYS.TOKEN); await fetch(`${API_BASE_URL}/index.php?action=admin_update_user`, { method: 'POST', body: JSON.stringify({ ...u, auth_token: token }) }); },
-    deleteUser: async (id: string) => { const token = localStorage.getItem(STORAGE_KEYS.TOKEN); await fetch(`${API_BASE_URL}/index.php?action=admin_delete_user`, { method: 'POST', body: JSON.stringify({ id, auth_token: token }) }); },
-    addShowcaseItem: async (item: any) => { const token = localStorage.getItem(STORAGE_KEYS.TOKEN); await fetch(`${API_BASE_URL}/index.php?action=admin_add_showcase`, { method: 'POST', body: JSON.stringify({ ...item, auth_token: token }) }); },
-    registerArtifact: async () => { },
+    adminCreateUser: async (u: any) => {
+        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        await fetch(`${API_BASE_URL}/index.php?action=admin_create_user`, { method: 'POST', body: JSON.stringify({ ...u, auth_token: token }) });
+    },
+
+    updateUser: async (u: any) => {
+        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        await fetch(`${API_BASE_URL}/index.php?action=admin_update_user`, { method: 'POST', body: JSON.stringify({ ...u, auth_token: token }) });
+    },
+
+    deleteUser: async (id: string) => {
+        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        await fetch(`${API_BASE_URL}/index.php?action=delete_user`, { method: 'POST', body: JSON.stringify({ id, auth_token: token }) });
+    },
 };
