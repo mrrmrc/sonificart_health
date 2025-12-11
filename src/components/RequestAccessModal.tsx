@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface RequestAccessModalProps {
     isOpen: boolean;
@@ -9,6 +10,7 @@ interface RequestAccessModalProps {
 }
 
 export const RequestAccessModal: React.FC<RequestAccessModalProps> = ({ isOpen, onClose, userEmail, initialPlan = 'Mensile' }) => {
+    const { t } = useLanguage();
     const [formData, setFormData] = useState({
         name: '',
         email: userEmail || '',
@@ -37,11 +39,11 @@ export const RequestAccessModal: React.FC<RequestAccessModalProps> = ({ isOpen, 
         setIsSubmitting(true);
         try {
             await api.requestAccess(formData);
-            alert("Richiesta inviata con successo! Controlla la tua email per la conferma.");
+            alert(t('request_access.success'));
             onClose();
         } catch (error) {
             console.error(error);
-            alert("Errore nell'invio. Riprova più tardi.");
+            alert(t('request_access.error'));
         } finally {
             setIsSubmitting(false);
         }
@@ -58,53 +60,53 @@ export const RequestAccessModal: React.FC<RequestAccessModalProps> = ({ isOpen, 
                     <div className="w-12 h-12 bg-brand-accent/20 rounded-full flex items-center justify-center mx-auto mb-4 text-brand-accent border border-brand-accent/30">
                         <i className="fas fa-file-invoice"></i>
                     </div>
-                    <h3 className="text-2xl font-bold text-white">Attivazione Servizio PRO</h3>
+                    <h3 className="text-2xl font-bold text-white">{t('request_access.title')}</h3>
                     <p className="text-sm text-brand-text-secondary mt-3 bg-white/5 p-3 rounded border border-white/5 text-left">
-                        Compila i dati per la fatturazione. Riceverai una email con la fattura e le coordinate bancarie.
+                        {t('request_access.subtitle')}
                         <br /><br />
-                        <em className="text-brand-accent">Il servizio sarà attivato alla ricezione del pagamento.</em>
+                        <em className="text-brand-accent">{t('request_access.activation_note')}</em>
                     </p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">Piano Scelto</label>
+                        <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">{t('request_access.plan')}</label>
                         <select name="plan" value={formData.plan} onChange={handleChange} className="w-full bg-black/30 border border-white/10 p-3 rounded-lg text-white focus:border-brand-accent focus:outline-none">
-                            <option value="Mensile">PRO Mensile (€ 8.80)</option>
-                            <option value="Annuale">PRO Annuale (€ 88.00)</option>
-                            <option value="Enterprise">Enterprise (Custom)</option>
+                            <option value="Mensile">{t('request_access.plan_monthly')}</option>
+                            <option value="Annuale">{t('request_access.plan_annual')}</option>
+                            <option value="Enterprise">{t('request_access.plan_enterprise')}</option>
                         </select>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">Ragione Sociale / Nome *</label>
+                            <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">{t('request_access.company_name')}</label>
                             <input type="text" name="name" required className="w-full bg-black/30 border border-white/10 p-3 rounded-lg text-white" value={formData.name} onChange={handleChange} />
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">Email Fatturazione *</label>
+                            <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">{t('request_access.billing_email')}</label>
                             <input type="email" name="email" required className="w-full bg-black/30 border border-white/10 p-3 rounded-lg text-white" value={formData.email} onChange={handleChange} />
                         </div>
                     </div>
 
                     <div>
-                        <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">Indirizzo Completo *</label>
-                        <input type="text" name="address" required className="w-full bg-black/30 border border-white/10 p-3 rounded-lg text-white" placeholder="Via, Città, CAP, Provincia" value={formData.address} onChange={handleChange} />
+                        <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">{t('request_access.address')}</label>
+                        <input type="text" name="address" required className="w-full bg-black/30 border border-white/10 p-3 rounded-lg text-white" placeholder={t('request_access.address_placeholder')} value={formData.address} onChange={handleChange} />
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">P.IVA / C.F. *</label>
+                            <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">{t('request_access.vat_number')}</label>
                             <input type="text" name="piva" required className="w-full bg-black/30 border border-white/10 p-3 rounded-lg text-white" value={formData.piva} onChange={handleChange} />
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">Codice SDI / PEC</label>
+                            <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">{t('request_access.sdi_code')}</label>
                             <input type="text" name="sdi" className="w-full bg-black/30 border border-white/10 p-3 rounded-lg text-white" placeholder="0000000" value={formData.sdi} onChange={handleChange} />
                         </div>
                     </div>
 
                     <button type="submit" disabled={isSubmitting} className="w-full bg-brand-accent hover:bg-brand-accent-light text-brand-primary font-bold py-3 rounded-lg shadow-lg transition-all mt-2 disabled:opacity-50">
-                        {isSubmitting ? "Invio in corso..." : "Richiedi Fattura e Attivazione"}
+                        {isSubmitting ? t('request_access.sending') : t('request_access.submit')}
                     </button>
                 </form>
             </div>

@@ -8,10 +8,17 @@ const getNestedTranslation = (obj: any, path: string): string => {
   }, obj) || path;
 };
 
+const interpolate = (text: string, vars?: Record<string, string | number>): string => {
+  if (!vars) return text;
+  return Object.keys(vars).reduce((acc, key) => {
+    return acc.replace(new RegExp(`{${key}}`, 'g'), String(vars[key]));
+  }, text);
+};
+
 interface LanguageContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
-  t: (key: string) => string;
+  t: (key: string, vars?: Record<string, string | number>) => string;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
@@ -19,8 +26,9 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [language, setLanguage] = useState<Language>('it');
 
-  const t = (path: string): string => {
-    return getNestedTranslation(translations[language], path);
+  const t = (path: string, vars?: Record<string, string | number>): string => {
+    const raw = getNestedTranslation(translations[language], path);
+    return interpolate(raw, vars);
   };
 
   return (

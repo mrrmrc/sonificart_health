@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { ConfigSettings, Paradigm, InstrumentType, ScanPatternOverride } from '../types';
 import { ScanPatternSelector } from './ScanPatternSelector';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface ConfigPanelProps {
     config: ConfigSettings;
@@ -26,6 +27,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
     config, onConfigChange, onStartProcessing, paradigm, 
     oscStatus, oscError, scanPatternOverride, onScanPatternOverrideChange, onGoProClick, isProUser
 }) => {
+    const { t } = useLanguage();
     
     const isScientific = paradigm === 'scientific';
     
@@ -84,21 +86,21 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 {/* RESOLUTION & BPM */}
                 <div className="grid grid-cols-1 gap-6">
                     <div className="config-item">
-                        <label htmlFor="pixelCount" className="text-xs font-bold text-brand-text-secondary uppercase mb-2 block">Risoluzione Analisi</label>
+                        <label htmlFor="pixelCount" className="text-xs font-bold text-brand-text-secondary uppercase mb-2 block">{t('config.resolution')}</label>
                         <select
                             id="pixelCount"
                             value={config.pixelCount}
                             onChange={(e) => onConfigChange({ pixelCount: parseInt(e.target.value, 10)})}
                             className="w-full p-3 bg-black/20 border border-white/10 rounded-lg text-white focus:ring-2 focus:ring-brand-accent focus:outline-none transition-all hover:bg-black/30"
                         >
-                            <option value="1024">1,024 (32×32 - Veloce)</option>
-                            <option value="4096">4,096 (64×64 - HD)</option>
-                            <option value="16384">16,384 (128×128 - 4K Pro)</option>
+                            <option value="1024">{t('config.pixel_1024')}</option>
+                            <option value="4096">{t('config.pixel_4096')}</option>
+                            <option value="16384">{t('config.pixel_16384')}</option>
                         </select>
                     </div>
                     <div className="config-item">
                         <label htmlFor="bpmSetting" className="text-xs font-bold text-brand-text-secondary uppercase mb-2 block">
-                            Tempo (BPM)
+                            {t('config.tempo')}
                         </label>
                         <div className="flex items-center gap-4">
                             <input
@@ -114,8 +116,8 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                             <span className="bg-black/20 border border-white/10 text-brand-accent font-mono font-bold py-1 px-3 rounded-md min-w-[60px] text-center text-sm">{config.bpm}</span>
                         </div>
                          <div className="flex justify-between mt-1 text-[10px] text-brand-text-secondary">
-                            <span>Lento</span>
-                            <span>Veloce</span>
+                            <span>{t('config.slow')}</span>
+                            <span>{t('config.fast')}</span>
                         </div>
                     </div>
                 </div>
@@ -123,7 +125,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 {/* ACCOMPANIMENT */}
                  <div className={`pt-4 border-t border-white/10 transition-opacity ${isScientific ? 'opacity-50' : ''}`}>
                     <div className="flex justify-between items-center mb-4">
-                        <h4 className="text-sm font-bold text-white">Arrangiamento Artistico</h4>
+                        <h4 className="text-sm font-bold text-white">{t('config.accompaniment')}</h4>
                         <label htmlFor="accompaniment-toggle" className={`flex items-center ${isScientific ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                             <div className="relative">
                                 <input
@@ -142,7 +144,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                     {config.enableAccompaniment && (
                         <div className="animate-fade-in grid grid-cols-1 gap-4">
                              <div>
-                                <label htmlFor="melodyInstrument" className="text-xs font-bold text-brand-text-secondary uppercase mb-1 block">Melodia</label>
+                                <label htmlFor="melodyInstrument" className="text-xs font-bold text-brand-text-secondary uppercase mb-1 block">{t('config.melody')}</label>
                                  <select
                                     id="melodyInstrument"
                                     value={config.melodyInstrument}
@@ -153,7 +155,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                                 </select>
                             </div>
                             <div>
-                                <label htmlFor="accompanimentInstrument" className="text-xs font-bold text-brand-text-secondary uppercase mb-1 block">Accompagnamento</label>
+                                <label htmlFor="accompanimentInstrument" className="text-xs font-bold text-brand-text-secondary uppercase mb-1 block">{t('config.accompaniment_instrument')}</label>
                                  <select
                                     id="accompanimentInstrument"
                                     value={config.accompanimentInstrument}
@@ -171,15 +173,15 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 <div className="bg-white/5 border border-white/10 p-4 rounded-xl mt-auto">
                     <div className="grid grid-cols-3 gap-2 text-center divide-x divide-white/10">
                         <div className="px-2">
-                             <div className="text-xs text-brand-text-secondary uppercase mb-1">Durata</div>
+                             <div className="text-xs text-brand-text-secondary uppercase mb-1">{t('config.duration')}</div>
                              <div className={`font-mono font-bold ${isDurationTooLong ? 'text-yellow-400' : 'text-white'}`}>{estimatedDuration}</div>
                         </div>
                         <div className="px-2">
-                             <div className="text-xs text-brand-text-secondary uppercase mb-1">Note</div>
+                             <div className="text-xs text-brand-text-secondary uppercase mb-1">{t('config.notes')}</div>
                              <div className="font-mono font-bold text-white">{estimates.totalNotes}</div>
                         </div>
                         <div className="px-2">
-                             <div className="text-xs text-brand-text-secondary uppercase mb-1">CPU</div>
+                             <div className="text-xs text-brand-text-secondary uppercase mb-1">{t('config.cpu')}</div>
                              <div className="font-mono font-bold text-green-400">Low</div>
                         </div>
                     </div>
@@ -194,10 +196,10 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                     className="w-full btn bg-brand-accent hover:bg-brand-accent-light text-brand-primary font-bold py-4 px-8 rounded-xl transition-all transform hover:scale-[1.02] shadow-[0_0_20px_rgba(45,212,191,0.3)] disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-600 disabled:shadow-none disabled:scale-100 flex items-center justify-center gap-3"
                 >
                     <i className="fas fa-play"></i>
-                    <span>AVVIA ANALISI (-{creditCost} CR)</span>
+                    <span>{t('config.start', { cost: creditCost })}</span>
                 </button>
                 <p className="text-[10px] text-center text-brand-text-secondary mt-2">
-                    {isProUser ? 'Hai crediti illimitati.' : `Hai crediti sufficienti per questa operazione?`}
+                    {isProUser ? t('config.unlimited') : t('config.credits_question')}
                 </p>
             </div>
         </div>

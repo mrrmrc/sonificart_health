@@ -107,7 +107,8 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
         return () => { imageEl.removeEventListener('load', handleLoad); resizeObserver.disconnect(); };
     }, [calculateImageRect, displayImage]);
 
-    const melodyEvents = useMemo(() => (result.audioOutput?.events || []).filter(e => e.isAccompaniment !== true), [result.audioOutput]);
+    // Exclude accompaniment and any events mapped to filler blocks so highlights stay inside the real image area
+    const melodyEvents = useMemo(() => (result.audioOutput?.events || []).filter(e => e.isAccompaniment !== true && !e.sourceBlock?.isFiller), [result.audioOutput]);
 
     useEffect(() => {
         if (!isPlaying || playbackTime < 0 || melodyEvents.length === 0) return;
@@ -181,6 +182,26 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
     const culturalFamily = result.culturalSelectionResult?.tradition?.cultural_family || t('results.generic') || "Generica";
     const culturalScore = result.culturalSelectionResult?.scoreBreakdown?.total || 0;
 
+    // Calcola i bounds di contenuto (escludi filler) per allineare overlay/cursore con l'immagine effettiva (senza bande nere)
+    const contentBounds = useMemo(() => {
+        const blocks = result.blockAnalysisResult?.blocks || [];
+        if (!blocks.length) return undefined;
+        const grid = result.blockAnalysisResult.gridSize || 32;
+        let minX = grid - 1, minY = grid - 1, maxX = 0, maxY = 0;
+        let found = false;
+        blocks.forEach(b => {
+            if (!b.isFiller) {
+                found = true;
+                minX = Math.min(minX, b.position.x);
+                minY = Math.min(minY, b.position.y);
+                maxX = Math.max(maxX, b.position.x);
+                maxY = Math.max(maxY, b.position.y);
+            }
+        });
+        if (!found) return undefined;
+        return { minX, minY, maxX, maxY };
+    }, [result.blockAnalysisResult]);
+
     return (
         <div className="animate-fade-in">
             {isVideoModalOpen && (
@@ -228,15 +249,25 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
 
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
                 <div className="lg:col-span-3 space-y-4">
-                    <div ref={containerRef} className="relative aspect-square bg-brand-primary/30 rounded-md overflow-hidden border border-brand-secondary group">
+                    <div ref={containerRef} className="relative aspect-square bg-black rounded-md overflow-hidden border border-brand-secondary group">
                         <img ref={imageRef} src={displayImage} alt="Analysis View" className="w-full h-full object-contain" />
-                        <div className="absolute top-2 right-2 z-10 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                            <span className="bg-black/70 text-white text-[10px] px-2 py-1 rounded backdrop-blur-md border border-white/10 shadow-sm">{t('results.view_analysis') || "Vista Analisi (512px)"}</span>
+                        <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ background: 'none' }}>
+                            <rect x={imageRenderInfo.x} y={imageRenderInfo.y} width={imageRenderInfo.width} height={imageRenderInfo.height} fill="none" style={{ pointerEvents: 'none' }} />
+                        </svg>
+                        <div className="absolute inset-0" style={{ pointerEvents: 'none' }}>
+                            <div className="absolute top-2 right-2 z-10 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                <span className="bg-black/70 text-white text-[10px] px-2 py-1 rounded backdrop-blur-md border border-white/10 shadow-sm pointer-events-auto">{t('results.view_analysis') || "Vista Analisi (512px)"}</span>
+                            </div>
+                            {result.blockAnalysisResult && Array.isArray(result.blockAnalysisResult.blocks) && (
+                                <ScanPathOverlay blocks={result.blockAnalysisResult.blocks} gridSize={result.blockAnalysisResult.gridSize} imageRect={imageRenderInfo} />
+                            )}
+                            <CursorHighlight
+                                gridSize={result.blockAnalysisResult?.gridSize || 32}
+                                imageRect={imageRenderInfo}
+                                activeBlockPosition={activeEvent?.sourceBlock?.position ?? null}
+                                contentBounds={contentBounds}
+                            />
                         </div>
-                        {result.blockAnalysisResult && Array.isArray(result.blockAnalysisResult.blocks) && (
-                            <ScanPathOverlay blocks={result.blockAnalysisResult.blocks} gridSize={result.blockAnalysisResult.gridSize} imageRect={imageRenderInfo} />
-                        )}
-                        <CursorHighlight gridSize={result.blockAnalysisResult?.gridSize || 32} imageRect={imageRenderInfo} activeBlockPosition={activeEvent?.sourceBlock?.position ?? null} />
                     </div>
                     <CursorLoupe activeEvent={activeEvent} isPlaying={isPlaying} />
                 </div>

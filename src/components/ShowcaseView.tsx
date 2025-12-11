@@ -3,6 +3,7 @@ import { ShowcaseProject, User } from '../types';
 import { api } from '../services/api';
 import { AudioPlayer } from './AudioPlayer';
 import { generateParadigmPreview } from '../services/audioUtils';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const fixImage = (url: string | undefined) => {
     if (!url) return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
@@ -11,15 +12,18 @@ const fixImage = (url: string | undefined) => {
 };
 
 // --- MODALE ZOOM QR ---
-const QrZoomModal: React.FC<{ url: string; onClose: () => void }> = ({ url, onClose }) => (
-    <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/90 animate-fade-in p-4" onClick={onClose}>
-        <div className="bg-white p-4 rounded-xl shadow-2xl animate-zoom-in max-w-sm w-full text-center" onClick={e => e.stopPropagation()}>
-            <h3 className="text-black font-bold mb-4 text-lg">Scansiona QR Code</h3>
-            <img src={url} alt="QR Full" className="w-full h-auto" />
-            <button onClick={onClose} className="mt-4 bg-gray-800 text-white px-6 py-2 rounded-full font-bold text-sm hover:bg-black transition-colors">Chiudi</button>
+const QrZoomModal: React.FC<{ url: string; onClose: () => void }> = ({ url, onClose }) => {
+    const { t } = useLanguage();
+    return (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/90 animate-fade-in p-4" onClick={onClose}>
+            <div className="bg-white p-4 rounded-xl shadow-2xl animate-zoom-in max-w-sm w-full text-center" onClick={e => e.stopPropagation()}>
+                <h3 className="text-black font-bold mb-4 text-lg">{t('showcase.scan_qr')}</h3>
+                <img src={url} alt="QR Full" className="w-full h-auto" />
+                <button onClick={onClose} className="mt-4 bg-gray-800 text-white px-6 py-2 rounded-full font-bold text-sm hover:bg-black transition-colors">{t('showcase.close')}</button>
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
 interface ProjectModalProps {
     project: ShowcaseProject;
@@ -30,6 +34,7 @@ interface ProjectModalProps {
 }
 
 const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, user, onDelete, onUpdate }) => {
+    const { t } = useLanguage();
     const [audioUrl, setAudioUrl] = useState<string | null>(project.audioUrl || null);
     const [isGenerating, setIsGenerating] = useState(!project.audioUrl);
     const [isQrZoomed, setIsQrZoomed] = useState(false);
@@ -59,7 +64,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, user, onD
 
     const handleDelete = (e: React.MouseEvent) => {
         e.stopPropagation(); // STOP PROPAGATION
-        if (confirm("Sei sicuro di voler rimuovere questa opera dalla vetrina pubblica?")) {
+        if (confirm(t('showcase.confirm_delete'))) {
             onDelete(project.id);
         }
     };
@@ -73,7 +78,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, user, onD
             onUpdate(updatedProject);
             setIsEditing(false);
         } catch (e) {
-            alert("Errore nel salvataggio.");
+            alert(t('showcase.error_save'));
         } finally {
             setIsSaving(false);
         }
@@ -82,7 +87,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, user, onD
     const handleShare = (e: React.MouseEvent) => {
         e.stopPropagation();
         navigator.clipboard.writeText(shareUrl);
-        alert("Link copiato negli appunti!");
+        alert(t('showcase.link_copied'));
     };
 
     return (
@@ -103,7 +108,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, user, onD
 
                 {/* INFO AREA (DESTRA) */}
                 <div className="w-full md:w-1/3 bg-[#1e1e2e] border-l border-white/10 p-8 flex flex-col overflow-y-auto relative z-10 custom-scrollbar">
-                    <button onClick={onClose} className="self-end text-white/50 hover:text-white mb-4 transition-colors bg-white/5 rounded-full w-8 h-8 flex items-center justify-center">
+                    <button onClick={onClose} className="self-end text-white/50 hover:text-white mb-4 transition-colors bg-white/5 rounded-full w-8 h-8 flex items-center justify-center" aria-label={t('dashboard.cancel')}>
                         <i className="fas fa-times"></i>
                     </button>
 
@@ -115,6 +120,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, user, onD
                                 value={editTitle}
                                 onChange={e => setEditTitle(e.target.value)}
                                 onClick={e => e.stopPropagation()}
+                                aria-label={t('showcase.title')}
                             />
                         ) : (
                             <h1 className="text-3xl font-bold text-white mb-2 font-display leading-tight">{project.title}</h1>
@@ -138,10 +144,11 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, user, onD
                                 value={editDescription}
                                 onChange={e => setEditDescription(e.target.value)}
                                 onClick={e => e.stopPropagation()}
+                                aria-label={t('showcase.description')}
                             />
                         ) : (
                             <p className="text-gray-300 leading-relaxed text-sm">
-                                {project.description || "Nessuna descrizione fornita."}
+                                {project.description || t('showcase.no_description')}
                             </p>
                         )}
                     </div>
@@ -149,11 +156,11 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, user, onD
                     {/* DATI TECNICI (SOLA LETTURA) */}
                     <div className="grid grid-cols-2 gap-4 mb-6">
                         <div className="bg-black/20 p-3 rounded border border-white/5">
-                            <span className="text-[10px] text-gray-500 uppercase block mb-1 font-bold">Tradizione</span>
+                            <span className="text-[10px] text-gray-500 uppercase block mb-1 font-bold">{t('showcase.tradition')}</span>
                             <span className="text-sm font-bold text-white truncate">{project.tradition}</span>
                         </div>
                         <div className="bg-black/20 p-3 rounded border border-white/5">
-                            <span className="text-[10px] text-gray-500 uppercase block mb-1 font-bold">Paradigma</span>
+                            <span className="text-[10px] text-gray-500 uppercase block mb-1 font-bold">{t('showcase.paradigm')}</span>
                             <span className="text-sm font-bold text-white capitalize">{project.paradigm}</span>
                         </div>
                     </div>
@@ -164,10 +171,10 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, user, onD
                             <img src={qrImgUrl} alt="QR" className="w-full h-full" />
                         </div>
                         <div className="flex flex-col gap-2 flex-grow">
-                            <h4 className="text-xs font-bold text-white uppercase">Condividi Opera</h4>
+                            <h4 className="text-xs font-bold text-white uppercase">{t('showcase.share_work')}</h4>
                             <div className="flex gap-2">
-                                <button onClick={() => setIsQrZoomed(true)} className="flex-1 py-1.5 bg-black/40 hover:bg-black/60 text-white text-[10px] font-bold rounded border border-white/10 transition-colors">Zoom</button>
-                                <button onClick={handleShare} className="flex-1 py-1.5 bg-brand-accent/20 hover:bg-brand-accent/30 text-brand-accent text-[10px] font-bold rounded border border-brand-accent/20 transition-colors">Copia Link</button>
+                                <button onClick={() => setIsQrZoomed(true)} className="flex-1 py-1.5 bg-black/40 hover:bg-black/60 text-white text-[10px] font-bold rounded border border-white/10 transition-colors">{t('showcase.scan_qr')}</button>
+                                <button onClick={handleShare} className="flex-1 py-1.5 bg-brand-accent/20 hover:bg-brand-accent/30 text-brand-accent text-[10px] font-bold rounded border border-brand-accent/20 transition-colors">{t('showcase.copy_link')}</button>
                             </div>
                         </div>
                     </div>
@@ -177,7 +184,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, user, onD
                         <div className="bg-brand-secondary/20 p-4 rounded-xl border border-brand-secondary/30 shadow-inner mb-4">
                             <div className="flex items-center gap-3 mb-3">
                                 <i className="fas fa-music text-brand-accent"></i>
-                                <h4 className="text-sm font-bold text-white">Traccia Audio</h4>
+                                <h4 className="text-sm font-bold text-white">{t('showcase.audio_track')}</h4>
                             </div>
                             {audioUrl ? <AudioPlayer audioRef={audioRef} audioUrl={audioUrl} /> : <div className="h-10 bg-white/5 rounded animate-pulse w-full"></div>}
                         </div>
@@ -189,8 +196,8 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, user, onD
                                 <i className="fas fa-video"></i>
                             </div>
                             <div>
-                                <h4 className="text-sm font-bold text-white">Opera Multimediale</h4>
-                                <p className="text-xs text-purple-200">Riproduzione video attiva</p>
+                                <h4 className="text-sm font-bold text-white">{t('showcase.multimedia')}</h4>
+                                <p className="text-xs text-purple-200">{t('showcase.video_active')}</p>
                             </div>
                         </div>
                     )}
@@ -200,18 +207,18 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, user, onD
                         <div className="mt-auto pt-6 border-t border-white/10 flex gap-3">
                             {isEditing ? (
                                 <>
-                                    <button onClick={() => setIsEditing(false)} className="flex-1 py-3 px-4 bg-gray-600 hover:bg-gray-500 text-white rounded-lg text-xs font-bold transition-colors">Annulla</button>
+                                    <button onClick={() => setIsEditing(false)} className="flex-1 py-3 px-4 bg-gray-600 hover:bg-gray-500 text-white rounded-lg text-xs font-bold transition-colors">{t('dashboard.cancel')}</button>
                                     <button onClick={handleSave} disabled={isSaving} className="flex-1 py-3 px-4 bg-green-600 hover:bg-green-500 text-white rounded-lg text-xs font-bold transition-colors">
-                                        {isSaving ? "Salvataggio..." : "Salva Modifiche"}
+                                        {isSaving ? t('showcase.saving') : t('showcase.save')}
                                     </button>
                                 </>
                             ) : (
                                 <>
                                     <button onClick={(e) => { e.stopPropagation(); setIsEditing(true); }} className="flex-1 py-3 px-4 bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 border border-blue-500/30 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2">
-                                        <i className="fas fa-edit"></i> Modifica
+                                        <i className="fas fa-edit"></i> {t('showcase.edit')}
                                     </button>
                                     <button onClick={handleDelete} className="flex-1 py-3 px-4 bg-red-500/10 hover:bg-red-500/40 text-red-400 border border-red-500/30 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2">
-                                        <i className="fas fa-trash"></i> Rimuovi
+                                        <i className="fas fa-trash"></i> {t('showcase.remove')}
                                     </button>
                                 </>
                             )}
@@ -229,6 +236,7 @@ interface ShowcaseViewProps {
 }
 
 export const ShowcaseView: React.FC<ShowcaseViewProps> = ({ user, initialProjectId }) => {
+    const { t } = useLanguage();
     const [projects, setProjects] = useState<ShowcaseProject[]>([]);
     const [selectedProject, setSelectedProject] = useState<ShowcaseProject | null>(null);
     const [filter, setFilter] = useState('all');
@@ -284,7 +292,7 @@ export const ShowcaseView: React.FC<ShowcaseViewProps> = ({ user, initialProject
         try {
             await api.deleteShowcaseItem(id);
         } catch (e) {
-            alert("Errore cancellazione.");
+            alert(t('showcase.error_delete'));
             fetchShowcase(); // Revert if failed
         }
     };
@@ -294,21 +302,21 @@ export const ShowcaseView: React.FC<ShowcaseViewProps> = ({ user, initialProject
         setSelectedProject(updatedProject);
     };
 
-    if (isLoading) return <div className="text-center py-20 text-gray-500">Caricamento opere...</div>;
+    if (isLoading) return <div className="text-center py-20 text-gray-500">{t('showcase.loading')}</div>;
 
     return (
         <div className="w-full max-w-7xl mx-auto animate-fade-in pb-20">
             <div className="text-center mb-12">
-                <h2 className="text-4xl font-display font-bold text-white mb-4">Galleria Sonificazioni</h2>
-                <p className="text-brand-text-secondary mb-8">Esplora le opere della community.</p>
+                <h2 className="text-4xl font-display font-bold text-white mb-4">{t('showcase.title')}</h2>
+                <p className="text-brand-text-secondary mb-8">{t('showcase.subtitle')}</p>
                 <div className="flex flex-wrap justify-center gap-4 bg-white/5 p-2 rounded-full inline-flex backdrop-blur-sm border border-white/10">
                     {['all', 'scientific', 'artistic', 'hybrid'].map(f => (
-                        <button key={f} onClick={() => { setFilter(f); setCurrentPage(1); }} className={`px-4 py-1.5 rounded-full text-xs font-bold capitalize transition-colors ${filter === f ? 'bg-brand-accent text-brand-primary' : 'text-gray-400 hover:text-white'}`}>{f === 'all' ? 'Tutti' : f}</button>
+                        <button key={f} onClick={() => { setFilter(f); setCurrentPage(1); }} className={`px-4 py-1.5 rounded-full text-xs font-bold capitalize transition-colors ${filter === f ? 'bg-brand-accent text-brand-primary' : 'text-gray-400 hover:text-white'}`}>{t(`showcase.${f === 'all' ? 'all' : f}`)}</button>
                     ))}
                     <div className="w-px h-6 bg-white/10 mx-2 self-center hidden sm:block"></div>
-                    <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value as any)} className="bg-transparent text-xs font-bold text-gray-300 focus:outline-none cursor-pointer appearance-none py-1 px-2">
-                        <option value="newest" className="bg-[#0f172a]">Più Recenti</option>
-                        <option value="oldest" className="bg-[#0f172a]">Meno Recenti</option>
+                    <select aria-label={t('showcase.sort')} value={sortOrder} onChange={(e) => setSortOrder(e.target.value as any)} className="bg-transparent text-xs font-bold text-gray-300 focus:outline-none cursor-pointer appearance-none py-1 px-2">
+                        <option value="newest" className="bg-[#0f172a]">{t('showcase.newest')}</option>
+                        <option value="oldest" className="bg-[#0f172a]">{t('showcase.oldest')}</option>
                         <option value="az" className="bg-[#0f172a]">A-Z</option>
                     </select>
                 </div>
@@ -321,7 +329,7 @@ export const ShowcaseView: React.FC<ShowcaseViewProps> = ({ user, initialProject
                         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent p-4 flex flex-col justify-end">
                             <span className="text-[10px] text-brand-accent font-bold uppercase mb-1">{p.paradigm}</span>
                             <h3 className="text-white font-bold text-lg leading-tight truncate">{p.title}</h3>
-                            <p className="text-xs text-gray-400">by {p.author}</p>
+                            <p className="text-xs text-gray-400">{t('showcase.by')} {p.author}</p>
                         </div>
                         {p.videoUrl && <div className="absolute top-3 right-3 bg-black/50 backdrop-blur-md w-8 h-8 rounded-full flex items-center justify-center text-white"><i className="fas fa-video text-xs"></i></div>}
                     </div>

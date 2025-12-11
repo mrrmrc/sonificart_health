@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { verifySacContainer } from '../services/sacService';
 import { SacVerificationResult, User } from '../types';
+import { useLanguage } from '../contexts/LanguageContext';
 
 type VerificationStatus = 'idle' | 'scanning' | 'analyzing' | 'valid' | 'invalid' | 'error' | 'not_found';
 
@@ -11,15 +12,16 @@ interface VerificationPortalProps {
 }
 
 const FileUploader: React.FC<{ onFileSelect: (file: File) => void }> = ({ onFileSelect }) => {
+    const { t } = useLanguage();
     const [isDragging, setIsDragging] = useState(false);
 
     const handleFile = useCallback((file: File) => {
         if (!file.name.toLowerCase().endsWith('.sac')) {
-            alert("Per la verifica, carica un file .SAC valido.");
+            alert(t('verification.invalid_file'));
             return;
         }
         onFileSelect(file);
-    }, [onFileSelect]);
+    }, [onFileSelect, t]);
 
     const handleDragEnter = useCallback((e: React.DragEvent<HTMLLabelElement>) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }, []);
     const handleDragLeave = useCallback((e: React.DragEvent<HTMLLabelElement>) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); }, []);
@@ -52,10 +54,10 @@ const FileUploader: React.FC<{ onFileSelect: (file: File) => void }> = ({ onFile
             </div>
 
             <h3 className="relative z-10 font-display font-bold text-white text-2xl mb-2">
-                Carica Container .SAC
+                {t('verification.upload_title')}
             </h3>
             <p className="relative z-10 text-sm text-brand-text-secondary text-center max-w-md leading-relaxed mb-6">
-                Trascina qui il file <strong>.sac</strong> per analizzare l'integrità del pacchetto, il manifest crittografico e i certificati interni.
+                {t('verification.upload_subtitle')}
             </p>
 
             <input
@@ -69,19 +71,24 @@ const FileUploader: React.FC<{ onFileSelect: (file: File) => void }> = ({ onFile
     );
 };
 
-const ScannerAnimation: React.FC = () => (
+const ScannerAnimation: React.FC = () => {
+    const { t } = useLanguage();
+    return (
     <div className="flex flex-col items-center justify-center h-80 relative overflow-hidden bg-black/60 rounded-2xl border border-brand-accent/20">
         <div className="absolute top-0 left-0 w-full h-full bg-[linear-gradient(transparent_0%,rgba(45,212,191,0.1)_50%,transparent_100%)] animate-scan"></div>
         <div className="w-32 h-32 border-4 border-brand-accent/30 rounded-full flex items-center justify-center relative">
             <div className="absolute inset-0 border-4 border-t-brand-accent border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
             <i className="fas fa-search text-4xl text-brand-accent animate-pulse"></i>
         </div>
-        <h3 className="mt-8 text-xl font-bold text-white tracking-widest animate-pulse">SCANSIONE CONTAINER...</h3>
-        <div className="mt-2 font-mono text-xs text-brand-accent">VERIFICA FIRME DIGITALI</div>
+        <h3 className="mt-8 text-xl font-bold text-white tracking-widest animate-pulse">{t('verification.scanning')}</h3>
+        <div className="mt-2 font-mono text-xs text-brand-accent">{t('verification.digital_signatures')}</div>
     </div>
-);
+    );
+};
 
-const NotFoundResultDisplay: React.FC<{ fileName: string, onReset: () => void, details?: string }> = ({ fileName, onReset, details }) => (
+const NotFoundResultDisplay: React.FC<{ fileName: string, onReset: () => void, details?: string }> = ({ fileName, onReset, details }) => {
+    const { t } = useLanguage();
+    return (
     <div className="p-8 border border-red-900/50 rounded-xl bg-[#0f0505] animate-fade-in relative overflow-hidden">
         <div className="absolute top-0 left-0 w-1 h-full bg-red-600"></div>
 
@@ -89,22 +96,23 @@ const NotFoundResultDisplay: React.FC<{ fileName: string, onReset: () => void, d
             <div className="w-20 h-20 rounded-full bg-red-900/20 flex items-center justify-center text-red-500 text-4xl mb-4 border border-red-500/30">
                 <i className="fas fa-times"></i>
             </div>
-            <h3 className="text-2xl font-bold text-red-100 mb-2">Verifica Fallita</h3>
+            <h3 className="text-2xl font-bold text-red-100 mb-2">{t('verification.invalid')}</h3>
             <p className="text-red-200/60 text-sm max-w-md">
-                Il file <strong>"{fileName}"</strong> non ha superato i controlli di integrità.
+                {t('verification.failed_file', { file: fileName })}
             </p>
         </div>
 
         <div className="bg-red-950/30 border border-red-900/50 p-4 rounded-lg text-left mb-8 text-xs text-red-200/80 space-y-2">
-            <p className="font-bold uppercase mb-2">Dettagli Errore:</p>
-            <p className="font-mono">{details || "Container corrotto o manomesso."}</p>
+            <p className="font-bold uppercase mb-2">{t('verification.error_details')}</p>
+            <p className="font-mono">{details || t('verification.corrupted')}</p>
         </div>
 
         <button onClick={onReset} className="w-full bg-red-900/20 hover:bg-red-900/40 text-red-200 font-bold py-3 rounded-lg transition-colors border border-red-800/30">
-            Riprova
+            {t('verification.retry')}
         </button>
     </div>
-);
+    );
+};
 
 interface VerificationResultDisplayProps {
     result: SacVerificationResult;
@@ -114,6 +122,7 @@ interface VerificationResultDisplayProps {
 }
 
 const VerificationResultDisplay: React.FC<VerificationResultDisplayProps> = ({ result, file, onReset, onLoad }) => {
+    const { t } = useLanguage();
     const { isValid, details, manifestData } = result;
     const [scannedItems, setScannedItems] = useState<string[]>([]);
 
@@ -158,7 +167,7 @@ const VerificationResultDisplay: React.FC<VerificationResultDisplayProps> = ({ r
         return anyManifest.sac_hash || anyManifest.hash || anyManifest.id || anyManifest.signature || "---";
     };
 
-    if (!isValid) return <NotFoundResultDisplay fileName={file.name} onReset={onReset} details="Hash mismatch or missing files." />;
+    if (!isValid) return <NotFoundResultDisplay fileName={file.name} onReset={onReset} details={t('verification.hash_mismatch')} />;
 
     return (
         <div className="relative rounded-xl overflow-hidden bg-[#0a0a0c] border border-brand-secondary shadow-2xl animate-fade-in">
@@ -174,20 +183,20 @@ const VerificationResultDisplay: React.FC<VerificationResultDisplayProps> = ({ r
                                 <i className="fas fa-shield-check"></i>
                             </div>
                             <div>
-                                <h3 className="text-2xl font-bold text-white">Container Valido</h3>
+                                <h3 className="text-2xl font-bold text-white">{t('verification.valid')}</h3>
                                 <p className="text-green-400 font-mono text-xs uppercase mt-1 tracking-wider">
-                                    <i className="fas fa-check-circle mr-1"></i> Firma Crittografica Autentica
+                                    <i className="fas fa-check-circle mr-1"></i> {t('verification.signature_ok')}
                                 </p>
                             </div>
                         </div>
 
                         <div className="space-y-4 mb-8">
                             <div className="bg-white/5 p-4 rounded-lg border border-white/5">
-                                <div className="text-[10px] text-brand-text-secondary uppercase font-bold mb-1">Data Creazione</div>
+                                <div className="text-[10px] text-brand-text-secondary uppercase font-bold mb-1">{t('verification.created_at')}</div>
                                 <div className="font-mono text-white">{new Date(manifestData.created_at).toLocaleString()}</div>
                             </div>
                             <div className="bg-white/5 p-4 rounded-lg border border-white/5">
-                                <div className="text-[10px] text-brand-text-secondary uppercase font-bold mb-1">ID Univoco (Hash)</div>
+                                <div className="text-[10px] text-brand-text-secondary uppercase font-bold mb-1">{t('verification.unique_id')}</div>
                                 <div className="font-mono text-xs text-brand-accent break-all">
                                     {getHashDisplay().substring(0, 32)}...
                                 </div>
@@ -198,14 +207,14 @@ const VerificationResultDisplay: React.FC<VerificationResultDisplayProps> = ({ r
                     <div className="flex gap-3">
                         {isScanComplete ? (
                             <button onClick={onLoad} className="flex-1 py-4 bg-brand-accent hover:bg-brand-accent-light text-brand-primary font-bold rounded-lg transition-all shadow-lg hover:shadow-brand-accent/30 flex items-center justify-center gap-2 animate-zoom-in">
-                                <i className="fas fa-folder-open"></i> Apri Opera nell'Editor
+                                <i className="fas fa-folder-open"></i> {t('verification.open_in_editor')}
                             </button>
                         ) : (
                             <button disabled className="flex-1 py-4 bg-white/5 text-gray-500 font-bold rounded-lg cursor-wait border border-white/5">
-                                <i className="fas fa-circle-notch fa-spin mr-2"></i> Analisi in corso...
+                                <i className="fas fa-circle-notch fa-spin mr-2"></i> {t('verification.analyzing')}
                             </button>
                         )}
-                        <button onClick={onReset} className="px-4 py-4 bg-white/5 hover:bg-white/10 text-white rounded-lg border border-white/10 transition-colors" title="Verifica altro file">
+                        <button onClick={onReset} className="px-4 py-4 bg-white/5 hover:bg-white/10 text-white rounded-lg border border-white/10 transition-colors" title={t('verification.retry')}>
                             <i className="fas fa-redo"></i>
                         </button>
                     </div>
@@ -215,7 +224,7 @@ const VerificationResultDisplay: React.FC<VerificationResultDisplayProps> = ({ r
                 <div className="bg-black/40 rounded-lg border border-white/10 p-4 font-mono text-xs overflow-y-auto max-h-[400px] custom-scrollbar relative flex flex-col min-h-[300px]">
                     <div className="absolute top-2 right-2 text-[10px] text-brand-text-secondary uppercase tracking-widest animate-pulse">Live Scan</div>
                     <div className="space-y-2">
-                        <div className="text-gray-500 border-b border-gray-800 pb-2 mb-2">Target: {file.name}</div>
+                        <div className="text-gray-500 border-b border-gray-800 pb-2 mb-2">{t('verification.target')}: {file.name}</div>
 
                         {displayList.map((filename) => {
                             const isScanned = scannedItems.includes(filename);
@@ -234,9 +243,9 @@ const VerificationResultDisplay: React.FC<VerificationResultDisplayProps> = ({ r
 
                         {isScanComplete && (
                             <div className="mt-4 pt-4 border-t border-green-500/30 text-green-400 font-bold animate-pulse">
-                                &gt;&gt; VERIFICA INTEGRITÀ COMPLETATA.
+                                {t('verification.complete')}
                                 <br />
-                                &gt;&gt; SIGNATURE MATCH: TRUE
+                                {t('verification.signature_match')}
                             </div>
                         )}
                     </div>
@@ -248,6 +257,7 @@ const VerificationResultDisplay: React.FC<VerificationResultDisplayProps> = ({ r
 };
 
 export const VerificationPortal: React.FC<VerificationPortalProps> = ({ user, onLogin, onLoadSacProject }) => {
+    const { t } = useLanguage();
     const [status, setStatus] = useState<VerificationStatus>('idle');
     const [result, setResult] = useState<SacVerificationResult | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -297,8 +307,8 @@ export const VerificationPortal: React.FC<VerificationPortalProps> = ({ user, on
             {status === 'idle' && <div className="bg-[#0a0a0c] rounded-2xl border border-white/10 p-12 shadow-2xl"><FileUploader onFileSelect={handleFileSelect} /></div>}
             {status === 'scanning' && <ScannerAnimation />}
             {status === 'valid' && result && uploadedFile && <VerificationResultDisplay result={result} file={uploadedFile} onReset={reset} onLoad={handleLoad} />}
-            {status === 'not_found' && uploadedFile && <NotFoundResultDisplay fileName={uploadedFile.name} onReset={reset} details="Container non valido." />}
-            {status === 'error' && <div className="text-center text-red-500">Errore: {error} <button onClick={reset}>Riprova</button></div>}
+            {status === 'not_found' && uploadedFile && <NotFoundResultDisplay fileName={uploadedFile.name} onReset={reset} details={t('verification.invalid')} />}
+            {status === 'error' && <div className="text-center text-red-500">{t('verification.error_read')}: {error} <button onClick={reset}>{t('verification.retry')}</button></div>}
         </div>
     );
 };
