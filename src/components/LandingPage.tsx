@@ -37,7 +37,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onExplor
                 </h1>
 
                 <p className="text-lg md:text-2xl text-brand-text-secondary max-w-3xl mx-auto font-light mb-12 z-10">
-                    {t('landing.subtitle')}
+                    <span dangerouslySetInnerHTML={{ __html: t('landing.subtitle') }} />
                 </p>
 
                 <div className="flex flex-col sm:flex-row gap-6 z-10">
@@ -55,16 +55,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onExplor
                 </div>
             </div>
 
-            {/* PRICING */}
+            {/* PRICING (ORA COMPLETAMENTE TRADOTTO) */}
             <div className="w-full bg-gradient-to-b from-transparent to-black/40 py-24 border-t border-white/5">
                 <div className="w-full max-w-7xl mx-auto px-6">
                     <div className="text-center mb-12">
-                        <h2 className="text-3xl md:text-5xl font-display font-bold text-white mb-4">Piani di Accesso</h2>
-                        <p className="text-brand-text-secondary mb-6">Scegli la potenza di calcolo adatta al tuo progetto.</p>
+                        <h2 className="text-3xl md:text-5xl font-display font-bold text-white mb-4">{t('landing.pricing.title')}</h2>
+                        <p className="text-brand-text-secondary mb-6">{t('landing.pricing.subtitle')}</p>
 
                         <div className="inline-flex bg-white/10 p-1 rounded-full border border-white/10">
-                            <button onClick={() => setBillingCycle('Mensile')} className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${billingCycle === 'Mensile' ? 'bg-brand-accent text-brand-primary shadow-lg' : 'text-white hover:text-white/80'}`}>Mensile</button>
-                            <button onClick={() => setBillingCycle('Annuale')} className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${billingCycle === 'Annuale' ? 'bg-brand-accent text-brand-primary shadow-lg' : 'text-white hover:text-white/80'}`}>Annuale (-20%)</button>
+                            <button onClick={() => setBillingCycle('Mensile')} className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${billingCycle === 'Mensile' ? 'bg-brand-accent text-brand-primary shadow-lg' : 'text-white hover:text-white/80'}`}>{t('landing.pricing.monthly')}</button>
+                            <button onClick={() => setBillingCycle('Annuale')} className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${billingCycle === 'Annuale' ? 'bg-brand-accent text-brand-primary shadow-lg' : 'text-white hover:text-white/80'}`}>{t('landing.pricing.annual')} (-20%)</button>
                         </div>
                     </div>
 
@@ -72,60 +72,59 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onExplor
                         {/* GRATIS */}
                         <div className="bg-white/5 border border-white/10 rounded-2xl p-8 flex flex-col hover:border-white/20 transition-colors">
                             <div className="mb-6">
-                                <h3 className="text-xl font-bold text-white">Gratis</h3>
-                                <div className="text-3xl font-black text-white mt-2">€ 0</div>
-                                <p className="text-xs text-brand-text-secondary mt-1">Per sperimentazione personale</p>
+                                <h3 className="text-xl font-bold text-white">{t('landing.pricing.free.title')}</h3>
+                                <div className="text-3xl font-black text-white mt-2">{t('landing.pricing.free.price')}</div>
+                                <p className="text-xs text-brand-text-secondary mt-1">{t('landing.pricing.free.desc')}</p>
                             </div>
                             <ul className="space-y-4 text-sm text-brand-text-secondary flex-grow mb-8">
-                                <li className="flex gap-3"><i className="fas fa-check text-green-400"></i> <span><strong>5 Crediti</strong> Omaggio</span></li>
-                                <li className="flex gap-3"><i className="fas fa-check text-green-400"></i> <span>Paradigma Scientifico Base</span></li>
-                                <li className="flex gap-3"><i className="fas fa-check text-green-400"></i> <span>Export MP3 Standard</span></li>
-                                <li className="flex gap-3"><i className="fas fa-check text-green-400"></i> <span>Accesso alla Community</span></li>
-                                <li className="flex gap-3"><i className="fas fa-check text-green-400"></i> <span>Visualizzatore 2D</span></li>
+                                <li className="flex gap-3"><i className="fas fa-check text-green-400"></i> <span>{t('landing.pricing.free.f1')}</span></li>
+                                <li className="flex gap-3"><i className="fas fa-check text-green-400"></i> <span>{t('landing.pricing.free.f2')}</span></li>
+                                <li className="flex gap-3"><i className="fas fa-check text-green-400"></i> <span>{t('landing.pricing.free.f3')}</span></li>
+                                <li className="flex gap-3"><i className="fas fa-check text-green-400"></i> <span>{t('landing.pricing.free.f4')}</span></li>
+                                <li className="flex gap-3"><i className="fas fa-check text-green-400"></i> <span>{t('landing.pricing.free.f5')}</span></li>
                             </ul>
-                            <button onClick={onGetStarted} className="w-full py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold transition-colors">Crea Account</button>
+                            <button onClick={onGetStarted} className="w-full py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold transition-colors">{t('landing.pricing.free.btn')}</button>
                         </div>
 
                         {/* PRO */}
                         <div className="bg-brand-secondary/80 backdrop-blur-xl border border-brand-accent/50 rounded-2xl p-8 flex flex-col relative transform scale-105 shadow-2xl shadow-brand-accent/10 z-10">
-                            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-brand-accent text-brand-primary text-xs font-black px-4 py-1.5 rounded-full uppercase tracking-wide shadow-lg">Consigliato</div>
+                            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-brand-accent text-brand-primary text-xs font-black px-4 py-1.5 rounded-full uppercase tracking-wide shadow-lg">{t('landing.pricing.recommended')}</div>
                             <div className="mb-6">
-                                <h3 className="text-xl font-bold text-white text-brand-accent">Pro</h3>
+                                <h3 className="text-xl font-bold text-white text-brand-accent">{t('landing.pricing.pro.title')}</h3>
                                 <div className="text-3xl font-black text-white mt-2">
-                                    {billingCycle === 'Mensile' ? '€ 8.80' : '€ 88.00'}
-                                    <span className="text-sm font-normal text-gray-400"> / {billingCycle === 'Mensile' ? 'mese' : 'anno'}</span>
+                                    {billingCycle === 'Mensile' ? t('landing.pricing.pro.price_monthly') : t('landing.pricing.pro.price_annual')}
+                                    <span className="text-sm font-normal text-gray-400"> / {billingCycle === 'Mensile' ? t('landing.pricing.month') : t('landing.pricing.year')}</span>
                                 </div>
-                                <p className="text-xs text-brand-text-secondary mt-1">Per professionisti e creativi</p>
+                                <p className="text-xs text-brand-text-secondary mt-1">{t('landing.pricing.pro.desc')}</p>
                             </div>
                             <ul className="space-y-4 text-sm text-white/90 flex-grow mb-8">
-                                <li className="flex gap-3"><i className="fas fa-infinity text-brand-accent"></i> <span><strong>Crediti Illimitati</strong></span></li>
-                                <li className="flex gap-3"><i className="fas fa-check text-brand-accent"></i> <span>Tutti i Paradigmi (AI + Ibrido)</span></li>
-                                <li className="flex gap-3"><i className="fas fa-check text-brand-accent"></i> <span>Export WAV 24bit / MIDI</span></li>
-                                <li className="flex gap-3"><i className="fas fa-check text-brand-accent"></i> <span>Licenza Commerciale</span></li>
-                                <li className="flex gap-3"><i className="fas fa-check text-brand-accent"></i> <span>Generazione Video 4K</span></li>
-                                <li className="flex gap-3"><i className="fas fa-check text-brand-accent"></i> <span>Priorità di Calcolo</span></li>
+                                <li className="flex gap-3"><i className="fas fa-infinity text-brand-accent"></i> <span>{t('landing.pricing.pro.f1')}</span></li>
+                                <li className="flex gap-3"><i className="fas fa-check text-brand-accent"></i> <span>{t('landing.pricing.pro.f2')}</span></li>
+                                <li className="flex gap-3"><i className="fas fa-check text-brand-accent"></i> <span>{t('landing.pricing.pro.f3')}</span></li>
+                                <li className="flex gap-3"><i className="fas fa-check text-brand-accent"></i> <span>{t('landing.pricing.pro.f4')}</span></li>
+                                <li className="flex gap-3"><i className="fas fa-check text-brand-accent"></i> <span>{t('landing.pricing.pro.f5')}</span></li>
+                                <li className="flex gap-3"><i className="fas fa-check text-brand-accent"></i> <span>{t('landing.pricing.pro.f6')}</span></li>
                             </ul>
-                            {/* Passa il piano scelto al click */}
                             <button onClick={() => onOpenPricing(billingCycle)} className="w-full py-4 bg-brand-accent hover:bg-brand-accent-light text-brand-primary font-bold rounded-xl transition-colors shadow-lg shadow-brand-accent/20">
-                                Richiedi Accesso PRO
+                                {t('landing.pricing.pro.btn')}
                             </button>
                         </div>
 
                         {/* ENTERPRISE */}
                         <div className="bg-white/5 border border-white/10 rounded-2xl p-8 flex flex-col hover:border-white/20 transition-colors">
                             <div className="mb-6">
-                                <h3 className="text-xl font-bold text-white">Istituzioni</h3>
-                                <div className="text-3xl font-black text-white mt-2">Custom</div>
-                                <p className="text-xs text-brand-text-secondary mt-1">Per Musei e Grandi Eventi</p>
+                                <h3 className="text-xl font-bold text-white">{t('landing.pricing.custom.title')}</h3>
+                                <div className="text-3xl font-black text-white mt-2">{t('landing.pricing.custom.subtitle')}</div>
+                                <p className="text-xs text-brand-text-secondary mt-1">{t('landing.pricing.custom.desc')}</p>
                             </div>
                             <ul className="space-y-4 text-sm text-brand-text-secondary flex-grow mb-8">
-                                <li className="flex gap-3"><i className="fas fa-check text-white"></i> <span>Piattaforma <strong>SaaS</strong> Dedicata</span></li>
-                                <li className="flex gap-3"><i className="fas fa-check text-white"></i> <span>Installazioni Interattive</span></li>
-                                <li className="flex gap-3"><i className="fas fa-check text-white"></i> <span>Supporto Hardware</span></li>
-                                <li className="flex gap-3"><i className="fas fa-check text-white"></i> <span>API Access Esclusivo</span></li>
-                                <li className="flex gap-3"><i className="fas fa-check text-white"></i> <span>Formazione Staff</span></li>
+                                <li className="flex gap-3"><i className="fas fa-check text-white"></i> <span>{t('landing.pricing.custom.f1')}</span></li>
+                                <li className="flex gap-3"><i className="fas fa-check text-white"></i> <span>{t('landing.pricing.custom.f2')}</span></li>
+                                <li className="flex gap-3"><i className="fas fa-check text-white"></i> <span>{t('landing.pricing.custom.f3')}</span></li>
+                                <li className="flex gap-3"><i className="fas fa-check text-white"></i> <span>{t('landing.pricing.custom.f4')}</span></li>
+                                <li className="flex gap-3"><i className="fas fa-check text-white"></i> <span>{t('landing.pricing.custom.f5')}</span></li>
                             </ul>
-                            <button onClick={() => onOpenPricing('Enterprise')} className="w-full py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold transition-colors">Contattaci</button>
+                            <button onClick={() => onOpenPricing('Enterprise')} className="w-full py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold transition-colors">{t('landing.pricing.custom.btn')}</button>
                         </div>
                     </div>
                 </div>

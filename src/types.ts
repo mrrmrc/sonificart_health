@@ -54,7 +54,10 @@ export interface MusicGenerationPrompt {
     main_prompt_ita: string;
     technical_parameters: string;
     justification: string;
-    stability_prompt: string;
+    // Modifichiamo qui: rendiamo espliciti i vari prompt
+    suno_prompt: string;      // Ottimizzato per Suno (Meta Tags)
+    udio_prompt: string;      // Ottimizzato per Udio (Tags descrittivi)
+    stability_prompt: string; // Ottimizzato per Stable Audio (Frase discorsiva)
     negative_prompt: string;
 }
 

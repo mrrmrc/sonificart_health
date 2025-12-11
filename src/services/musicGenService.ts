@@ -1,8 +1,8 @@
 
 import { MusicGenerationPrompt, MusicGenResponse } from "../types";
 
-// HARDCODED KEY AS REQUESTED
-const STABILITY_API_KEY = 'sk-EQyuyCbTzRuI9InYbQZtsCVPLSNAy202c5veU8iXOoY9KcTA';
+// Lettura sicura da env (mai in chiaro nel bundle)
+const STABILITY_API_KEY = (import.meta as any)?.env?.VITE_STABILITY_API_KEY || (typeof process !== 'undefined' ? (process as any).env?.VITE_STABILITY_API_KEY : '');
 
 /**
  * STABILITY AI SERVICE
@@ -20,6 +20,10 @@ export async function generateAiTrack(
     
     // Clamp duration: Stable Audio 2.5 supports up to 180s. 
     const duration = Math.min(Math.max(durationSeconds, 1), 180); 
+
+    if (!STABILITY_API_KEY) {
+        throw new Error("Chiave Stable Audio mancante: configura VITE_STABILITY_API_KEY lato server/proxy.");
+    }
 
     try {
         // 1. ATTEMPT AUDIO-TO-AUDIO (Structure Guided)

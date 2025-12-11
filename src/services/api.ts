@@ -78,7 +78,15 @@ export const api = {
 
         await fetch(`${API_BASE_URL}/index.php?action=save_sonification`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ imageHash: result.imageHash, paradigm, traditionName: result.culturalSelectionResult.tradition.name, imageUrl: imgBase64, audioData: audioBase64, auth_token: token })
+            body: JSON.stringify({
+                imageHash: result.imageHash,
+                paradigm,
+                traditionName: result.culturalSelectionResult.tradition.name,
+                imageUrl: imgBase64,
+                audioData: audioBase64,
+                musicGenerationPrompt: result.musicGenerationPrompt, // <--- CAMPO AGGIUNTO QUI
+                auth_token: token
+            })
         });
     },
 

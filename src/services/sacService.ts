@@ -14,12 +14,23 @@ interface SacInputData {
     culturalSelectionResult: CulturalSelectionResult;
     transformedEvents: TransformedNoteEvent[];
     totalDuration: number;
-    canvas: OffscreenCanvas | null;
+    canvas: OffscreenCanvas | HTMLCanvasElement | null;
     imageJpegBlob?: Blob;
     audioWavBlob: Blob;
     midiBlob: Blob;
     scanPattern: ScanPatternData;
     videoBlob?: Blob;
+}
+
+async function canvasToBlob(canvas: OffscreenCanvas | HTMLCanvasElement, type: string, quality?: number): Promise<Blob> {
+    if ('convertToBlob' in canvas) {
+        return await (canvas as OffscreenCanvas).convertToBlob({ type, quality });
+    }
+    return await new Promise<Blob>((resolve, reject) => {
+        (canvas as HTMLCanvasElement).toBlob((blob) => {
+            if (blob) resolve(blob); else reject(new Error('Failed to convert canvas to blob'));
+        }, type, quality);
+    });
 }
 
 export async function createSacContainer(data: SacInputData) {
@@ -32,7 +43,7 @@ export async function createSacContainer(data: SacInputData) {
     if (data.imageJpegBlob) {
         imageBlob = data.imageJpegBlob;
     } else if (data.canvas) {
-        imageBlob = await data.canvas.convertToBlob({ type: 'image/jpeg', quality: 0.9 });
+        imageBlob = await canvasToBlob(data.canvas, 'image/jpeg', 0.9);
     } else {
         throw new Error("Nessuna immagine fornita per il SAC");
     }
@@ -255,21 +266,57 @@ export async function parseSacContainer(file: File): Promise<SonificationResult>
 }
 
 export async function verifySacContainer(file: File): Promise<SacVerificationResult> {
-    // (Il codice di verifySacContainer rimane identico al tuo, lo ometto per brevità per non farti confusione. 
-    //  Il problema era solo nella funzione parseSacContainer sopra).
-    //  Se ti serve tutto il file completo fammi sapere, ma basta sostituire parseSacContainer e aggiungere gli import mancanti.
-
     const zip = await JSZip.loadAsync(file);
     const manifestFile = zip.file("integrity_manifest.json");
     if (!manifestFile) throw new Error("Manifest mancante.");
+
     const manifestContent = await manifestFile.async('string');
     const manifest = JSON.parse(manifestContent);
-    const fileHashes = manifest.integrity?.file_hashes;
+    const fileHashes = manifest.integrity?.file_hashes as Record<string, { sha256: string, size_bytes: number }> | undefined;
 
-    const verificationDetails: any = {};
+    if (!fileHashes) throw new Error("Manifest incompleto: file_hashes assente.");
+
+    const verificationDetails: Record<string, { expected: string; actual: string; match: boolean }> = {};
     let allValid = true;
 
-    // ... (Logica di verifica standard)
+    const requiredFiles = [
+        "original_image.jpg",
+        "generated_audio.wav",
+        "musical_notation.mid",
+        "block_analysis.json",
+        "cultural_selection.json",
+        "sonification_data.json",
+        "cultural_certification.json",
+        "validation_report.json",
+        "integrity_manifest.json"
+    ];
+
+    // Verifica presenza e hash di tutti i file elencati nel manifest
+    for (const [filename, meta] of Object.entries(fileHashes)) {
+        const entry = zip.file(filename);
+        if (!entry) {
+            verificationDetails[filename] = { expected: meta.sha256, actual: 'missing', match: false };
+            allValid = false;
+            continue;
+        }
+        const content = await entry.async('arraybuffer');
+        const actualHash = bufferToHex(await calculateSHA256(content));
+        const match = actualHash === meta.sha256;
+        verificationDetails[filename] = { expected: meta.sha256, actual: actualHash, match };
+        if (!match) allValid = false;
+        if (meta.size_bytes && meta.size_bytes !== content.byteLength) {
+            allValid = false;
+            verificationDetails[filename].match = false;
+        }
+    }
+
+    // Verifica presenza dei file minimi (fail-safe, anche se non nel manifest)
+    for (const req of requiredFiles) {
+        if (!zip.file(req)) {
+            verificationDetails[req] = verificationDetails[req] || { expected: 'present', actual: 'missing', match: false };
+            allValid = false;
+        }
+    }
 
     return {
         isValid: allValid,

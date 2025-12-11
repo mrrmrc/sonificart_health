@@ -1,5 +1,5 @@
-
 import React, { useEffect, useState } from 'react';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface HelpModalProps {
     isOpen: boolean;
@@ -11,6 +11,7 @@ type HelpTab = 'guide' | 'interface' | 'faq' | 'scientific';
 
 export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSection }) => {
     const [activeTab, setActiveTab] = useState<HelpTab>('guide');
+    const { t } = useLanguage();
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -23,7 +24,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
     // Auto-scroll logic
     useEffect(() => {
         if (isOpen && initialSection) {
-            if(['doc-colorimetry', 'doc-database', 'doc-determinism', 'doc-pipeline', 'doc-sac'].includes(initialSection)) {
+            if (['doc-colorimetry', 'doc-database', 'doc-determinism', 'doc-pipeline', 'doc-sac'].includes(initialSection)) {
                 setActiveTab('scientific');
                 setTimeout(() => {
                     const el = document.getElementById(initialSection);
@@ -46,22 +47,18 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
                 return (
                     <div className="space-y-8 animate-fade-in">
                         <div className="bg-brand-secondary/50 p-6 rounded-xl border border-brand-accent/20">
-                            <h3 className="text-2xl font-display font-bold text-white mb-4">Come usare SonificA.R.T.</h3>
+                            <h3 className="text-2xl font-display font-bold text-white mb-4">{t('help.guide.title')}</h3>
                             <p className="text-brand-text-secondary leading-relaxed mb-6">
-                                Benvenuto nel manuale operativo. Segui questi 4 passaggi per trasformare la tua prima immagine in una composizione sonora certificata.
+                                {t('help.guide.intro')}
                             </p>
 
                             <div className="space-y-6">
                                 <div className="flex gap-4">
                                     <div className="flex-shrink-0 w-8 h-8 rounded-full bg-brand-accent text-black font-bold flex items-center justify-center">1</div>
                                     <div>
-                                        <h4 className="text-lg font-bold text-white mb-1">Scegli il Paradigma</h4>
+                                        <h4 className="text-lg font-bold text-white mb-1">{t('help.guide.step1')}</h4>
                                         <p className="text-sm text-brand-text-secondary">
-                                            Prima di caricare, seleziona la "lente" interpretativa in alto a sinistra:
-                                            <ul className="list-disc list-inside mt-2 ml-2 space-y-1 text-xs">
-                                                <li><strong>Scientifico (1 CR):</strong> Traduzione pura dati-suono. Ideale per analisi e ricerca.</li>
-                                                <li><strong>Ibrido/Artistico (2 CR):</strong> L'IA interpreta l'immagine per creare un arrangiamento musicale emotivo.</li>
-                                            </ul>
+                                            {t('help.guide.step1_desc')}
                                         </p>
                                     </div>
                                 </div>
@@ -69,9 +66,9 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
                                 <div className="flex gap-4">
                                     <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white text-black font-bold flex items-center justify-center">2</div>
                                     <div>
-                                        <h4 className="text-lg font-bold text-white mb-1">Carica l'Immagine</h4>
+                                        <h4 className="text-lg font-bold text-white mb-1">{t('help.guide.step2')}</h4>
                                         <p className="text-sm text-brand-text-secondary">
-                                            Trascina il tuo file (JPG, PNG) nell'area di upload. Il sistema effettuerà immediatamente la <strong>Standardizzazione</strong> (resize a 512x512px) e il calcolo dell'Hash di integrità.
+                                            {t('help.guide.step2_desc')}
                                         </p>
                                     </div>
                                 </div>
@@ -79,15 +76,9 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
                                 <div className="flex gap-4">
                                     <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white text-black font-bold flex items-center justify-center">3</div>
                                     <div>
-                                        <h4 className="text-lg font-bold text-white mb-1">Configura e Avvia</h4>
+                                        <h4 className="text-lg font-bold text-white mb-1">{t('help.guide.step3')}</h4>
                                         <p className="text-sm text-brand-text-secondary">
-                                            Nel pannello di destra puoi personalizzare:
-                                            <ul className="list-disc list-inside mt-2 ml-2 space-y-1 text-xs">
-                                                <li><strong>Risoluzione:</strong> Più alta = più note, elaborazione più lenta.</li>
-                                                <li><strong>BPM:</strong> Velocità di riproduzione.</li>
-                                                <li><strong>Percorso Scansione:</strong> "Auto" usa la tradizione culturale, oppure puoi forzare una spirale o linea manuale.</li>
-                                            </ul>
-                                            Clicca su <strong>AVVIA ANALISI</strong> per generare l'audio.
+                                            {t('help.guide.step3_desc')}
                                         </p>
                                     </div>
                                 </div>
@@ -95,17 +86,9 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
                                 <div className="flex gap-4">
                                     <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white text-black font-bold flex items-center justify-center">4</div>
                                     <div>
-                                        <h4 className="text-lg font-bold text-white mb-1">Ascolta e Scarica</h4>
+                                        <h4 className="text-lg font-bold text-white mb-1">{t('help.guide.step4')}</h4>
                                         <p className="text-sm text-brand-text-secondary">
-                                            A fine elaborazione, usa il player per ascoltare. 
-                                            <br/>
-                                            Se hai una licenza <strong>PRO</strong>, puoi scaricare:
-                                            <ul className="list-disc list-inside mt-2 ml-2 space-y-1 text-xs">
-                                                <li>Audio WAV Master</li>
-                                                <li>File MIDI (per uso in DAW esterne)</li>
-                                                <li><strong>Video Forense (MP4)</strong>: La prova visiva della scansione.</li>
-                                                <li>Container .SAC completo (per archiviazione certificata).</li>
-                                            </ul>
+                                            {t('help.guide.step4_desc')}
                                         </p>
                                     </div>
                                 </div>
@@ -113,81 +96,84 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
                         </div>
                     </div>
                 );
-            
+
             case 'interface':
                 return (
                     <div className="space-y-8 animate-fade-in">
-                         <h3 className="text-xl font-bold text-white border-b border-white/10 pb-4">Glossario Interfaccia</h3>
-                         
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <h3 className="text-xl font-bold text-white border-b border-white/10 pb-4">{t('help.tabs.glossary')}</h3>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="bg-white/5 p-4 rounded-lg">
-                                <h4 className="font-bold text-brand-accent mb-2"><i className="fas fa-video mr-2"></i> Prova Cinetica (Kinetic Proof)</h4>
+                                <h4 className="font-bold text-brand-accent mb-2"><i className="fas fa-video mr-2"></i> {t('help.glossary.kinetic')}</h4>
                                 <p className="text-xs text-brand-text-secondary">
-                                    È il video generato dal sistema. Si chiama "Cinetico" perché mostra il movimento dell'algoritmo e "Prova" perché include i dati di telemetria (coordinate X/Y e tempo) che dimostrano che il suono non è casuale.
-                                </p>
-                            </div>
-                            
-                            <div className="bg-white/5 p-4 rounded-lg">
-                                <h4 className="font-bold text-brand-accent mb-2"><i className="fas fa-box mr-2"></i> Container .SAC</h4>
-                                <p className="text-xs text-brand-text-secondary">
-                                    (Sonified Art Container). È un file ZIP speciale che contiene tutto il progetto: immagine originale, audio, MIDI e certificati. Serve per archiviare l'opera in modo sicuro.
+                                    {t('help.glossary.kinetic_desc')}
                                 </p>
                             </div>
 
                             <div className="bg-white/5 p-4 rounded-lg">
-                                <h4 className="font-bold text-brand-accent mb-2"><i className="fas fa-coins mr-2"></i> Crediti (CR)</h4>
+                                <h4 className="font-bold text-brand-accent mb-2"><i className="fas fa-box mr-2"></i> {t('help.glossary.sac')}</h4>
                                 <p className="text-xs text-brand-text-secondary">
-                                    La valuta virtuale per usare il sistema. 
-                                    <br/><strong>Scientifico = 1 CR</strong>. 
-                                    <br/><strong>Artistico/Ibrido = 2 CR</strong>.
-                                    <br/>Gli utenti PRO hanno crediti infiniti.
+                                    {t('help.glossary.sac_desc')}
                                 </p>
                             </div>
 
                             <div className="bg-white/5 p-4 rounded-lg">
-                                <h4 className="font-bold text-brand-accent mb-2"><i className="fas fa-fingerprint mr-2"></i> Hash SHA-256</h4>
+                                <h4 className="font-bold text-brand-accent mb-2"><i className="fas fa-coins mr-2"></i> {t('help.glossary.credits')}</h4>
                                 <p className="text-xs text-brand-text-secondary">
-                                    Una stringa alfanumerica unica (es. <code>a7f3c2...</code>) che identifica l'immagine. Se cambi anche solo un pixel dell'immagine, questo codice cambia completamente. Serve per la verifica di autenticità.
+                                    {t('help.glossary.credits_desc')}
                                 </p>
                             </div>
-                         </div>
+
+                            <div className="bg-white/5 p-4 rounded-lg">
+                                <h4 className="font-bold text-brand-accent mb-2"><i className="fas fa-fingerprint mr-2"></i> {t('help.glossary.hash')}</h4>
+                                <p className="text-xs text-brand-text-secondary">
+                                    {t('help.glossary.hash_desc')}
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 );
 
             case 'faq':
-                 return (
+                return (
                     <div className="space-y-6 animate-fade-in">
-                        <h3 className="text-xl font-bold text-white border-b border-white/10 pb-4">Domande Frequenti (FAQ)</h3>
-                        
+                        <h3 className="text-xl font-bold text-white border-b border-white/10 pb-4">{t('help.tabs.faq')}</h3>
+
                         <div className="space-y-4">
+                            {/* DOMANDA 1 */}
                             <details className="bg-black/30 rounded-lg p-4 open:bg-black/50 transition-colors">
                                 <summary className="font-bold text-white cursor-pointer flex justify-between items-center">
-                                    Posso usare la musica generata per i miei video?
+                                    {t('help.faq.q1')}
                                     <i className="fas fa-chevron-down text-xs"></i>
                                 </summary>
-                                <p className="mt-2 text-sm text-brand-text-secondary">
-                                    Sì. Se hai un account <strong>PRO</strong>, possiedi i diritti commerciali sull'output generato. Con l'account Free, puoi usarla per scopi personali o educativi citando "Generato con SonificA.R.T.".
-                                </p>
+                                <p
+                                    className="mt-2 text-sm text-brand-text-secondary"
+                                    dangerouslySetInnerHTML={{ __html: t('help.faq.a1') }}
+                                />
                             </details>
 
+                            {/* DOMANDA 2 */}
                             <details className="bg-black/30 rounded-lg p-4 open:bg-black/50 transition-colors">
                                 <summary className="font-bold text-white cursor-pointer flex justify-between items-center">
-                                    Perché il video non si scarica subito?
+                                    {t('help.faq.q2')}
                                     <i className="fas fa-chevron-down text-xs"></i>
                                 </summary>
-                                <p className="mt-2 text-sm text-brand-text-secondary">
-                                    La "Prova Cinetica" viene renderizzata in tempo reale dal browser frame-per-frame per garantire la sincronia perfetta. Per un audio di 3 minuti, il rendering può richiedere circa 30-60 secondi a seconda della potenza del tuo computer.
-                                </p>
+                                <p
+                                    className="mt-2 text-sm text-brand-text-secondary"
+                                    dangerouslySetInnerHTML={{ __html: t('help.faq.a2') }}
+                                />
                             </details>
 
+                            {/* DOMANDA 3 */}
                             <details className="bg-black/30 rounded-lg p-4 open:bg-black/50 transition-colors">
                                 <summary className="font-bold text-white cursor-pointer flex justify-between items-center">
-                                    Come funziona la verifica .SAC?
+                                    {t('help.faq.q3')}
                                     <i className="fas fa-chevron-down text-xs"></i>
                                 </summary>
-                                <p className="mt-2 text-sm text-brand-text-secondary">
-                                    Vai nella sezione "Verifica" del menu. Trascina un file .SAC. Il sistema ricalcolerà gli hash di tutti i file interni e ti dirà se il pacchetto è integro o se è stato manomesso.
-                                </p>
+                                <p
+                                    className="mt-2 text-sm text-brand-text-secondary"
+                                    dangerouslySetInnerHTML={{ __html: t('help.faq.a3') }}
+                                />
                             </details>
                         </div>
                     </div>
@@ -196,11 +182,16 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
             case 'scientific':
                 return (
                     <div className="space-y-6 animate-fade-in pb-10">
+                        {/* 
+                            NOTA: Questa sezione scientifica è ancora hardcoded in Italiano 
+                            come da codice originale, poiché il file di traduzione 
+                            aggiornato copriva solo la sezione FAQ. 
+                        */}
                         <div className="bg-brand-secondary/50 p-4 rounded-lg border border-brand-secondary mb-6">
                             <h2 className="text-xl font-bold text-white mb-2">White Paper Tecnico</h2>
                             <p className="text-sm text-brand-text-secondary">
-                                Documentazione completa del Framework SonificA.R.T. v1.0. 
-                                <br/>Basato su: <em>"Metodologia Deterministica per Sonificazione Culturalmente Consapevole dell'Arte Visiva"</em> (Mirra, 2025).
+                                Documentazione completa del Framework SonificA.R.T. v1.0.
+                                <br />Basato su: <em>"Metodologia Deterministica per Sonificazione Culturalmente Consapevole dell'Arte Visiva"</em> (Mirra, 2025).
                             </p>
                         </div>
 
@@ -253,8 +244,8 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
                                     Ogni trasformazione è una funzione matematica pura. È stato eliminato ogni uso di <code>Math.random()</code> non seedato.
                                 </p>
                                 <div className="bg-black p-3 rounded border border-white/10 font-mono text-xs text-green-400">
-                                    ∀ Image I, ∀ Configuration C:<br/>
-                                    SonificART(I, C, t1) = SonificART(I, C, t2)<br/>
+                                    ∀ Image I, ∀ Configuration C:<br />
+                                    SonificART(I, C, t1) = SonificART(I, C, t2)<br />
                                     Dove l'uguaglianza è bit-perfect.
                                 </div>
                             </div>
@@ -346,7 +337,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
                                 <p>
                                     Per risolvere il problema della fiducia nel digitale, il framework produce un <strong>Sonified Art Container (SAC)</strong>. Non è un semplice file audio, ma un "contenitore notarile" (ZIP rinominato) auto-validante.
                                 </p>
-                                
+
                                 <h4 className="font-bold text-white mt-2">Contenuto del Container:</h4>
                                 <ul className="space-y-2 text-xs font-mono bg-black/30 p-4 rounded border border-white/10">
                                     <li>├── original_image.jpg (Input standardizzato)</li>
@@ -369,46 +360,46 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
     };
 
     return (
-        <div 
+        <div
             className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 animate-backdrop-fade-in p-4"
             onClick={onClose}
         >
-            <div 
+            <div
                 className="relative w-full max-w-4xl bg-[#0f172a] rounded-xl shadow-2xl border border-white/10 animate-zoom-in flex flex-col max-h-[85vh]"
                 onClick={e => e.stopPropagation()}
             >
                 <div className="flex justify-between items-center p-6 border-b border-white/10">
                     <h2 className="text-2xl font-bold text-white flex items-center gap-3">
                         <i className="fas fa-book-reader text-brand-accent"></i>
-                        Manuale Utente
+                        {t('help.title')}
                     </h2>
                     <button onClick={onClose} className="text-white/50 hover:text-white text-2xl transition-colors">&times;</button>
                 </div>
 
                 <div className="flex border-b border-white/10 bg-white/5 px-6 overflow-x-auto">
-                    <button 
+                    <button
                         onClick={() => setActiveTab('guide')}
                         className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'guide' ? 'border-brand-accent text-white' : 'border-transparent text-brand-text-secondary hover:text-white'}`}
                     >
-                        Guida Rapida
+                        {t('help.tabs.guide')}
                     </button>
-                    <button 
+                    <button
                         onClick={() => setActiveTab('interface')}
                         className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'interface' ? 'border-brand-accent text-white' : 'border-transparent text-brand-text-secondary hover:text-white'}`}
                     >
-                        Glossario Interfaccia
+                        {t('help.tabs.glossary')}
                     </button>
-                    <button 
+                    <button
                         onClick={() => setActiveTab('faq')}
                         className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'faq' ? 'border-brand-accent text-white' : 'border-transparent text-brand-text-secondary hover:text-white'}`}
                     >
-                        FAQ
+                        {t('help.tabs.faq')}
                     </button>
-                    <button 
+                    <button
                         onClick={() => setActiveTab('scientific')}
                         className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'scientific' ? 'border-brand-accent text-white' : 'border-transparent text-brand-text-secondary hover:text-white'}`}
                     >
-                        Appendice Scientifica
+                        {t('help.tabs.science')}
                     </button>
                 </div>
 
@@ -418,7 +409,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
 
                 <div className="p-6 border-t border-white/10 bg-white/5 flex justify-end">
                     <button onClick={onClose} className="px-6 py-2 bg-white/10 hover:bg-white/20 text-white font-bold rounded-lg transition-colors">
-                        Chiudi Manuale
+                        {t('help.close')}
                     </button>
                 </div>
             </div>

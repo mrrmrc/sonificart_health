@@ -113,8 +113,16 @@ function generateScanSequence(gridSize: number, pattern: ScanPattern): number[] 
     return sequence.slice(0, totalBlocks);
 }
 
+// Stable, nested stringify to ensure hashes change when nested config (es. OSC) changes.
+function stableStringifyConfig(value: any): string {
+    if (value === null || typeof value !== 'object') return JSON.stringify(value);
+    if (Array.isArray(value)) return `[${value.map(stableStringifyConfig).join(',')}]`;
+    const keys = Object.keys(value).sort();
+    return `{${keys.map(k => `"${k}":${stableStringifyConfig(value[k])}`).join(',')}}`;
+}
+
 async function calculateDeterministicHash(imageData: ImageData, config: ConfigSettings): Promise<string> {
-    const configString = Object.keys(config).sort().map(key => `${key}:${config[key as keyof ConfigSettings]}`).join(';');
+    const configString = stableStringifyConfig(config);
     const encoder = new TextEncoder();
     const configBuffer = encoder.encode(configString);
     const combinedBuffer = new Uint8Array(imageData.data.length + configBuffer.length);
@@ -124,11 +132,33 @@ async function calculateDeterministicHash(imageData: ImageData, config: ConfigSe
     return bufferToHex(hashBuffer);
 }
 
-async function standardizeImage(file: File): Promise<{ canvas: OffscreenCanvas, imageData: ImageData, imageBounds: { x: number, y: number, width: number, height: number } }> {
-    const imageBitmap = await createImageBitmap(file);
-    const canvas = new OffscreenCanvas(512, 512);
-    const ctx = canvas.getContext('2d');
+function createCanvas(size = 512): { canvas: OffscreenCanvas | HTMLCanvasElement, ctx: CanvasRenderingContext2D } {
+    const hasOffscreen = typeof OffscreenCanvas !== 'undefined';
+    const canvas = hasOffscreen ? new OffscreenCanvas(size, size) : (() => {
+        const c = document.createElement('canvas');
+        c.width = size;
+        c.height = size;
+        return c;
+    })();
+    const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | null;
     if (!ctx) throw new Error('Could not get canvas context');
+    return { canvas, ctx };
+}
+
+async function canvasToBlob(canvas: OffscreenCanvas | HTMLCanvasElement, type: string, quality?: number): Promise<Blob> {
+    if ('convertToBlob' in canvas) {
+        return await (canvas as OffscreenCanvas).convertToBlob({ type, quality });
+    }
+    return await new Promise<Blob>((resolve, reject) => {
+        (canvas as HTMLCanvasElement).toBlob((blob) => {
+            if (blob) resolve(blob); else reject(new Error('Failed to convert canvas to blob'));
+        }, type, quality);
+    });
+}
+
+async function standardizeImage(file: File): Promise<{ canvas: OffscreenCanvas | HTMLCanvasElement, imageData: ImageData, imageBounds: { x: number, y: number, width: number, height: number } }> {
+    const imageBitmap = await createImageBitmap(file);
+    const { canvas, ctx } = createCanvas(512);
     const aspectRatio = imageBitmap.width / imageBitmap.height;
     let dw = 512, dh = 512;
     if (aspectRatio > 1) dh = 512 / aspectRatio; else dw = 512 * aspectRatio;
@@ -551,7 +581,7 @@ export async function sonifyImage(
     progressCallback(0, 'active');
     const { canvas, imageData, imageBounds } = await standardizeImage(file);
     // Generate the exact Blob that will be used in the SAC for hash consistency
-    const standardizedImageBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.9 });
+    const standardizedImageBlob = await canvasToBlob(canvas, 'image/jpeg', 0.9);
     const standardizedImageUrl = URL.createObjectURL(standardizedImageBlob);
 
     // Calculate Image File Hash (physical)
@@ -726,7 +756,7 @@ async function sonifyImageArtisticOrHybrid(
     const { canvas, imageData, imageBounds } = await standardizeImage(file);
 
     // Generate the exact Blob for SAC and Hash
-    const standardizedImageBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.9 });
+    const standardizedImageBlob = await canvasToBlob(canvas, 'image/jpeg', 0.9);
     const standardizedImageUrl = URL.createObjectURL(standardizedImageBlob);
     const imageFileHash = bufferToHex(await calculateSHA256(await standardizedImageBlob.arrayBuffer()));
 
