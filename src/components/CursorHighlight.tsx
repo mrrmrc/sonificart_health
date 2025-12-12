@@ -5,9 +5,17 @@ interface CursorHighlightProps {
     imageRect: { x: number; y: number; width: number; height: number };
     activeBlockPosition: { x: number; y: number } | null;
     contentBounds?: { minX: number; minY: number; maxX: number; maxY: number };
+    // opzionale: bounds effettivi dell'immagine (512x512), ignorato se non usato
+    imageBounds?: { x: number; y: number; width: number; height: number };
 }
 
-export const CursorHighlight: React.FC<CursorHighlightProps> = React.memo(({ gridSize, imageRect, activeBlockPosition, contentBounds }) => {
+export const CursorHighlight: React.FC<CursorHighlightProps> = React.memo(({
+    gridSize,
+    imageRect,
+    activeBlockPosition,
+    contentBounds,
+    imageBounds: _imageBounds, // opzionale, non usato ma accettato
+}) => {
     if (!activeBlockPosition || imageRect.width === 0) {
         return null;
     }

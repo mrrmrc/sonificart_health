@@ -148,7 +148,8 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({ steps, imageUrl 
 
                 <div className="relative p-6 text-center bg-brand-secondary/80 backdrop-blur-md">
                     <div className="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-brand-accent mx-auto"></div>
-                    <h3 className="text-2xl font-bold text-white mt-4">Framework v1.0 in Elaborazione</h3>
+                    <div className="text-3xl font-mono font-bold text-brand-accent mt-3">{Math.round(visualProgress)}%</div>
+                    <h3 className="text-2xl font-bold text-white mt-2">Framework v1.0 in Elaborazione</h3>
                     {isFinalStepActive ? (
                         <p className="text-brand-accent-light min-h-[40px] flex flex-col items-center justify-center text-center">
                             <span>{finalStepName}...</span>
@@ -185,10 +186,13 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({ steps, imageUrl 
                                     <div className="flex-grow">
                                         <div className="flex items-center justify-between mb-1">
                                             <span className="text-brand-text-primary text-sm">{step.name}</span>
-                                            <span className={`text-xs font-mono font-bold ${step.status === 'completed' ? 'text-green-400' :
-                                                    step.status === 'active' ? 'text-brand-accent' :
-                                                        'text-brand-text-secondary'
-                                                }`}>
+                                            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                                                step.status === 'completed'
+                                                    ? 'text-green-200 border-green-400/60 bg-green-500/10'
+                                                    : step.status === 'active'
+                                                        ? 'text-brand-accent border-brand-accent/60 bg-brand-accent/10'
+                                                        : 'text-brand-text-secondary border-white/10 bg-white/5'
+                                            }`}>
                                                 {Math.round(stepPercentage)}%
                                             </span>
                                         </div>

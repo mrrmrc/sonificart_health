@@ -355,17 +355,39 @@ function AppContent() {
         } finally { setIsProcessing(false); }
     };
 
+    // Aggiorna lo stato degli step in base ai callback del servizio
+    const updateProcessingStep = useCallback((stepIndex: number, status: 'active' | 'completed') => {
+        setProcessingSteps(prev => {
+            return prev.map((step, idx) => {
+                if (idx < stepIndex && status === 'active') {
+                    // quelli prima vengono marcati completed
+                    return { ...step, status: 'completed' };
+                }
+                if (idx === stepIndex) {
+                    return { ...step, status };
+                }
+                return step;
+            });
+        });
+    }, []);
+
     const startSonification = async () => {
         if (!imageFile || !user) { setIsLoginModalOpen(true); return; }
+        // resetta gli step a pending prima di partire
+        setProcessingSteps(scientificSteps.map(s => ({ ...s, status: 'pending' })));
         setIsProcessing(true); setResult(null); setIsViewingHistory(false);
         try {
             await new Promise(r => setTimeout(r, 500));
             let res: SonificationResult;
-            if (paradigm === 'scientific') res = await sonifyImage(imageFile, config, () => { }, oscClient, scanPatternOverride);
-            else if (paradigm === 'artistic') res = await sonifyImageArtistic(imageFile, config, () => { }, oscClient, scanPatternOverride);
-            else res = await sonifyImageHybrid(imageFile, config, () => { }, oscClient, scanPatternOverride);
+            const progressCb = (stepIndex: number, status: 'active' | 'completed') => updateProcessingStep(stepIndex, status);
+
+            if (paradigm === 'scientific') res = await sonifyImage(imageFile, config, progressCb, oscClient, scanPatternOverride);
+            else if (paradigm === 'artistic') res = await sonifyImageArtistic(imageFile, config, progressCb, oscClient, scanPatternOverride);
+            else res = await sonifyImageHybrid(imageFile, config, progressCb, oscClient, scanPatternOverride);
             if (user) await api.saveSonification(res, paradigm);
             setResult(res);
+            // al termine tutti completed
+            setProcessingSteps(prev => prev.map(step => ({ ...step, status: 'completed' })));
         } catch (error) { console.error(error); alert("Errore elaborazione"); } finally { setIsProcessing(false); }
     };
 

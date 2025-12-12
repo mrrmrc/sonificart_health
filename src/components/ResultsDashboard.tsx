@@ -434,7 +434,6 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                 imageRect={imageRenderInfo}
                                 activeBlockPosition={displayEvent?.sourceBlock?.position ?? null}
                                 contentBounds={contentBounds}
-                                imageBounds={imageBounds}
                             />
                         </div>
                     </div>
