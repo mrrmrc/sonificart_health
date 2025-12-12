@@ -55,6 +55,68 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
 }) => {
     const { t } = useLanguage();
 
+    const imageRef = useRef<HTMLImageElement>(null);
+
+    const correctedResult = useMemo(() => {
+        const blockAnalysis = result.blockAnalysisResult;
+        if (!blockAnalysis || !blockAnalysis.blocks || blockAnalysis.blocks.length === 0) {
+            return result;
+        }
+
+        const imageEle = imageRef.current;
+        if (!imageEle || !imageEle.naturalWidth) {
+            return result;
+        }
+
+        const { naturalWidth, naturalHeight } = imageEle;
+        const aspectRatio = naturalWidth / naturalHeight;
+        let dw = 512, dh = 512;
+        if (aspectRatio > 1) dh = 512 / aspectRatio; else dw = 512 * aspectRatio;
+        const dx = (512 - dw) / 2, dy = (512 - dh) / 2;
+        const imageBounds = { x: dx, y: dy, width: dw, height: dh };
+
+        const gridSize = blockAnalysis.gridSize || 32;
+        const blockWidth = 512 / gridSize;
+        const blockHeight = 512 / gridSize;
+
+        // Always recalculate isFiller based on imageBounds to ensure accuracy,
+        // especially for restored works where isFiller might be incorrectly set
+        const correctedBlocks = blockAnalysis.blocks.map(block => {
+            const startX = Math.floor(block.position.x * blockWidth);
+            const startY = Math.floor(block.position.y * blockHeight);
+            const blockCenterX = startX + blockWidth / 2;
+            const blockCenterY = startY + blockHeight / 2;
+
+            const isFiller = blockCenterX <= imageBounds.x || blockCenterX >= (imageBounds.x + imageBounds.width) ||
+                blockCenterY <= imageBounds.y || blockCenterY >= (imageBounds.y + imageBounds.height);
+
+            return { ...block, isFiller };
+        });
+
+        const correctedEvents = result.audioOutput.events.map(event => {
+            if (event.sourceBlock) {
+                const correctedSourceBlock = correctedBlocks.find(b =>
+                    b.position.x === event.sourceBlock.position.x &&
+                    b.position.y === event.sourceBlock.position.y
+                );
+                return { ...event, sourceBlock: correctedSourceBlock || event.sourceBlock };
+            }
+            return event;
+        });
+
+        return {
+            ...result,
+            blockAnalysisResult: {
+                ...blockAnalysis,
+                blocks: correctedBlocks,
+            },
+            audioOutput: {
+                ...result.audioOutput,
+                events: correctedEvents,
+            },
+        };
+    }, [result, imageRef.current?.naturalWidth]);
+
     // Stato per i Tab del Prompt (Suno / Udio / Stability)
     const [activePromptTab, setActivePromptTab] = useState<'suno' | 'udio' | 'stability'>('suno');
 
@@ -62,26 +124,27 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
     const [playbackTime, setPlaybackTime] = useState(0);
     const [isPlaying, setIsPlaying] = useState(false);
     const [activeEvent, setActiveEvent] = useState<TransformedNoteEvent | null>(null);
+    const [hoverEvent, setHoverEvent] = useState<TransformedNoteEvent | null>(null);
 
     const [isVideoRendering, setIsVideoRendering] = useState(false);
     const [videoProgress, setVideoProgress] = useState(0);
-    const [generatedVideoBlob, setGeneratedVideoBlob] = useState<Blob | null>(result.generatedVideoBlob || null);
+    const [generatedVideoBlob, setGeneratedVideoBlob] = useState<Blob | null>(correctedResult.generatedVideoBlob || null);
     const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
     const [videoTitle, setVideoTitle] = useState("Composizione Sonora");
     const [videoAuthor, setVideoAuthor] = useState("SonificA.R.T. User");
 
     const containerRef = useRef<HTMLDivElement>(null);
-    const imageRef = useRef<HTMLImageElement>(null);
+
     const audioRef = useRef<HTMLAudioElement>(null);
     const lastEventIndexRef = useRef(0);
 
-    const isArtisticMode = !!result.musicGenerationPrompt;
-    const scanPatternName = result.scanPattern?.name || t('results.unknown_pattern') || "Pattern Sconosciuto";
+    const isArtisticMode = !!correctedResult.musicGenerationPrompt;
+    const scanPatternName = correctedResult.scanPattern?.name || t('results.unknown_pattern') || "Pattern Sconosciuto";
     const isManualScan = useMemo(() => scanPatternName.startsWith("Manuale:") || scanPatternName.startsWith("Manual:"), [scanPatternName]);
     const isPro = !!user?.isPro || !!user?.isAdmin;
-    const displayImage = result.standardizedImageUrl;
-    const safeHash = result.imageHash || "unknown_hash";
-    const safeDuration = result.audioOutput?.duration || 0;
+    const displayImage = correctedResult.standardizedImageUrl;
+    const safeHash = correctedResult.imageHash || "unknown_hash";
+    const safeDuration = correctedResult.audioOutput?.duration || 0;
 
     const calculateImageRect = useCallback(() => {
         if (!imageRef.current || !containerRef.current) return;
@@ -108,7 +171,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
     }, [calculateImageRect, displayImage]);
 
     // Exclude accompaniment and any events mapped to filler blocks so highlights stay inside the real image area
-    const melodyEvents = useMemo(() => (result.audioOutput?.events || []).filter(e => e.isAccompaniment !== true && !e.sourceBlock?.isFiller), [result.audioOutput]);
+    const melodyEvents = useMemo(() => (correctedResult.audioOutput?.events || []).filter(e => e.isAccompaniment !== true && !e.sourceBlock?.isFiller), [correctedResult.audioOutput]);
 
     useEffect(() => {
         if (!isPlaying || playbackTime < 0 || melodyEvents.length === 0) return;
@@ -131,12 +194,12 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
 
     // LOGICA COPIA PROMPT AGGIORNATA
     const copyPrompt = () => {
-        if (!result.musicGenerationPrompt) return;
+        if (!correctedResult.musicGenerationPrompt) return;
         let textToCopy = "";
         switch (activePromptTab) {
-            case 'suno': textToCopy = result.musicGenerationPrompt.suno_prompt || result.musicGenerationPrompt.stability_prompt; break;
-            case 'udio': textToCopy = result.musicGenerationPrompt.udio_prompt || result.musicGenerationPrompt.stability_prompt; break;
-            case 'stability': textToCopy = result.musicGenerationPrompt.stability_prompt; break;
+            case 'suno': textToCopy = correctedResult.musicGenerationPrompt.suno_prompt || correctedResult.musicGenerationPrompt.stability_prompt; break;
+            case 'udio': textToCopy = correctedResult.musicGenerationPrompt.udio_prompt || correctedResult.musicGenerationPrompt.stability_prompt; break;
+            case 'stability': textToCopy = correctedResult.musicGenerationPrompt.stability_prompt; break;
         }
         if (textToCopy) {
             navigator.clipboard.writeText(textToCopy);
@@ -148,45 +211,45 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
     const startVideoGeneration = async () => {
         setIsVideoModalOpen(false); setIsVideoRendering(true); setVideoProgress(0);
         try {
-            const blob = await generateSonificationVideo(result, (p) => setVideoProgress(p), { title: videoTitle, author: videoAuthor });
+            const blob = await generateSonificationVideo(correctedResult, (p) => setVideoProgress(p), { title: videoTitle, author: videoAuthor });
             setGeneratedVideoBlob(blob); saveAs(blob, `kinetic_proof_${safeHash.substring(0, 8)}.mp4`);
         } catch (e) { console.error(e); alert("Errore video: " + (e instanceof Error ? e.message : String(e))); } finally { setIsVideoRendering(false); }
     };
     const handleDownloadSac = async () => {
         try {
             const canvas = new OffscreenCanvas(512, 512); const ctx = canvas.getContext('2d');
-            const img = new Image(); img.src = result.standardizedImageUrl; await new Promise(r => { img.onload = r; });
+            const img = new Image(); img.src = correctedResult.standardizedImageUrl; await new Promise(r => { img.onload = r; });
             ctx?.drawImage(img, 0, 0, 512, 512);
-            const sacContainer = await createSacContainer({ imageHash: result.imageHash, audioHash: result.audioHash, config: result.configUsed, blockAnalysisResult: result.blockAnalysisResult, culturalSelectionResult: result.culturalSelectionResult, transformedEvents: result.audioOutput.events.filter(e => !e.isAccompaniment), canvas: canvas, audioWavBlob: result.audioOutput.audioWavBlob, midiBlob: result.audioOutput.midiBlob, totalDuration: result.audioOutput.duration, scanPattern: result.scanPattern, videoBlob: generatedVideoBlob || undefined });
+            const sacContainer = await createSacContainer({ imageHash: correctedResult.imageHash, audioHash: correctedResult.audioHash, config: correctedResult.configUsed, blockAnalysisResult: correctedResult.blockAnalysisResult, culturalSelectionResult: correctedResult.culturalSelectionResult, transformedEvents: correctedResult.audioOutput.events.filter(e => !e.isAccompaniment), canvas: canvas, audioWavBlob: correctedResult.audioOutput.audioWavBlob, midiBlob: correctedResult.audioOutput.midiBlob, totalDuration: correctedResult.audioOutput.duration, scanPattern: correctedResult.scanPattern, videoBlob: generatedVideoBlob || undefined });
             saveAs(sacContainer.blob, sacContainer.fileName);
-        } catch (e) { console.error("SAC failed", e); if (result.sacContainer?.blob) saveAs(result.sacContainer.blob, result.sacContainer.fileName || "project.sac"); else alert("Errore SAC."); }
+        } catch (e) { console.error("SAC failed", e); if (correctedResult.sacContainer?.blob) saveAs(correctedResult.sacContainer.blob, correctedResult.sacContainer.fileName || "project.sac"); else alert("Errore SAC."); }
     };
 
     const visualProfile = useMemo(() => {
-        const stats = result.blockAnalysisResult?.globalStats || { avg_L: 0, avg_saturation: 0, hue_diversity: 0 };
+        const stats = correctedResult.blockAnalysisResult?.globalStats || { avg_L: 0, avg_saturation: 0, hue_diversity: 0 };
         const sat = stats.avg_saturation > 1 ? stats.avg_saturation : stats.avg_saturation * 100;
         const hue = stats.hue_diversity > 1 ? stats.hue_diversity : stats.hue_diversity * 100;
         return { lightness: stats.avg_L, saturation: sat, hueDiversity: hue };
-    }, [result]);
+    }, [correctedResult]);
 
     const audioProfile = useMemo(() => {
-        const events = result.audioOutput?.events?.filter(e => !e.isAccompaniment) || [];
+        const events = correctedResult.audioOutput?.events?.filter(e => !e.isAccompaniment) || [];
         if (events.length === 0) return { pitch: { low: 0, mid: 0, high: 0 }, dynamics: { soft: 0, mid: 0, loud: 0 } };
         let low = 0, midPitch = 0, high = 0; let soft = 0, midDynamics = 0, loud = 0;
         events.forEach(event => { if (event.midiFloat < 60) low++; else if (event.midiFloat < 84) midPitch++; else high++; if (event.velocity < 43) soft++; else if (event.velocity < 86) midDynamics++; else loud++; });
         const total = events.length;
         return { pitch: { low: (low / total) * 100, mid: (midPitch / total) * 100, high: (high / total) * 100 }, dynamics: { soft: (soft / total) * 100, mid: (midDynamics / total) * 100, loud: (loud / total) * 100 } };
-    }, [result]);
+    }, [correctedResult]);
 
-    const culturalName = result.culturalSelectionResult?.tradition?.name || t('results.unknown') || "Sconosciuta";
-    const culturalFamily = result.culturalSelectionResult?.tradition?.cultural_family || t('results.generic') || "Generica";
-    const culturalScore = result.culturalSelectionResult?.scoreBreakdown?.total || 0;
+    const culturalName = correctedResult.culturalSelectionResult?.tradition?.name || t('results.unknown') || "Sconosciuta";
+    const culturalFamily = correctedResult.culturalSelectionResult?.tradition?.cultural_family || t('results.generic') || "Generica";
+    const culturalScore = correctedResult.culturalSelectionResult?.scoreBreakdown?.total || 0;
 
     // Calcola i bounds di contenuto (escludi filler) per allineare overlay/cursore con l'immagine effettiva (senza bande nere)
     const contentBounds = useMemo(() => {
-        const blocks = result.blockAnalysisResult?.blocks || [];
+        const blocks = correctedResult.blockAnalysisResult?.blocks || [];
         if (!blocks.length) return undefined;
-        const grid = result.blockAnalysisResult.gridSize || 32;
+        const grid = correctedResult.blockAnalysisResult.gridSize || 32;
         let minX = grid - 1, minY = grid - 1, maxX = 0, maxY = 0;
         let found = false;
         blocks.forEach(b => {
@@ -200,7 +263,107 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
         });
         if (!found) return undefined;
         return { minX, minY, maxX, maxY };
-    }, [result.blockAnalysisResult]);
+    }, [correctedResult.blockAnalysisResult]);
+
+    // Calcola imageBounds: l'area effettiva dell'immagine nel canvas 512x512 (escludendo letterbox)
+    const imageBounds = useMemo(() => {
+        if (!imageRef.current || !imageRef.current.naturalWidth) return undefined;
+        const { naturalWidth, naturalHeight } = imageRef.current;
+        const aspectRatio = naturalWidth / naturalHeight;
+        let dw = 512, dh = 512;
+        if (aspectRatio > 1) {
+            dh = 512 / aspectRatio;
+        } else {
+            dw = 512 * aspectRatio;
+        }
+        const dx = (512 - dw) / 2;
+        const dy = (512 - dh) / 2;
+        return { x: dx, y: dy, width: dw, height: dh };
+    }, [imageRef.current?.naturalWidth, imageRef.current?.naturalHeight]);
+
+    // Handler per il mouse move sull'immagine - analisi cursore in tempo reale
+    const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+        if (!containerRef.current || !imageRef.current || !correctedResult.blockAnalysisResult || !imageBounds) return;
+
+        const rect = containerRef.current.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        const { x: imgX, y: imgY, width: imgW, height: imgH } = imageRenderInfo;
+
+        // Verifica se il mouse è dentro l'area dell'immagine renderizzata
+        if (mouseX < imgX || mouseX > imgX + imgW || mouseY < imgY || mouseY > imgY + imgH) {
+            setHoverEvent(null);
+            return;
+        }
+
+        const gridSize = correctedResult.blockAnalysisResult.gridSize || 32;
+        const blocks = correctedResult.blockAnalysisResult.blocks || [];
+
+        // Calcolo inverso: dalla posizione del mouse alla posizione del blocco sulla griglia 512x512
+        // Posizione relativa all'immagine renderizzata (in pixel dall'angolo dell'immagine)
+        const relMouseX = mouseX - imgX;
+        const relMouseY = mouseY - imgY;
+
+        // Fattore di scala dall'immagine renderizzata all'area effettiva nel canvas 512x512
+        const scaleX = imageBounds.width / imgW;
+        const scaleY = imageBounds.height / imgH;
+
+        // Posizione nell'area effettiva dell'immagine nel canvas 512x512
+        const imageX = relMouseX * scaleX;
+        const imageY = relMouseY * scaleY;
+
+        // Aggiungi l'offset delle bande nere per ottenere la posizione sul canvas completo 512x512
+        const canvasX = imageX + imageBounds.x;
+        const canvasY = imageY + imageBounds.y;
+
+        // Dimensione del blocco sul canvas 512x512
+        const blockSizeOnCanvas = 512 / gridSize;
+
+        // Coordinate del blocco sulla griglia
+        const blockX = Math.floor(canvasX / blockSizeOnCanvas);
+        const blockY = Math.floor(canvasY / blockSizeOnCanvas);
+
+        // Assicurati che le coordinate siano valide
+        if (blockX < 0 || blockX >= gridSize || blockY < 0 || blockY >= gridSize) {
+            setHoverEvent(null);
+            return;
+        }
+
+        // Trova il blocco corrispondente
+        const block = blocks.find(b =>
+            b.position.x === blockX &&
+            b.position.y === blockY
+        );
+
+        if (block && !block.isFiller) {
+            // Trova l'evento corrispondente o crea uno fittizio per la visualizzazione
+            const event = melodyEvents.find(e =>
+                e.sourceBlock?.position.x === blockX &&
+                e.sourceBlock?.position.y === blockY
+            ) || {
+                time: 0,
+                duration: 0,
+                baseNote: 60,
+                noteName: "C",
+                midiFloat: 60,
+                velocity: 100,
+                sourceBlock: block,
+                isAccompaniment: false
+            } as TransformedNoteEvent;
+
+            setHoverEvent(event);
+        } else {
+            setHoverEvent(null);
+        }
+    }, [imageRenderInfo, correctedResult.blockAnalysisResult, melodyEvents, imageBounds]);
+
+    const handleMouseLeave = useCallback(() => {
+        setHoverEvent(null);
+    }, []);
+
+    // L'evento attivo ha priorità: se sta suonando usa activeEvent, altrimenti usa hoverEvent
+    const displayEvent = isPlaying ? activeEvent : (hoverEvent || activeEvent);
 
     return (
         <div className="animate-fade-in">
@@ -249,7 +412,12 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
 
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
                 <div className="lg:col-span-3 space-y-4">
-                    <div ref={containerRef} className="relative aspect-square bg-black rounded-md overflow-hidden border border-brand-secondary group">
+                    <div
+                        ref={containerRef}
+                        className="relative aspect-square bg-black rounded-md overflow-hidden border border-brand-secondary group"
+                        onMouseMove={handleMouseMove}
+                        onMouseLeave={handleMouseLeave}
+                    >
                         <img ref={imageRef} src={displayImage} alt="Analysis View" className="w-full h-full object-contain" />
                         <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ background: 'none' }}>
                             <rect x={imageRenderInfo.x} y={imageRenderInfo.y} width={imageRenderInfo.width} height={imageRenderInfo.height} fill="none" style={{ pointerEvents: 'none' }} />
@@ -258,18 +426,19 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                             <div className="absolute top-2 right-2 z-10 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                                 <span className="bg-black/70 text-white text-[10px] px-2 py-1 rounded backdrop-blur-md border border-white/10 shadow-sm pointer-events-auto">{t('results.view_analysis') || "Vista Analisi (512px)"}</span>
                             </div>
-                            {result.blockAnalysisResult && Array.isArray(result.blockAnalysisResult.blocks) && (
-                                <ScanPathOverlay blocks={result.blockAnalysisResult.blocks} gridSize={result.blockAnalysisResult.gridSize} imageRect={imageRenderInfo} />
+                            {correctedResult.blockAnalysisResult && Array.isArray(correctedResult.blockAnalysisResult.blocks) && (
+                                <ScanPathOverlay blocks={correctedResult.blockAnalysisResult.blocks} gridSize={correctedResult.blockAnalysisResult.gridSize} imageRect={imageRenderInfo} />
                             )}
                             <CursorHighlight
-                                gridSize={result.blockAnalysisResult?.gridSize || 32}
+                                gridSize={correctedResult.blockAnalysisResult?.gridSize || 32}
                                 imageRect={imageRenderInfo}
-                                activeBlockPosition={activeEvent?.sourceBlock?.position ?? null}
+                                activeBlockPosition={displayEvent?.sourceBlock?.position ?? null}
                                 contentBounds={contentBounds}
+                                imageBounds={imageBounds}
                             />
                         </div>
                     </div>
-                    <CursorLoupe activeEvent={activeEvent} isPlaying={isPlaying} />
+                    <CursorLoupe activeEvent={displayEvent} isPlaying={isPlaying} />
                 </div>
 
                 <div className="lg:col-span-2 bg-brand-secondary/50 p-6 rounded-lg">
@@ -297,10 +466,10 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                     <h5 className="text-sm text-brand-text-secondary mb-2 text-center">
                                         {isHistoryView ? t('results.player_title') + " (Archive)" : t('results.player_title')}
                                     </h5>
-                                    <AudioPlayer audioRef={audioRef} audioUrl={result.audioOutput?.audioUrl || ""} onTimeUpdate={handleTimeUpdate} onPlay={handlePlay} onStop={handleStop} />
-                                    <MusicSheet activeEvent={activeEvent} />
+                                    <AudioPlayer audioRef={audioRef} audioUrl={correctedResult.audioOutput?.audioUrl || ""} onTimeUpdate={handleTimeUpdate} onPlay={handlePlay} onStop={handleStop} />
+                                    <MusicSheet activeEvent={displayEvent} />
                                     <div className="flex gap-3 mt-4 pt-3 border-t border-brand-secondary/30">
-                                        <button onClick={onReset} className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-300 py-2 rounded text-xs font-bold transition-colors border border-red-500/30 flex items-center justify-center gap-2">
+                                        <button onClick={onReset} className={`flex-1 ${isHistoryView ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-red-500/20 hover:bg-red-500/30 text-red-300'} py-2 rounded text-xs font-bold transition-colors ${isHistoryView ? '' : 'border border-red-500/30'} flex items-center justify-center gap-2`}>
                                             <i className={`fas ${isHistoryView ? 'fa-arrow-left' : 'fa-times'}`}></i>
                                             {isHistoryView ? t('results.back_to_list') : t('dashboard.cancel')}
                                         </button>
@@ -320,7 +489,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
                 {/* --- SEZIONE CONCEPT & AI RIGENERATA CON MULTI-TAB --- */}
-                {isArtisticMode && result.musicGenerationPrompt && (
+                {isArtisticMode && correctedResult.musicGenerationPrompt && (
                     <InfoCard title={t('results.concept_title') || "Concept & Interpretazione AI"} icon="fa-wand-magic-sparkles" className="lg:col-span-3 relative overflow-hidden">
                         <div className='space-y-4'>
 
@@ -354,30 +523,30 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                             {/* AREA TESTO PROMPT DINAMICA */}
                             <div className="bg-brand-primary/70 p-3 rounded-md text-sm font-mono break-words border border-white/10 min-h-[80px] flex items-center">
                                 {activePromptTab === 'suno' && (
-                                    <span className="text-brand-accent">{result.musicGenerationPrompt.suno_prompt || result.musicGenerationPrompt.stability_prompt}</span>
+                                    <span className="text-brand-accent">{correctedResult.musicGenerationPrompt.suno_prompt || correctedResult.musicGenerationPrompt.stability_prompt}</span>
                                 )}
                                 {activePromptTab === 'udio' && (
-                                    <span className="text-blue-300">{result.musicGenerationPrompt.udio_prompt || result.musicGenerationPrompt.stability_prompt}</span>
+                                    <span className="text-blue-300">{correctedResult.musicGenerationPrompt.udio_prompt || correctedResult.musicGenerationPrompt.stability_prompt}</span>
                                 )}
                                 {activePromptTab === 'stability' && (
-                                    <span className="text-purple-300">{result.musicGenerationPrompt.stability_prompt}</span>
+                                    <span className="text-purple-300">{correctedResult.musicGenerationPrompt.stability_prompt}</span>
                                 )}
                             </div>
 
                             <div>
                                 <h5 className="text-brand-text-secondary text-xs mb-1 font-bold">{t('results.concept_ita') || "Concept (Ita)"}:</h5>
-                                <p className="text-sm text-brand-text-secondary italic">"{result.musicGenerationPrompt.main_prompt_ita}"</p>
+                                <p className="text-sm text-brand-text-secondary italic">"{correctedResult.musicGenerationPrompt.main_prompt_ita}"</p>
                             </div>
 
                             {/* PARAMETRI TECNICI E GIUSTIFICAZIONE */}
                             <div className="grid grid-cols-2 gap-4 pt-2 border-t border-white/5">
                                 <div>
                                     <h5 className="text-brand-text-secondary text-[10px] uppercase font-bold">{t('results.tech_specs') || "Specifiche Tecniche"}</h5>
-                                    <p className="text-xs text-white font-mono">{result.musicGenerationPrompt.technical_parameters}</p>
+                                    <p className="text-xs text-white font-mono">{correctedResult.musicGenerationPrompt.technical_parameters}</p>
                                 </div>
                                 <div>
                                     <h5 className="text-brand-text-secondary text-[10px] uppercase font-bold">{t('results.ai_reason') || "Ragionamento AI"}</h5>
-                                    <p className="text-xs text-brand-text-secondary leading-tight">{result.musicGenerationPrompt.justification}</p>
+                                    <p className="text-xs text-brand-text-secondary leading-tight">{correctedResult.musicGenerationPrompt.justification}</p>
                                 </div>
                             </div>
 
@@ -409,20 +578,20 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                 </InfoCard>
 
                 <InfoCard title={t('results.analysis_synthesis')} icon="fa-cogs">
-                    <DataRow label={t('results.grid')} value={`${result.blockAnalysisResult?.gridSize || 32}x${result.blockAnalysisResult?.gridSize || 32}`} />
-                    <DataRow label={t('results.audio_events')} value={result.audioOutput?.eventsCount || 0} />
+                    <DataRow label={t('results.grid')} value={`${correctedResult.blockAnalysisResult?.gridSize || 32}x${correctedResult.blockAnalysisResult?.gridSize || 32}`} />
+                    <DataRow label={t('results.audio_events')} value={correctedResult.audioOutput?.eventsCount || 0} />
                     <DataRow label={t('results.duration')} value={`${safeDuration.toFixed(2)}s`} />
                     <DataRow label={t('results.audio_quality') || "Qualità Audio"} value="44.1kHz WAV" />
                 </InfoCard>
 
                 <InfoCard title={t('results.forensic_certificate')} icon="fa-fingerprint">
                     <DataRow label={t('results.image_hash')} value={safeHash.substring(0, 16) + '...'} />
-                    <DataRow label={t('results.audio_hash')} value={(result.audioHash || "---").substring(0, 16) + '...'} />
+                    <DataRow label={t('results.audio_hash')} value={(correctedResult.audioHash || "---").substring(0, 16) + '...'} />
                     <DataRow label={t('results.framework_ver') || "Framework Ver."} value="1.0" />
                 </InfoCard>
 
                 <InfoCard title={t('results.performance')} icon="fa-bolt">
-                    <DataRow label={t('results.total_time')} value={`${result.performanceMetrics?.totalProcessingTime?.toFixed(0) || 0} ms`} />
+                    <DataRow label={t('results.total_time')} value={`${correctedResult.performanceMetrics?.totalProcessingTime?.toFixed(0) || 0} ms`} />
                 </InfoCard>
 
                 <InfoCard title={t('results.download_artifacts')} icon="fa-download">
@@ -433,10 +602,10 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                 <button onClick={onRequestAccess} className="px-4 py-1.5 bg-brand-accent text-black text-xs font-bold rounded-full">{t('results.unlock') || "Sblocca"}</button>
                             </div>
                         )}
-                        <button disabled={!isPro} onClick={() => saveAs(result.audioOutput.audioWavBlob, 'generated_audio.wav')} className="w-full bg-brand-accent/20 text-brand-accent py-1 rounded hover:bg-brand-accent/30 disabled:opacity-50">
+                        <button disabled={!isPro} onClick={() => saveAs(correctedResult.audioOutput.audioWavBlob, 'generated_audio.wav')} className="w-full bg-brand-accent/20 text-brand-accent py-1 rounded hover:bg-brand-accent/30 disabled:opacity-50">
                             <i className="fas fa-file-audio mr-2"></i> {t('results.download_wav')}
                         </button>
-                        <button disabled={!isPro} onClick={() => saveAs(result.audioOutput.midiBlob, 'musical_notation.mid')} className="w-full bg-brand-accent/20 text-brand-accent py-1 rounded hover:bg-brand-accent/30 disabled:opacity-50">
+                        <button disabled={!isPro} onClick={() => saveAs(correctedResult.audioOutput.midiBlob, 'musical_notation.mid')} className="w-full bg-brand-accent/20 text-brand-accent py-1 rounded hover:bg-brand-accent/30 disabled:opacity-50">
                             <i className="fas fa-music mr-2"></i> {t('results.download_midi')}
                         </button>
                         <button disabled={!isPro} onClick={handleVideoAction} className="w-full bg-purple-600/30 text-purple-300 py-1 rounded hover:bg-purple-600/50 border border-purple-500/30 relative">

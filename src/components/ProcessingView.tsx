@@ -10,6 +10,8 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({ steps, imageUrl 
     const [visualProgress, setVisualProgress] = useState(0);
     // FIX: Initialize useRef with null to satisfy environments where an initial value is required, and to correctly handle type checks.
     const animationFrameRef = useRef<number | null>(null);
+    const activeStepAnimRef = useRef<number | null>(null);
+    const [activeStepProgress, setActiveStepProgress] = useState(0); // 0..1 progresso interno dello step attivo
 
     // The "target" percentage based on discrete step completion
     const progressPercentage = useMemo(() => {
@@ -20,10 +22,40 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({ steps, imageUrl 
         const isFinished = completedSteps === totalSteps && !steps.some(s => s.status === 'active');
         if (isFinished) return 100;
 
-        // Give a little progress for the active step to feel more responsive
-        const activeStep = steps.find(s => s.status === 'active');
-        const progress = activeStep ? (completedSteps + 0.5) / totalSteps : completedSteps / totalSteps;
-        return Math.min(100, progress * 100);
+        // Usa il progresso interno dello step attivo per rendere la % dinamica
+        const activeIndex = steps.findIndex(s => s.status === 'active');
+        const stepFraction = activeIndex >= 0 ? activeStepProgress : 0;
+        const progress = (completedSteps + stepFraction) / totalSteps;
+        // Evita di mostrare 100% finché non è tutto terminato
+        return Math.min(99, Math.max(0, progress * 100));
+    }, [steps, activeStepProgress]);
+
+    // Anima il progresso dello step attivo (0 -> 0.95) finché non cambia lo status
+    useEffect(() => {
+        const activeIndex = steps.findIndex(s => s.status === 'active');
+        if (activeIndex === -1) {
+            setActiveStepProgress(0);
+            if (activeStepAnimRef.current !== null) cancelAnimationFrame(activeStepAnimRef.current);
+            return;
+        }
+
+        // Reset quando cambia lo step attivo
+        setActiveStepProgress(0);
+        if (activeStepAnimRef.current !== null) cancelAnimationFrame(activeStepAnimRef.current);
+
+        const tick = () => {
+            setActiveStepProgress(prev => {
+                // Cresce lentamente verso 0.95, mai 1.0 finché non viene marcato completed
+                if (prev >= 0.95) return 0.95;
+                return prev + 0.004; // ~0.4% per frame ~25s per step; viene azzerato quando step termina
+            });
+            activeStepAnimRef.current = requestAnimationFrame(tick);
+        };
+        activeStepAnimRef.current = requestAnimationFrame(tick);
+
+        return () => {
+            if (activeStepAnimRef.current !== null) cancelAnimationFrame(activeStepAnimRef.current);
+        };
     }, [steps]);
 
     const isFinalStepActive = useMemo(() =>
@@ -91,6 +123,19 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({ steps, imageUrl 
         }
     }
 
+    // Calcola la percentuale per ogni step individuale
+    const getStepPercentage = (step: ProcessingStep, index: number) => {
+        if (step.status === 'completed') return 100;
+        if (step.status === 'pending') return 0;
+
+        // Step attivo: usa la progressione animata (0..95%)
+        const activeIndex = steps.findIndex(s => s.status === 'active');
+        if (activeIndex === index) {
+            return Math.round(activeStepProgress * 100);
+        }
+        return 0;
+    };
+
     return (
         <div className="max-w-2xl mx-auto my-8 animate-fade-in">
             <div className="relative rounded-lg overflow-hidden border border-brand-secondary/50 shadow-2xl">
@@ -130,14 +175,36 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({ steps, imageUrl 
                     </div>
 
                     <div className="mt-4 text-left space-y-2">
-                        {steps.map(step => (
-                            <div key={step.id} className={`flex items-center gap-4 p-3 rounded-md transition-all duration-300 ${getStepClass(step.status)}`}>
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white flex-shrink-0 ${getIconClass(step.status)}`}>
-                                    {step.status === 'completed' ? <i className="fas fa-check"></i> : step.id}
+                        {steps.map((step, index) => {
+                            const stepPercentage = getStepPercentage(step, index);
+                            return (
+                                <div key={step.id} className={`flex items-center gap-4 p-3 rounded-md transition-all duration-300 ${getStepClass(step.status)}`}>
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white flex-shrink-0 ${getIconClass(step.status)}`}>
+                                        {step.status === 'completed' ? <i className="fas fa-check"></i> : step.id}
+                                    </div>
+                                    <div className="flex-grow">
+                                        <div className="flex items-center justify-between mb-1">
+                                            <span className="text-brand-text-primary text-sm">{step.name}</span>
+                                            <span className={`text-xs font-mono font-bold ${step.status === 'completed' ? 'text-green-400' :
+                                                    step.status === 'active' ? 'text-brand-accent' :
+                                                        'text-brand-text-secondary'
+                                                }`}>
+                                                {Math.round(stepPercentage)}%
+                                            </span>
+                                        </div>
+                                        <div className="w-full bg-brand-primary/50 rounded-full h-1.5">
+                                            <div
+                                                className={`h-full rounded-full transition-all duration-300 ${step.status === 'completed' ? 'bg-green-500' :
+                                                        step.status === 'active' ? 'bg-brand-accent' :
+                                                            'bg-brand-secondary'
+                                                    }`}
+                                                style={{ width: `${stepPercentage}%` }}
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
-                                <span className="text-brand-text-primary">{step.name}</span>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
             </div>

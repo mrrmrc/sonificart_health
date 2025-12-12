@@ -51,7 +51,7 @@ export const CursorLoupe: React.FC<CursorLoupeProps> = React.memo(({ activeEvent
 
             {!isPlaying && !activeEvent && (
                 <div className="h-16 flex items-center justify-center text-brand-text-secondary italic text-sm">
-                    In attesa della riproduzione...
+                    Passa il mouse sull'immagine per l'analisi in tempo reale
                 </div>
             )}
 
