@@ -3,8 +3,7 @@ import { MusicGenerationPrompt, Tradition, BlockAnalysisResult } from "../types"
 import { fileToBase64 } from "../utils/fileUtils";
 
 // --- CONFIGURAZIONE CHIAVE ---
-const GOOGLE_API_KEY = (import.meta as any)?.env?.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? (process as any).env?.VITE_GEMINI_API_KEY : "");
-
+const GOOGLE_API_KEY = "AIzaSyBtEtAu3W09-UAp7J0mc2x07HwvQt3UqAE";
 export async function describeImageContent(imageFile: File): Promise<string> {
     if (!GOOGLE_API_KEY) {
         throw new Error("Chiave API Google mancante.");

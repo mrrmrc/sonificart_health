@@ -170,8 +170,77 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
         return () => { imageEl.removeEventListener('load', handleLoad); resizeObserver.disconnect(); };
     }, [calculateImageRect, displayImage]);
 
+    // Ricostruisci sempre il blocco sorgente per ogni evento (utile per history / SAC)
+    const resolvedEvents = useMemo(() => {
+        const blocks = correctedResult.blockAnalysisResult?.blocks || [];
+        const gridSize = correctedResult.blockAnalysisResult?.gridSize || 32;
+        const fallbackDuration = correctedResult.configUsed?.noteDurationSeconds || 0.5;
+        let runningTime = 0;
+
+        return (correctedResult.audioOutput?.events || []).map((evt, idx) => {
+            let block = evt.sourceBlock;
+
+            if (!block || !block.position) {
+                // prova con l'indice memorizzato
+                const blockIndex = typeof evt.sourceBlockIndex === 'number' ? evt.sourceBlockIndex : idx;
+                const fallback = blocks[blockIndex];
+                if (fallback) {
+                    block = fallback;
+                } else {
+                    // fallback finale: coord da indice
+                    const x = blockIndex % gridSize;
+                    const y = Math.floor(blockIndex / gridSize);
+                    block = {
+                        r: evt.sourceBlock?.r ?? 100,
+                        g: evt.sourceBlock?.g ?? 100,
+                        b: evt.sourceBlock?.b ?? 100,
+                        position: { x, y },
+                        hsv: { h: 0, s: 0, v: 0 },
+                        lab: { l: 50, a: 0, b: 0 },
+                        variance: 0,
+                        isFiller: false,
+                    };
+                }
+            }
+
+            // fallback per tempo/durata/noteName se mancanti (tipico in history/SAC)
+            const duration = Number.isFinite(evt.duration) && evt.duration > 0 ? evt.duration : fallbackDuration;
+            const time = Number.isFinite(evt.time) ? evt.time : runningTime;
+            runningTime = time + duration;
+
+            return {
+                ...evt,
+                time,
+                duration,
+                noteName: evt.noteName || "C",
+                midiFloat: Number.isFinite(evt.midiFloat) ? evt.midiFloat : 60,
+                velocity: Number.isFinite(evt.velocity) ? evt.velocity : 100,
+                sourceBlock: block,
+                isAccompaniment: evt.isAccompaniment === true ? true : false,
+            };
+<<<<<<< Current (Your changes)
+<<<<<<< Current (Your changes)
+<<<<<<< Current (Your changes)
+        });
+=======
+        })
+            // ordina per tempo crescente per garantire allineamento player → highlight
+            .sort((a, b) => (a.time ?? 0) - (b.time ?? 0));
+>>>>>>> Incoming (Background Agent changes)
+=======
+        })
+            // ordina per tempo crescente per garantire allineamento player → highlight
+            .sort((a, b) => (a.time ?? 0) - (b.time ?? 0));
+>>>>>>> Incoming (Background Agent changes)
+=======
+        })
+            // ordina per tempo crescente per garantire allineamento player → highlight
+            .sort((a, b) => (a.time ?? 0) - (b.time ?? 0));
+>>>>>>> Incoming (Background Agent changes)
+    }, [correctedResult.audioOutput, correctedResult.blockAnalysisResult]);
+
     // Exclude accompaniment and any events mapped to filler blocks so highlights stay inside the real image area
-    const melodyEvents = useMemo(() => (correctedResult.audioOutput?.events || []).filter(e => e.isAccompaniment !== true && !e.sourceBlock?.isFiller), [correctedResult.audioOutput]);
+    const melodyEvents = useMemo(() => resolvedEvents.filter(e => e.isAccompaniment !== true && !e.sourceBlock?.isFiller), [resolvedEvents]);
 
     useEffect(() => {
         if (!isPlaying || playbackTime < 0 || melodyEvents.length === 0) return;
@@ -463,7 +532,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                 </div>
                                 <div className="bg-brand-primary/30 p-3 rounded-lg border border-brand-secondary">
                                     <h5 className="text-sm text-brand-text-secondary mb-2 text-center">
-                                        {isHistoryView ? t('results.player_title') + " (Archive)" : t('results.player_title')}
+                                        {t('results.player_title')}
                                     </h5>
                                     <AudioPlayer audioRef={audioRef} audioUrl={correctedResult.audioOutput?.audioUrl || ""} onTimeUpdate={handleTimeUpdate} onPlay={handlePlay} onStop={handleStop} />
                                     <MusicSheet activeEvent={displayEvent} />
