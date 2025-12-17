@@ -2,11 +2,9 @@ import React, { useState } from 'react';
 import { Logo } from './Logo';
 import { useLanguage } from '../contexts/LanguageContext';
 import { Language } from '../services/translations';
-import { ViewType } from '../types'; // Import Corretto
+import { useNavigate, useLocation } from 'react-router-dom';
 
 interface NavbarProps {
-    currentView: ViewType;
-    setView: (view: ViewType) => void;
     isLoggedIn: boolean;
     isAdmin?: boolean;
     userCredits?: number;
@@ -17,10 +15,15 @@ interface NavbarProps {
     onOpenHelp: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ currentView, setView, isLoggedIn, isAdmin, userCredits, isProUser, onLogin, onLogout, onGoProClick, onOpenHelp }) => {
+export const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, isAdmin, userCredits, isProUser, onLogin, onLogout, onGoProClick, onOpenHelp }) => {
     const { language, setLanguage, t } = useLanguage();
     const [isLangOpen, setIsLangOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    // Helper per determinare la vista corrente dal path
+    const currentView = location.pathname === '/' ? 'landing' : location.pathname.substring(1);
 
     const languages: { code: Language; label: string; flag: string }[] = [
         { code: 'it', label: 'ITA', flag: '🇮🇹' },
@@ -29,7 +32,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setView, isLoggedIn
         { code: 'es', label: 'ESP', flag: '🇪🇸' },
     ];
 
-    const navLinkClass = (view: ViewType) => `
+    const navLinkClass = (view: string) => `
         relative cursor-pointer px-3 py-2 text-sm font-bold tracking-wide uppercase transition-all duration-300 group
         ${currentView === view
             ? 'text-white'
@@ -45,7 +48,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setView, isLoggedIn
             <div className="max-w-[1800px] mx-auto px-6 h-20 flex items-center justify-between">
 
                 {/* --- LEFT: BRANDING --- */}
-                <div className="flex items-center gap-3 cursor-pointer group shrink-0" onClick={() => setView('landing')}>
+                <div className="flex items-center gap-3 cursor-pointer group shrink-0" onClick={() => navigate('/')}>
                     <Logo className="w-10 h-10 relative z-10 transition-transform duration-700 ease-out group-hover:rotate-[360deg] filter drop-shadow-[0_0_8px_rgba(45,212,191,0.5)]" />
                     <div className="flex flex-col justify-center">
                         <div className="flex items-baseline gap-2">
@@ -53,7 +56,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setView, isLoggedIn
                                 Sonific<span className="text-brand-accent">A.R.T.</span>
                             </span>
                             <span className="text-[10px] font-mono text-brand-text-secondary/70 border border-white/10 px-1.5 rounded bg-white/5">
-                                v1.0
+                                v1.1
                             </span>
                         </div>
                         <span className="text-[8px] uppercase tracking-[0.2em] text-brand-text-secondary hidden sm:block group-hover:text-white transition-colors">
@@ -64,7 +67,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setView, isLoggedIn
 
                 {/* --- CENTER: MAIN NAVIGATION --- */}
                 <div className="hidden lg:flex items-center justify-center gap-8">
-                    <button onClick={() => setView('landing')} className={navLinkClass('landing')}>
+                    <button onClick={() => navigate('/')} className={navLinkClass('landing')}>
                         {t('nav.home')}
                         <ActiveIndicator isActive={currentView === 'landing'} />
                     </button>
@@ -77,31 +80,31 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setView, isLoggedIn
 
                     {isLoggedIn ? (
                         <>
-                            <button onClick={() => setView('sonification')} className={navLinkClass('sonification')}>
+                            <button onClick={() => navigate('/sonification')} className={navLinkClass('sonification')}>
                                 {t('nav.sonify')}
                                 <ActiveIndicator isActive={currentView === 'sonification'} />
                             </button>
-                            <button onClick={() => setView('showcase')} className={navLinkClass('showcase')}>
+                            <button onClick={() => navigate('/showcase')} className={navLinkClass('showcase')}>
                                 {t('nav.showcase')}
                                 <ActiveIndicator isActive={currentView === 'showcase'} />
                             </button>
-                            <button onClick={() => setView('verification')} className={navLinkClass('verification')}>
+                            <button onClick={() => navigate('/verification')} className={navLinkClass('verification')}>
                                 {t('nav.verify')}
                                 <ActiveIndicator isActive={currentView === 'verification'} />
                             </button>
-                            <button onClick={() => setView('dashboard')} className={navLinkClass('dashboard')}>
+                            <button onClick={() => navigate('/dashboard')} className={navLinkClass('dashboard')}>
                                 {t('nav.dashboard')}
                                 <ActiveIndicator isActive={currentView === 'dashboard'} />
                             </button>
                             {isAdmin && (
-                                <button onClick={() => setView('admin')} className={`${navLinkClass('admin')} text-red-400 hover:text-red-300`}>
+                                <button onClick={() => navigate('/admin')} className={`${navLinkClass('admin')} text-red-400 hover:text-red-300`}>
                                     {t('nav.admin')}
                                     <ActiveIndicator isActive={currentView === 'admin'} />
                                 </button>
                             )}
                         </>
                     ) : (
-                        <button onClick={() => setView('showcase')} className={navLinkClass('showcase')}>
+                        <button onClick={() => navigate('/showcase')} className={navLinkClass('showcase')}>
                             {t('nav.showcase')}
                             <ActiveIndicator isActive={currentView === 'showcase'} />
                         </button>
@@ -166,7 +169,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setView, isLoggedIn
                             </div>
 
                             <button
-                                onClick={() => setView('profile')}
+                                onClick={() => navigate('/profile')}
                                 className="hidden sm:flex w-9 h-9 rounded-full bg-gradient-to-br from-brand-accent to-purple-600 items-center justify-center text-white shadow-lg hover:scale-110 transition-transform border border-white/20"
                             >
                                 <i className="fas fa-user text-xs"></i>
@@ -190,20 +193,20 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setView, isLoggedIn
             {isMobileMenuOpen && (
                 <div className="lg:hidden bg-[#0f172a] border-b border-white/10 animate-fade-in shadow-2xl absolute w-full left-0 top-20 z-50">
                     <div className="p-4 space-y-2">
-                        <button onClick={() => { setView('landing'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">
+                        <button onClick={() => { navigate('/'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">
                             {t('nav.home')}
                         </button>
                         <button onClick={() => { onGoProClick(); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-brand-accent font-bold bg-white/5 rounded-lg border border-brand-accent/20">
                             {t('nav.access')}
                         </button>
-                        <button onClick={() => { setView('showcase'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">
+                        <button onClick={() => { navigate('/showcase'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">
                             {t('nav.showcase')}
                         </button>
                         {isLoggedIn && (
                             <>
-                                <button onClick={() => { setView('sonification'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">{t('nav.sonify')}</button>
-                                <button onClick={() => { setView('verification'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">{t('nav.verify')}</button>
-                                <button onClick={() => { setView('dashboard'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">{t('nav.dashboard')}</button>
+                                <button onClick={() => { navigate('/sonification'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">{t('nav.sonify')}</button>
+                                <button onClick={() => { navigate('/verification'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">{t('nav.verify')}</button>
+                                <button onClick={() => { navigate('/dashboard'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">{t('nav.dashboard')}</button>
                                 <div className="px-4 py-3 text-sm text-gray-400 flex items-center gap-2">
                                     <i className="fas fa-coins text-brand-accent"></i>
                                     Crediti: <span className="text-white font-mono">{isProUser ? 'Infiniti' : userCredits}</span>
