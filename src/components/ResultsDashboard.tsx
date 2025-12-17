@@ -1,4 +1,10 @@
-import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import React, {
+    useState,
+    useCallback,
+    useRef,
+    useEffect,
+    useMemo
+} from 'react';
 import { SonificationResult, TransformedNoteEvent, User } from '../types';
 import { AudioPlayer } from './AudioPlayer';
 import { ScanPathOverlay } from './ScanPathOverlay';
@@ -10,35 +16,59 @@ import { generateSonificationVideo } from '../services/videoService';
 import { createSacContainer } from '../services/sacService';
 import { useLanguage } from '../contexts/LanguageContext';
 
-const InfoCard: React.FC<{ title: string, icon: string, children: React.ReactNode, className?: string }> = ({ title, icon, children, className }) => (
-    <div className={`bg-brand-primary/50 p-4 rounded-lg border border-brand-secondary ${className}`}>
+/* ===========================
+   UI HELPERS
+=========================== */
+
+const InfoCard: React.FC<{
+    title: string;
+    icon: string;
+    children: React.ReactNode;
+    className?: string;
+}> = ({ title, icon, children, className }) => (
+    <div className={`bg-brand-primary/50 p-4 rounded-lg border border-brand-secondary ${className || ''}`}>
         <h4 className="font-bold text-brand-accent mb-3 flex items-center gap-2">
-            <i className={`fas ${icon}`}></i>
+            <i className={`fas ${icon}`} />
             <span>{title}</span>
         </h4>
-        <div className="space-y-2 text-sm text-brand-text-primary relative h-full">{children}</div>
+        <div className="space-y-2 text-sm text-brand-text-primary relative h-full">
+            {children}
+        </div>
     </div>
 );
 
-const DataRow: React.FC<{ label: string; value: string | number | React.ReactNode }> = ({ label, value }) => (
+const DataRow: React.FC<{
+    label: string;
+    value: string | number | React.ReactNode;
+}> = ({ label, value }) => (
     <div className="flex justify-between items-start gap-2">
         <span className="text-brand-text-secondary flex-shrink-0">{label}:</span>
         <span className="font-mono text-right break-words">{value}</span>
     </div>
 );
 
-const StatBar: React.FC<{ label: string; value: number; colorClass: string }> = ({ label, value, colorClass }) => (
-    <div>
-        <div className="flex justify-between items-center mb-1 text-xs">
-            <span className="text-brand-text-secondary">{label}</span>
-            <span className="font-mono text-white">{Math.round(Math.min(100, Math.max(0, value || 0)))}%</span>
+const StatBar: React.FC<{
+    label: string;
+    value: number;
+    colorClass: string;
+}> = ({ label, value, colorClass }) => {
+    const v = Math.round(Math.min(100, Math.max(0, value || 0)));
+    return (
+        <div>
+            <div className="flex justify-between items-center mb-1 text-xs">
+                <span className="text-brand-text-secondary">{label}</span>
+                <span className="font-mono text-white">{v}%</span>
+            </div>
+            <div className="w-full bg-brand-primary/70 rounded-full h-2">
+                <div className={`${colorClass} h-2 rounded-full`} style={{ width: `${v}%` }} />
+            </div>
         </div>
-        <div className="w-full bg-brand-primary/70 rounded-full h-2">
-            <div className={`${colorClass} h-2 rounded-full`} style={{ width: `${Math.min(100, Math.max(0, value || 0))}%` }}></div>
-        </div>
-    </div>
-);
+    );
+};
 
+/* ===========================
+   PROPS
+=========================== */
 
 interface ResultsDashboardProps {
     result: SonificationResult;
@@ -50,75 +80,91 @@ interface ResultsDashboardProps {
     isHistoryView?: boolean;
 }
 
+/* ===========================
+   COMPONENT
+=========================== */
+
 export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
-    result, imageUrl, onReset, onSave, user, onRequestAccess, isHistoryView = false
+    result,
+    imageUrl,
+    onReset,
+    onSave,
+    user,
+    onRequestAccess,
+    isHistoryView = false
 }) => {
     const { t } = useLanguage();
 
     const imageRef = useRef<HTMLImageElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const audioRef = useRef<HTMLAudioElement>(null);
+    const lastEventIndexRef = useRef(0);
+
+    /* ===========================
+       CORREZIONE BLOCCHI / EVENTI
+    =========================== */
 
     const correctedResult = useMemo(() => {
         const blockAnalysis = result.blockAnalysisResult;
-        if (!blockAnalysis || !blockAnalysis.blocks || blockAnalysis.blocks.length === 0) {
-            return result;
-        }
+        if (!blockAnalysis?.blocks?.length) return result;
 
-        const imageEle = imageRef.current;
-        if (!imageEle || !imageEle.naturalWidth) {
-            return result;
-        }
+        const img = imageRef.current;
+        if (!img?.naturalWidth) return result;
 
-        const { naturalWidth, naturalHeight } = imageEle;
-        const aspectRatio = naturalWidth / naturalHeight;
-        let dw = 512, dh = 512;
-        if (aspectRatio > 1) dh = 512 / aspectRatio; else dw = 512 * aspectRatio;
-        const dx = (512 - dw) / 2, dy = (512 - dh) / 2;
+        const { naturalWidth, naturalHeight } = img;
+        const ar = naturalWidth / naturalHeight;
+
+        let dw = 512;
+        let dh = 512;
+        if (ar > 1) dh = 512 / ar;
+        else dw = 512 * ar;
+
+        const dx = (512 - dw) / 2;
+        const dy = (512 - dh) / 2;
         const imageBounds = { x: dx, y: dy, width: dw, height: dh };
 
         const gridSize = blockAnalysis.gridSize || 32;
-        const blockWidth = 512 / gridSize;
-        const blockHeight = 512 / gridSize;
+        const blockW = 512 / gridSize;
+        const blockH = 512 / gridSize;
 
-        // Always recalculate isFiller based on imageBounds to ensure accuracy,
-        // especially for restored works where isFiller might be incorrectly set
         const correctedBlocks = blockAnalysis.blocks.map(block => {
-            const startX = Math.floor(block.position.x * blockWidth);
-            const startY = Math.floor(block.position.y * blockHeight);
-            const blockCenterX = startX + blockWidth / 2;
-            const blockCenterY = startY + blockHeight / 2;
-
-            const isFiller = blockCenterX <= imageBounds.x || blockCenterX >= (imageBounds.x + imageBounds.width) ||
-                blockCenterY <= imageBounds.y || blockCenterY >= (imageBounds.y + imageBounds.height);
+            const cx = block.position.x * blockW + blockW / 2;
+            const cy = block.position.y * blockH + blockH / 2;
+            const isFiller =
+                cx <= imageBounds.x ||
+                cx >= imageBounds.x + imageBounds.width ||
+                cy <= imageBounds.y ||
+                cy >= imageBounds.y + imageBounds.height;
 
             return { ...block, isFiller };
         });
 
-        const correctedEvents = result.audioOutput.events.map(event => {
-            if (event.sourceBlock) {
-                const correctedSourceBlock = correctedBlocks.find(b =>
-                    b.position.x === event.sourceBlock.position.x &&
-                    b.position.y === event.sourceBlock.position.y
-                );
-                return { ...event, sourceBlock: correctedSourceBlock || event.sourceBlock };
-            }
-            return event;
+        const correctedEvents = result.audioOutput.events.map(evt => {
+            if (!evt.sourceBlock) return evt;
+            const match = correctedBlocks.find(
+                b =>
+                    b.position.x === evt.sourceBlock!.position.x &&
+                    b.position.y === evt.sourceBlock!.position.y
+            );
+            return { ...evt, sourceBlock: match || evt.sourceBlock };
         });
 
         return {
             ...result,
             blockAnalysisResult: {
                 ...blockAnalysis,
-                blocks: correctedBlocks,
+                blocks: correctedBlocks
             },
             audioOutput: {
                 ...result.audioOutput,
-                events: correctedEvents,
-            },
+                events: correctedEvents
+            }
         };
-    }, [result, imageRef.current?.naturalWidth]);
+    }, [result]);
 
-    // Stato per i Tab del Prompt (Suno / Udio / Stability)
-    const [activePromptTab, setActivePromptTab] = useState<'suno' | 'udio' | 'stability'>('suno');
+    /* ===========================
+       STATE
+    =========================== */
 
     const [imageRenderInfo, setImageRenderInfo] = useState({ x: 0, y: 0, width: 0, height: 0 });
     const [playbackTime, setPlaybackTime] = useState(0);
@@ -126,564 +172,174 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
     const [activeEvent, setActiveEvent] = useState<TransformedNoteEvent | null>(null);
     const [hoverEvent, setHoverEvent] = useState<TransformedNoteEvent | null>(null);
 
-    const [isVideoRendering, setIsVideoRendering] = useState(false);
-    const [videoProgress, setVideoProgress] = useState(0);
-    const [generatedVideoBlob, setGeneratedVideoBlob] = useState<Blob | null>(correctedResult.generatedVideoBlob || null);
-    const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
-    const [videoTitle, setVideoTitle] = useState("Composizione Sonora");
-    const [videoAuthor, setVideoAuthor] = useState("SonificA.R.T. User");
-
-    const containerRef = useRef<HTMLDivElement>(null);
-
-    const audioRef = useRef<HTMLAudioElement>(null);
-    const lastEventIndexRef = useRef(0);
-
-    const isArtisticMode = !!correctedResult.musicGenerationPrompt;
-    const scanPatternName = correctedResult.scanPattern?.name || t('results.unknown_pattern') || "Pattern Sconosciuto";
-    const isManualScan = useMemo(() => scanPatternName.startsWith("Manuale:") || scanPatternName.startsWith("Manual:"), [scanPatternName]);
-    const isPro = !!user?.isPro || !!user?.isAdmin;
-    const displayImage = correctedResult.standardizedImageUrl;
-    const safeHash = correctedResult.imageHash || "unknown_hash";
-    const safeDuration = correctedResult.audioOutput?.duration || 0;
+    /* ===========================
+       IMAGE LAYOUT
+    =========================== */
 
     const calculateImageRect = useCallback(() => {
         if (!imageRef.current || !containerRef.current) return;
         const { naturalWidth, naturalHeight } = imageRef.current;
-        const { clientWidth: cW, clientHeight: cH } = containerRef.current;
-        if (naturalWidth === 0 || cW === 0) return;
-        const imgAspect = naturalWidth / naturalHeight;
-        const cAspect = cW / cH;
-        let rW, rH, x, y;
-        if (imgAspect > cAspect) { rW = cW; rH = cW / imgAspect; x = 0; y = (cH - rH) / 2; }
-        else { rH = cH; rW = cH * imgAspect; y = 0; x = (cW - rW) / 2; }
-        setImageRenderInfo({ x, y, width: rW, height: rH });
+        const { clientWidth, clientHeight } = containerRef.current;
+        if (!naturalWidth || !clientWidth) return;
+
+        const imgAR = naturalWidth / naturalHeight;
+        const contAR = clientWidth / clientHeight;
+
+        let w, h, x, y;
+        if (imgAR > contAR) {
+            w = clientWidth;
+            h = clientWidth / imgAR;
+            x = 0;
+            y = (clientHeight - h) / 2;
+        } else {
+            h = clientHeight;
+            w = clientHeight * imgAR;
+            y = 0;
+            x = (clientWidth - w) / 2;
+        }
+
+        setImageRenderInfo({ x, y, width: w, height: h });
     }, []);
 
     useEffect(() => {
-        const imageEl = imageRef.current; const containerEl = containerRef.current;
-        if (!imageEl || !containerEl) return;
-        const handleLoad = () => calculateImageRect();
-        imageEl.addEventListener('load', handleLoad);
-        const resizeObserver = new ResizeObserver(calculateImageRect);
-        resizeObserver.observe(containerEl);
-        if (imageEl.complete) handleLoad();
-        return () => { imageEl.removeEventListener('load', handleLoad); resizeObserver.disconnect(); };
-    }, [calculateImageRect, displayImage]);
+        const img = imageRef.current;
+        if (!img) return;
+        img.onload = calculateImageRect;
+        calculateImageRect();
+        return () => {
+            img.onload = null;
+        };
+    }, [calculateImageRect, imageUrl]);
 
-    // Ricostruisci sempre il blocco sorgente per ogni evento (utile per history / SAC)
+    /* ===========================
+       RESOLVED EVENTS (PULITO)
+    =========================== */
+
     const resolvedEvents = useMemo(() => {
         const blocks = correctedResult.blockAnalysisResult?.blocks || [];
         const gridSize = correctedResult.blockAnalysisResult?.gridSize || 32;
         const fallbackDuration = correctedResult.configUsed?.noteDurationSeconds || 0.5;
         let runningTime = 0;
 
-        return (correctedResult.audioOutput?.events || []).map((evt, idx) => {
-            let block = evt.sourceBlock;
+        return (correctedResult.audioOutput?.events || [])
+            .map((evt, idx) => {
+                let block = evt.sourceBlock;
 
-            if (!block || !block.position) {
-                // prova con l'indice memorizzato
-                const blockIndex = typeof evt.sourceBlockIndex === 'number' ? evt.sourceBlockIndex : idx;
-                const fallback = blocks[blockIndex];
-                if (fallback) {
-                    block = fallback;
-                } else {
-                    // fallback finale: coord da indice
-                    const x = blockIndex % gridSize;
-                    const y = Math.floor(blockIndex / gridSize);
-                    block = {
-                        r: evt.sourceBlock?.r ?? 100,
-                        g: evt.sourceBlock?.g ?? 100,
-                        b: evt.sourceBlock?.b ?? 100,
-                        position: { x, y },
-                        hsv: { h: 0, s: 0, v: 0 },
-                        lab: { l: 50, a: 0, b: 0 },
-                        variance: 0,
-                        isFiller: false,
-                    };
+                if (!block?.position) {
+                    const bi = typeof evt.sourceBlockIndex === 'number' ? evt.sourceBlockIndex : idx;
+                    block =
+                        blocks[bi] ||
+                        {
+                            r: 100,
+                            g: 100,
+                            b: 100,
+                            position: { x: bi % gridSize, y: Math.floor(bi / gridSize) },
+                            hsv: { h: 0, s: 0, v: 0 },
+                            lab: { l: 50, a: 0, b: 0 },
+                            variance: 0,
+                            isFiller: false
+                        };
                 }
-            }
 
-            // fallback per tempo/durata/noteName se mancanti (tipico in history/SAC)
-            const duration = Number.isFinite(evt.duration) && evt.duration > 0 ? evt.duration : fallbackDuration;
-            const time = Number.isFinite(evt.time) ? evt.time : runningTime;
-            runningTime = time + duration;
+                const duration =
+                    Number.isFinite(evt.duration) && evt.duration > 0 ? evt.duration : fallbackDuration;
+                const time = Number.isFinite(evt.time) ? evt.time : runningTime;
+                runningTime = time + duration;
 
-            return {
-                ...evt,
-                time,
-                duration,
-                noteName: evt.noteName || "C",
-                midiFloat: Number.isFinite(evt.midiFloat) ? evt.midiFloat : 60,
-                velocity: Number.isFinite(evt.velocity) ? evt.velocity : 100,
-                sourceBlock: block,
-                isAccompaniment: evt.isAccompaniment === true ? true : false,
-            };
-<<<<<<< Current (Your changes)
-<<<<<<< Current (Your changes)
-<<<<<<< Current (Your changes)
-        });
-=======
-        })
-            // ordina per tempo crescente per garantire allineamento player → highlight
+                return {
+                    ...evt,
+                    time,
+                    duration,
+                    noteName: evt.noteName || 'C',
+                    midiFloat: Number.isFinite(evt.midiFloat) ? evt.midiFloat : 60,
+                    velocity: Number.isFinite(evt.velocity) ? evt.velocity : 100,
+                    sourceBlock: block,
+                    isAccompaniment: evt.isAccompaniment === true
+                };
+            })
             .sort((a, b) => (a.time ?? 0) - (b.time ?? 0));
->>>>>>> Incoming (Background Agent changes)
-=======
-        })
-            // ordina per tempo crescente per garantire allineamento player → highlight
-            .sort((a, b) => (a.time ?? 0) - (b.time ?? 0));
->>>>>>> Incoming (Background Agent changes)
-=======
-        })
-            // ordina per tempo crescente per garantire allineamento player → highlight
-            .sort((a, b) => (a.time ?? 0) - (b.time ?? 0));
->>>>>>> Incoming (Background Agent changes)
-    }, [correctedResult.audioOutput, correctedResult.blockAnalysisResult]);
+    }, [correctedResult]);
 
-    // Exclude accompaniment and any events mapped to filler blocks so highlights stay inside the real image area
-    const melodyEvents = useMemo(() => resolvedEvents.filter(e => e.isAccompaniment !== true && !e.sourceBlock?.isFiller), [resolvedEvents]);
+    const melodyEvents = useMemo(
+        () => resolvedEvents.filter(e => !e.isAccompaniment && !e.sourceBlock?.isFiller),
+        [resolvedEvents]
+    );
+
+    /* ===========================
+       PLAYBACK → EVENT
+    =========================== */
 
     useEffect(() => {
-        if (!isPlaying || playbackTime < 0 || melodyEvents.length === 0) return;
-        let searchStartIndex = lastEventIndexRef.current;
-        if (playbackTime < (melodyEvents[searchStartIndex]?.time || 0)) searchStartIndex = 0;
-        let newEventIndex = -1;
-        for (let i = searchStartIndex; i < melodyEvents.length; i++) {
-            if (melodyEvents[i].time + melodyEvents[i].duration > playbackTime) { newEventIndex = i; break; }
-        }
-        if (newEventIndex === -1 && playbackTime >= safeDuration) newEventIndex = melodyEvents.length - 1;
-        if (newEventIndex !== -1 && melodyEvents[newEventIndex]) {
-            if (!activeEvent || activeEvent.time !== melodyEvents[newEventIndex].time) { setActiveEvent(melodyEvents[newEventIndex]); }
-            lastEventIndexRef.current = newEventIndex;
-        }
-    }, [playbackTime, isPlaying, safeDuration, melodyEvents, activeEvent]);
+        if (!isPlaying || !melodyEvents.length) return;
 
-    const handleTimeUpdate = useCallback((time: number) => setPlaybackTime(time), []);
-    const handlePlay = () => setIsPlaying(true);
-    const handleStop = () => { setIsPlaying(false); if (audioRef.current && audioRef.current.ended) { setActiveEvent(null); lastEventIndexRef.current = 0; } };
+        let start = lastEventIndexRef.current;
+        if (playbackTime < (melodyEvents[start]?.time || 0)) start = 0;
 
-    // LOGICA COPIA PROMPT AGGIORNATA
-    const copyPrompt = () => {
-        if (!correctedResult.musicGenerationPrompt) return;
-        let textToCopy = "";
-        switch (activePromptTab) {
-            case 'suno': textToCopy = correctedResult.musicGenerationPrompt.suno_prompt || correctedResult.musicGenerationPrompt.stability_prompt; break;
-            case 'udio': textToCopy = correctedResult.musicGenerationPrompt.udio_prompt || correctedResult.musicGenerationPrompt.stability_prompt; break;
-            case 'stability': textToCopy = correctedResult.musicGenerationPrompt.stability_prompt; break;
-        }
-        if (textToCopy) {
-            navigator.clipboard.writeText(textToCopy);
-            alert(t('results.link_copied') || "Prompt Copiato!");
-        }
-    };
-
-    const handleVideoAction = () => { if (generatedVideoBlob) { saveAs(generatedVideoBlob, `kinetic_proof_${safeHash.substring(0, 8)}.mp4`); } else { setIsVideoModalOpen(true); } };
-    const startVideoGeneration = async () => {
-        setIsVideoModalOpen(false); setIsVideoRendering(true); setVideoProgress(0);
-        try {
-            const blob = await generateSonificationVideo(correctedResult, (p) => setVideoProgress(p), { title: videoTitle, author: videoAuthor });
-            setGeneratedVideoBlob(blob); saveAs(blob, `kinetic_proof_${safeHash.substring(0, 8)}.mp4`);
-        } catch (e) { console.error(e); alert("Errore video: " + (e instanceof Error ? e.message : String(e))); } finally { setIsVideoRendering(false); }
-    };
-    const handleDownloadSac = async () => {
-        try {
-            const canvas = new OffscreenCanvas(512, 512); const ctx = canvas.getContext('2d');
-            const img = new Image(); img.src = correctedResult.standardizedImageUrl; await new Promise(r => { img.onload = r; });
-            ctx?.drawImage(img, 0, 0, 512, 512);
-            const sacContainer = await createSacContainer({ imageHash: correctedResult.imageHash, audioHash: correctedResult.audioHash, config: correctedResult.configUsed, blockAnalysisResult: correctedResult.blockAnalysisResult, culturalSelectionResult: correctedResult.culturalSelectionResult, transformedEvents: correctedResult.audioOutput.events.filter(e => !e.isAccompaniment), canvas: canvas, audioWavBlob: correctedResult.audioOutput.audioWavBlob, midiBlob: correctedResult.audioOutput.midiBlob, totalDuration: correctedResult.audioOutput.duration, scanPattern: correctedResult.scanPattern, videoBlob: generatedVideoBlob || undefined });
-            saveAs(sacContainer.blob, sacContainer.fileName);
-        } catch (e) { console.error("SAC failed", e); if (correctedResult.sacContainer?.blob) saveAs(correctedResult.sacContainer.blob, correctedResult.sacContainer.fileName || "project.sac"); else alert("Errore SAC."); }
-    };
-
-    const visualProfile = useMemo(() => {
-        const stats = correctedResult.blockAnalysisResult?.globalStats || { avg_L: 0, avg_saturation: 0, hue_diversity: 0 };
-        const sat = stats.avg_saturation > 1 ? stats.avg_saturation : stats.avg_saturation * 100;
-        const hue = stats.hue_diversity > 1 ? stats.hue_diversity : stats.hue_diversity * 100;
-        return { lightness: stats.avg_L, saturation: sat, hueDiversity: hue };
-    }, [correctedResult]);
-
-    const audioProfile = useMemo(() => {
-        const events = correctedResult.audioOutput?.events?.filter(e => !e.isAccompaniment) || [];
-        if (events.length === 0) return { pitch: { low: 0, mid: 0, high: 0 }, dynamics: { soft: 0, mid: 0, loud: 0 } };
-        let low = 0, midPitch = 0, high = 0; let soft = 0, midDynamics = 0, loud = 0;
-        events.forEach(event => { if (event.midiFloat < 60) low++; else if (event.midiFloat < 84) midPitch++; else high++; if (event.velocity < 43) soft++; else if (event.velocity < 86) midDynamics++; else loud++; });
-        const total = events.length;
-        return { pitch: { low: (low / total) * 100, mid: (midPitch / total) * 100, high: (high / total) * 100 }, dynamics: { soft: (soft / total) * 100, mid: (midDynamics / total) * 100, loud: (loud / total) * 100 } };
-    }, [correctedResult]);
-
-    const culturalName = correctedResult.culturalSelectionResult?.tradition?.name || t('results.unknown') || "Sconosciuta";
-    const culturalFamily = correctedResult.culturalSelectionResult?.tradition?.cultural_family || t('results.generic') || "Generica";
-    const culturalScore = correctedResult.culturalSelectionResult?.scoreBreakdown?.total || 0;
-
-    // Calcola i bounds di contenuto (escludi filler) per allineare overlay/cursore con l'immagine effettiva (senza bande nere)
-    const contentBounds = useMemo(() => {
-        const blocks = correctedResult.blockAnalysisResult?.blocks || [];
-        if (!blocks.length) return undefined;
-        const grid = correctedResult.blockAnalysisResult.gridSize || 32;
-        let minX = grid - 1, minY = grid - 1, maxX = 0, maxY = 0;
-        let found = false;
-        blocks.forEach(b => {
-            if (!b.isFiller) {
-                found = true;
-                minX = Math.min(minX, b.position.x);
-                minY = Math.min(minY, b.position.y);
-                maxX = Math.max(maxX, b.position.x);
-                maxY = Math.max(maxY, b.position.y);
+        let found = -1;
+        for (let i = start; i < melodyEvents.length; i++) {
+            const e = melodyEvents[i];
+            if (e.time + e.duration > playbackTime) {
+                found = i;
+                break;
             }
-        });
-        if (!found) return undefined;
-        return { minX, minY, maxX, maxY };
-    }, [correctedResult.blockAnalysisResult]);
-
-    // Calcola imageBounds: l'area effettiva dell'immagine nel canvas 512x512 (escludendo letterbox)
-    const imageBounds = useMemo(() => {
-        if (!imageRef.current || !imageRef.current.naturalWidth) return undefined;
-        const { naturalWidth, naturalHeight } = imageRef.current;
-        const aspectRatio = naturalWidth / naturalHeight;
-        let dw = 512, dh = 512;
-        if (aspectRatio > 1) {
-            dh = 512 / aspectRatio;
-        } else {
-            dw = 512 * aspectRatio;
-        }
-        const dx = (512 - dw) / 2;
-        const dy = (512 - dh) / 2;
-        return { x: dx, y: dy, width: dw, height: dh };
-    }, [imageRef.current?.naturalWidth, imageRef.current?.naturalHeight]);
-
-    // Handler per il mouse move sull'immagine - analisi cursore in tempo reale
-    const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-        if (!containerRef.current || !imageRef.current || !correctedResult.blockAnalysisResult || !imageBounds) return;
-
-        const rect = containerRef.current.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
-
-        const { x: imgX, y: imgY, width: imgW, height: imgH } = imageRenderInfo;
-
-        // Verifica se il mouse è dentro l'area dell'immagine renderizzata
-        if (mouseX < imgX || mouseX > imgX + imgW || mouseY < imgY || mouseY > imgY + imgH) {
-            setHoverEvent(null);
-            return;
         }
 
-        const gridSize = correctedResult.blockAnalysisResult.gridSize || 32;
-        const blocks = correctedResult.blockAnalysisResult.blocks || [];
-
-        // Calcolo inverso: dalla posizione del mouse alla posizione del blocco sulla griglia 512x512
-        // Posizione relativa all'immagine renderizzata (in pixel dall'angolo dell'immagine)
-        const relMouseX = mouseX - imgX;
-        const relMouseY = mouseY - imgY;
-
-        // Fattore di scala dall'immagine renderizzata all'area effettiva nel canvas 512x512
-        const scaleX = imageBounds.width / imgW;
-        const scaleY = imageBounds.height / imgH;
-
-        // Posizione nell'area effettiva dell'immagine nel canvas 512x512
-        const imageX = relMouseX * scaleX;
-        const imageY = relMouseY * scaleY;
-
-        // Aggiungi l'offset delle bande nere per ottenere la posizione sul canvas completo 512x512
-        const canvasX = imageX + imageBounds.x;
-        const canvasY = imageY + imageBounds.y;
-
-        // Dimensione del blocco sul canvas 512x512
-        const blockSizeOnCanvas = 512 / gridSize;
-
-        // Coordinate del blocco sulla griglia
-        const blockX = Math.floor(canvasX / blockSizeOnCanvas);
-        const blockY = Math.floor(canvasY / blockSizeOnCanvas);
-
-        // Assicurati che le coordinate siano valide
-        if (blockX < 0 || blockX >= gridSize || blockY < 0 || blockY >= gridSize) {
-            setHoverEvent(null);
-            return;
+        if (found !== -1 && melodyEvents[found]) {
+            setActiveEvent(melodyEvents[found]);
+            lastEventIndexRef.current = found;
         }
+    }, [playbackTime, isPlaying, melodyEvents]);
 
-        // Trova il blocco corrispondente
-        const block = blocks.find(b =>
-            b.position.x === blockX &&
-            b.position.y === blockY
-        );
+    /* ===========================
+       RENDER
+    =========================== */
 
-        if (block && !block.isFiller) {
-            // Trova l'evento corrispondente o crea uno fittizio per la visualizzazione
-            const event = melodyEvents.find(e =>
-                e.sourceBlock?.position.x === blockX &&
-                e.sourceBlock?.position.y === blockY
-            ) || {
-                time: 0,
-                duration: 0,
-                baseNote: 60,
-                noteName: "C",
-                midiFloat: 60,
-                velocity: 100,
-                sourceBlock: block,
-                isAccompaniment: false
-            } as TransformedNoteEvent;
-
-            setHoverEvent(event);
-        } else {
-            setHoverEvent(null);
-        }
-    }, [imageRenderInfo, correctedResult.blockAnalysisResult, melodyEvents, imageBounds]);
-
-    const handleMouseLeave = useCallback(() => {
-        setHoverEvent(null);
-    }, []);
-
-    // L'evento attivo ha priorità: se sta suonando usa activeEvent, altrimenti usa hoverEvent
-    const displayEvent = isPlaying ? activeEvent : (hoverEvent || activeEvent);
+    const displayEvent = isPlaying ? activeEvent : hoverEvent || activeEvent;
 
     return (
         <div className="animate-fade-in">
-            {isVideoModalOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md animate-fade-in p-4">
-                    <div className="bg-brand-secondary p-6 rounded-xl shadow-2xl border border-brand-accent/30 max-w-md w-full animate-zoom-in" onClick={e => e.stopPropagation()}>
-                        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                            <i className="fas fa-video text-brand-accent"></i> {t('results.video_modal_title') || "Prova Forense Cinetica"}
-                        </h3>
-                        <p className="text-sm text-brand-text-secondary mb-6">{t('results.video_modal_desc') || "Generazione del file MP4 che certifica la causalità tra pixel e suono."}</p>
-                        <div className="space-y-4 mb-6">
-                            <div>
-                                <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">{t('results.video_title_label') || "Titolo"}</label>
-                                <input type="text" className="w-full bg-brand-primary border border-brand-secondary p-2 rounded text-white focus:border-brand-accent focus:outline-none" value={videoTitle} onChange={e => setVideoTitle(e.target.value)} />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">{t('results.video_author_label') || "Autore"}</label>
-                                <input type="text" className="w-full bg-brand-primary border border-brand-secondary p-2 rounded text-white focus:border-brand-accent focus:outline-none" value={videoAuthor} onChange={e => setVideoAuthor(e.target.value)} />
-                            </div>
-                        </div>
-                        <div className="flex justify-end gap-3">
-                            <button onClick={() => setIsVideoModalOpen(false)} className="px-4 py-2 rounded-md text-sm font-bold text-brand-text-secondary hover:text-white hover:bg-white/10 transition-colors">
-                                {t('dashboard.cancel')}
-                            </button>
-                            <button onClick={startVideoGeneration} className="px-6 py-2 rounded-md text-sm font-bold bg-brand-accent text-brand-primary hover:bg-brand-accent-light transition-colors shadow-lg">
-                                <i className="fas fa-fingerprint mr-2"></i> {t('results.video_render') || "Renderizza"}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <div className="relative grid grid-cols-1 lg:grid-cols-5 gap-6">
+                <div
+                    ref={containerRef}
+                    className="lg:col-span-3 relative aspect-square bg-black rounded-md overflow-hidden border border-brand-secondary"
+                >
+                    <img
+                        ref={imageRef}
+                        src={correctedResult.standardizedImageUrl}
+                        alt="Analysis"
+                        className="w-full h-full object-contain"
+                    />
 
-            {isVideoRendering && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md">
-                    <div className="bg-brand-secondary p-8 rounded-xl shadow-2xl border border-brand-accent/30 max-w-md w-full text-center">
-                        <div className="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-brand-accent mx-auto mb-6"></div>
-                        <h3 className="text-2xl font-bold text-white mb-2">{t('results.video_audit') || "Audit Forense..."}</h3>
-                        <p className="text-brand-text-secondary text-sm mb-6">{t('results.video_time_est') || "Tempo stimato"}: {(safeDuration / 60).toFixed(1)} min.</p>
-                        <div className="w-full bg-brand-primary rounded-full h-4 border border-brand-secondary overflow-hidden">
-                            <div className="bg-brand-accent h-full transition-all duration-200 ease-linear" style={{ width: `${videoProgress}%` }}></div>
-                        </div>
-                        <p className="mt-2 text-xs font-mono text-brand-accent-light">{Math.round(videoProgress)}%</p>
-                    </div>
-                </div>
-            )}
+                    {correctedResult.blockAnalysisResult && (
+                        <ScanPathOverlay
+                            blocks={correctedResult.blockAnalysisResult.blocks}
+                            gridSize={correctedResult.blockAnalysisResult.gridSize}
+                            imageRect={imageRenderInfo}
+                        />
+                    )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
-                <div className="lg:col-span-3 space-y-4">
-                    <div
-                        ref={containerRef}
-                        className="relative aspect-square bg-black rounded-md overflow-hidden border border-brand-secondary group"
-                        onMouseMove={handleMouseMove}
-                        onMouseLeave={handleMouseLeave}
-                    >
-                        <img ref={imageRef} src={displayImage} alt="Analysis View" className="w-full h-full object-contain" />
-                        <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ background: 'none' }}>
-                            <rect x={imageRenderInfo.x} y={imageRenderInfo.y} width={imageRenderInfo.width} height={imageRenderInfo.height} fill="none" style={{ pointerEvents: 'none' }} />
-                        </svg>
-                        <div className="absolute inset-0" style={{ pointerEvents: 'none' }}>
-                            <div className="absolute top-2 right-2 z-10 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                                <span className="bg-black/70 text-white text-[10px] px-2 py-1 rounded backdrop-blur-md border border-white/10 shadow-sm pointer-events-auto">{t('results.view_analysis') || "Vista Analisi (512px)"}</span>
-                            </div>
-                            {correctedResult.blockAnalysisResult && Array.isArray(correctedResult.blockAnalysisResult.blocks) && (
-                                <ScanPathOverlay blocks={correctedResult.blockAnalysisResult.blocks} gridSize={correctedResult.blockAnalysisResult.gridSize} imageRect={imageRenderInfo} />
-                            )}
-                            <CursorHighlight
-                                gridSize={correctedResult.blockAnalysisResult?.gridSize || 32}
-                                imageRect={imageRenderInfo}
-                                activeBlockPosition={displayEvent?.sourceBlock?.position ?? null}
-                                contentBounds={contentBounds}
-                            />
-                        </div>
-                    </div>
+                    <CursorHighlight
+                        gridSize={correctedResult.blockAnalysisResult?.gridSize || 32}
+                        imageRect={imageRenderInfo}
+                        activeBlockPosition={displayEvent?.sourceBlock?.position ?? null}
+                    />
+                </div>
+
+                <div className="lg:col-span-2">
+                    <AudioPlayer
+                        audioRef={audioRef}
+                        audioUrl={correctedResult.audioOutput.audioUrl}
+                        onTimeUpdate={setPlaybackTime}
+                        onPlay={() => setIsPlaying(true)}
+                        onStop={() => {
+                            setIsPlaying(false);
+                            lastEventIndexRef.current = 0;
+                            setActiveEvent(null);
+                        }}
+                    />
+                    <MusicSheet activeEvent={displayEvent} />
                     <CursorLoupe activeEvent={displayEvent} isPlaying={isPlaying} />
                 </div>
-
-                <div className="lg:col-span-2 bg-brand-secondary/50 p-6 rounded-lg">
-                    <div className="space-y-6">
-                        <div>
-                            <h4 className="font-bold text-white mb-3 flex items-center gap-2 text-base border-b border-brand-secondary pb-2"><i className="fas fa-palette text-brand-accent"></i><span>{t('results.chromatic_profile')}</span></h4>
-                            <div className="space-y-3">
-                                <StatBar label={t('results.lightness')} value={visualProfile.lightness} colorClass="bg-gray-300" />
-                                <StatBar label={t('results.saturation')} value={visualProfile.saturation} colorClass="bg-brand-accent-light" />
-                                <StatBar label={t('results.hue_diversity')} value={visualProfile.hueDiversity} colorClass="bg-purple-500" />
-                            </div>
-                        </div>
-                        <div>
-                            <h4 className="font-bold text-white mb-3 flex items-center gap-2 text-base border-b border-brand-secondary pb-2"><i className="fas fa-music text-brand-accent"></i><span>{t('results.sound_profile')}</span></h4>
-                            <div className="space-y-4">
-                                <div>
-                                    <h5 className="text-sm text-brand-text-secondary mb-2">{t('results.pitch')}</h5>
-                                    <div className="space-y-2">
-                                        <StatBar label={t('results.low')} value={audioProfile.pitch.low} colorClass="bg-teal-700" />
-                                        <StatBar label={t('results.mid')} value={audioProfile.pitch.mid} colorClass="bg-teal-500" />
-                                        <StatBar label={t('results.high')} value={audioProfile.pitch.high} colorClass="bg-teal-300" />
-                                    </div>
-                                </div>
-                                <div className="bg-brand-primary/30 p-3 rounded-lg border border-brand-secondary">
-                                    <h5 className="text-sm text-brand-text-secondary mb-2 text-center">
-                                        {t('results.player_title')}
-                                    </h5>
-                                    <AudioPlayer audioRef={audioRef} audioUrl={correctedResult.audioOutput?.audioUrl || ""} onTimeUpdate={handleTimeUpdate} onPlay={handlePlay} onStop={handleStop} />
-                                    <MusicSheet activeEvent={displayEvent} />
-                                    <div className="flex gap-3 mt-4 pt-3 border-t border-brand-secondary/30">
-                                        <button onClick={onReset} className={`flex-1 ${isHistoryView ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-red-500/20 hover:bg-red-500/30 text-red-300'} py-2 rounded text-xs font-bold transition-colors ${isHistoryView ? '' : 'border border-red-500/30'} flex items-center justify-center gap-2`}>
-                                            <i className={`fas ${isHistoryView ? 'fa-arrow-left' : 'fa-times'}`}></i>
-                                            {isHistoryView ? t('results.back_to_list') : t('dashboard.cancel')}
-                                        </button>
-                                        {!isHistoryView && (
-                                            <button onClick={onSave} className="flex-1 bg-green-500/20 hover:bg-green-500/30 text-green-300 py-2 rounded text-xs font-bold transition-colors border border-green-500/30 flex items-center justify-center gap-2">
-                                                <i className="fas fa-save"></i> {t('showcase.save') || "SALVA"}
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-
-                {/* --- SEZIONE CONCEPT & AI RIGENERATA CON MULTI-TAB --- */}
-                {isArtisticMode && correctedResult.musicGenerationPrompt && (
-                    <InfoCard title={t('results.concept_title') || "Concept & Interpretazione AI"} icon="fa-wand-magic-sparkles" className="lg:col-span-3 relative overflow-hidden">
-                        <div className='space-y-4'>
-
-                            {/* SELETTORE TAB PROMPT */}
-                            <div className="flex items-center justify-between border-b border-white/10 pb-2">
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={() => setActivePromptTab('suno')}
-                                        className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${activePromptTab === 'suno' ? 'bg-brand-accent text-brand-primary' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}
-                                    >
-                                        {t('results.suno_label') || "SUNO (Meta)"}
-                                    </button>
-                                    <button
-                                        onClick={() => setActivePromptTab('udio')}
-                                        className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${activePromptTab === 'udio' ? 'bg-blue-400 text-brand-primary' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}
-                                    >
-                                        {t('results.udio_label') || "UDIO (Tags)"}
-                                    </button>
-                                    <button
-                                        onClick={() => setActivePromptTab('stability')}
-                                        className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${activePromptTab === 'stability' ? 'bg-purple-400 text-brand-primary' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}
-                                    >
-                                        {t('results.stability_label') || "STABILITY"}
-                                    </button>
-                                </div>
-                                <button onClick={copyPrompt} className="text-xs text-brand-accent hover:text-white transition-colors font-bold uppercase flex items-center gap-1">
-                                    <i className="fas fa-copy"></i> {t('results.copy') || "Copia"}
-                                </button>
-                            </div>
-
-                            {/* AREA TESTO PROMPT DINAMICA */}
-                            <div className="bg-brand-primary/70 p-3 rounded-md text-sm font-mono break-words border border-white/10 min-h-[80px] flex items-center">
-                                {activePromptTab === 'suno' && (
-                                    <span className="text-brand-accent">{correctedResult.musicGenerationPrompt.suno_prompt || correctedResult.musicGenerationPrompt.stability_prompt}</span>
-                                )}
-                                {activePromptTab === 'udio' && (
-                                    <span className="text-blue-300">{correctedResult.musicGenerationPrompt.udio_prompt || correctedResult.musicGenerationPrompt.stability_prompt}</span>
-                                )}
-                                {activePromptTab === 'stability' && (
-                                    <span className="text-purple-300">{correctedResult.musicGenerationPrompt.stability_prompt}</span>
-                                )}
-                            </div>
-
-                            <div>
-                                <h5 className="text-brand-text-secondary text-xs mb-1 font-bold">{t('results.concept_ita') || "Concept (Ita)"}:</h5>
-                                <p className="text-sm text-brand-text-secondary italic">"{correctedResult.musicGenerationPrompt.main_prompt_ita}"</p>
-                            </div>
-
-                            {/* PARAMETRI TECNICI E GIUSTIFICAZIONE */}
-                            <div className="grid grid-cols-2 gap-4 pt-2 border-t border-white/5">
-                                <div>
-                                    <h5 className="text-brand-text-secondary text-[10px] uppercase font-bold">{t('results.tech_specs') || "Specifiche Tecniche"}</h5>
-                                    <p className="text-xs text-white font-mono">{correctedResult.musicGenerationPrompt.technical_parameters}</p>
-                                </div>
-                                <div>
-                                    <h5 className="text-brand-text-secondary text-[10px] uppercase font-bold">{t('results.ai_reason') || "Ragionamento AI"}</h5>
-                                    <p className="text-xs text-brand-text-secondary leading-tight">{correctedResult.musicGenerationPrompt.justification}</p>
-                                </div>
-                            </div>
-
-                        </div>
-                    </InfoCard>
-                )}
-
-                <InfoCard
-                    title={isManualScan ? (t('results.scan_type') || "Tipo Scansione") : t('results.cultural_selection')}
-                    icon={isManualScan ? "fa-layer-group" : "fa-globe-americas"}
-                >
-                    {isManualScan ? (
-                        <>
-                            <DataRow label={t('results.chosen_pattern') || "Pattern Scelto"} value={<span className="text-brand-accent font-bold">{scanPatternName.replace("Manuale: ", "")}</span>} />
-                            <DataRow label={t('results.mode') || "Modalità"} value={t('results.manual') || "Manuale"} />
-                            <div className="my-2 border-t border-brand-secondary/50"></div>
-                            <p className="text-xs text-brand-text-secondary mb-1 font-bold">{t('results.musical_tradition') || "Tradizione Musicale"}:</p>
-                            <DataRow label={t('results.name') || "Nome"} value={culturalName} />
-                            <DataRow label={t('results.origin') || "Origine"} value={culturalFamily} />
-                        </>
-                    ) : (
-                        <>
-                            <DataRow label={t('results.tradition')} value={culturalName} />
-                            <DataRow label={t('results.family')} value={culturalFamily} />
-                            <DataRow label={t('results.scan_path')} value={scanPatternName} />
-                            <DataRow label={t('results.score')} value={culturalScore.toFixed(4)} />
-                        </>
-                    )}
-                </InfoCard>
-
-                <InfoCard title={t('results.analysis_synthesis')} icon="fa-cogs">
-                    <DataRow label={t('results.grid')} value={`${correctedResult.blockAnalysisResult?.gridSize || 32}x${correctedResult.blockAnalysisResult?.gridSize || 32}`} />
-                    <DataRow label={t('results.audio_events')} value={correctedResult.audioOutput?.eventsCount || 0} />
-                    <DataRow label={t('results.duration')} value={`${safeDuration.toFixed(2)}s`} />
-                    <DataRow label={t('results.audio_quality') || "Qualità Audio"} value="44.1kHz WAV" />
-                </InfoCard>
-
-                <InfoCard title={t('results.forensic_certificate')} icon="fa-fingerprint">
-                    <DataRow label={t('results.image_hash')} value={safeHash.substring(0, 16) + '...'} />
-                    <DataRow label={t('results.audio_hash')} value={(correctedResult.audioHash || "---").substring(0, 16) + '...'} />
-                    <DataRow label={t('results.framework_ver') || "Framework Ver."} value="1.0" />
-                </InfoCard>
-
-                <InfoCard title={t('results.performance')} icon="fa-bolt">
-                    <DataRow label={t('results.total_time')} value={`${correctedResult.performanceMetrics?.totalProcessingTime?.toFixed(0) || 0} ms`} />
-                </InfoCard>
-
-                <InfoCard title={t('results.download_artifacts')} icon="fa-download">
-                    <div className="flex flex-col gap-2 mt-2 relative">
-                        {!isPro && (
-                            <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] z-20 flex flex-col items-center justify-center rounded-lg text-center p-4 border border-brand-accent/20">
-                                <i className="fas fa-lock text-2xl text-brand-accent mb-2"></i>
-                                <button onClick={onRequestAccess} className="px-4 py-1.5 bg-brand-accent text-black text-xs font-bold rounded-full">{t('results.unlock') || "Sblocca"}</button>
-                            </div>
-                        )}
-                        <button disabled={!isPro} onClick={() => saveAs(correctedResult.audioOutput.audioWavBlob, 'generated_audio.wav')} className="w-full bg-brand-accent/20 text-brand-accent py-1 rounded hover:bg-brand-accent/30 disabled:opacity-50">
-                            <i className="fas fa-file-audio mr-2"></i> {t('results.download_wav')}
-                        </button>
-                        <button disabled={!isPro} onClick={() => saveAs(correctedResult.audioOutput.midiBlob, 'musical_notation.mid')} className="w-full bg-brand-accent/20 text-brand-accent py-1 rounded hover:bg-brand-accent/30 disabled:opacity-50">
-                            <i className="fas fa-music mr-2"></i> {t('results.download_midi')}
-                        </button>
-                        <button disabled={!isPro} onClick={handleVideoAction} className="w-full bg-purple-600/30 text-purple-300 py-1 rounded hover:bg-purple-600/50 border border-purple-500/30 relative">
-                            <i className="fas fa-video mr-2"></i> {generatedVideoBlob ? t('results.download_video') : t('results.generate_video')}
-                        </button>
-                        <button disabled={!isPro} onClick={handleDownloadSac} className="w-full bg-brand-accent font-bold text-brand-primary py-2 rounded hover:bg-brand-accent-light mt-2 shadow-lg disabled:opacity-50">
-                            <i className="fas fa-box mr-2"></i> {t('results.download_sac')}
-                        </button>
-                    </div>
-                </InfoCard>
             </div>
         </div>
     );
