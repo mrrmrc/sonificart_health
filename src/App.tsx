@@ -137,8 +137,14 @@ function AppContent() {
         videoBlob?: Blob
     ): SonificationResult => {
 
+        // 0. Parse Metadata if string
+        let meta = partialData.metadata || {};
+        if (typeof meta === 'string') {
+            try { meta = JSON.parse(meta); } catch (e) { console.error("Metadata parse error", e); meta = {}; }
+        }
+
         // 1. Recupero Configurazione
-        const loadedConfig = partialData.configUsed || partialData.metadata?.config_used || {};
+        const loadedConfig = partialData.configUsed || meta.config_used || {};
         const safeConfig: ConfigSettings = {
             ...initialSettings,
             ...loadedConfig,
@@ -172,7 +178,7 @@ function AppContent() {
 
         // 3. Recupero Pattern Scansione
         let scanName = partialData.scanPattern?.name
-            || partialData.metadata?.scan_pattern?.name
+            || meta.scan_pattern?.name
             || "Pattern Importato";
         if (typeof scanName === 'string') scanName = scanName.replace("Manuale: ", "");
 
@@ -235,7 +241,7 @@ function AppContent() {
 
         const duration = partialData.audioOutput?.duration
             || partialData.totalDuration
-            || partialData.metadata?.total_duration_seconds
+            || meta.total_duration_seconds
             || (sanitizedEvents.length * safeConfig.noteDurationSeconds)
             || 0;
 
@@ -250,8 +256,8 @@ function AppContent() {
             : fakeBlocks;
 
         return {
-            imageHash: partialData.imageHash || partialData.hash || partialData.metadata?.image_hash || "restored_entry",
-            audioHash: partialData.audioHash || partialData.metadata?.audio_hash || "---",
+            imageHash: partialData.imageHash || partialData.hash || meta.image_hash || "restored_entry",
+            audioHash: partialData.audioHash || meta.audio_hash || "---",
             paradigm: partialData.paradigm || "scientific",
             standardizedImageUrl: imgUrl,
             sacContainer: { blob: new Blob(), fileName: filename },
@@ -285,8 +291,11 @@ function AppContent() {
             performanceMetrics: { totalProcessingTime: 0 },
             validationHashes: { imageBlobHash: "", audioBlobHash: "", midiBlobHash: "" },
 
-            // Recupero prompt se presente
-            musicGenerationPrompt: partialData.musicGenerationPrompt
+            // Recupero prompt se presente (supporto camelCase e snake_case)
+            musicGenerationPrompt: partialData.musicGenerationPrompt || partialData.music_generation_prompt || meta.music_generation_prompt || null,
+
+            // Recupero eventuale traccia AI generata
+            generatedAiTrackUrl: partialData.generatedAiTrackUrl || partialData.generated_ai_track_url || null
         };
     };
 

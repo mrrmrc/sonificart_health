@@ -89,8 +89,8 @@ export const translations = {
     },
     landing: {
       badge: "Framework v1.0 Stable",
-      title_start: "I SUONI",
-      title_end: "DELLE IMMAGINI",
+      title_start: "Immagini",
+      title_end: "e suoni",
       subtitle: "Trasforma ogni pixel in frequenza. Il primo framework deterministico per la <strong>sonificazione scientifica</strong> e <strong>artistica</strong>.",
       cta_start: "INIZIA A CREARE",
       cta_explore: "ESPLORA VETRINA",

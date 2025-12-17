@@ -2,33 +2,30 @@
 // ==================================================================================
 // 0. CONFIGURAZIONE PRODUZIONE
 // ==================================================================================
-ini_set('display_errors', 1); // Errori nascosti per pulizia JSON
+ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 error_reporting(E_ALL);
 
-// Limiti aumentati per gestire file grandi
-@ini_set('memory_limit', '512M');
-@ini_set('post_max_size', '100M');
-@ini_set('upload_max_filesize', '100M');
+@ini_set('memory_limit', '1024M');
+@ini_set('post_max_size', '1024M');
+@ini_set('upload_max_filesize', '1024M');
 @ini_set('max_execution_time', 600);
 
 // ==================================================================================
-// 1. DATABASE & PERCORSI
+// 1. DATABASE
 // ==================================================================================
 $db_host = 'localhost';
 $db_name = 'diq0p57p_sonificart';
 $db_user = 'diq0p57p_sonifico';
 $db_pass = 'DROPAxin2026!';
-$db_charset = 'utf8mb4'; 
-
-// URL Base del sito per i link ai file media
+$db_charset = 'utf8mb4';
 $baseUrl = "https://" . $_SERVER['HTTP_HOST'];
 
 // ==================================================================================
-// 2. HEADER & CORS
+// 2. HEADERS
 // ==================================================================================
-header("Access-Control-Allow-Origin: *"); 
-// Header dinamici per gestire sia JSON che Multipart
+header("Access-Control-Allow-Origin: *");
+header("Content-Type: application/json; charset=UTF-8");
 header("Access-Control-Allow-Methods: GET,POST,PUT,DELETE,OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
 
@@ -38,17 +35,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
 }
 
 // ==================================================================================
-// 3. CONNESSIONE DATABASE
+// 3. CONNESSIONE DB
 // ==================================================================================
 try {
     $dsn = "mysql:host=$db_host;dbname=$db_name;charset=$db_charset";
-    $pdo = new PDO($dsn, $db_user, $db_pass, [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4"
-    ]);
+    $pdo = new PDO($dsn, $db_user, $db_pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4"]);
 } catch (PDOException $e) {
-    header("Content-Type: application/json");
     http_response_code(500);
     echo json_encode(["error" => "Database connection failed"]);
     exit();
@@ -60,29 +52,35 @@ try {
 $action = $_GET['action'] ?? '';
 $method = $_SERVER['REQUEST_METHOD'];
 
-// Leggiamo input JSON solo se non è un upload file (multipart)
+// Gestione Input
 $input = [];
-if ($action !== 'upload_media') {
+if (strpos($_SERVER['CONTENT_TYPE'] ?? '', 'multipart/form-data') === false) {
     $rawInput = file_get_contents('php://input');
     $input = json_decode($rawInput, true) ?? [];
 }
 
-function getUserIdFromToken($input) {
+function getUserIdFromToken($input)
+{
     $headers = getallheaders();
-    // Supporto per token in header o in post
     $token = $headers['Authorization'] ?? $headers['authorization'] ?? ($input['auth_token'] ?? ($_POST['auth_token'] ?? ''));
-    
-    if (strpos($token, 'Bearer ') === 0) $token = substr($token, 7);
-    if (strpos($token, 'user_') === 0) return str_replace('user_', '', $token);
-    
+    if (strpos($token, 'Bearer ') === 0)
+        $token = substr($token, 7);
+    if (strpos($token, 'user_') === 0)
+        return str_replace('user_', '', $token);
     return null;
 }
 
-// Funzione per salvare Base64 come file fisico (cartella media)
-function saveBase64File($base64Data, $type, $hash) {
-    if (!$base64Data) return null;
+function sendResponse($data, $code = 200)
+{
+    http_response_code($code);
+    echo json_encode($data);
+    exit();
+}
 
-    // Rileva estensione e rimuovi header
+function saveBase64File($base64Data, $type, $hash)
+{
+    if (!$base64Data)
+        return null;
     if (preg_match('/^data:(\w+)\/(\w+);base64,/', $base64Data, $typeInfo)) {
         $data = substr($base64Data, strpos($base64Data, ',') + 1);
         $ext = $typeInfo[2];
@@ -90,442 +88,396 @@ function saveBase64File($base64Data, $type, $hash) {
         $data = $base64Data;
         $ext = ($type === 'image') ? 'jpg' : 'wav';
     }
-
     $data = base64_decode($data);
-    if ($data === false) return null;
-
-    // Normalizza estensioni
-    if ($ext === 'jpeg') $ext = 'jpg';
-    if ($ext === 'x-wav') $ext = 'wav';
-    if ($ext === 'mpeg') $ext = 'mp3';
-
-    // Percorso relativo per salvare (risaliamo da /api/ a /media/)
+    if ($data === false)
+        return null;
+    if ($ext === 'jpeg')
+        $ext = 'jpg';
+    if ($ext === 'x-wav')
+        $ext = 'wav';
+    if ($ext === 'mpeg')
+        $ext = 'mp3';
+    if ($ext === 'quicktime')
+        $ext = 'mov';
     $folder = ($type === 'image') ? '../media/images/' : '../media/audio/';
+    if (strpos($hash, 'pub_') === 0)
+        $folder = '../media/custom/';
     $fileName = $hash . '.' . $ext;
-    $filePath = $folder . $fileName;
-
-    // Crea cartella se non esiste
-    if (!file_exists($folder)) {
-        @mkdir($folder, 0755, true);
-    }
-
-    if (file_put_contents($filePath, $data)) {
-        // Ritorna il percorso WEB
-        return "/media/" . ($type === 'image' ? 'images/' : 'audio/') . $fileName;
+    $serverPath = __DIR__ . '/' . $folder;
+    if (!file_exists($serverPath))
+        mkdir($serverPath, 0755, true);
+    if (file_put_contents($serverPath . $fileName, $data)) {
+        $webFolder = ($type === 'image') ? '/media/images/' : '/media/audio/';
+        if (strpos($hash, 'pub_') === 0)
+            $webFolder = '/media/custom/';
+        return $webFolder . $fileName;
     }
     return null;
 }
 
-function sendResponse($data, $code = 200) {
-    header("Content-Type: application/json; charset=UTF-8");
-    http_response_code($code);
-    echo json_encode($data);
-    exit();
+function generatePassword($length = 10)
+{
+    return substr(str_shuffle(str_repeat('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ', ceil($length / strlen('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')))), 1, $length);
+}
+
+function sendHtmlEmail($to, $subject, $title, $bodyContent)
+{
+    $headers = "MIME-Version: 1.0\r\nContent-type:text/html;charset=UTF-8\r\nFrom: SonificART <mail@sonificart.com>\r\n";
+    $template = "<!DOCTYPE html><html><head><style>body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;background-color:#f4f4f9;}.container{max-width:600px;margin:40px auto;background:#ffffff;border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,0.05);}.header{background:#0f172a;padding:30px;text-align:center;}.header img{width:180px;}.content{padding:40px 30px;color:#334155;line-height:1.6;}.h1{color:#8b5cf6;font-size:24px;margin-bottom:20px;font-weight:bold;}.info-box{background:#f8fafc;border-left:4px solid #2dd4bf;padding:15px;margin:20px 0;border-radius:4px;}.footer{background:#f1f5f9;padding:20px;text-align:center;font-size:12px;color:#94a3b8;}.btn{display:inline-block;background:#16a34a;color:#ffffff;text-decoration:none;padding:12px 25px;border-radius:50px;font-weight:bold;margin-top:20px;}</style></head><body><div class='container'><div class='header'><img src='https://sonificart.com/logo.png' alt='SonificART Logo'></div><div class='content'><div class='h1'>$title</div>$bodyContent</div><div class='footer'>&copy; " . date('Y') . " SonificA.R.T. Framework</div></div></body></html>";
+    @mail($to, $subject, $template, $headers);
 }
 
 // ==================================================================================
 // 5. ROTTE API
 // ==================================================================================
+// === NUOVA ROTTA PER UPLOAD A PEZZI (CHUNKED) ===
+if ($action === 'upload_chunk' && $method === 'POST') {
+    $tempDir = __DIR__ . '/../media/temp_chunks/';
+    if (!file_exists($tempDir))
+        mkdir($tempDir, 0777, true);
 
-// --- LOGIN (Tuo codice) ---
+    if (!isset($_FILES['fileChunk']) || !isset($_POST['uploadId']) || !isset($_POST['chunkIndex']) || !isset($_POST['totalChunks']) || !isset($_POST['originalFilename'])) {
+        sendResponse(['error' => 'Parametri chunk mancanti'], 400);
+    }
+
+    $chunk = $_FILES['fileChunk'];
+    $uploadId = basename($_POST['uploadId']); // Pulizia per sicurezza
+    $chunkIndex = (int) $_POST['chunkIndex'];
+    $totalChunks = (int) $_POST['totalChunks'];
+    $originalFilename = basename($_POST['originalFilename']); // Pulizia per sicurezza
+
+    // Salva il pezzetto
+    $chunkPath = $tempDir . $uploadId . '_chunk_' . $chunkIndex;
+    if (!move_uploaded_file($chunk['tmp_name'], $chunkPath)) {
+        sendResponse(['error' => 'Failed to save chunk'], 500);
+    }
+
+    // Se è l'ultimo pezzetto, assembla il file finale
+    if ($chunkIndex === $totalChunks - 1) {
+        $ext = strtolower(pathinfo($originalFilename, PATHINFO_EXTENSION));
+        $finalDir = __DIR__ . '/../media/custom/';
+        if (!file_exists($finalDir))
+            mkdir($finalDir, 0755, true);
+
+        $finalFilename = uniqid('pub_', true) . '.' . $ext;
+        $finalPath = $finalDir . $finalFilename;
+
+        $finalFile = fopen($finalPath, 'ab');
+        if (!$finalFile) {
+            sendResponse(['error' => 'Impossibile creare il file finale'], 500);
+        }
+
+        for ($i = 0; $i < $totalChunks; $i++) {
+            $chunkToRead = $tempDir . $uploadId . '_chunk_' . $i;
+            if (file_exists($chunkToRead)) {
+                $chunkContent = file_get_contents($chunkToRead);
+                fwrite($finalFile, $chunkContent);
+                unlink($chunkToRead); // Pulisci il pezzetto dopo averlo scritto
+            }
+        }
+        fclose($finalFile);
+
+        $fileType = in_array($ext, ['mp4', 'mov', 'avi', 'webm']) ? 'video' : 'audio';
+        sendResponse(["success" => true, "url" => "/media/custom/" . $finalFilename, "type" => $fileType]);
+
+    } else {
+        // Se non è l'ultimo pezzetto, rispondi solo con un 'OK'
+        sendResponse(['success' => true, 'message' => "Chunk {$chunkIndex} received."]);
+    }
+    exit();
+}
+
+// --- LOGIN ---
 if ($action === 'login' && $method === 'POST') {
     $email = $input['email'] ?? '';
     $password = $input['password'] ?? '';
-
     $stmt = $pdo->prepare("SELECT * FROM users WHERE email = ?");
     $stmt->execute([$email]);
     $user = $stmt->fetch();
-
     if ($user && $user['password'] === $password) {
         $pdo->prepare("UPDATE users SET created_at = NOW() WHERE id = ?")->execute([$user['id']]);
-        sendResponse([
-            "token" => "user_" . $user['id'],
-            "user" => [
-                "id" => (string)$user['id'],
-                "name" => $user['name'],
-                "email" => $user['email'],
-                "isPro" => (bool)$user['is_pro'],
-                "isAdmin" => (bool)$user['is_admin'],
-                "credits" => (int)$user['credits'],
-                "avatarUrl" => $user['avatar_url']
-            ]
-        ]);
+        sendResponse(["token" => "user_" . $user['id'], "user" => ["id" => (string) $user['id'], "name" => $user['name'], "email" => $user['email'], "isPro" => (bool) $user['is_pro'], "isAdmin" => (bool) $user['is_admin'], "credits" => (int) $user['credits'], "avatarUrl" => $user['avatar_url']]]);
     } else {
         sendResponse(["error" => "Credenziali non valide"], 401);
     }
 }
 
-// --- REGISTRAZIONE (CON TUA EMAIL HTML ORIGINALE) ---
+// --- REGISTRAZIONE ---
 if ($action === 'register' && $method === 'POST') {
     $name = $input['name'] ?? '';
     $email = $input['email'] ?? '';
     $password = $input['password'] ?? '';
-
     try {
-        // Controllo esistenza
         $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
         $stmt->execute([$email]);
-        if ($stmt->fetch()) {
-            sendResponse(["error" => "Email già registrata"], 400);
-        }
-
-        // Creazione
+        if ($stmt->fetch())
+            sendResponse(["error" => "Email esistente"], 400);
         $stmt = $pdo->prepare("INSERT INTO users (name, email, password, credits, avatar_url) VALUES (?, ?, ?, 5, ?)");
         $avatar = "https://api.dicebear.com/7.x/avataaars/svg?seed=" . urlencode($name);
         $stmt->execute([$name, $email, $password, $avatar]);
-        
         $id = $pdo->lastInsertId();
-        $token = "user_" . $id; 
 
-        // --- INVIO EMAIL ---
-        $headersEmail = "MIME-Version: 1.0" . "\r\n";
-        $headersEmail .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-        $headersEmail .= "From: SonificART <mail@sonificart.com>" . "\r\n";
-        $headersEmail .= "Reply-To: mail@sonificart.com" . "\r\n";
+        $msg = "<p>Grazie per la registrazione!</p><div class='info-box'><strong>Email:</strong> $email<br><strong>Password:</strong> $password</div>";
+        sendHtmlEmail($email, "Benvenuto in SonificART", "Registrazione Completata", $msg);
 
-        $subjectUser = "Benvenuto in SonificART / Welcome to SonificART";
-        $messageUser = "
-        <html>
-        <head><title>Welcome</title></head>
-        <body style='font-family: Arial, sans-serif; color: #333; background-color: #f4f4f4; padding: 20px;'>
-            <div style='background-color: #fff; padding: 30px; border-radius: 8px; max-width: 600px; margin: 0 auto; border: 1px solid #ddd; text-align: center;'>
-                <img src='https://sonificart.com/logo.png' alt='SonificART Logo' style='max-width: 150px; margin-bottom: 20px;'>
-                <h2 style='color: #8A2BE2;'>Benvenuto / Welcome, $name!</h2>
-                <p>Grazie per esserti unito a <strong>SonificART</strong>.</p>
-                <div style='background-color: #f9f9f9; padding: 15px; border-left: 4px solid #8A2BE2; text-align: left; margin: 20px auto; width: 80%;'>
-                    <p><strong>Email:</strong> $email</p>
-                    <p><strong>Password:</strong> $password</p>
-                </div>
-                <br>
-                <a href='https://sonificart.com' style='background-color: #8A2BE2; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;'>LOGIN NOW</a>
-            </div>
-        </body>
-        </html>
-        ";
-        // Usa @ per non bloccare se la mail fallisce
-        @mail($email, $subjectUser, $messageUser, $headersEmail);
-
-        // Notifica Admin
-        $subjectAdmin = "[SonificART] New User: $name";
-        $messageAdmin = "New registration.<br>Name: $name<br>Email: $email";
-        @mail("mail@sonificart.com", $subjectAdmin, $messageAdmin, $headersEmail);
-
-        sendResponse([
-            "token" => $token, 
-            "user" => [
-                "id" => (string)$id,
-                "name" => $name,
-                "email" => $email,
-                "isPro" => false,
-                "credits" => 5
-            ]
-        ]);
+        sendResponse(["token" => "user_" . $id, "user" => ["id" => (string) $id, "name" => $name, "email" => $email, "isPro" => false, "credits" => 5]]);
     } catch (Exception $e) {
-        sendResponse(["error" => "Errore registrazione: " . $e->getMessage()], 500);
+        sendResponse(["error" => $e->getMessage()], 500);
     }
 }
 
-// --- 2.1 RECUPERO PASSWORD ---
-if ($action === 'reset_password' && $method === 'POST') {
+// --- REQUEST ACCESS (RICHIESTA PRO - PENDING) ---
+if ($action === 'request_access' && $method === 'POST') {
+    $name = $input['name'] ?? 'Utente';
     $email = $input['email'] ?? '';
-    $stmt = $pdo->prepare("SELECT id, name, password FROM users WHERE email = ?");
-    $stmt->execute([$email]);
-    $user = $stmt->fetch();
+    $plan = $input['plan'] ?? 'Mensile';
+    $piva = $input['piva'] ?? '-';
+    $address = $input['address'] ?? '-';
+    $sdi = $input['sdi'] ?? '-';
+    $reason = $input['reason'] ?? '-';
 
-    if ($user) {
-        $headersEmail = "MIME-Version: 1.0" . "\r\n";
-        $headersEmail .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-        $headersEmail .= "From: SonificART <mail@sonificart.com>" . "\r\n";
-        
-        $message = "
-        <html>
-        <body style='font-family: sans-serif; text-align: center;'>
-            <img src='https://sonificart.com/logo.png' width='120'><br><br>
-            <h3>Ciao " . $user['name'] . ",</h3>
-            <p>La tua password è: <strong>" . $user['password'] . "</strong></p>
-        </body>
-        </html>";
-        
-        @mail($email, "Recupero Password", $message, $headersEmail);
-        sendResponse(["success" => true, "message" => "Email inviata"]);
+    if (!$email)
+        sendResponse(["error" => "Email mancante"], 400);
+
+    $stmt = $pdo->prepare("INSERT INTO registration_requests (name, email, plan, address, piva, sdi, reason) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    $stmt->execute([$name, $email, $plan, $address, $piva, $sdi, $reason]);
+
+    $msgUser = "<p>Grazie <strong>$name</strong>, abbiamo ricevuto la tua richiesta per il piano <strong>PRO ($plan)</strong>.</p><p>La tua richiesta è in attesa di approvazione per la fatturazione. Riceverai i dettagli di accesso e la fattura pro-forma appena approvata.</p>";
+    sendHtmlEmail($email, "Richiesta Accesso RICEVUTA", "Richiesta in Elaborazione", $msgUser);
+
+    $msgAdmin = "<p><strong>NUOVA RICHIESTA PRO:</strong></p><ul><li>Nome: $name</li><li>Email: $email</li><li>Piano: $plan</li><li>P.IVA: $piva</li></ul><p>Procedere all'approvazione.</p>";
+    sendHtmlEmail("mail@sonificart.com", "NUOVO LEAD: $name", "Nuova Richiesta Accesso", $msgAdmin);
+
+    sendResponse(["success" => true]);
+}
+
+// --- ADMIN APPROVAZIONE RICHIESTA ---
+if ($action === 'admin_approve_request' && $method === 'POST') {
+    $reqId = $input['id'];
+    $req = $pdo->query("SELECT * FROM registration_requests WHERE id=$reqId")->fetch();
+
+    if ($req) {
+        $password = generatePassword(10);
+        $avatar = "https://api.dicebear.com/7.x/avataaars/svg?seed=" . urlencode($req['name']);
+
+        $stmt = $pdo->prepare("INSERT INTO users (name, email, password, credits, avatar_url, is_pro, is_admin) VALUES (?, ?, ?, 9999, ?, 1, 0)");
+        $stmt->execute([$req['name'], $req['email'], $password, $avatar]);
+
+        $pdo->query("DELETE FROM registration_requests WHERE id=$reqId");
+
+        $msgApprove = "<p>La tua richiesta è stata <strong>APPROVATA</strong>!</p><div class='info-box'><strong>Email:</strong> {$req['email']}<br><strong>Password:</strong> $password</div><p>Il servizio è attivo. Riceverai la fattura separatamente.</p><a href='https://sonificart.com' class='btn'>ACCEDI ORA</a>";
+        sendHtmlEmail($req['email'], "Benvenuto in SonificART PRO", "Accesso PRO Attivato", $msgApprove);
+
+        sendResponse(["success" => true]);
     } else {
-        sendResponse(["success" => true, "message" => "Se la mail esiste, invieremo i dati."]);
+        sendResponse(["error" => "Richiesta non trovata"], 404);
     }
 }
 
-// ==================================================================================
-// MIDDLEWARE AUTHENTICATION
-// ==================================================================================
+// --- ADMIN RIFIUTO RICHIESTA ---
+if ($action === 'admin_reject_request' && $method === 'POST') {
+    $pdo->query("DELETE FROM registration_requests WHERE id={$input['id']}");
+    sendResponse(["success" => true]);
+}
+
+// --- ADMIN GET RICHIESTE ---
+if ($action === 'admin_get_requests' && $method === 'POST') {
+    $reqs = $pdo->query("SELECT id, name, email, plan, piva, created_at FROM registration_requests ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+    sendResponse($reqs);
+}
+
+// --- MIDDLEWARE AUTHENTICATION ---
 $userId = getUserIdFromToken($input);
 if (!$userId) {
-    if (!in_array($action, ['login', 'register', 'get_showcase', 'reset_password', 'upload_media'])) {
+    if (!in_array($action, ['login', 'register', 'get_showcase', 'reset_password', 'upload_media', 'request_access', 'admin_get_requests'])) {
         sendResponse(["error" => "Unauthorized"], 401);
     }
 }
 
-// --- NUOVO ENDPOINT: UPLOAD MEDIA (PER IL PULSANTE "PUBBLICA") ---
+// --- UPLOAD MEDIA ---
 if ($action === 'upload_media' && $method === 'POST') {
-    if (!isset($_FILES['file'])) sendResponse(["error" => "Nessun file ricevuto"], 400);
+    if (!isset($_FILES['file']))
+        sendResponse(["error" => "Nessun file ricevuto"], 400);
 
     $file = $_FILES['file'];
     $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-    $allowed = ['mp4', 'mp3', 'wav', 'jpg', 'png', 'mov'];
+    $targetDir = __DIR__ . '/../media/custom/';
+    if (!file_exists($targetDir))
+        mkdir($targetDir, 0755, true);
 
-    if (!in_array($ext, $allowed)) sendResponse(["error" => "Formato non supportato"], 400);
+    $newFileName = uniqid('pub_', true) . '.' . $ext;
 
-    $targetDir = '../media/custom/';
-    if (!file_exists($targetDir)) @mkdir($targetDir, 0755, true);
-
-    $newFileName = uniqid('upload_', true) . '.' . $ext;
-    
     if (move_uploaded_file($file['tmp_name'], $targetDir . $newFileName)) {
-        sendResponse([
-            "success" => true, 
-            "url" => "/media/custom/" . $newFileName,
-            "type" => in_array($ext, ['mp4', 'mov']) ? 'video' : 'audio'
-        ]);
+        sendResponse(["success" => true, "url" => "/media/custom/" . $newFileName, "type" => in_array($ext, ['mp4', 'mov', 'avi']) ? 'video' : 'audio']);
     } else {
         sendResponse(["error" => "Errore scrittura file su disco"], 500);
     }
 }
 
-// --- 6. HISTORY (AGGIORNATO PER SALVATAGGIO FILESYSTEM) ---
+// --- SAVE SONIFICATION ---
 if ($action === 'save_sonification' && $method === 'POST') {
     try {
         $hash = $input['imageHash'] ?? 'hash_' . time();
-        $paradigm = $input['paradigm'] ?? 'scientific';
-        $tradition = $input['traditionName'] ?? 'Unknown';
-        
-        // Salva file fisici
+
+        // Handling JSON fields
+        $musicPrompt = isset($input['musicGenerationPrompt']) ? json_encode($input['musicGenerationPrompt']) : null;
+        $generatedAiTrackUrl = $input['generatedAiTrackUrl'] ?? null;
+
         $imgUrl = saveBase64File($input['imageUrl'] ?? '', 'image', $hash);
         $audioUrl = saveBase64File($input['audioData'] ?? '', 'audio', $hash);
-        
-        if (!$imgUrl) $imgUrl = "placeholder.png"; // Fallback
+        if (!$imgUrl)
+            $imgUrl = "placeholder.png";
 
-        // Scrivi nel DB
-        $stmt = $pdo->prepare("INSERT INTO history (user_id, image_hash, paradigm, tradition_name, image_url, audio_url) VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$userId, $hash, $paradigm, $tradition, $imgUrl, $audioUrl]);
+        $stmt = $pdo->prepare("INSERT INTO history (user_id, image_hash, paradigm, tradition_name, image_url, audio_url, music_generation_prompt, generated_ai_track_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$userId, $hash, $input['paradigm'], $input['traditionName'], $imgUrl, $audioUrl, $musicPrompt, $generatedAiTrackUrl]);
 
-        sendResponse(["success" => true, "message" => "Files saved"]);
-
+        sendResponse(["success" => true]);
     } catch (Exception $e) {
-        http_response_code(400); 
-        echo json_encode(["success" => false, "error" => "Errore DB: " . $e->getMessage()]);
-        exit();
+        sendResponse(["error" => $e->getMessage()], 500);
     }
 }
 
-// --- GET HISTORY (AGGIORNATO PER URL MEDIA) ---
-if ($action === 'get_history' && $method === 'POST') {
+// --- DELETE HISTORY ITEM (CANCELLAZIONE A CASCATA INTEGRATA) ---
+// Ho mantenuto il metodo POST originale per compatibilità con il tuo frontend.
+// Ho aggiunto SOLO la query per cancellare dalla showcase.
+if ($action === 'delete_history_item' && $method === 'POST') {
+    $entryId = $input['id'] ?? '';
+
+    // Recupero dati
+    $stmt = $pdo->prepare("SELECT image_url, audio_url FROM history WHERE id = ? AND user_id = ?");
+    $stmt->execute([$entryId, $userId]);
+    $item = $stmt->fetch();
+
+    if ($item) {
+        // Pulizia file fisici
+        if (!empty($item['image_url']) && strpos($item['image_url'], '/media') !== false)
+            @unlink(__DIR__ . '/../' . $item['image_url']);
+        if (!empty($item['audio_url']) && strpos($item['audio_url'], '/media') !== false)
+            @unlink(__DIR__ . '/../' . $item['audio_url']);
+
+        // Cancellazione da History (Privato)
+        $stmt = $pdo->prepare("DELETE FROM history WHERE id = ?");
+        $stmt->execute([$entryId]);
+
+        // --- AGGIUNTA: CANCELLAZIONE A CASCATA SU GALLERIA (Pubblico) ---
+        // Se esiste un'opera pubblica di questo utente con la stessa immagine, viene cancellata
+        if (!empty($item['image_url'])) {
+            $pdo->prepare("DELETE FROM showcase WHERE owner_id = ? AND image_url = ?")
+                ->execute([$userId, $item['image_url']]);
+        }
+        // ---------------------------------------------------------------
+
+        sendResponse(["success" => true]);
+    } else {
+        sendResponse(["error" => "Not found"], 404);
+    }
+}
+
+// --- PUBLISH HISTORY ---
+if ($action === 'publish_history' && $method === 'POST') {
     try {
-        $stmt = $pdo->prepare("SELECT * FROM history WHERE user_id = ? ORDER BY timestamp DESC");
-        $stmt->execute([$userId]);
-        $history = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        $mapped = array_map(function($h) use ($baseUrl) {
-            return [
-                "id" => $h['image_hash'],
-                "timestamp" => $h['timestamp'],
-                // Gestione percorsi assoluti per file media
-                "imageUrl" => (strpos($h['image_url'], '/media') !== false) ? $baseUrl . $h['image_url'] : $h['image_url'],
-                "audioUrl" => $h['audio_url'] ? ((strpos($h['audio_url'], '/media') !== false) ? $baseUrl . $h['audio_url'] : $h['audio_url']) : null,
-                "paradigm" => $h['paradigm'],
-                "traditionName" => $h['tradition_name']
-            ];
-        }, $history);
-        sendResponse($mapped);
-    } catch (Exception $e) {
-        sendResponse([], 500);
+        $entryId = $input['entryId'];
+        $entry = $pdo->prepare("SELECT * FROM history WHERE id = ? OR image_hash = ?");
+        $entry->execute([$entryId, $entryId]);
+        $e = $entry->fetch();
+
+        if ($e) {
+            $author = $pdo->query("SELECT name FROM users WHERE id = $userId")->fetchColumn();
+            $tags = implode(',', $input['metadata']['tags']);
+            $priority = (int) ($input['metadata']['priority'] ?? 0);
+
+            $customMediaUrl = $input['customMediaUrl'] ?? null;
+            $customMediaType = $input['customMediaType'] ?? null;
+
+            $finalAudio = ($customMediaType === 'audio') ? $customMediaUrl : ($e['audio_url'] ?? null);
+            $finalVideo = ($customMediaType === 'video') ? $customMediaUrl : null;
+
+            $stmt = $pdo->prepare("INSERT INTO showcase (title, author_name, description, image_url, audio_url, video_url, paradigm, tradition, tags, duration, notes_count, created_at, owner_id, is_public, priority) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '3m', 1024, NOW(), ?, 1, ?)");
+            $stmt->execute([$input['metadata']['title'], $author, $input['metadata']['description'], $e['image_url'], $finalAudio, $finalVideo, $e['paradigm'], $e['tradition_name'], $tags, $userId, $priority]);
+            sendResponse(["success" => true]);
+        } else
+            sendResponse(["error" => "Not found"], 404);
+    } catch (Exception $ex) {
+        sendResponse(["error" => $ex->getMessage()], 500);
     }
 }
 
-// --- ALTRI ENDPOINTS (INVARIATI) ---
+// --- GET HISTORY ---
+if ($action === 'get_history' && $method === 'POST') {
+    $stmt = $pdo->prepare("SELECT * FROM history WHERE user_id = ? ORDER BY timestamp DESC");
+    $stmt->execute([$userId]);
+    $history = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $mapped = array_map(function ($h) use ($baseUrl) {
+        return [
+            "id" => (string) $h['id'],
+            "imageHash" => $h['image_hash'],
+            "timestamp" => $h['timestamp'],
+            "imageUrl" => (strpos($h['image_url'], '/media') !== false) ? $baseUrl . $h['image_url'] : $h['image_url'],
+            "audioUrl" => $h['audio_url'] ? ((strpos($h['audio_url'], '/media') !== false) ? $baseUrl . $h['audio_url'] : $h['audio_url']) : null,
+            "paradigm" => $h['paradigm'],
+            "traditionName" => $h['tradition_name'],
+            "musicGenerationPrompt" => isset($h['music_generation_prompt']) ? json_decode($h['music_generation_prompt'], true) : null,
+            "generatedAiTrackUrl" => $h['generated_ai_track_url'] ?? null
+        ];
+    }, $history);
+    sendResponse($mapped);
+}
+
+// --- GET SHOWCASE ---
+if ($action === 'get_showcase' && $method === 'GET') {
+    $stmt = $pdo->query("SELECT * FROM showcase WHERE is_public = 1 ORDER BY priority DESC, created_at DESC");
+    $projects = $stmt->fetchAll();
+    $mapped = array_map(function ($p) use ($baseUrl) {
+        $audio = $p['audio_url'] ? ((strpos($p['audio_url'], '/') === 0) ? $baseUrl . $p['audio_url'] : $p['audio_url']) : null;
+        $video = $p['video_url'] ? ((strpos($p['video_url'], '/') === 0) ? $baseUrl . $p['video_url'] : $p['video_url']) : null;
+        $img = (strpos($p['image_url'], '/') === 0) ? $baseUrl . $p['image_url'] : $p['image_url'];
+        return ["id" => (string) $p['id'], "title" => $p['title'], "date" => $p['created_at'], "author" => $p['author_name'], "ownerId" => $p['owner_id'], "description" => $p['description'], "imageUrl" => $img, "audioUrl" => $audio, "videoUrl" => $video, "paradigm" => $p['paradigm'], "tradition" => $p['tradition'], "tags" => $p['tags'] ? explode(',', $p['tags']) : [], "stats" => ["duration" => $p['duration'], "notes" => (int) $p['notes_count']], "priority" => (int) $p['priority']];
+    }, $projects);
+    sendResponse($mapped);
+}
+
+// --- ALTRI ENDPOINT ---
 
 if ($action === 'check_session') {
     $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
     $stmt->execute([$userId]);
-    $user = $stmt->fetch();
-    if ($user) {
-        sendResponse(["user" => [
-            "id" => (string)$user['id'], "name" => $user['name'], "email" => $user['email'],
-            "isPro" => (bool)$user['is_pro'], "isAdmin" => (bool)$user['is_admin'],
-            "credits" => (int)$user['credits'], "avatarUrl" => $user['avatar_url']
-        ]]);
-    } else { sendResponse(["error" => "User not found"], 401); }
-}
-
-if ($action === 'consume_credits' && $method === 'POST') {
-    $cost = $input['cost'] ?? 1;
-    $stmt = $pdo->prepare("SELECT credits, is_pro, is_admin FROM users WHERE id = ?");
-    $stmt->execute([$userId]); 
     $u = $stmt->fetch();
-
-    if ($u['is_pro'] || $u['is_admin']) {
-        sendResponse(["success" => true, "credits" => 9999]);
-    } elseif ($u['credits'] >= $cost) {
-        $pdo->prepare("UPDATE users SET credits = credits - ? WHERE id = ?")->execute([$cost, $userId]);
-        sendResponse(["success" => true, "credits" => $u['credits'] - $cost]);
-    } else {
-        sendResponse(["error" => "NO_CREDITS"], 403);
-    }
+    if ($u)
+        sendResponse(["user" => ["id" => (string) $u['id'], "name" => $u['name'], "email" => $u['email'], "isPro" => (bool) $u['is_pro'], "isAdmin" => (bool) $u['is_admin'], "credits" => (int) $u['credits'], "avatarUrl" => $u['avatar_url']]]);
+    else
+        sendResponse(["error" => "User not found"], 401);
 }
 
+if ($action === 'consume_credits') {
+    sendResponse(["success" => true, "credits" => 9999]);
+}
 if ($action === 'clear_history') {
-    // Pulizia file fisici
-    $stmt = $pdo->prepare("SELECT image_url, audio_url FROM history WHERE user_id = ?");
-    $stmt->execute([$userId]);
-    $files = $stmt->fetchAll();
-    foreach ($files as $f) {
-        if (strpos($f['image_url'], '/media') !== false) @unlink('..' . $f['image_url']);
-        if ($f['audio_url'] && strpos($f['audio_url'], '/media') !== false) @unlink('..' . $f['audio_url']);
-    }
     $pdo->prepare("DELETE FROM history WHERE user_id = ?")->execute([$userId]);
     sendResponse(["success" => true]);
 }
 
-// --- PUBLISH ---
-// --- PUBLISH HISTORY (AGGIORNATO CON UPDATE E MEDIA CUSTOM) ---
-// --- PUBLISH ---
-// --- PUBLISH (CON GESTIONE MEDIA CUSTOM) ---
-if ($action === 'publish_history' && $method === 'POST') {
-    try {
-        // Recupera dati originali dalla history
-        $entry = $pdo->prepare("SELECT * FROM history WHERE image_hash = ? AND user_id = ?");
-        $entry->execute([$input['entryId'], $userId]);
-        $e = $entry->fetch();
-        
-        if ($e) {
-            $author = $pdo->prepare("SELECT name FROM users WHERE id = ?"); 
-            $author->execute([$userId]);
-            $authorName = $author->fetch()['name'];
-            
-            $tags = is_array($input['metadata']['tags']) ? implode(',', $input['metadata']['tags']) : $input['metadata']['tags'];
-            
-            // --- NUOVA LOGICA MEDIA CUSTOM ---
-            $customMediaUrl = null;
-            $customMediaType = null;
-
-            // Se il frontend invia un file custom in base64
-            if (!empty($input['customMediaData'])) {
-                $type = strpos($input['customMediaData'], 'video') !== false ? 'video' : 'audio';
-                // Salviamo il file usando la funzione saveBase64File (che deve essere presente nel tuo file)
-                $customMediaUrl = saveBase64File($input['customMediaData'], $type, 'pub_' . time() . '_' . $e['image_hash']);
-                $customMediaType = $type;
-            }
-            
-            // Decide quali URL usare nella vetrina
-            // Se c'è un audio custom, usa quello, altrimenti usa l'audio originale della history
-            $finalAudio = ($customMediaType === 'audio') ? $customMediaUrl : ($e['audio_url'] ?? null);
-            // Se c'è un video custom, usa quello
-            $finalVideo = ($customMediaType === 'video') ? $customMediaUrl : null;
-
-            $stmt = $pdo->prepare("INSERT INTO showcase (title, author_name, description, image_url, audio_url, video_url, paradigm, tradition, tags, duration, notes_count, created_at, owner_id, is_public) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, 1)");
-            
-            $stmt->execute([
-                $input['metadata']['title'], 
-                $authorName, 
-                $input['metadata']['description'], 
-                $e['image_url'], 
-                $finalAudio, 
-                $finalVideo, 
-                $e['paradigm'], 
-                $e['tradition_name'], 
-                $tags, 
-                "3m", // Durata placeholder, o passala dal frontend se la hai
-                1024, 
-                $userId
-            ]);
-            
-            sendResponse(["success" => true]);
-        } else {
-            sendResponse(["error" => "Opera originale non trovata"], 404);
-        }
-    } catch (Exception $ex) { 
-        sendResponse(["error" => $ex->getMessage()], 500); 
-    }
-}
-
-// --- 3. VETRINA (SHOWCASE) ---
-// --- VETRINA (SHOWCASE) ---
-// --- 3. VETRINA (SHOWCASE) ---
-if ($action === 'get_showcase' && $method === 'GET') {
-    try {
-        $stmt = $pdo->query("SELECT * FROM showcase WHERE is_public = 1 ORDER BY created_at DESC");
-        $projects = $stmt->fetchAll();
-        $mapped = array_map(function($p) use ($baseUrl) {
-            // Percorsi assoluti per i media
-            $img = (strpos($p['image_url'], '/media') === 0) ? $baseUrl . $p['image_url'] : $p['image_url'];
-            $audio = $p['audio_url'] ? ((strpos($p['audio_url'], '/media') !== false) ? $baseUrl . $p['audio_url'] : $p['audio_url']) : null;
-            $video = $p['video_url'] ? ((strpos($p['video_url'], '/media') !== false) ? $baseUrl . $p['video_url'] : $p['video_url']) : null;
-
-            return [
-                "id" => (string)$p['id'], "title" => $p['title'], "date" => $p['created_at'], "author" => $p['author_name'],
-                "description" => $p['description'], "imageUrl" => $img, "audioUrl" => $audio, "videoUrl" => $video,
-                "paradigm" => $p['paradigm'], "tradition" => $p['tradition'], "tags" => $p['tags'] ? explode(',', $p['tags']) : [],
-                "stats" => ["duration" => $p['duration'], "notes" => (int)$p['notes_count']], "isPublic" => (bool)$p['is_public'],
-                "ownerId" => $p['owner_id'] // Aggiunto ownerId
-            ];
-        }, $projects);
-        sendResponse($mapped);
-    } catch (Exception $e) { sendResponse(["error" => $e->getMessage()], 500); }
-}
-
-// --- 8. AMMINISTRAZIONE ---
+// --- SEZIONE ADMIN ---
 if ($userId) {
     $stmt = $pdo->prepare("SELECT is_admin FROM users WHERE id = ?");
     $stmt->execute([$userId]);
     if ($stmt->fetchColumn()) {
-        
+        if ($action === 'get_stats')
+            sendResponse(["totalUsers" => (int) $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn(), "totalSonifications" => (int) $pdo->query("SELECT COUNT(*) FROM history")->fetchColumn(), "serverHealth" => ["cpu" => 10, "memory" => 40, "uptime" => "99.9%"], "apiStatus" => ["gemini" => ["used" => 0, "limit" => 10000], "storage" => ["used" => 0, "limit" => 100]]]);
         if ($action === 'get_users') {
-            $users = $pdo->query("SELECT id, name, email, is_pro, is_admin, credits, avatar_url, created_at as registeredAt, created_at as lastLogin FROM users ORDER BY created_at DESC")->fetchAll();
+            $users = $pdo->query("SELECT id, name, email, is_pro, is_admin, credits, avatar_url, created_at FROM users ORDER BY created_at DESC")->fetchAll();
             foreach ($users as &$u) {
-                $u['is_pro'] = (bool)$u['is_pro'];
-                $u['is_admin'] = (bool)$u['is_admin'];
-                $u['credits'] = (int)$u['credits'];
+                $u['is_pro'] = (bool) $u['is_pro'];
+                $u['is_admin'] = (bool) $u['is_admin'];
             }
             sendResponse($users);
         }
-
-        // ... (Altre funzioni admin mantenute identiche, omesse solo per brevità ma presenti nel file originale)
-        if ($action === 'get_stats') {
-             sendResponse([
-                "totalUsers" => (int)$pdo->query("SELECT COUNT(*) FROM users")->fetchColumn(),
-                "totalSonifications" => (int)$pdo->query("SELECT COUNT(*) FROM history")->fetchColumn(),
-                "serverHealth" => ["cpu" => 12, "memory" => 45, "uptime" => "99.9%"],
-                "apiStatus" => ["gemini" => ["used" => 0, "limit" => 10000], "storage" => ["used" => 0, "limit" => 100]]
-             ]);
+        if ($action === 'admin_delete_showcase') {
+            $pdo->prepare("DELETE FROM showcase WHERE id = ?")->execute([$input['id']]);
+            sendResponse(["success" => true]);
         }
     }
 }
 
-if (!$action) sendResponse(["message" => "SonificART API Ready"]);
-// --- DELETE HISTORY ITEM (CANCELLAZIONE SINGOLA) ---
-if ($action === 'delete_history_item' && $method === 'POST') {
-    $entryId = $input['id'] ?? '';
-    
-    // Prima recuperiamo i percorsi dei file per cancellarli dal disco
-    $stmt = $pdo->prepare("SELECT image_url, audio_url FROM history WHERE id = ? AND user_id = ?");
-    $stmt->execute([$entryId, $userId]);
-    $item = $stmt->fetch();
-    
-    if ($item) {
-        // Cancella immagine fisica se esiste
-        if (!empty($item['image_url']) && strpos($item['image_url'], '/media') !== false) {
-            $filePath = __DIR__ . '/../' . $item['image_url']; // Risale dalla cartella api alla root
-            if (file_exists($filePath)) @unlink($filePath);
-        }
-        // Cancella audio fisico se esiste
-        if (!empty($item['audio_url']) && strpos($item['audio_url'], '/media') !== false) {
-            $filePath = __DIR__ . '/../' . $item['audio_url'];
-            if (file_exists($filePath)) @unlink($filePath);
-        }
-        
-        // Cancella dal DB
-        $stmt = $pdo->prepare("DELETE FROM history WHERE id = ?");
-        $stmt->execute([$entryId]);
-        sendResponse(["success" => true]);
-    } else {
-        sendResponse(["error" => "Elemento non trovato o non tuo"], 404);
-    }
-}
+if (!$action)
+    sendResponse(["message" => "API Ready"]);
 ?>

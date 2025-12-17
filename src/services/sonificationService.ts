@@ -54,57 +54,58 @@ function getManualScanPatternDetails(pattern: ScanPattern): { pattern: ScanPatte
 }
 
 
-function generateScanSequence(gridSize: number, pattern: ScanPattern): number[] {
+// Update signature to take width/height
+function generateScanSequence(gridWidth: number, gridHeight: number, pattern: ScanPattern): number[] {
     const sequence: number[] = [];
-    const totalBlocks = gridSize * gridSize;
+    const totalBlocks = gridWidth * gridHeight;
     switch (pattern) {
         case ScanPattern.INWARD_BOX_CLOCKWISE: {
-            let top = 0, bottom = gridSize - 1, left = 0, right = gridSize - 1;
+            let top = 0, bottom = gridHeight - 1, left = 0, right = gridWidth - 1;
             while (top <= bottom && left <= right) {
-                for (let i = left; i <= right; i++) sequence.push(top * gridSize + i); top++;
-                for (let i = top; i <= bottom; i++) sequence.push(i * gridSize + right); right--;
-                if (top <= bottom) { for (let i = right; i >= left; i--) sequence.push(bottom * gridSize + i); bottom--; }
-                if (left <= right) { for (let i = bottom; i >= top; i--) sequence.push(i * gridSize + left); left++; }
+                for (let i = left; i <= right; i++) sequence.push(top * gridWidth + i); top++;
+                for (let i = top; i <= bottom; i++) sequence.push(i * gridWidth + right); right--;
+                if (top <= bottom) { for (let i = right; i >= left; i--) sequence.push(bottom * gridWidth + i); bottom--; }
+                if (left <= right) { for (let i = bottom; i >= top; i--) sequence.push(i * gridWidth + left); left++; }
             }
             break;
         }
         case ScanPattern.INWARD_BOX_COUNTER_CLOCKWISE: {
-            let top = 0, bottom = gridSize - 1, left = 0, right = gridSize - 1;
+            let top = 0, bottom = gridHeight - 1, left = 0, right = gridWidth - 1;
             while (top <= bottom && left <= right) {
-                for (let i = top; i <= bottom; i++) sequence.push(i * gridSize + left); left++;
+                for (let i = top; i <= bottom; i++) sequence.push(i * gridWidth + left); left++;
                 if (left > right) break;
-                for (let i = left; i <= right; i++) sequence.push(bottom * gridSize + i); bottom--;
+                for (let i = left; i <= right; i++) sequence.push(bottom * gridWidth + i); bottom--;
                 if (top > bottom) break;
-                for (let i = bottom; i >= top; i--) sequence.push(i * gridSize + right); right--;
+                for (let i = bottom; i >= top; i--) sequence.push(i * gridWidth + right); right--;
                 if (left > right) break;
-                for (let i = right; i >= left; i--) sequence.push(top * gridSize + i); top++;
+                for (let i = right; i >= left; i--) sequence.push(top * gridWidth + i); top++;
             }
             break;
         }
         case ScanPattern.BOUSTROPHEDON_LTR:
-            for (let y = 0; y < gridSize; y++) {
+            for (let y = 0; y < gridHeight; y++) {
                 if (y % 2 === 0) { // Left to Right
-                    for (let x = 0; x < gridSize; x++) sequence.push(y * gridSize + x);
+                    for (let x = 0; x < gridWidth; x++) sequence.push(y * gridWidth + x);
                 } else { // Right to Left
-                    for (let x = gridSize - 1; x >= 0; x--) sequence.push(y * gridSize + x);
+                    for (let x = gridWidth - 1; x >= 0; x--) sequence.push(y * gridWidth + x);
                 }
             }
             break;
         case ScanPattern.BOUSTROPHEDON_RTL:
-            for (let y = 0; y < gridSize; y++) {
+            for (let y = 0; y < gridHeight; y++) {
                 if (y % 2 === 0) { // Right to Left
-                    for (let x = gridSize - 1; x >= 0; x--) sequence.push(y * gridSize + x);
+                    for (let x = gridWidth - 1; x >= 0; x--) sequence.push(y * gridWidth + x);
                 } else { // Left to Right
-                    for (let x = 0; x < gridSize; x++) sequence.push(y * gridSize + x);
+                    for (let x = 0; x < gridWidth; x++) sequence.push(y * gridWidth + x);
                 }
             }
             break;
         case ScanPattern.SCANLINES_VERTICAL:
-            for (let x = 0; x < gridSize; x++) {
+            for (let x = 0; x < gridWidth; x++) {
                 if (x % 2 === 0) { // Down
-                    for (let y = 0; y < gridSize; y++) sequence.push(y * gridSize + x);
+                    for (let y = 0; y < gridHeight; y++) sequence.push(y * gridWidth + x);
                 } else { // Up
-                    for (let y = gridSize - 1; y >= 0; y--) sequence.push(y * gridSize + x);
+                    for (let y = gridHeight - 1; y >= 0; y--) sequence.push(y * gridWidth + x);
                 }
             }
             break;
@@ -156,23 +157,52 @@ async function canvasToBlob(canvas: OffscreenCanvas | HTMLCanvasElement, type: s
     });
 }
 
+
 async function standardizeImage(file: File): Promise<{ canvas: OffscreenCanvas | HTMLCanvasElement, imageData: ImageData, imageBounds: { x: number, y: number, width: number, height: number } }> {
     const imageBitmap = await createImageBitmap(file);
-    const { canvas, ctx } = createCanvas(512);
-    const aspectRatio = imageBitmap.width / imageBitmap.height;
-    let dw = 512, dh = 512;
-    if (aspectRatio > 1) dh = 512 / aspectRatio; else dw = 512 * aspectRatio;
-    const dx = (512 - dw) / 2, dy = (512 - dh) / 2;
-    ctx.drawImage(imageBitmap, dx, dy, dw, dh);
-    const imageData = ctx.getImageData(0, 0, 512, 512);
-    return { canvas, imageData, imageBounds: { x: dx, y: dy, width: dw, height: dh } };
+
+    // Standard Framework v1.0: 512x512 Fixed Canvas
+    const canvasSize = 512;
+    const { canvas, ctx } = createCanvas(canvasSize);
+    canvas.width = canvasSize;
+    canvas.height = canvasSize;
+
+    // Fill with black (Section 4.2.1: implies normalization, often implies filling void)
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, canvasSize, canvasSize);
+
+    const aspect = imageBitmap.width / imageBitmap.height;
+    let drawWidth = canvasSize;
+    let drawHeight = canvasSize;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    if (aspect > 1) {
+        // Landscape
+        drawHeight = Math.round(canvasSize / aspect);
+        offsetY = Math.round((canvasSize - drawHeight) / 2);
+    } else {
+        // Portrait
+        drawWidth = Math.round(canvasSize * aspect);
+        offsetX = Math.round((canvasSize - drawWidth) / 2);
+    }
+
+    ctx.drawImage(imageBitmap, offsetX, offsetY, drawWidth, drawHeight);
+    const imageData = ctx.getImageData(0, 0, canvasSize, canvasSize);
+
+    // Return bounds of the actual image content for filler detection
+    return {
+        canvas,
+        imageData,
+        imageBounds: { x: offsetX, y: offsetY, width: drawWidth, height: drawHeight }
+    };
 }
 
 // --- Worker-based block analysis ---
 function analyzeBlocks(imageData: ImageData, pixelCount: number, imageBounds: { x: number, y: number, width: number, height: number }): Promise<BlockAnalysisResult> {
     return new Promise((resolve, reject) => {
         const fullWorkerCode = `
-            // --- Color utility functions ---
+            // --- Color utility functions (SAME AS BEFORE) ---
             function rgbToHsv(r, g, b) {
                 r /= 255; g /= 255; b /= 255;
                 const max = Math.max(r, g, b), min = Math.min(r, g, b);
@@ -205,36 +235,56 @@ function analyzeBlocks(imageData: ImageData, pixelCount: number, imageBounds: { 
                 return { l: (116 * y) - 16, a: 500 * (x - y), b: 200 * (y - z) };
             }
         
-            function performBlockAnalysis(imageData, pixelCount, imageBounds) {
-                const gridSize = Math.sqrt(pixelCount);
-                const blockWidth = 512 / gridSize, blockHeight = 512 / gridSize;
+            function performBlockAnalysis(imageData, targetTotalBlocks, imageBounds) {
+                const imgWidth = imageData.width; // Should be 512
+                const imgHeight = imageData.height; // Should be 512
+                
+                // Framework v1.0 standard: 32x32 grid
+                const gridSize = Math.round(Math.sqrt(targetTotalBlocks)); // Should be 32 if target is 1024
+                const blockWidth = imgWidth / gridSize; // 16
+                const blockHeight = imgHeight / gridSize; // 16
+
+                // Grid Dimensions Fixed 32x32 for Compliance
+                const gridW = gridSize;
+                const gridH = gridSize;
+
                 const blocks = [];
                 let totalL = 0, totalA = 0, totalB = 0, totalS = 0, totalVariance = 0, contentBlockCount = 0;
                 const hueCounts = {};
 
-                for (let gridY = 0; gridY < gridSize; gridY++) {
-                    for (let gridX = 0; gridX < gridSize; gridX++) {
+                for (let gridY = 0; gridY < gridH; gridY++) {
+                    for (let gridX = 0; gridX < gridW; gridX++) {
                         let r = 0, g = 0, b = 0, count = 0;
                         let sumL = 0, sumL2 = 0;
                         const startX = Math.floor(gridX * blockWidth);
                         const startY = Math.floor(gridY * blockHeight);
-                        const blockCenterX = startX + blockWidth / 2;
-                        const blockCenterY = startY + blockHeight / 2;
-                        const isFiller = blockCenterX < imageBounds.x || blockCenterX > imageBounds.x + imageBounds.width ||
-                                         blockCenterY < imageBounds.y || blockCenterY > imageBounds.y + imageBounds.height;
+                        const endX = Math.min(Math.floor((gridX + 1) * blockWidth), imgWidth);
+                        const endY = Math.min(Math.floor((gridY + 1) * blockHeight), imgHeight);
 
-                        if (!isFiller) {
-                             for (let y = startY; y < startY + blockHeight; y++) {
-                                for (let x = startX; x < startX + blockWidth; x++) {
-                                    const i = (y * 512 + x) * 4;
-                                    const R = imageData.data[i], G = imageData.data[i+1], B = imageData.data[i+2];
-                                    r += R; g += G; b += B;
-                                    const l = 0.2126 * R + 0.7152 * G + 0.0722 * B;
-                                    sumL += l;
-                                    sumL2 += l * l;
-                                    count++;
-                                }
+                        const centerX = (startX + endX) / 2;
+                        const centerY = (startY + endY) / 2;
+                        // Block Center inside Image Bounds?
+                        const isInsideImage = 
+                            centerX >= imageBounds.x && 
+                            centerX <= (imageBounds.x + imageBounds.width) &&
+                            centerY >= imageBounds.y && 
+                            centerY <= (imageBounds.y + imageBounds.height);
+                        
+                        const isFiller = !isInsideImage;
+
+                        for (let y = startY; y < endY; y++) {
+                            for (let x = startX; x < endX; x++) {
+                                const i = (y * imgWidth + x) * 4;
+                                const R = imageData.data[i], G = imageData.data[i+1], B = imageData.data[i+2];
+                                r += R; g += G; b += B;
+                                const l = 0.2126 * R + 0.7152 * G + 0.0722 * B;
+                                sumL += l;
+                                sumL2 += l * l;
+                                count++;
                             }
+                        }
+
+                        if (count > 0 && !isFiller) { 
                             const avgR = r/count, avgG = g/count, avgB = b/count;
                             const avgL = sumL / count;
                             const variance = (sumL2 / count) - (avgL * avgL);
@@ -246,7 +296,8 @@ function analyzeBlocks(imageData: ImageData, pixelCount: number, imageBounds: { 
                             contentBlockCount++;
                             blocks.push({ r: avgR, g: avgG, b: avgB, position: { x: gridX, y: gridY }, hsv, lab, variance, isFiller: false });
                         } else {
-                             blocks.push({ r: 0, g: 0, b: 0, position: { x: gridX, y: gridY }, hsv: {h:0, s:0, v:0}, lab: {l:0, a:0, b:0}, variance: 0, isFiller: true });
+                            // Filler block or empty
+                            blocks.push({ r: 0, g: 0, b: 0, position: { x: gridX, y: gridY }, hsv: {h:0,s:0,v:0}, lab: {l:0,a:0,b:0}, variance: 0, isFiller: true });
                         }
                     }
                 }
@@ -254,10 +305,11 @@ function analyzeBlocks(imageData: ImageData, pixelCount: number, imageBounds: { 
                 const safeContentBlockCount = contentBlockCount > 0 ? contentBlockCount : 1;
                 return {
                     blocks,
-                    totalPixelsAnalyzed: 512 * 512,
-                    coveragePercentage: 100,
-                    analysisMethod: 'Grid 100% Coverage',
-                    gridSize,
+                    totalPixelsAnalyzed: contentBlockCount * blockWidth * blockHeight, // Only content pixels
+                    coveragePercentage: (contentBlockCount / (gridW * gridH)) * 100,
+                    analysisMethod: 'Fixed Grid 32x32 (Framework v1.0)',
+                    gridSize: gridSize, 
+                    // gridDimensions removed (square)
                     blockSize: blockWidth,
                     globalStats: { 
                         avg_L: totalL/safeContentBlockCount, avg_a: totalA/safeContentBlockCount, avg_b: totalB/safeContentBlockCount, 
@@ -620,7 +672,11 @@ export async function sonifyImage(
         ? determineCulturalScanPattern(tradition.cultural_family)
         : getManualScanPatternDetails(scanPatternOverride);
 
-    const scanSequence = generateScanSequence(blockAnalysisResult.gridSize, scanPatternEnum);
+    // Framework v1.0: Always Square Grid
+    const gridW = blockAnalysisResult.gridSize;
+    const gridH = blockAnalysisResult.gridSize;
+
+    const scanSequence = generateScanSequence(gridW, gridH, scanPatternEnum);
 
     const baseEventDurationSeconds = config.noteDurationSeconds;
 
@@ -813,7 +869,11 @@ async function sonifyImageArtisticOrHybrid(
         ? determineCulturalScanPattern(tradition.cultural_family)
         : getManualScanPatternDetails(scanPatternOverride);
 
-    const scanSequence = generateScanSequence(blockAnalysisResult.gridSize, scanPatternEnum);
+    // Framework v1.0: Always Square Grid
+    const gridW = blockAnalysisResult.gridSize;
+    const gridH = blockAnalysisResult.gridSize;
+
+    const scanSequence = generateScanSequence(gridW, gridH, scanPatternEnum);
 
     const baseEventDurationSeconds = config.noteDurationSeconds;
     const melodyEvents: TransformedNoteEvent[] = [];

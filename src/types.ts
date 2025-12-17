@@ -252,6 +252,8 @@ export interface DashboardEntry {
     audioHash?: string;
     audioUrl?: string | null;
     validationHashes?: ValidationHashes;
+    musicGenerationPrompt?: MusicGenerationPrompt | null;
+    generatedAiTrackUrl?: string | null;
 }
 
 export interface MusicGenResponse {
