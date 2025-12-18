@@ -68,7 +68,7 @@ const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPub
     };
 
     // ... resto del componente
-    const publicLink = `https://sonificart.com/gallery?id=${entry.id}`;
+    const publicLink = `https://sonificart.com/showcase?id=${entry.id}`;
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(publicLink)}`;
     const downloadQR = async () => { /* ... */ };
 

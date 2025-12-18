@@ -12,7 +12,7 @@ interface OutletContextType {
 export const ShowcasePage: React.FC = () => {
     const { user } = useOutletContext<OutletContextType>();
     const [searchParams] = useSearchParams();
-    const galleryId = searchParams.get('gallery_id') || undefined;
+    const galleryId = searchParams.get('id') || searchParams.get('gallery_id') || undefined;
 
     // ShowcaseView gestirà internamente il galleryId
     return <ShowcaseView user={user} initialProjectId={galleryId} />;

@@ -255,8 +255,8 @@ export const ShowcaseView: React.FC<ShowcaseViewProps> = ({ user, initialProject
             setProjects(data);
 
             if (initialProjectId) {
-                // FIX: Tipo esplicito
-                const target = data.find((p: ShowcaseProject) => p.id === initialProjectId);
+                // Supporta sia l'ID Vetrina che l'ID Storia (QR Code)
+                const target = data.find((p: ShowcaseProject) => p.id === initialProjectId || p.historyId === initialProjectId);
                 if (target) setSelectedProject(target);
             }
         } catch (e) { console.error(e); }

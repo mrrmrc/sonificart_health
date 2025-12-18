@@ -207,6 +207,11 @@ export const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, isAdmin, userCredits
                                 <button onClick={() => { navigate('/sonification'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">{t('nav.sonify')}</button>
                                 <button onClick={() => { navigate('/verification'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">{t('nav.verify')}</button>
                                 <button onClick={() => { navigate('/dashboard'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">{t('nav.dashboard')}</button>
+                                {isAdmin && (
+                                    <button onClick={() => { navigate('/admin'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-red-400 font-bold hover:bg-white/5 rounded-lg border border-red-500/20">
+                                        <i className="fas fa-user-shield mr-2"></i> {t('nav.admin')}
+                                    </button>
+                                )}
                                 <div className="px-4 py-3 text-sm text-gray-400 flex items-center gap-2">
                                     <i className="fas fa-coins text-brand-accent"></i>
                                     Crediti: <span className="text-white font-mono">{isProUser ? 'Infiniti' : userCredits}</span>

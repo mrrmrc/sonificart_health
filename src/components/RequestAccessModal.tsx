@@ -60,7 +60,7 @@ export const RequestAccessModal: React.FC<RequestAccessModalProps> = ({ isOpen, 
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 animate-fade-in p-4" onClick={onClose}>
-            <div className="relative w-full max-w-lg bg-[#0f172a] rounded-xl shadow-2xl border border-brand-accent/30 animate-zoom-in p-8 overflow-y-auto max-h-[90vh]" onClick={e => e.stopPropagation()}>
+            <div className="relative w-full max-w-2xl bg-[#0f172a] rounded-xl shadow-2xl border border-brand-accent/30 animate-zoom-in p-8 overflow-y-auto max-h-[90vh]" onClick={e => e.stopPropagation()}>
                 <button className="absolute top-4 right-4 text-white/50 hover:text-white text-xl" onClick={onClose}>&times;</button>
 
                 <div className="mb-6 text-center">
@@ -79,14 +79,14 @@ export const RequestAccessModal: React.FC<RequestAccessModalProps> = ({ isOpen, 
                     {/* PLAN SELECTION (Custom Radio Grid) */}
                     <div>
                         <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-2">{t('request_access.plan')}</label>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-3 gap-3">
                             {['Mensile', 'Annuale', 'Enterprise'].map(plan => (
                                 <div
                                     key={plan}
                                     onClick={() => handlePlanSelect(plan)}
                                     className={`cursor-pointer p-3 rounded-lg border text-center transition-all flex flex-col items-center justify-center h-full ${formData.plan === plan
-                                            ? 'bg-brand-accent text-brand-primary border-brand-accent shadow-lg ring-1 ring-brand-accent'
-                                            : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:border-white/20'
+                                        ? 'bg-brand-accent text-brand-primary border-brand-accent shadow-lg ring-1 ring-brand-accent'
+                                        : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:border-white/20'
                                         }`}
                                 >
                                     <div className="text-sm font-bold leading-tight">

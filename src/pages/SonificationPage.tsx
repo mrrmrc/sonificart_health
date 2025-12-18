@@ -159,8 +159,14 @@ export const SonificationPage: React.FC = () => {
 
     const handleManualSave = async () => {
         if (!result || !user) return;
+
+        const defaultTitle = `Opera del ${new Date().toLocaleDateString()}`;
+        const title = prompt("Inserisci un nome per la tua opera:", defaultTitle);
+        if (title === null) return; // User cancelled
+        const finalTitle = title.trim() || defaultTitle;
+
         try {
-            await api.saveSonification(result, paradigm);
+            await api.saveSonification(result, paradigm, finalTitle);
             // Non chiudere, ma notificare successo (gestito in ResultsDashboard)
         } catch (e) {
             console.error(e);

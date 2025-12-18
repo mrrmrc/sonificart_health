@@ -69,7 +69,7 @@ export const api = {
         return data.credits;
     },
 
-    saveSonification: async (result: SonificationResult, paradigm: Paradigm) => {
+    saveSonification: async (result: SonificationResult, paradigm: Paradigm, title?: string) => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
 
         // Prepare FormData for Multipart Upload (Faster & Robust)
@@ -77,7 +77,7 @@ export const api = {
         formData.append('auth_token', token || '');
         formData.append('imageHash', result.imageHash);
         formData.append('paradigm', paradigm);
-        formData.append('traditionName', result.culturalSelectionResult.tradition.name);
+        formData.append('traditionName', title || result.culturalSelectionResult.tradition.name);
 
         // JSON Fields
         formData.append('musicGenerationPrompt', JSON.stringify(result.musicGenerationPrompt));
@@ -219,36 +219,41 @@ export const api = {
         await fetch(`${API_BASE_URL}/index.php?action=admin_reject_request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, auth_token: token }) });
     },
 
+    updateAccessRequest: async (id: string, field: string, value: boolean): Promise<void> => {
+        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        await fetch(`${API_BASE_URL}/index.php?action=admin_update_request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value, auth_token: token }) });
+    },
+
     getSystemStats: async (): Promise<SystemStats> => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        const response = await fetch(`${API_BASE_URL}/index.php?action=get_stats`, { method: 'POST', body: JSON.stringify({ auth_token: token }) });
+        const response = await fetch(`${API_BASE_URL}/index.php?action=get_stats`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auth_token: token }) });
         return await handleResponse(response);
     },
 
     getSystemLogs: async (): Promise<SystemLog[]> => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        const response = await fetch(`${API_BASE_URL}/index.php?action=get_logs`, { method: 'POST', body: JSON.stringify({ auth_token: token }) });
+        const response = await fetch(`${API_BASE_URL}/index.php?action=get_logs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auth_token: token }) });
         return await handleResponse(response);
     },
 
     getAllUsers: async (): Promise<User[]> => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        const response = await fetch(`${API_BASE_URL}/index.php?action=get_users`, { method: 'POST', body: JSON.stringify({ auth_token: token }) });
+        const response = await fetch(`${API_BASE_URL}/index.php?action=get_users`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auth_token: token }) });
         return await handleResponse(response);
     },
 
     adminCreateUser: async (u: any) => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        await fetch(`${API_BASE_URL}/index.php?action=admin_create_user`, { method: 'POST', body: JSON.stringify({ ...u, auth_token: token }) });
+        await fetch(`${API_BASE_URL}/index.php?action=admin_create_user`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...u, auth_token: token }) });
     },
 
     updateUser: async (u: any) => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        await fetch(`${API_BASE_URL}/index.php?action=admin_update_user`, { method: 'POST', body: JSON.stringify({ ...u, auth_token: token }) });
+        await fetch(`${API_BASE_URL}/index.php?action=admin_update_user`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...u, auth_token: token }) });
     },
 
     deleteUser: async (id: string) => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        await fetch(`${API_BASE_URL}/index.php?action=delete_user`, { method: 'POST', body: JSON.stringify({ id, auth_token: token }) });
+        await fetch(`${API_BASE_URL}/index.php?action=delete_user`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, auth_token: token }) });
     },
 };

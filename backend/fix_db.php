@@ -39,7 +39,8 @@ try {
         "is_public TINYINT(1) DEFAULT 1",
         "priority INT DEFAULT 0",
         "owner_id INT",
-        "video_url VARCHAR(255)"
+        "video_url VARCHAR(255)",
+        "history_id INT"
     ];
 
     foreach ($cols as $colDef) {
@@ -68,8 +69,32 @@ try {
         piva VARCHAR(50),
         sdi VARCHAR(50),
         reason TEXT,
+        institution_type VARCHAR(255),
+        purpose TEXT,
+        website VARCHAR(255),
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )");
+
+    // Add columns to registration_requests if they don't exist
+    $regCols = [
+        "institution_type VARCHAR(255)",
+        "purpose TEXT",
+        "website VARCHAR(255)",
+        "invoice_sent TINYINT(1) DEFAULT 0",
+        "paid TINYINT(1) DEFAULT 0"
+    ];
+
+    foreach ($regCols as $colDef) {
+        try {
+            $colName = explode(' ', $colDef)[0];
+            $pdo->exec("ALTER TABLE registration_requests ADD COLUMN $colDef");
+            echo "Added column $colName to registration_requests\n";
+        } catch (Exception $e) {
+            if (strpos($e->getMessage(), "Duplicate column") !== false) {
+                echo "Column " . explode(' ', $colDef)[0] . " already exists in registration_requests.\n";
+            }
+        }
+    }
 
     echo "\nDATABASE UPDATE COMPLETED SUCCESSFULLY.\n";
 

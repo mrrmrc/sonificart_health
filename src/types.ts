@@ -277,10 +277,14 @@ export interface User {
 
 export interface SystemStats {
     totalUsers: number;
-    activeUsers24h: number;
     totalSonifications: number;
-    serverHealth: { cpu: number; memory: number; uptime: string; };
-    apiStatus: {
+    aiUsage?: { hybrid: number; artistic: number; scientific: number };
+    phpVersion?: string;
+    dbVersion?: string;
+    serverOs?: string;
+    activeUsers24h?: number;
+    serverHealth?: { cpu: number; memory: number; uptime: string; };
+    apiStatus?: {
         gemini: { serviceName: string; used: number; limit: number; unit: string; costEstimated: number };
         storage: { serviceName: string; used: number; limit: number; unit: string; costEstimated: number };
         paddle: { serviceName: string; used: number; limit: number; unit: string; costEstimated: number };
@@ -311,6 +315,8 @@ export interface ShowcaseProject {
     isPublic?: boolean;
     audioUrl?: string;
     videoUrl?: string;
+    historyId?: string;
+    priority?: number;
 }
 
 // --- DEFINIZIONE SPOSTATA QUI PER EVITARE DIPENDENZE CIRCOLARI ---
