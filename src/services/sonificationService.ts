@@ -167,9 +167,8 @@ async function standardizeImage(file: File): Promise<{ canvas: OffscreenCanvas |
     canvas.width = canvasSize;
     canvas.height = canvasSize;
 
-    // Fill with black (Section 4.2.1: implies normalization, often implies filling void)
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, canvasSize, canvasSize);
+    // Framework v1.0 standard: 512x512 Fixed Canvas. 
+    // Implicit transparent background (no fill).
 
     const aspect = imageBitmap.width / imageBitmap.height;
     let drawWidth = canvasSize;
@@ -437,7 +436,23 @@ function adjustTiming(baseDuration: number, tradition: Tradition, scanPosition: 
 
 function transformNote(mappedBlock: MappedBlock, tradition: Tradition): Omit<TransformedNoteEvent, 'time' | 'duration'> {
     const { baseNote, noteName, microtoneOffset } = mappedBlock.mapping;
-    const { lab, variance } = mappedBlock.blockData;
+    const { lab, variance, isFiller } = mappedBlock.blockData;
+
+    // SILENCE FILLER BLOCKS (Border Transparency)
+    if (isFiller) {
+        return {
+            baseNote: 0,
+            transformedCents: 0,
+            midiFloat: 0,
+            velocity: 0,
+            expression: 0,
+            chroma: 0,
+            articulation: 'normal',
+            noteName: '-',
+            sourceBlock: mappedBlock.blockData,
+            isAccompaniment: false,
+        };
+    }
 
     const midiFloat = baseNote + (microtoneOffset / 100.0);
     const transformedCents = (midiFloat - 60) * 100;
@@ -549,6 +564,10 @@ async function synthesizeAudio(events: TransformedNoteEvent[], totalDuration: nu
 
             const freq = 440 * Math.pow(2, (event.midiFloat - 69) / 12);
             const velocity = event.velocity / 127.0;
+
+            // Skip silent notes (Filler/Rest)
+            if (velocity <= 0) continue;
+
             const brightness = event.expression; // 0-1 (L*)
 
             // Envelope parameters (Linear AR for speed)

@@ -2,6 +2,7 @@
 // src/pages/SonificationPage.tsx
 import React, { useState, useCallback, useEffect } from 'react';
 import { useOutletContext, useLocation } from 'react-router-dom';
+import { useLanguage } from '../contexts/LanguageContext';
 import OSC from 'osc-js';
 import { SonificationResult, ConfigSettings, ProcessingStep, Paradigm, ScanPatternOverride, User, DashboardEntry } from '../types';
 import { sonifyImage, sonifyImageArtistic, sonifyImageHybrid } from '../services/sonificationService';
@@ -25,6 +26,7 @@ interface OutletContextType {
 
 export const SonificationPage: React.FC = () => {
     const { user, isUnlimited, setIsLoginModalOpen, setIsRequestAccessOpen } = useOutletContext<OutletContextType>();
+    const { t } = useLanguage();
     const location = useLocation();
 
     const [imageFile, setImageFile] = useState<File | null>(null);
@@ -183,13 +185,13 @@ export const SonificationPage: React.FC = () => {
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                         <div className="lg:col-span-7 transition-all duration-500 flex flex-col gap-6">
                             <div className="bg-slate-950/60 backdrop-blur-xl p-6 rounded-xl border border-white/10 shadow-2xl">
-                                <div className="mb-6"><h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2"><div className="w-6 h-6 rounded bg-brand-accent text-black flex items-center justify-center text-xs font-bold">1</div> Seleziona Paradigma</h3><ParadigmToggle selectedParadigm={paradigm} onParadigmChange={setParadigm} isPro={isUnlimited} /></div>
-                                <div className="border-t border-white/10 pt-6"><h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2"><div className="w-6 h-6 rounded bg-white text-black flex items-center justify-center text-xs font-bold">2</div> Input Visivo</h3><ImageUploader onFileSelect={handleFileSelect} hasFile={!!imageFile} /></div>
+                                <div className="mb-6"><h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2"><div className="w-6 h-6 rounded bg-brand-accent text-black flex items-center justify-center text-xs font-bold">1</div> {t('steps.select_paradigm')}</h3><ParadigmToggle selectedParadigm={paradigm} onParadigmChange={setParadigm} isPro={isUnlimited} /></div>
+                                <div className="border-t border-white/10 pt-6"><h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2"><div className="w-6 h-6 rounded bg-white text-black flex items-center justify-center text-xs font-bold">2</div> {t('steps.visual_input')}</h3><ImageUploader onFileSelect={handleFileSelect} hasFile={!!imageFile} /></div>
                                 {imageFile && imageUrl && <div className="mt-6 border-t border-white/10 pt-6"><ImagePreview file={imageFile} imageUrl={imageUrl} /></div>}
                             </div>
                         </div>
                         <div className="lg:col-span-5 animate-fade-in-up h-full">
-                            {imageFile ? (<div className="bg-slate-950/60 backdrop-blur-xl p-6 rounded-xl border border-white/10 shadow-2xl h-full"><h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2"><div className="w-6 h-6 rounded bg-white text-black flex items-center justify-center text-xs font-bold">3</div> Parametri{!isUnlimited && <span className="ml-auto text-xs bg-brand-accent/10 text-brand-accent px-2 py-0.5 rounded">Costo: {paradigm === 'scientific' ? '1 CR' : '2 CR'}</span>}{isUnlimited && <span className="ml-auto text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded flex items-center gap-1"><i className="fas fa-infinity"></i> Licenza Attiva</span>}</h3><ConfigPanel config={config} onConfigChange={(nc) => setConfig(p => ({ ...p, ...nc }))} onStartProcessing={startSonification} paradigm={paradigm} oscStatus={oscStatus} oscError={oscError} scanPatternOverride={scanPatternOverride} onScanPatternOverrideChange={setScanPatternOverride} onGoProClick={() => setIsRequestAccessOpen(true)} isProUser={!!isUnlimited} /></div>) : <ParadigmInfo paradigm={paradigm} onGoPro={() => setIsRequestAccessOpen(true)} isProUser={!!isUnlimited} />}
+                            {imageFile ? (<div className="bg-slate-950/60 backdrop-blur-xl p-6 rounded-xl border border-white/10 shadow-2xl h-full"><h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2"><div className="w-6 h-6 rounded bg-white text-black flex items-center justify-center text-xs font-bold">3</div> {t('steps.parameters')}{!isUnlimited && <span className="ml-auto text-xs bg-brand-accent/10 text-brand-accent px-2 py-0.5 rounded">{t('steps.cost')}: {paradigm === 'scientific' ? '1 CR' : '2 CR'}</span>}{isUnlimited && <span className="ml-auto text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded flex items-center gap-1"><i className="fas fa-infinity"></i> {t('steps.active_license')}</span>}</h3><ConfigPanel config={config} onConfigChange={(nc) => setConfig(p => ({ ...p, ...nc }))} onStartProcessing={startSonification} paradigm={paradigm} oscStatus={oscStatus} oscError={oscError} scanPatternOverride={scanPatternOverride} onScanPatternOverrideChange={setScanPatternOverride} onGoProClick={() => setIsRequestAccessOpen(true)} isProUser={!!isUnlimited} /></div>) : <ParadigmInfo paradigm={paradigm} onGoPro={() => setIsRequestAccessOpen(true)} isProUser={!!isUnlimited} />}
                         </div>
                     </div>
                 </div>

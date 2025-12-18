@@ -23,14 +23,14 @@ const instrumentOptions: { value: InstrumentType, label: string }[] = [
     { value: 'triangle', label: 'Onda Triangolare (Morbido)' },
 ];
 
-export const ConfigPanel: React.FC<ConfigPanelProps> = ({ 
-    config, onConfigChange, onStartProcessing, paradigm, 
+export const ConfigPanel: React.FC<ConfigPanelProps> = ({
+    config, onConfigChange, onStartProcessing, paradigm,
     oscStatus, oscError, scanPatternOverride, onScanPatternOverrideChange, onGoProClick, isProUser
 }) => {
     const { t } = useLanguage();
-    
+
     const isScientific = paradigm === 'scientific';
-    
+
     // REMOVED: isLocked logic. All features are accessible via credits for Free users.
     const creditCost = paradigm === 'scientific' ? 1 : 2;
 
@@ -41,7 +41,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
 
     const { estimatedDuration, isDurationTooLong, isDurationInvalid } = useMemo(() => {
         const totalSeconds = config.noteDurationSeconds * config.pixelCount;
-        
+
         const invalid = !isFinite(totalSeconds) || totalSeconds <= 0;
         if (invalid) {
             return { estimatedDuration: "N/A", isDurationTooLong: false, isDurationInvalid: true };
@@ -50,11 +50,11 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
         const minutes = Math.floor(totalSeconds / 60);
         const seconds = Math.round(totalSeconds % 60);
         const durationString = `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
-        
+
         const tooLong = totalSeconds > 600;
 
-        return { 
-            estimatedDuration: durationString, 
+        return {
+            estimatedDuration: durationString,
             isDurationTooLong: tooLong,
             isDurationInvalid: false
         };
@@ -65,19 +65,19 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
         const estimatedProcessing = `<${Math.max(1, Math.round(config.pixelCount / 2000))}s (DSP)`;
         return { totalNotes, estimatedProcessing };
     }, [config.pixelCount]);
-    
+
     const handleOscChange = (field: string, value: any) => {
         onConfigChange({ osc: { ...config.osc, [field]: value } });
     };
 
     return (
         <div className="relative animate-fade-in h-full flex flex-col">
-            
+
             <div className="flex-grow space-y-6">
-                
+
                 {/* SCAN PATTERN */}
                 <div className="pb-4 border-b border-white/10">
-                     <ScanPatternSelector 
+                    <ScanPatternSelector
                         value={scanPatternOverride}
                         onChange={onScanPatternOverrideChange}
                     />
@@ -90,7 +90,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                         <select
                             id="pixelCount"
                             value={config.pixelCount}
-                            onChange={(e) => onConfigChange({ pixelCount: parseInt(e.target.value, 10)})}
+                            onChange={(e) => onConfigChange({ pixelCount: parseInt(e.target.value, 10) })}
                             className="w-full p-3 bg-black/20 border border-white/10 rounded-lg text-white focus:ring-2 focus:ring-brand-accent focus:outline-none transition-all hover:bg-black/30"
                         >
                             <option value="1024">{t('config.pixel_1024')}</option>
@@ -115,7 +115,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                             />
                             <span className="bg-black/20 border border-white/10 text-brand-accent font-mono font-bold py-1 px-3 rounded-md min-w-[60px] text-center text-sm">{config.bpm}</span>
                         </div>
-                         <div className="flex justify-between mt-1 text-[10px] text-brand-text-secondary">
+                        <div className="flex justify-between mt-1 text-[10px] text-brand-text-secondary">
                             <span>{t('config.slow')}</span>
                             <span>{t('config.fast')}</span>
                         </div>
@@ -123,7 +123,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 </div>
 
                 {/* ACCOMPANIMENT */}
-                 <div className={`pt-4 border-t border-white/10 transition-opacity ${isScientific ? 'opacity-50' : ''}`}>
+                <div className={`pt-4 border-t border-white/10 transition-opacity ${isScientific ? 'opacity-50' : ''}`}>
                     <div className="flex justify-between items-center mb-4">
                         <h4 className="text-sm font-bold text-white">{t('config.accompaniment')}</h4>
                         <label htmlFor="accompaniment-toggle" className={`flex items-center ${isScientific ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
@@ -143,9 +143,9 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                     </div>
                     {config.enableAccompaniment && (
                         <div className="animate-fade-in grid grid-cols-1 gap-4">
-                             <div>
+                            <div>
                                 <label htmlFor="melodyInstrument" className="text-xs font-bold text-brand-text-secondary uppercase mb-1 block">{t('config.melody')}</label>
-                                 <select
+                                <select
                                     id="melodyInstrument"
                                     value={config.melodyInstrument}
                                     onChange={(e) => onConfigChange({ melodyInstrument: e.target.value as InstrumentType })}
@@ -156,7 +156,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                             </div>
                             <div>
                                 <label htmlFor="accompanimentInstrument" className="text-xs font-bold text-brand-text-secondary uppercase mb-1 block">{t('config.accompaniment_instrument')}</label>
-                                 <select
+                                <select
                                     id="accompanimentInstrument"
                                     value={config.accompanimentInstrument}
                                     onChange={(e) => onConfigChange({ accompanimentInstrument: e.target.value as InstrumentType })}
@@ -173,16 +173,16 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 <div className="bg-white/5 border border-white/10 p-4 rounded-xl mt-auto">
                     <div className="grid grid-cols-3 gap-2 text-center divide-x divide-white/10">
                         <div className="px-2">
-                             <div className="text-xs text-brand-text-secondary uppercase mb-1">{t('config.duration')}</div>
-                             <div className={`font-mono font-bold ${isDurationTooLong ? 'text-yellow-400' : 'text-white'}`}>{estimatedDuration}</div>
+                            <div className="text-xs text-brand-text-secondary uppercase mb-1">{t('config.duration')}</div>
+                            <div className={`font-mono font-bold ${isDurationTooLong ? 'text-yellow-400' : 'text-white'}`}>{estimatedDuration}</div>
                         </div>
                         <div className="px-2">
-                             <div className="text-xs text-brand-text-secondary uppercase mb-1">{t('config.notes')}</div>
-                             <div className="font-mono font-bold text-white">{estimates.totalNotes}</div>
+                            <div className="text-xs text-brand-text-secondary uppercase mb-1">{t('config.notes')}</div>
+                            <div className="font-mono font-bold text-white">{estimates.totalNotes}</div>
                         </div>
                         <div className="px-2">
-                             <div className="text-xs text-brand-text-secondary uppercase mb-1">{t('config.cpu')}</div>
-                             <div className="font-mono font-bold text-green-400">Low</div>
+                            <div className="text-xs text-brand-text-secondary uppercase mb-1">{t('config.cpu')}</div>
+                            <div className="font-mono font-bold text-green-400">Low</div>
                         </div>
                     </div>
                 </div>
@@ -196,7 +196,12 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                     className="w-full btn bg-brand-accent hover:bg-brand-accent-light text-brand-primary font-bold py-4 px-8 rounded-xl transition-all transform hover:scale-[1.02] shadow-[0_0_20px_rgba(45,212,191,0.3)] disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-600 disabled:shadow-none disabled:scale-100 flex items-center justify-center gap-3"
                 >
                     <i className="fas fa-play"></i>
-                    <span>{t('config.start', { cost: creditCost })}</span>
+                    <span>
+                        {isProUser
+                            ? (t('config.start').split('(')[0].trim()) // "AVVIA ANALISI" (Rimuove la parte del costo tra parentesi se presente)
+                            : t('config.start', { cost: creditCost })
+                        }
+                    </span>
                 </button>
                 <p className="text-[10px] text-center text-brand-text-secondary mt-2">
                     {isProUser ? t('config.unlimited') : t('config.credits_question')}

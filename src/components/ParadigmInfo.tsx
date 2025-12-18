@@ -87,7 +87,7 @@ export const ParadigmInfo: React.FC<ParadigmInfoProps> = ({ paradigm, onGoPro, i
                         <h3 className="text-2xl font-bold text-white">{info.title}</h3>
                         <p className="text-brand-text-secondary text-sm font-mono uppercase tracking-wider">{info.subtitle}</p>
                     </div>
-                    {isProTier && (
+                    {isProTier && !isProUser && (
                         <div className="ml-auto">
                             <span className="bg-gradient-to-r from-yellow-500 to-amber-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg shadow-amber-500/20">
                                 2 CR
@@ -133,7 +133,7 @@ export const ParadigmInfo: React.FC<ParadigmInfoProps> = ({ paradigm, onGoPro, i
                             ))}
                         </div>
                         <div className="space-y-1">
-                            {info.license.limitations.map((lim, i) => (
+                            {!isProUser && info.license.limitations.map((lim, i) => (
                                 <div key={i} className="flex items-center gap-1.5 text-yellow-300/60">
                                     <i className="fas fa-info-circle"></i> {lim}
                                 </div>

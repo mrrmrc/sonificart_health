@@ -28,7 +28,7 @@ export const translations = {
         title: "Paradigma Ibrido (AI + Dati)",
         subtitle: "Il 'Regista' Virtuale",
         step1_title: "Visione Computerizzata",
-        step1_desc: "Un'IA analizza il contenuto semantico (es. 'Tramonto malinconico').",
+        step1_desc: "Visione Semantica: L'IA 'guarda' l'immagine per capire il contesto (es. paesaggio, ritratto) e lo fonde con i dati.",
         step2_title: "Fusione Dati",
         step2_desc: "I dati scientifici del colore guidano l'emozione dell'IA.",
         step3_title: "Arrangiamento",
@@ -45,7 +45,7 @@ export const translations = {
         title: "Paradigma Artistico",
         subtitle: "Interpretazione Strutturale Libera",
         step1_title: "Astrazione Pura",
-        step1_desc: "L'IA ignora il soggetto visivo e si concentra sulla geometria compositiva.",
+        step1_desc: "Astrazione Strutturale: L'IA ignora il soggetto visivo e interpreta solo la 'vibrazione matematica' (colori, forme) per un prompt puro.",
         step2_title: "Traduzione Cieca",
         step2_desc: "Generazione basata sui rapporti matematici di contrasto ed equilibrio.",
         step3_title: "Creatività Generativa",
@@ -303,6 +303,13 @@ export const translations = {
       generic: "Generica",
       link_copied: "Copiato!"
     },
+    steps: {
+      select_paradigm: "Seleziona Paradigma",
+      visual_input: "Input Visivo",
+      parameters: "Parametri",
+      cost: "Costo",
+      active_license: "Licenza Attiva"
+    },
     login: {
       login: "Accedi",
       create_account: "Crea Account",
@@ -332,6 +339,11 @@ export const translations = {
       address_placeholder: "Via, Città, CAP, Provincia",
       vat_number: "P.IVA / C.F.",
       sdi_code: "Codice SDI / PEC",
+      institution_type: "Tipo Istituzione",
+      institution_placeholder: "Es. Museo, Università, Festival",
+      purpose: "Finalità d'Uso",
+      purpose_placeholder: "Descrivi brevemente come intendi usare la piattaforma...",
+      website: "Sito Web (Opzionale)",
       submit: "Richiedi Fattura e Attivazione",
       success: "Richiesta inviata con successo! Controlla la tua email.",
       error: "Errore nell'invio. Riprova più tardi.",
@@ -437,7 +449,7 @@ export const translations = {
         title: "Hybrid Paradigm (AI + Data)",
         subtitle: "The Virtual Director",
         step1_title: "Computer Vision",
-        step1_desc: "An AI analyzes semantic content (e.g., 'Melancholic Sunset').",
+        step1_desc: "Semantic Vision: AI 'sees' the image context (e.g., landscape, portrait) and merges it with data.",
         step2_title: "Data Fusion",
         step2_desc: "Scientific color data guides the AI emotion.",
         step3_title: "Arrangement",
@@ -454,7 +466,7 @@ export const translations = {
         title: "Artistic Paradigm",
         subtitle: "Free Structural Interpretation",
         step1_title: "Pure Abstraction",
-        step1_desc: "AI ignores subject and focuses on compositional geometry.",
+        step1_desc: "Structural Abstraction: AI ignores the visual subject, interpreting only the 'mathematical vibe' (colors, shapes) for a pure prompt.",
         step2_title: "Blind Translation",
         step2_desc: "Based solely on mathematical contrast/balance.",
         step3_title: "Generative Creativity",
@@ -783,6 +795,13 @@ export const translations = {
       unknown: "Unknown",
       generic: "Generic",
       link_copied: "Copied!"
+    },
+    steps: {
+      select_paradigm: "Select Paradigm",
+      visual_input: "Visual Input",
+      parameters: "Parameters",
+      cost: "Cost",
+      active_license: "Active License"
     },
     login: {
       login: "Login",

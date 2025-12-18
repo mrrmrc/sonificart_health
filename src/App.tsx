@@ -14,6 +14,7 @@ function AppContent() {
     const [user, setUser] = useState<User | null>(null);
     const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
     const [isRequestAccessOpen, setIsRequestAccessOpen] = useState(false);
+    const [requestAccessInitialPlan, setRequestAccessInitialPlan] = useState<string>('Mensile');
     const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
     const [helpInitialSection, setHelpInitialSection] = useState<string | undefined>(undefined);
     const isUnlimited = user?.isPro || user?.isAdmin;
@@ -34,12 +35,18 @@ function AppContent() {
         checkUser();
     }, []);
 
+    const openRequestAccess = (plan: string = 'Mensile') => {
+        setRequestAccessInitialPlan(plan);
+        setIsRequestAccessOpen(true);
+    };
+
     const contextValue = {
         user,
         setUser, // Exposed for LoginModal
         isUnlimited,
         setIsLoginModalOpen,
         setIsRequestAccessOpen,
+        openRequestAccess, // NEW
         setIsHelpModalOpen,
         setHelpInitialSection
     };
@@ -54,7 +61,7 @@ function AppContent() {
                 isProUser={isUnlimited}
                 onLogin={() => setIsLoginModalOpen(true)}
                 onLogout={async () => { await api.logout(); setUser(null); }}
-                onGoProClick={() => setIsRequestAccessOpen(true)}
+                onGoProClick={() => openRequestAccess('Mensile')}
                 onOpenHelp={() => { setHelpInitialSection(undefined); setIsHelpModalOpen(true); }}
             />
             <main className="flex-grow w-full relative z-10">
@@ -68,7 +75,7 @@ function AppContent() {
             </main>
             <Footer />
             <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} onLoginSuccess={(u) => { setUser(u); setIsLoginModalOpen(false); }} />
-            <RequestAccessModal isOpen={isRequestAccessOpen} onClose={() => setIsRequestAccessOpen(false)} userEmail={user?.email} />
+            <RequestAccessModal isOpen={isRequestAccessOpen} onClose={() => setIsRequestAccessOpen(false)} userEmail={user?.email} initialPlan={requestAccessInitialPlan} />
             <HelpModal isOpen={isHelpModalOpen} onClose={() => setIsHelpModalOpen(false)} initialSection={helpInitialSection} />
         </div>
     );

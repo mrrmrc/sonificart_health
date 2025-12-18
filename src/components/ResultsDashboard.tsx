@@ -864,7 +864,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
 
                 <InfoCard title={t('results.forensic_certificate')} icon="fa-fingerprint">
                     <DataRow label={t('results.image_hash')} value={safeHash.substring(0, 16) + '...'} />
-                    <DataRow label={t('results.audio_hash')} value={(correctedResult.audioHash || "---").substring(0, 16) + '...'} />
+                    <DataRow label={t('results.audio_hash')} value={(correctedResult.audioHash || (correctedResult.audioOutput as any)?.audioHash || "---").substring(0, 16) + '...'} />
                     <DataRow label={t('results.framework_ver') || "Framework Ver."} value="1.0" />
                 </InfoCard>
 

@@ -113,8 +113,9 @@ export const api = {
         }
 
         try {
-            const response = await fetch(`${API_BASE_URL}/index.php?action=save_sonification`, {
+            const response = await fetch(`${API_BASE_URL}/index.php?action=save_sonification&auth_token=${encodeURIComponent(token || '')}`, {
                 method: 'POST',
+                headers: { 'Authorization': token ? `Bearer ${token}` : '' },
                 body: formData,
             });
             const data = await handleResponse(response);
@@ -124,8 +125,9 @@ export const api = {
             formData.delete('audioFile');
 
             try {
-                const responseLite = await fetch(`${API_BASE_URL}/index.php?action=save_sonification`, {
+                const responseLite = await fetch(`${API_BASE_URL}/index.php?action=save_sonification&auth_token=${encodeURIComponent(token || '')}`, {
                     method: 'POST',
+                    headers: { 'Authorization': token ? `Bearer ${token}` : '' },
                     body: formData,
                 });
                 const dataLite = await handleResponse(responseLite);
