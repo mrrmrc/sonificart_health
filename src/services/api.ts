@@ -10,14 +10,19 @@ const STORAGE_KEYS = {
 };
 
 const handleResponse = async (response: Response) => {
+    if (response.status === 413) {
+        throw new Error("File troppo grande (Errore 413). Il server ha rifiutato l'upload. Riduci la durata o contatta l'assistenza per aumentare il limite di upload.");
+    }
     const text = await response.text();
     try {
         const data = JSON.parse(text);
         if (!response.ok) throw new Error(data.error || data.message || `HTTP Error ${response.status}`);
         return data;
     } catch (e) {
-        console.error("Server Error:", text);
-        throw new Error("Errore server. Controlla la console.");
+        if (e instanceof Error && e.message.includes("File troppo grande")) throw e;
+        console.error("Server Error Response:", text);
+        // Fallback for non-JSON errors (e.g. PHP Fatal Error HTML)
+        throw new Error(`Errore Server (${response.status}): ${text.substring(0, 100)}...`);
     }
 };
 
@@ -66,28 +71,71 @@ export const api = {
 
     saveSonification: async (result: SonificationResult, paradigm: Paradigm) => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        let imgBase64 = "", audioBase64 = "";
+
+        // Prepare FormData for Multipart Upload (Faster & Robust)
+        const formData = new FormData();
+        formData.append('auth_token', token || '');
+        formData.append('imageHash', result.imageHash);
+        formData.append('paradigm', paradigm);
+        formData.append('traditionName', result.culturalSelectionResult.tradition.name);
+
+        // JSON Fields
+        formData.append('musicGenerationPrompt', JSON.stringify(result.musicGenerationPrompt));
+        formData.append('configUsed', JSON.stringify(result.configUsed));
+        formData.append('blockData', JSON.stringify(result.blockAnalysisResult));
+
+        // Optimize Events
+        const compressedEvents = result.audioOutput.events.map(e => [
+            Number(e.time.toFixed(3)),
+            Number(e.duration.toFixed(3)),
+            Number(e.midiFloat.toFixed(2)),
+            Math.round(e.velocity),
+            e.sourceBlock?.position.x ?? -1,
+            e.sourceBlock?.position.y ?? -1,
+            e.noteName
+        ]);
+        formData.append('events', JSON.stringify(compressedEvents));
+
+        // Files
         try {
-            const img = new Image(); img.src = result.standardizedImageUrl; await new Promise(r => img.onload = r);
-            const c = document.createElement('canvas'); c.width = 600; c.height = (img.height / img.width) * 600;
-            c.getContext('2d')?.drawImage(img, 0, 0, c.width, c.height); imgBase64 = c.toDataURL('image/jpeg', 0.85);
+            // Image: Convert DataURL/URL to Blob
+            const imgRes = await fetch(result.standardizedImageUrl);
+            const imgBlob = await imgRes.blob();
+            formData.append('imageFile', imgBlob, "image.jpg");
 
-            const reader = new FileReader();
-            await new Promise((res) => { reader.onloadend = () => { audioBase64 = reader.result as string; res(true); }; reader.readAsDataURL(result.audioOutput.audioWavBlob); });
-        } catch (e) { }
+            // Audio: Use existing Blob
+            if (result.audioOutput.audioWavBlob) {
+                formData.append('audioFile', result.audioOutput.audioWavBlob, "audio.wav");
+            }
+        } catch (e) {
+            console.error("Error preparing blobs for upload", e);
+            throw new Error("Errore nella preparazione dei file per l'upload.");
+        }
 
-        await fetch(`${API_BASE_URL}/index.php?action=save_sonification`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                imageHash: result.imageHash,
-                paradigm,
-                traditionName: result.culturalSelectionResult.tradition.name,
-                imageUrl: imgBase64,
-                audioData: audioBase64,
-                musicGenerationPrompt: result.musicGenerationPrompt, // <--- CAMPO AGGIUNTO QUI
-                auth_token: token
-            })
-        });
+        try {
+            const response = await fetch(`${API_BASE_URL}/index.php?action=save_sonification`, {
+                method: 'POST',
+                body: formData,
+            });
+            const data = await handleResponse(response);
+            if (!data.success) throw new Error(data.error || "Salvataggio incompleto (Server Error).");
+        } catch (error) {
+            console.warn("Salvataggio Full fallito, tento salvataggio Lite (no audio)...", error);
+            formData.delete('audioFile');
+
+            try {
+                const responseLite = await fetch(`${API_BASE_URL}/index.php?action=save_sonification`, {
+                    method: 'POST',
+                    body: formData,
+                });
+                const dataLite = await handleResponse(responseLite);
+                if (!dataLite.success) throw new Error(dataLite.error || "Salvataggio Lite fallito.");
+                alert("Nota: Il file audio era troppo grande per il server. Sonificazione salvata SENZA audio cache. L'audio verrà rigenerato automaticamente quando aprirai l'opera.");
+            } catch (liteError) {
+                console.error("Anche il salvataggio Lite è fallito.", liteError);
+                throw new Error("Impossibile salvare l'opera. Verifica la connessione o contatta l'assistenza.");
+            }
+        }
     },
 
     uploadChunk: async (formData: FormData): Promise<any> => {
@@ -125,7 +173,8 @@ export const api = {
 
     deleteHistoryItem: async (id: string) => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        await fetch(`${API_BASE_URL}/index.php?action=delete_history_item`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, auth_token: token }) });
+        const response = await fetch(`${API_BASE_URL}/index.php?action=delete_history_item`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, auth_token: token }) });
+        await handleResponse(response);
     },
 
     getShowcase: async () => {

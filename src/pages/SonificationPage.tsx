@@ -73,7 +73,42 @@ export const SonificationPage: React.FC = () => {
             setParadigm(restoredResult.paradigm as Paradigm);
             if (restoredResult.configUsed) setConfig(restoredResult.configUsed);
 
-            // Pulisci lo stato per evitare ricaricamenti indesiderati? No, meglio lasciarlo.
+            // AUTO-REGENERATE AUDIO IF MISSING (Lite Save Fallback)
+            if (!restoredResult.audioOutput.audioUrl) {
+                // console.log("Audio missing in history entry. Auto-regenerating...");
+                setIsProcessing(true);
+                // Create a self-executing async function to handle regeneration
+                (async () => {
+                    try {
+                        const res = await fetch(restoredResult.standardizedImageUrl);
+                        const blob = await res.blob();
+                        const file = new File([blob], "restored.jpg", { type: blob.type });
+                        setImageFile(file); // Update state too
+
+                        let newResult: SonificationResult;
+                        const progressCb = updateProcessingStep;
+
+                        // Small delay to let UI render processing view
+                        await new Promise(r => setTimeout(r, 500));
+
+                        if (entry.paradigm === 'scientific') {
+                            newResult = await sonifyImage(file, restoredResult.configUsed, progressCb, oscClient, scanPatternOverride);
+                        } else if (entry.paradigm === 'artistic') {
+                            newResult = await sonifyImageArtistic(file, restoredResult.configUsed, progressCb, oscClient, scanPatternOverride);
+                        } else {
+                            newResult = await sonifyImageHybrid(file, restoredResult.configUsed, progressCb, oscClient, scanPatternOverride);
+                        }
+                        setResult(newResult);
+                    } catch (e) {
+                        console.error("Failed to regenerate audio:", e);
+                        alert("Impossibile rigenerare l'audio per questa opera.");
+                        // Fallback to restored result without audio
+                        setResult(restoredResult);
+                    } finally {
+                        setIsProcessing(false);
+                    }
+                })();
+            }
         } else if (location.state?.sacResult) {
             // Caricamento da Verification Page
             const restoredResult = location.state.sacResult;
@@ -112,15 +147,33 @@ export const SonificationPage: React.FC = () => {
             else if (paradigm === 'artistic') res = await sonifyImageArtistic(imageFile, config, progressCb, oscClient, scanPatternOverride);
             else res = await sonifyImageHybrid(imageFile, config, progressCb, oscClient, scanPatternOverride);
 
-            if (user) await api.saveSonification(res, paradigm);
+            // REMOVED AUTO SAVE to ensure 100% progress means READY
+            // if (user) await api.saveSonification(res, paradigm);
+
             setResult(res);
             setProcessingSteps(prev => prev.map(step => ({ ...step, status: 'completed' })));
         } catch (error) { console.error(error); alert("Errore elaborazione"); } finally { setIsProcessing(false); }
     };
 
+    const handleManualSave = async () => {
+        if (!result || !user) return;
+        try {
+            await api.saveSonification(result, paradigm);
+            // Non chiudere, ma notificare successo (gestito in ResultsDashboard)
+        } catch (e) {
+            console.error(e);
+            throw e; // Rilancia per gestire errore in UI
+        }
+    };
+
     const handleReset = () => {
         setResult(null); setImageUrl(null); setImageFile(null); setIsViewingHistory(false);
-        // Clean URL state if possible? window.history.replaceState({}, '')
+    };
+
+    const handleCloseResult = () => {
+        setResult(null);
+        setIsViewingHistory(false);
+        window.scrollTo(0, 0);
     };
 
     return (
@@ -142,7 +195,7 @@ export const SonificationPage: React.FC = () => {
                 </div>
             )}
             {isProcessing && <div className="max-w-3xl mx-auto"><ProcessingView steps={processingSteps} imageUrl={imageUrl} /></div>}
-            {result && imageUrl && (<div className="max-w-7xl mx-auto"><ResultsDashboard result={result} imageUrl={imageUrl} onReset={handleReset} onSave={handleReset} user={user} onRequestAccess={() => setIsRequestAccessOpen(true)} isHistoryView={isViewingHistory} /></div>)}
+            {result && imageUrl && (<div className="max-w-7xl mx-auto"><ResultsDashboard result={result} imageUrl={imageUrl} onReset={handleCloseResult} onSave={handleManualSave} user={user} onRequestAccess={() => setIsRequestAccessOpen(true)} isHistoryView={isViewingHistory} /></div>)}
         </div>
     );
 };

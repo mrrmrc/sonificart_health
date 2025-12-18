@@ -66,10 +66,24 @@ export const reconstructResultFromPartialData = (
     const rawBlockAnalysis = partialData.blockAnalysisResult || partialData.blockData || partialData.analysis || {};
 
     // Determina Griglia (se manca, la deduce)
+    // Determina Griglia (se manca, la deduce con priorità intelligente)
     let gridSize = 32;
-    if (safeConfig.pixelCount) gridSize = Math.sqrt(safeConfig.pixelCount);
-    else if (safeRawEvents.length > 0) gridSize = Math.ceil(Math.sqrt(safeRawEvents.length));
-    else if (rawBlockAnalysis.gridSize) gridSize = rawBlockAnalysis.gridSize;
+    // 1. Configurazione Esplicita CARICATA (non il default)
+    if (loadedConfig.pixelCount) {
+        gridSize = Math.sqrt(loadedConfig.pixelCount);
+    }
+    // 2. Deduzione da Eventi (se config mancante, utile per vecchi salvataggi)
+    else if (safeRawEvents.length > 0) {
+        // Se gli eventi sono > 1024, probabilmente è 64x64 (4096)
+        // Usiamo ceil(sqrt) per sicurezza
+        const inferred = Math.ceil(Math.sqrt(safeRawEvents.length));
+        if (inferred > 32) gridSize = inferred;
+        else if (rawBlockAnalysis.gridSize) gridSize = rawBlockAnalysis.gridSize;
+    }
+    // 3. Fallback analisi o default
+    else if (rawBlockAnalysis.gridSize) {
+        gridSize = rawBlockAnalysis.gridSize;
+    }
 
     // Se non ci sono eventi (es. dashboard solo audio), ne creiamo di fittizi per visualizzazione
     const finalEvents = safeRawEvents.length > 0 ? safeRawEvents : Array.from({ length: 256 }, (_, i) => ({
@@ -82,9 +96,30 @@ export const reconstructResultFromPartialData = (
 
     // Sanitizzazione Coordinate Eventi
     const sanitizedEvents: TransformedNoteEvent[] = finalEvents.map((evt: any, index: number) => {
+
+        // GESTIONE FORMATO COMPRESSO (v1.10+) [time, dur, midi, vel, x, y, noteName]
+        if (Array.isArray(evt)) {
+            const x = evt[4] ?? -1;
+            const y = evt[5] ?? -1;
+            return {
+                time: evt[0],
+                duration: evt[1],
+                midiFloat: evt[2],
+                velocity: evt[3],
+                noteName: evt[6] || "C",
+                baseNote: Math.round(evt[2]),
+                sourceBlock: {
+                    r: 100, g: 100, b: 100, // Colore fittizio, verrà ricollegato in Dashboard
+                    position: { x, y }
+                },
+                sourceBlockIndex: (x >= 0 && y >= 0) ? (y * gridSize + x) : index,
+                isAccompaniment: false
+            };
+        }
+
         let cx = 0;
         let cy = 0;
-
+        // ... Logic for object format ...
         // Calcolo coordinate da indice se mancano
         if (typeof evt.sourceBlockIndex === 'number') {
             cx = evt.sourceBlockIndex % gridSize;

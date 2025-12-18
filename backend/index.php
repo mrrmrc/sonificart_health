@@ -52,12 +52,16 @@ try {
 $action = $_GET['action'] ?? '';
 $method = $_SERVER['REQUEST_METHOD'];
 
-// Gestione Input
+// Gestione Input Unificata
 $input = [];
-if (strpos($_SERVER['CONTENT_TYPE'] ?? '', 'multipart/form-data') === false) {
+if (strpos($_SERVER['CONTENT_TYPE'] ?? '', 'multipart/form-data') !== false) {
+    $input = $_POST;
+} else {
     $rawInput = file_get_contents('php://input');
     $input = json_decode($rawInput, true) ?? [];
 }
+
+// ... functions ...
 
 function getUserIdFromToken($input)
 {
@@ -113,6 +117,101 @@ function saveBase64File($base64Data, $type, $hash)
         return $webFolder . $fileName;
     }
     return null;
+}
+
+function saveUploadedFile($fileKey, $type, $hash)
+{
+    if (!isset($_FILES[$fileKey]) || $_FILES[$fileKey]['error'] !== UPLOAD_ERR_OK)
+        return null;
+    $file = $_FILES[$fileKey];
+    $ext = ($type === 'image') ? 'jpg' : 'wav';
+
+    // Validate if user provided a specific name/ext? No, stick to hash.
+    // Actually for security verify mime type? assume ok for now context.
+
+    $folder = ($type === 'image') ? '../media/images/' : '../media/audio/';
+    if (strpos($hash, 'pub_') === 0)
+        $folder = '../media/custom/';
+
+    $fileName = $hash . '.' . $ext;
+    $serverPath = __DIR__ . '/' . $folder;
+
+    if (!file_exists($serverPath))
+        mkdir($serverPath, 0755, true);
+
+    if (move_uploaded_file($file['tmp_name'], $serverPath . $fileName)) {
+        $webFolder = ($type === 'image') ? '/media/images/' : '/media/audio/';
+        if (strpos($hash, 'pub_') === 0)
+            $webFolder = '/media/custom/';
+        return $webFolder . $fileName;
+    }
+    return null;
+}
+
+// ...
+
+// --- SAVE SONIFICATION (MULTIPART SUPPORT) ---
+if ($action === 'save_sonification' && $method === 'POST') {
+    try {
+        $hash = $input['imageHash'] ?? 'hash_' . time();
+        $isMultipart = (strpos($_SERVER['CONTENT_TYPE'] ?? '', 'multipart/form-data') !== false);
+
+        // Campi JSON (se multipart arrivano come stringhe, se JSON come array/null)
+        // Helper per decodificare se stringa
+        $decodeIfNeeded = function ($val) {
+            return (is_string($val) && (strpos($val, '{') === 0 || strpos($val, '[') === 0)) ? $val : (is_array($val) ? json_encode($val) : $val);
+        };
+        // ATTENZIONE: Se ricevo array da JSON input, json_encode mi serve per salvarlo nel DB (che vuole stringa)
+        // Se ricevo stringa da FormData, è già pronta per il DB? Sì.
+        // Ma aspetta: in JSON mode facevo isset(...) ? json_encode(...) : null.
+        // Unifichiamo: Vogliamo STRINGHE JSON valide per il DB.
+
+        $getJsonString = function ($key) use ($input) {
+            if (!isset($input[$key]))
+                return null;
+            $val = $input[$key];
+            if (is_array($val))
+                return json_encode($val);
+            // Se è stringa, assumiamo sia già JSON valido o raw text. Per events/blocks è JSON.
+            // Controlliamo se è 'null' stringa?
+            if ($val === 'null')
+                return null;
+            return $val;
+        };
+
+        $musicPrompt = $getJsonString('musicGenerationPrompt');
+        $generatedAiTrackUrl = $input['generatedAiTrackUrl'] ?? null;
+        if ($generatedAiTrackUrl === 'null')
+            $generatedAiTrackUrl = null;
+        $configJson = $getJsonString('configUsed');
+        $eventData = $getJsonString('events');
+        $blockData = $getJsonString('blockData');
+
+        // Gestione File (Ibrido: Files o Base64)
+        $imgUrl = null;
+        if (isset($_FILES['imageFile'])) {
+            $imgUrl = saveUploadedFile('imageFile', 'image', $hash);
+        } else {
+            $imgUrl = saveBase64File($input['imageUrl'] ?? '', 'image', $hash);
+        }
+
+        $audioUrl = null;
+        if (isset($_FILES['audioFile'])) {
+            $audioUrl = saveUploadedFile('audioFile', 'audio', $hash);
+        } else {
+            $audioUrl = saveBase64File($input['audioData'] ?? '', 'audio', $hash);
+        }
+
+        if (!$imgUrl)
+            $imgUrl = "placeholder.png";
+
+        $stmt = $pdo->prepare("INSERT INTO history (user_id, image_hash, paradigm, tradition_name, image_url, audio_url, music_generation_prompt, generated_ai_track_url, config_json, event_data, block_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$userId, $hash, $input['paradigm'], $input['traditionName'], $imgUrl, $audioUrl, $musicPrompt, $generatedAiTrackUrl, $configJson, $eventData, $blockData]);
+
+        sendResponse(["success" => true]);
+    } catch (Exception $e) {
+        sendResponse(["error" => "Save Error: " . $e->getMessage()], 500);
+    }
 }
 
 function generatePassword($length = 10)
@@ -322,14 +421,19 @@ if ($action === 'save_sonification' && $method === 'POST') {
         // Handling JSON fields
         $musicPrompt = isset($input['musicGenerationPrompt']) ? json_encode($input['musicGenerationPrompt']) : null;
         $generatedAiTrackUrl = $input['generatedAiTrackUrl'] ?? null;
+        $configJson = isset($input['configUsed']) ? json_encode($input['configUsed']) : null;
+
+        // Critical Logic Data (Events & Blocks)
+        $eventData = isset($input['events']) ? json_encode($input['events']) : null;
+        $blockData = isset($input['blockData']) ? json_encode($input['blockData']) : null;
 
         $imgUrl = saveBase64File($input['imageUrl'] ?? '', 'image', $hash);
         $audioUrl = saveBase64File($input['audioData'] ?? '', 'audio', $hash);
         if (!$imgUrl)
             $imgUrl = "placeholder.png";
 
-        $stmt = $pdo->prepare("INSERT INTO history (user_id, image_hash, paradigm, tradition_name, image_url, audio_url, music_generation_prompt, generated_ai_track_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$userId, $hash, $input['paradigm'], $input['traditionName'], $imgUrl, $audioUrl, $musicPrompt, $generatedAiTrackUrl]);
+        $stmt = $pdo->prepare("INSERT INTO history (user_id, image_hash, paradigm, tradition_name, image_url, audio_url, music_generation_prompt, generated_ai_track_url, config_json, event_data, block_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$userId, $hash, $input['paradigm'], $input['traditionName'], $imgUrl, $audioUrl, $musicPrompt, $generatedAiTrackUrl, $configJson, $eventData, $blockData]);
 
         sendResponse(["success" => true]);
     } catch (Exception $e) {
@@ -417,7 +521,10 @@ if ($action === 'get_history' && $method === 'POST') {
             "paradigm" => $h['paradigm'],
             "traditionName" => $h['tradition_name'],
             "musicGenerationPrompt" => isset($h['music_generation_prompt']) ? json_decode($h['music_generation_prompt'], true) : null,
-            "generatedAiTrackUrl" => $h['generated_ai_track_url'] ?? null
+            "generatedAiTrackUrl" => $h['generated_ai_track_url'] ?? null,
+            "configUsed" => isset($h['config_json']) ? json_decode($h['config_json'], true) : null,
+            "events" => isset($h['event_data']) ? json_decode($h['event_data'], true) : null,
+            "blockData" => isset($h['block_data']) ? json_decode($h['block_data'], true) : null
         ];
     }, $history);
     sendResponse($mapped);

@@ -56,7 +56,7 @@ export const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, isAdmin, userCredits
                                 Sonific<span className="text-brand-accent">A.R.T.</span>
                             </span>
                             <span className="text-[10px] font-mono text-brand-text-secondary/70 border border-white/10 px-1.5 rounded bg-white/5">
-                                v1.1
+                                v1.13
                             </span>
                         </div>
                         <span className="text-[8px] uppercase tracking-[0.2em] text-brand-text-secondary hidden sm:block group-hover:text-white transition-colors">

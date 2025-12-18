@@ -5,6 +5,7 @@ import { api, USE_MOCK_BACKEND } from '../services/api';
 const fixImage = (url: string | undefined) => {
     if (!url) return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
     if (url.startsWith('data:') || url.startsWith('http')) return url;
+    if (url.startsWith('/')) return `https://sonificart.com${url}`;
     return `data:image/jpeg;base64,${url}`;
 };
 

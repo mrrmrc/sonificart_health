@@ -60,10 +60,22 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
 
     const [originalAspectRatio, setOriginalAspectRatio] = useState<number | null>(null);
     const [hasSaved, setHasSaved] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
-    const handleSaveClick = () => {
-        onSave();
-        setHasSaved(true);
+    const handleSaveClick = async () => {
+        if (hasSaved || isSaving) return;
+        setIsSaving(true);
+        try {
+            await onSave();
+            setHasSaved(true);
+            alert(t('showcase.saved_success') || "Sonificazione salvata con successo!");
+        } catch (e) {
+            console.error(e);
+            alert(e instanceof Error ? e.message : "Errore durante il salvataggio.");
+            setHasSaved(false);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleClose = () => {
@@ -732,8 +744,16 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                             {isHistoryView ? t('results.back_to_list') : "CHIUDI"}
                                         </button>
                                         {!isHistoryView && (
-                                            <button onClick={handleSaveClick} className="flex-1 bg-green-500/20 hover:bg-green-500/30 text-green-300 py-2 rounded text-xs font-bold transition-colors border border-green-500/30 flex items-center justify-center gap-2">
-                                                <i className="fas fa-save"></i> {t('showcase.save') || "SALVA"}
+                                            <button
+                                                onClick={handleSaveClick}
+                                                disabled={hasSaved || isSaving}
+                                                className={`flex-1 ${hasSaved ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-green-500/20 hover:bg-green-500/30 text-green-300 border-green-500/30'} py-2 rounded text-xs font-bold transition-colors border flex items-center justify-center gap-2`}
+                                            >
+                                                {isSaving ? (
+                                                    <><i className="fas fa-spinner fa-spin"></i> SALVATAGGIO...</>
+                                                ) : (
+                                                    hasSaved ? <><i className="fas fa-check"></i> SALVATO</> : <><i className="fas fa-save"></i> {t('showcase.save') || "SALVA"}</>
+                                                )}
                                             </button>
                                         )}
                                     </div>
