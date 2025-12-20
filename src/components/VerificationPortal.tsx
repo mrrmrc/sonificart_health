@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { verifySacContainer } from '../services/sacService';
 import { SacVerificationResult, User } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
+import { ConfirmationModal } from './ConfirmationModal';
 
 type VerificationStatus = 'idle' | 'scanning' | 'analyzing' | 'valid' | 'invalid' | 'error' | 'not_found';
 
@@ -74,43 +75,43 @@ const FileUploader: React.FC<{ onFileSelect: (file: File) => void }> = ({ onFile
 const ScannerAnimation: React.FC = () => {
     const { t } = useLanguage();
     return (
-    <div className="flex flex-col items-center justify-center h-80 relative overflow-hidden bg-black/60 rounded-2xl border border-brand-accent/20">
-        <div className="absolute top-0 left-0 w-full h-full bg-[linear-gradient(transparent_0%,rgba(45,212,191,0.1)_50%,transparent_100%)] animate-scan"></div>
-        <div className="w-32 h-32 border-4 border-brand-accent/30 rounded-full flex items-center justify-center relative">
-            <div className="absolute inset-0 border-4 border-t-brand-accent border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
-            <i className="fas fa-search text-4xl text-brand-accent animate-pulse"></i>
+        <div className="flex flex-col items-center justify-center h-80 relative overflow-hidden bg-black/60 rounded-2xl border border-brand-accent/20">
+            <div className="absolute top-0 left-0 w-full h-full bg-[linear-gradient(transparent_0%,rgba(45,212,191,0.1)_50%,transparent_100%)] animate-scan"></div>
+            <div className="w-32 h-32 border-4 border-brand-accent/30 rounded-full flex items-center justify-center relative">
+                <div className="absolute inset-0 border-4 border-t-brand-accent border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
+                <i className="fas fa-search text-4xl text-brand-accent animate-pulse"></i>
+            </div>
+            <h3 className="mt-8 text-xl font-bold text-white tracking-widest animate-pulse">{t('verification.scanning')}</h3>
+            <div className="mt-2 font-mono text-xs text-brand-accent">{t('verification.digital_signatures')}</div>
         </div>
-        <h3 className="mt-8 text-xl font-bold text-white tracking-widest animate-pulse">{t('verification.scanning')}</h3>
-        <div className="mt-2 font-mono text-xs text-brand-accent">{t('verification.digital_signatures')}</div>
-    </div>
     );
 };
 
 const NotFoundResultDisplay: React.FC<{ fileName: string, onReset: () => void, details?: string }> = ({ fileName, onReset, details }) => {
     const { t } = useLanguage();
     return (
-    <div className="p-8 border border-red-900/50 rounded-xl bg-[#0f0505] animate-fade-in relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-1 h-full bg-red-600"></div>
+        <div className="p-8 border border-red-900/50 rounded-xl bg-[#0f0505] animate-fade-in relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-1 h-full bg-red-600"></div>
 
-        <div className="flex flex-col items-center text-center mb-8 relative z-10">
-            <div className="w-20 h-20 rounded-full bg-red-900/20 flex items-center justify-center text-red-500 text-4xl mb-4 border border-red-500/30">
-                <i className="fas fa-times"></i>
+            <div className="flex flex-col items-center text-center mb-8 relative z-10">
+                <div className="w-20 h-20 rounded-full bg-red-900/20 flex items-center justify-center text-red-500 text-4xl mb-4 border border-red-500/30">
+                    <i className="fas fa-times"></i>
+                </div>
+                <h3 className="text-2xl font-bold text-red-100 mb-2">{t('verification.invalid')}</h3>
+                <p className="text-red-200/60 text-sm max-w-md">
+                    {t('verification.failed_file', { file: fileName })}
+                </p>
             </div>
-            <h3 className="text-2xl font-bold text-red-100 mb-2">{t('verification.invalid')}</h3>
-            <p className="text-red-200/60 text-sm max-w-md">
-                {t('verification.failed_file', { file: fileName })}
-            </p>
-        </div>
 
-        <div className="bg-red-950/30 border border-red-900/50 p-4 rounded-lg text-left mb-8 text-xs text-red-200/80 space-y-2">
-            <p className="font-bold uppercase mb-2">{t('verification.error_details')}</p>
-            <p className="font-mono">{details || t('verification.corrupted')}</p>
-        </div>
+            <div className="bg-red-950/30 border border-red-900/50 p-4 rounded-lg text-left mb-8 text-xs text-red-200/80 space-y-2">
+                <p className="font-bold uppercase mb-2">{t('verification.error_details')}</p>
+                <p className="font-mono">{details || t('verification.corrupted')}</p>
+            </div>
 
-        <button onClick={onReset} className="w-full bg-red-900/20 hover:bg-red-900/40 text-red-200 font-bold py-3 rounded-lg transition-colors border border-red-800/30">
-            {t('verification.retry')}
-        </button>
-    </div>
+            <button onClick={onReset} className="w-full bg-red-900/20 hover:bg-red-900/40 text-red-200 font-bold py-3 rounded-lg transition-colors border border-red-800/30">
+                {t('verification.retry')}
+            </button>
+        </div>
     );
 };
 
@@ -263,6 +264,9 @@ export const VerificationPortal: React.FC<VerificationPortalProps> = ({ user, on
     const [error, setError] = useState<string | null>(null);
     const [uploadedFile, setUploadedFile] = useState<File | null>(null);
 
+    // MODAL STATE
+    const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean, title: string, message: string, onConfirm: () => void, type: 'info' | 'warning' | 'danger' | 'success', singleButton?: boolean }>({ isOpen: false, title: '', message: '', onConfirm: () => { }, type: 'info' });
+
     const handleFileSelect = useCallback(async (file: File) => {
         setStatus('scanning');
         setUploadedFile(file);
@@ -284,7 +288,14 @@ export const VerificationPortal: React.FC<VerificationPortalProps> = ({ user, on
         if (onLoadSacProject && uploadedFile && result) {
             onLoadSacProject(uploadedFile, result);
         } else {
-            alert("Funzionalità di caricamento non disponibile.");
+            setConfirmModal({
+                isOpen: true,
+                title: "Errore",
+                message: "Funzionalità di caricamento non disponibile.",
+                type: 'warning',
+                singleButton: true,
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            });
         }
     };
 
@@ -309,6 +320,16 @@ export const VerificationPortal: React.FC<VerificationPortalProps> = ({ user, on
             {status === 'valid' && result && uploadedFile && <VerificationResultDisplay result={result} file={uploadedFile} onReset={reset} onLoad={handleLoad} />}
             {status === 'not_found' && uploadedFile && <NotFoundResultDisplay fileName={uploadedFile.name} onReset={reset} details={t('verification.invalid')} />}
             {status === 'error' && <div className="text-center text-red-500">{t('verification.error_read')}: {error} <button onClick={reset}>{t('verification.retry')}</button></div>}
+
+            <ConfirmationModal
+                isOpen={confirmModal.isOpen}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                type={confirmModal.type}
+                singleButton={confirmModal.singleButton}
+                onConfirm={confirmModal.onConfirm}
+                onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+            />
         </div>
     );
 };

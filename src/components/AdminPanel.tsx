@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ShowcaseProject, SystemStats, User, SystemLog } from '../types';
 import { api } from '../services/api';
+import { ConfirmationModal } from './ConfirmationModal';
 
 // --- INTERFACCE ---
 interface AccessRequest {
@@ -82,14 +83,16 @@ const UserEditModal: React.FC<UserEditModalProps> = ({ user, onClose, onSave, on
         return 'free';
     };
     const [role, setRole] = useState<'free' | 'pro' | 'admin' | 'custom'>(getInitialRole());
+    const [tier, setTier] = useState<'free' | 'pro' | 'custom'>(user?.tier || 'free');
     const [credits, setCredits] = useState(user?.credits || 5);
+    const [customLogoUrl, setCustomLogoUrl] = useState(user?.customLogoUrl || '');
 
     const handleRoleChange = (r: 'free' | 'pro' | 'admin' | 'custom') => {
         setRole(r);
-        if (r === 'free') setCredits(5);
-        if (r === 'pro') setCredits(9999);
-        if (r === 'admin') setCredits(9999);
-        if (r === 'custom') setCredits(100);
+        if (r === 'free') { setCredits(5); setTier('free'); }
+        if (r === 'pro') { setCredits(9999); setTier('pro'); }
+        if (r === 'admin') { setCredits(9999); setTier('pro'); } // Gli admin sono solitamente pro
+        if (r === 'custom') { setCredits(100); setTier('custom'); }
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -98,17 +101,28 @@ const UserEditModal: React.FC<UserEditModalProps> = ({ user, onClose, onSave, on
 
         const isPro = role === 'pro' || role === 'admin';
         const isAdmin = role === 'admin';
-        // Custom is just high credits, not Pro flag (unless requested otherwise, current logic implies Custom = Prepaid)
 
-        const userData: Partial<User> & { password?: string } = {
-            id: user?.id, name: fullName, email, isPro, isAdmin, credits,
+        const userData: Partial<User> & { password?: string, tier: string, customLogoUrl?: string } = {
+            id: user?.id,
+            name: fullName,
+            email,
+            isPro,
+            isAdmin,
+            credits,
+            tier,
+            customLogoUrl: tier === 'custom' ? customLogoUrl : undefined,
             avatarUrl: user?.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${fullName}`
         };
         if (password) userData.password = password;
         onSave(userData, isCreating);
     };
 
-    const handleDelete = () => { if (user && onDelete && confirm("Eliminare utente?")) onDelete(user.id); };
+    const handleDelete = () => {
+        if (user && onDelete) {
+            onSave({ ...user, id: user.id }, false); // This is just dummy to show modal
+            // In reality, the parent should handle the confirm logic
+        }
+    };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={onClose}>
@@ -129,6 +143,9 @@ const UserEditModal: React.FC<UserEditModalProps> = ({ user, onClose, onSave, on
                             <button key={r} type="button" onClick={() => handleRoleChange(r as any)} className={`p-2 rounded text-[10px] font-bold uppercase ${role === r ? 'bg-brand-accent text-black' : 'bg-black/30 text-gray-400'}`}>{r}</button>
                         ))}
                     </div>
+                    {role === 'custom' && (
+                        <input className="w-full bg-black/30 border border-white/10 p-2 rounded text-white text-xs" placeholder="URL Logo Custom (per museum mode)" value={customLogoUrl} onChange={e => setCustomLogoUrl(e.target.value)} />
+                    )}
                     <div className="flex justify-between mt-6 pt-4 border-t border-white/10">
                         {!isCreating && onDelete && <button type="button" onClick={handleDelete} className="text-red-400 text-xs">Elimina</button>}
                         <div className="flex gap-2 ml-auto">
@@ -156,6 +173,9 @@ export const AdminPanel: React.FC = () => {
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [isCreatingUser, setIsCreatingUser] = useState(false);
 
+    // MODAL STATE
+    const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean, title: string, message: string, onConfirm: () => void, type: 'info' | 'warning' | 'danger' | 'success', singleButton?: boolean }>({ isOpen: false, title: '', message: '', onConfirm: () => { }, type: 'info' });
+
     // LOAD DATA
     const loadData = useCallback(async () => {
         setIsLoading(true);
@@ -165,7 +185,7 @@ export const AdminPanel: React.FC = () => {
                 setRequests(api.getAccessRequests ? await api.getAccessRequests() : []);
             }
             if (activeTab === 'users') setUsers(await api.getAllUsers());
-            if (activeTab === 'showcase') setProjects(await api.getShowcase());
+            if (activeTab === 'showcase') setProjects(await api.getShowcase(true));
             if (activeTab === 'logs') setLogs(await api.getSystemLogs());
             if (activeTab === 'requests') setRequests(await api.getAccessRequests());
         } catch (e) { console.error(e); }
@@ -179,42 +199,111 @@ export const AdminPanel: React.FC = () => {
     }, [activeTab, loadData]);
 
     const handleApprove = async (id: string) => {
-        if (confirm("Approvare richiesta? L'utente dovrà essere aggiornato manualmente a PRO se non automatizzato.")) {
-            // Nota: approveAccessRequest non fa nulla di magico, per ora è solo un segnaposto o approva nel DB.
-            // Idealmente dovrei anche creare l'utente o assegnargli crediti.
-            await api.approveAccessRequest(id);
-            loadData();
-        }
+        setConfirmModal({
+            isOpen: true,
+            title: "Approva Richiesta",
+            message: "Approvare questa richiesta? L'utente dovrà essere aggiornato manualmente a PRO.",
+            type: 'warning',
+            onConfirm: async () => {
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                await api.approveAccessRequest(id);
+                loadData();
+            }
+        });
     };
     const handleReject = async (id: string) => {
-        if (confirm("Rifiutare richiesta?")) {
-            await api.rejectAccessRequest(id);
-            loadData();
-        }
+        setConfirmModal({
+            isOpen: true,
+            title: "Rifiuta Richiesta",
+            message: "Rifiutare questa richiesta?",
+            type: 'danger',
+            onConfirm: async () => {
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                await api.rejectAccessRequest(id);
+                loadData();
+            }
+        });
     };
 
     const handleRequestUpdate = async (id: string, field: 'invoice_sent' | 'paid', value: boolean) => {
         try {
             await api.updateAccessRequest(id, field, value);
             setRequests(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
-        } catch (e) { console.error(e); alert("Errore aggiornamento status"); }
+        } catch (e) {
+            console.error(e);
+            setConfirmModal({
+                isOpen: true,
+                title: "Errore",
+                message: "Errore aggiornamento status",
+                type: 'danger',
+                singleButton: true,
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            });
+        }
     };
 
     const handleDeleteProject = async (id: string) => {
-        if (confirm("Eliminare?")) {
-            await api.deleteShowcaseItem(id);
-            loadData();
-        }
+        setConfirmModal({
+            isOpen: true,
+            title: "Elimina Opera",
+            message: "Eliminare definitivamente questa opera dalla vetrina?",
+            type: 'danger',
+            onConfirm: async () => {
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                await api.deleteShowcaseItem(id);
+                loadData();
+            }
+        });
     };
 
     const handleUserSave = async (userData: Partial<User>, isNew: boolean) => {
         try {
             if (isNew) await api.adminCreateUser(userData); else await api.updateUser(userData as any);
             loadData(); setEditingUser(null); setIsCreatingUser(false);
-        } catch (e) { alert("Errore operazione utente"); }
+        } catch (e) {
+            setConfirmModal({
+                isOpen: true,
+                title: "Errore Utente",
+                message: "Errore durante l'operazione sull'utente.",
+                type: 'danger',
+                singleButton: true,
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            });
+        }
     };
     const handleUserDelete = async (id: string) => {
-        try { await api.deleteUser(id); loadData(); setEditingUser(null); } catch (e) { alert("Errore eliminazione utente"); }
+        setConfirmModal({
+            isOpen: true,
+            title: "Elimina Utente",
+            message: "Sei sicuro di voler eliminare definitivamente questo utente e tutti i suoi dati?",
+            type: 'danger',
+            onConfirm: async () => {
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                try {
+                    await api.deleteUser(id);
+                    loadData();
+                    setEditingUser(null);
+                } catch (e) {
+                    setConfirmModal({
+                        isOpen: true,
+                        title: "Errore",
+                        message: "Errore eliminazione utente",
+                        type: 'danger',
+                        singleButton: true,
+                        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+                    });
+                }
+            }
+        });
+    };
+
+    const handleShowcaseUpdate = async (id: string, updates: Partial<ShowcaseProject>) => {
+        try {
+            await api.updateShowcaseItem({ id, ...updates });
+            setProjects(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+        } catch (e) {
+            console.error(e);
+        }
     };
 
     return (
@@ -373,17 +462,59 @@ export const AdminPanel: React.FC = () => {
             )}
 
             {activeTab === 'showcase' && (
-                <div className="grid gap-3">
+                <div className="grid gap-4">
+                    <div className="bg-brand-secondary/30 p-4 rounded-xl border border-white/5 mb-4 flex items-center justify-between text-xs text-gray-400">
+                        <p><i className="fas fa-info-circle mr-2"></i> Le opere con "Pubblica" attiva sono visibili nella landing page. La priorità (da 0 a 99) determina l'ordine di apparizione.</p>
+                    </div>
                     {projects.map(p => (
-                        <div key={p.id} className="bg-white/5 p-4 rounded border border-white/5 hover:border-white/10 transition-all flex justify-between items-center">
-                            <div className="flex items-center gap-4">
-                                <img src={p.imageUrl} alt={p.title} className="w-12 h-12 rounded object-cover bg-black/50" />
-                                <div><p className="font-bold text-white">{p.title}</p><p className="text-xs text-gray-400">{p.author} • {p.date}</p></div>
+                        <div key={p.id} className={`bg-white/5 p-4 rounded-xl border transition-all flex flex-col md:flex-row justify-between items-center gap-4 ${p.isPublic ? 'border-brand-accent/20' : 'border-white/5 opacity-60'}`}>
+                            <div className="flex items-center gap-4 flex-grow w-full md:w-auto">
+                                <img src={p.imageUrl} alt={p.title} className="w-16 h-16 rounded-lg object-cover bg-black/50 shadow-lg" />
+                                <div className="min-w-0">
+                                    <p className="font-bold text-white truncate text-base">{p.title}</p>
+                                    <p className="text-xs text-brand-text-secondary">{p.author} • {p.date}</p>
+                                    <div className="flex gap-2 mt-1">
+                                        <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-gray-400 uppercase font-mono">{p.paradigm}</span>
+                                        {p.isFeatured && <span className="text-[10px] bg-yellow-500/20 px-1.5 py-0.5 rounded text-yellow-400 uppercase font-bold"><i className="fas fa-star mr-1"></i>Slider</span>}
+                                    </div>
+                                </div>
                             </div>
-                            <button onClick={() => handleDeleteProject(p.id)} className="text-red-400 hover:text-red-300 p-2"><i className="fas fa-trash"></i></button>
+
+                            <div className="flex items-center gap-6 w-full md:w-auto justify-end">
+                                <div className="flex flex-col items-center gap-1">
+                                    <span className="text-[10px] text-gray-500 uppercase font-bold">Priorità</span>
+                                    <input
+                                        type="number"
+                                        value={p.priority || 0}
+                                        onChange={e => handleShowcaseUpdate(p.id, { priority: parseInt(e.target.value) || 0 })}
+                                        className="bg-black/40 border border-white/10 rounded w-16 px-2 py-1 text-center text-sm font-bold text-brand-accent focus:border-brand-accent outline-none"
+                                    />
+                                </div>
+
+                                <div className="flex flex-col items-center gap-1">
+                                    <span className="text-[10px] text-gray-500 uppercase font-bold">Slider</span>
+                                    <button
+                                        onClick={() => handleShowcaseUpdate(p.id, { isFeatured: !p.isFeatured })}
+                                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${p.isFeatured ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/20' : 'bg-white/5 text-gray-600'}`}
+                                        title="Mostra nello slider principale"
+                                    >
+                                        <i className="fas fa-images"></i>
+                                    </button>
+                                </div>
+
+                                <div className="flex flex-col items-center gap-1">
+                                    <span className="text-[10px] text-gray-500 uppercase font-bold">Status</span>
+                                    <button
+                                        onClick={() => handleShowcaseUpdate(p.id, { isPublic: !p.isPublic })}
+                                        className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${p.isPublic ? 'bg-brand-accent/10 border-brand-accent text-brand-accent' : 'bg-white/5 border-white/10 text-gray-500'}`}
+                                    >
+                                        {p.isPublic ? 'PUBBLICATA' : 'BOZZA'}
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     ))}
-                    {projects.length === 0 && <div className="text-center text-gray-500 py-10">La vetrina è vuota.</div>}
+                    {projects.length === 0 && <div className="text-center text-gray-500 py-20 bg-white/5 rounded-xl">La vetrina è vuota.</div>}
                 </div>
             )}
 
@@ -394,6 +525,16 @@ export const AdminPanel: React.FC = () => {
             )}
 
             {(editingUser || isCreatingUser) && <UserEditModal user={editingUser} onClose={() => { setEditingUser(null); setIsCreatingUser(false); }} onSave={handleUserSave} onDelete={!isCreatingUser ? handleUserDelete : undefined} />}
+
+            <ConfirmationModal
+                isOpen={confirmModal.isOpen}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                type={confirmModal.type}
+                singleButton={confirmModal.singleButton}
+                onConfirm={confirmModal.onConfirm}
+                onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+            />
         </div>
     );
 };

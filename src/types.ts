@@ -270,6 +270,8 @@ export interface User {
     isAdmin: boolean;
     token?: string;
     avatarUrl?: string;
+    customLogoUrl?: string;
+    tier?: 'free' | 'pro' | 'custom';
     registeredAt: string;
     lastLogin?: string;
     credits: number;
@@ -317,6 +319,7 @@ export interface ShowcaseProject {
     videoUrl?: string;
     historyId?: string;
     priority?: number;
+    isFeatured?: boolean;
 }
 
 // --- DEFINIZIONE SPOSTATA QUI PER EVITARE DIPENDENZE CIRCOLARI ---

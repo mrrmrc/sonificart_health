@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { DashboardEntry, User } from '../types';
 import { api, USE_MOCK_BACKEND } from '../services/api';
+import { ConfirmationModal } from './ConfirmationModal';
 
 const fixImage = (url: string | undefined) => {
     if (!url) return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
@@ -10,7 +11,7 @@ const fixImage = (url: string | undefined) => {
 };
 
 // --- MODALE PUBBLICAZIONE (CON UPLOAD A PEZZI) ---
-const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPublish: (data: any, customMedia: { url: string, type: string } | null) => Promise<void> }> = ({ entry, onClose, onPublish }) => {
+const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPublish: (data: any, customMedia: { url: string, type: string } | null) => Promise<any> }> = ({ entry, onClose, onPublish }) => {
     const [step, setStep] = useState<1 | 2>(1);
     const [title, setTitle] = useState(`Opera del ${new Date(entry.timestamp).toLocaleDateString()}`);
     const [description, setDescription] = useState('');
@@ -18,6 +19,13 @@ const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPub
     const [customFile, setCustomFile] = useState<File | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
+    const [publishedId, setPublishedId] = useState<string | null>(null);
+
+    // FIX: Store uploaded result to correct QR Code immediately
+    const [uploadedMedia, setUploadedMedia] = useState<{ url: string, type: string } | null>(null);
+
+    // Modal State for inside PublishModal
+    const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean, title: string, message: string, onConfirm: () => void, type: 'info' | 'warning' | 'danger' | 'success', singleButton?: boolean }>({ isOpen: false, title: '', message: '', onConfirm: () => { }, type: 'info' });
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -54,23 +62,68 @@ const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPub
                 }
             }
 
-            await onPublish({
+            if (customMediaResult) {
+                setUploadedMedia(customMediaResult);
+            }
+
+            const result = await onPublish({
                 title, description, tags: tags.split(',').map(t => t.trim()).filter(t => t.length > 0)
             }, customMediaResult);
+
+            if (result && result.id) {
+                setPublishedId(result.id);
+            }
 
             setStep(2);
         } catch (e) {
             console.error(e);
-            alert("Errore durante la pubblicazione.");
+            setConfirmModal({
+                isOpen: true,
+                title: "Errore",
+                message: "Impossibile completare la pubblicazione. Verifica la connessione e riprova.",
+                type: 'danger',
+                singleButton: true,
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            });
         } finally {
             setIsSubmitting(false);
         }
     };
 
     // ... resto del componente
-    const publicLink = `https://sonificart.com/showcase?id=${entry.id}`;
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(publicLink)}`;
-    const downloadQR = async () => { /* ... */ };
+    // MODIFICA: Il link pubblico usa l'id reale della vetrina se disponibile, altrimenti fallback
+    const idToUse = publishedId || entry.id;
+    const publicLink = `https://sonificart.com/?gallery_id=${idToUse}`;
+
+    // Logic for QR Code target (Media > Page)
+    const getAbsoluteUrl = (url: string | null | undefined) => {
+        if (!url) return null;
+        if (url.startsWith('http')) return url;
+        return `https://sonificart.com${url.startsWith('/') ? '' : '/'}${url}`;
+    };
+
+    // FIX: Prioritize uploaded media URL, then AI generated track, then local audio URL
+    const mediaTarget = getAbsoluteUrl(uploadedMedia?.url) || getAbsoluteUrl(entry.generatedAiTrackUrl) || getAbsoluteUrl(entry.audioUrl);
+
+    // Se non abbiamo un file media diretto, mandiamo alla pagina in modalità "museum" (più pulita)
+    const museumLink = `https://sonificart.com/museum?id=${idToUse}`;
+    const qrTarget = museumLink; // Consigliato per avere il controllo sul branding (logo custom)
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrTarget)}`;
+    const downloadQR = async () => {
+        try {
+            const res = await fetch(qrUrl);
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `QR_${entry.id}.png`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        } catch (e) {
+            console.error(e);
+        }
+    };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 animate-fade-in p-4" onClick={onClose}>
@@ -79,9 +132,9 @@ const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPub
                     {step === 1 ? (
                         <form onSubmit={handleSubmit} className="space-y-6">
                             <h3 className="text-2xl font-bold text-white mb-6">Pubblica in Vetrina</h3>
-                            <div className="flex gap-6">
-                                <img src={fixImage(entry.imageUrl)} className="w-1/3 h-32 object-cover rounded-lg border border-white/10" alt="Preview" />
-                                <div className="w-2/3 space-y-4">
+                            <div className="flex flex-col sm:flex-row gap-6">
+                                <img src={fixImage(entry.imageUrl)} className="w-full sm:w-1/3 h-48 sm:h-32 object-cover rounded-lg border border-white/10" alt="Preview" />
+                                <div className="w-full sm:w-2/3 space-y-4">
                                     <input required type="text" className="w-full bg-black/30 border border-white/10 p-2 rounded text-white" value={title} onChange={e => setTitle(e.target.value)} />
                                     <div className="p-2 bg-black/20 rounded border border-white/5">
                                         <label className="block text-xs font-bold text-brand-accent uppercase mb-1 cursor-pointer">Carica Video/Audio (Opzionale)<input type="file" accept="video/*,audio/*" className="hidden" onChange={e => setCustomFile(e.target.files ? e.target.files[0] : null)} /></label>
@@ -117,29 +170,46 @@ const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPub
                             <div className="flex justify-center my-4"><img src={qrUrl} alt="QR Code" className="w-32 h-32 bg-white p-2 rounded" /></div>
                             <div className="flex justify-center gap-4">
                                 <button onClick={downloadQR} className="px-4 py-2 bg-white/10 rounded text-white text-xs font-bold">Scarica QR</button>
-                                <button onClick={() => navigator.clipboard.writeText(publicLink)} className="px-4 py-2 bg-white/10 rounded text-white text-xs font-bold">Copia Link</button>
+                                <button onClick={() => {
+                                    navigator.clipboard.writeText(qrTarget);
+                                    // Potremmo aggiungere un piccolo feedback visivo qui, ma per ora va bene così
+                                }} className="px-4 py-2 bg-white/10 rounded text-white text-xs font-bold">Copia Link</button>
                             </div>
                             <button onClick={onClose} className="text-gray-500 text-sm mt-4">Chiudi</button>
                         </div>
                     )}
                 </div>
             </div>
+
+            <ConfirmationModal
+                isOpen={confirmModal.isOpen}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                type={confirmModal.type}
+                singleButton={confirmModal.singleButton}
+                onConfirm={confirmModal.onConfirm}
+                onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+            />
         </div>
     );
 };
 
 // ... (HistoryItem rimane uguale)
 const HistoryItem: React.FC<{ item: DashboardEntry; onView: () => void; onPublishClick?: () => void; onDelete?: () => void; isPro?: boolean }> = ({ item, onView, onPublishClick, onDelete, isPro }) => (
-    <div className="bg-brand-secondary/40 p-4 rounded-lg flex items-center gap-4 hover:bg-brand-secondary/60 transition-all cursor-pointer" onClick={onView}>
-        <div className="w-20 h-20 flex-shrink-0"><img src={fixImage(item.imageUrl)} alt="thumb" className="w-full h-full object-cover rounded bg-black" /></div>
-        <div className="flex-grow min-w-0">
-            <h4 className="text-white font-bold text-sm truncate">{item.traditionName || "Senza Titolo"}</h4>
-            <div className="text-[10px] text-gray-500 mt-1 flex gap-2"><span className="bg-white/10 px-1.5 rounded uppercase">{item.paradigm}</span><span>{new Date(item.timestamp).toLocaleDateString()}</span></div>
+    <div className="bg-brand-secondary/40 p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center gap-4 hover:bg-brand-secondary/60 transition-all cursor-pointer" onClick={onView}>
+        <div className="flex items-center gap-4 w-full">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0"><img src={fixImage(item.imageUrl)} alt="thumb" className="w-full h-full object-cover rounded bg-black" /></div>
+            <div className="flex-grow min-w-0">
+                <h4 className="text-white font-bold text-sm truncate">{item.traditionName || "Senza Titolo"}</h4>
+                <div className="text-[10px] text-gray-500 mt-1 flex gap-2"><span className="bg-white/10 px-1.5 rounded uppercase">{item.paradigm}</span><span>{new Date(item.timestamp).toLocaleDateString()}</span></div>
+            </div>
         </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-            <button onClick={(e) => { e.stopPropagation(); onView(); }} className="bg-brand-primary hover:bg-white/10 text-white text-xs font-bold py-2 px-4 rounded border border-white/10">Sonificazione</button>
-            {isPro && onPublishClick && <button onClick={(e) => { e.stopPropagation(); onPublishClick(); }} className="bg-purple-600/20 text-purple-300 hover:bg-purple-600 hover:text-white text-xs font-bold py-2 px-4 rounded border border-purple-500/30">Galleria</button>}
-            <button onClick={(e) => { e.stopPropagation(); if (onDelete) onDelete(); }} className="bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white p-2 rounded ml-2"><i className="fas fa-trash"></i></button>
+        <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto mt-2 sm:mt-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-white/5">
+            <div className="flex gap-2">
+                <button onClick={(e) => { e.stopPropagation(); onView(); }} className="bg-brand-primary hover:bg-white/10 text-white text-[10px] sm:text-xs font-bold py-2 px-3 sm:px-4 rounded border border-white/10">Sonificazione</button>
+                {isPro && onPublishClick && <button onClick={(e) => { e.stopPropagation(); onPublishClick(); }} className="bg-purple-600/20 text-purple-300 hover:bg-purple-600 hover:text-white text-[10px] sm:text-xs font-bold py-2 px-3 sm:px-4 rounded border border-purple-500/30">Galleria</button>}
+            </div>
+            <button onClick={(e) => { e.stopPropagation(); if (onDelete) onDelete(); }} className="bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white p-2 rounded ml-2"><i className="fas fa-trash text-xs"></i></button>
         </div>
     </div>
 );
@@ -149,6 +219,9 @@ export const UserDashboard: React.FC<{ onLoadEntry: (entry: DashboardEntry) => v
     const [isLoading, setIsLoading] = useState(true);
     const [publishingEntry, setPublishingEntry] = useState<DashboardEntry | null>(null);
     const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+    // MODAL STATES
+    const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean, title: string, message: string, onConfirm: () => void, type: 'info' | 'warning' | 'danger' | 'success', singleButton?: boolean }>({ isOpen: false, title: '', message: '', onConfirm: () => { }, type: 'info' });
 
     const loadHistory = useCallback(async () => {
         setIsLoading(true);
@@ -164,15 +237,32 @@ export const UserDashboard: React.FC<{ onLoadEntry: (entry: DashboardEntry) => v
     useEffect(() => { loadHistory(); }, [loadHistory]);
 
     const deleteItem = async (id: string) => {
-        if (confirm("Sei sicuro di voler eliminare definitivamente questa opera?")) {
-            setHistory(currentHistory => currentHistory.filter(item => item.id !== id));
-            try {
-                await api.deleteHistoryItem(id);
-            } catch (e) {
-                alert("Errore nella cancellazione. Ricarica la pagina.");
-                loadHistory();
+        setConfirmModal({
+            isOpen: true,
+            title: "Elimina Opera",
+            message: "Sei sicuro di voler eliminare definitivamente questa opera? L'azione è irreversibile.",
+            type: 'danger',
+            onConfirm: async () => {
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                const oldHistory = [...history];
+                setHistory(currentHistory => currentHistory.filter(item => item.id !== id));
+                try {
+                    await api.deleteHistoryItem(id);
+                } catch (e) {
+                    setConfirmModal({
+                        isOpen: true,
+                        title: "Errore",
+                        message: "Impossibile eliminare l'opera. Riprova più tardi.",
+                        type: 'danger',
+                        singleButton: true,
+                        onConfirm: () => {
+                            setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                            setHistory(oldHistory);
+                        }
+                    });
+                }
             }
-        }
+        });
     };
 
     const handlePublish = async (metadata: { title: string; description: string; tags: string[] }, customMedia: { url: string; type: string; } | null) => {
@@ -191,6 +281,16 @@ export const UserDashboard: React.FC<{ onLoadEntry: (entry: DashboardEntry) => v
                 </div>
             )}
             {publishingEntry && <PublishModal entry={publishingEntry} onClose={() => setPublishingEntry(null)} onPublish={handlePublish} />}
+
+            <ConfirmationModal
+                isOpen={confirmModal.isOpen}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                type={confirmModal.type}
+                singleButton={confirmModal.singleButton}
+                onConfirm={confirmModal.onConfirm}
+                onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+            />
         </div>
     );
 };

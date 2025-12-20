@@ -9,6 +9,7 @@ import { sonifyImage, sonifyImageArtistic, sonifyImageHybrid } from '../services
 import { api } from '../services/api';
 import { ProcessingView } from '../components/ProcessingView';
 import { ResultsDashboard } from '../components/ResultsDashboard';
+import { ConfirmationModal } from '../components/ConfirmationModal';
 import { ParadigmToggle } from '../components/ParadigmToggle';
 import { ImageUploader } from '../components/ImageUploader';
 import { ImagePreview } from '../components/ImagePreview';
@@ -41,6 +42,21 @@ export const SonificationPage: React.FC = () => {
     const [oscStatus, setOscStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
     const [oscError, setOscError] = useState<string | null>(null);
     const [isViewingHistory, setIsViewingHistory] = useState(false);
+
+    // MODAL STATE
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean,
+        title: string,
+        message: string,
+        onConfirm: (val?: string) => void,
+        type: 'info' | 'warning' | 'danger' | 'success',
+        singleButton?: boolean,
+        showInput?: boolean,
+        inputPlaceholder?: string,
+        initialInputValue?: string,
+        confirmText?: string,
+        cancelText?: string
+    }>({ isOpen: false, title: '', message: '', onConfirm: () => { }, type: 'info' });
 
     // Gestione OSC
     useEffect(() => {
@@ -100,10 +116,16 @@ export const SonificationPage: React.FC = () => {
                         } else {
                             newResult = await sonifyImageHybrid(file, restoredResult.configUsed, progressCb, oscClient, scanPatternOverride);
                         }
-                        setResult(newResult);
                     } catch (e) {
                         console.error("Failed to regenerate audio:", e);
-                        alert("Impossibile rigenerare l'audio per questa opera.");
+                        setConfirmModal({
+                            isOpen: true,
+                            title: "Errore Rigenerazione",
+                            message: "Impossibile rigenerare l'audio per questa opera.",
+                            type: 'danger',
+                            singleButton: true,
+                            onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+                        });
                         // Fallback to restored result without audio
                         setResult(restoredResult);
                     } finally {
@@ -154,23 +176,26 @@ export const SonificationPage: React.FC = () => {
 
             setResult(res);
             setProcessingSteps(prev => prev.map(step => ({ ...step, status: 'completed' })));
-        } catch (error) { console.error(error); alert("Errore elaborazione"); } finally { setIsProcessing(false); }
+        } catch (error) {
+            console.error(error);
+            setConfirmModal({
+                isOpen: true,
+                title: "Errore Elaborazione",
+                message: "Si è verificato un errore durante la sonificazione dell'immagine.",
+                type: 'danger',
+                singleButton: true,
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            });
+        } finally { setIsProcessing(false); }
     };
 
-    const handleManualSave = async () => {
+    const handleManualSave = async (title: string) => {
         if (!result || !user) return;
-
-        const defaultTitle = `Opera del ${new Date().toLocaleDateString()}`;
-        const title = prompt("Inserisci un nome per la tua opera:", defaultTitle);
-        if (title === null) return; // User cancelled
-        const finalTitle = title.trim() || defaultTitle;
-
         try {
-            await api.saveSonification(result, paradigm, finalTitle);
-            // Non chiudere, ma notificare successo (gestito in ResultsDashboard)
+            await api.saveSonification(result, paradigm, title);
         } catch (e) {
             console.error(e);
-            throw e; // Rilancia per gestire errore in UI
+            throw e;
         }
     };
 
@@ -204,6 +229,21 @@ export const SonificationPage: React.FC = () => {
             )}
             {isProcessing && <div className="max-w-3xl mx-auto"><ProcessingView steps={processingSteps} imageUrl={imageUrl} /></div>}
             {result && imageUrl && (<div className="max-w-7xl mx-auto"><ResultsDashboard result={result} imageUrl={imageUrl} onReset={handleCloseResult} onSave={handleManualSave} user={user} onRequestAccess={() => setIsRequestAccessOpen(true)} isHistoryView={isViewingHistory} /></div>)}
+
+            <ConfirmationModal
+                isOpen={confirmModal.isOpen}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                type={confirmModal.type}
+                singleButton={confirmModal.singleButton}
+                showInput={confirmModal.showInput}
+                inputPlaceholder={confirmModal.inputPlaceholder}
+                initialInputValue={confirmModal.initialInputValue}
+                confirmText={confirmModal.confirmText}
+                cancelText={confirmModal.cancelText}
+                onConfirm={confirmModal.onConfirm}
+                onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+            />
         </div>
     );
 };

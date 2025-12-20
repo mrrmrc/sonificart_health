@@ -7,6 +7,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { AdminPage } from "./pages/AdminPage";
 import { LandingPageWrapper } from "./pages/LandingPageWrapper";
 import { ProfilePage } from "./pages/ProfilePage";
+import { MuseumPage } from "./pages/MuseumPage";
 import { ErrorPage } from "./components/ErrorPage";
 
 export const router = createBrowserRouter([
@@ -22,6 +23,7 @@ export const router = createBrowserRouter([
             { path: "dashboard", element: <DashboardPage /> },
             { path: "profile", element: <ProfilePage /> },
             { path: "admin", element: <AdminPage /> },
+            { path: "museum", element: <MuseumPage /> },
         ],
     },
 ]);

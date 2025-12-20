@@ -132,7 +132,7 @@ export const api = {
                 });
                 const dataLite = await handleResponse(responseLite);
                 if (!dataLite.success) throw new Error(dataLite.error || "Salvataggio Lite fallito.");
-                alert("Nota: Il file audio era troppo grande per il server. Sonificazione salvata SENZA audio cache. L'audio verrà rigenerato automaticamente quando aprirai l'opera.");
+                // Removed native alert. Handled by return if needed, but for now we just log it or let it pass.
             } catch (liteError) {
                 console.error("Anche il salvataggio Lite è fallito.", liteError);
                 throw new Error("Impossibile salvare l'opera. Verifica la connessione o contatta l'assistenza.");
@@ -153,7 +153,7 @@ export const api = {
 
     publishFromHistory: async (entry: DashboardEntry, metadata: any, user: User, customMedia: { url: string, type: string } | null) => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        await fetch(`${API_BASE_URL}/index.php?action=publish_history`, {
+        const response = await fetch(`${API_BASE_URL}/index.php?action=publish_history`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 entryId: entry.id,
@@ -163,6 +163,13 @@ export const api = {
                 auth_token: token
             })
         });
+        return await handleResponse(response);
+    },
+
+    updateProfile: async (data: { name?: string, email?: string, avatarUrl?: string, customLogoUrl?: string, password?: string }) => {
+        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const response = await fetch(`${API_BASE_URL}/index.php?action=update_profile`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...data, auth_token: token }) });
+        return await handleResponse(response);
     },
 
     getHistory: async () => {
@@ -179,14 +186,14 @@ export const api = {
         await handleResponse(response);
     },
 
-    getShowcase: async () => {
-        const response = await fetch(`${API_BASE_URL}/index.php?action=get_showcase&t=${new Date().getTime()}`);
+    getShowcase: async (includeAll: boolean = false) => {
+        const response = await fetch(`${API_BASE_URL}/index.php?action=get_showcase${includeAll ? '&all=1' : ''}&t=${new Date().getTime()}`);
         return await handleResponse(response);
     },
 
-    // --- ADMIN FUNCTIONS (RIPRISTINATE) ---
+    // --- ADMIN FUNCTIONS ---
 
-    updateShowcaseItem: async (item: ShowcaseProject) => {
+    updateShowcaseItem: async (item: Partial<ShowcaseProject> & { id: string }) => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
         await fetch(`${API_BASE_URL}/index.php?action=update_showcase_item`, {
             method: 'POST',
@@ -233,6 +240,11 @@ export const api = {
     getSystemLogs: async (): Promise<SystemLog[]> => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
         const response = await fetch(`${API_BASE_URL}/index.php?action=get_logs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auth_token: token }) });
+        return await handleResponse(response);
+    },
+
+    getUserInfo: async (id: string): Promise<Partial<User>> => {
+        const response = await fetch(`${API_BASE_URL}/index.php?action=get_user_info&id=${id}`);
         return await handleResponse(response);
     },
 

@@ -9,6 +9,7 @@ import saveAs from 'file-saver';
 import { generateSonificationVideo } from '../services/videoService';
 import { createSacContainer } from '../services/sacService';
 import { useLanguage } from '../contexts/LanguageContext';
+import { ConfirmationModal } from './ConfirmationModal';
 
 const InfoCard: React.FC<{ title: string, icon: string, children: React.ReactNode, className?: string }> = ({ title, icon, children, className }) => (
     <div className={`bg-brand-primary/50 p-4 rounded-lg border border-brand-secondary ${className}`}>
@@ -44,7 +45,7 @@ interface ResultsDashboardProps {
     result: SonificationResult;
     imageUrl: string;
     onReset: () => void;
-    onSave: () => void;
+    onSave: (title: string) => void;
     user: User | null;
     onRequestAccess: () => void;
     isHistoryView?: boolean;
@@ -62,16 +63,35 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
     const [hasSaved, setHasSaved] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
+    // MODAL STATE
+    const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean, title: string, message: string, onConfirm: () => void, type: 'info' | 'warning' | 'danger' | 'success', singleButton?: boolean }>({ isOpen: false, title: '', message: '', onConfirm: () => { }, type: 'info' });
+
+    const [workTitle, setWorkTitle] = useState(`Opera del ${new Date().toLocaleDateString()}`);
+
     const handleSaveClick = async () => {
         if (hasSaved || isSaving) return;
         setIsSaving(true);
         try {
-            await onSave();
+            await onSave(workTitle.trim() || `Opera del ${new Date().toLocaleDateString()}`);
             setHasSaved(true);
-            alert(t('showcase.saved_success') || "Sonificazione salvata con successo!");
+            setConfirmModal({
+                isOpen: true,
+                title: "Salvataggio",
+                message: t('showcase.saved_success') || "Sonificazione salvata con successo!",
+                type: 'success',
+                singleButton: true,
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            });
         } catch (e) {
             console.error(e);
-            alert(e instanceof Error ? e.message : "Errore durante il salvataggio.");
+            setConfirmModal({
+                isOpen: true,
+                title: "Errore",
+                message: e instanceof Error ? e.message : "Errore durante il salvataggio.",
+                type: 'danger',
+                singleButton: true,
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            });
             setHasSaved(false);
         } finally {
             setIsSaving(false);
@@ -85,9 +105,16 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
         }
 
         if (!hasSaved) {
-            if (window.confirm("Attenzione: non hai salvato le modifiche. Se chiudi ora, il lavoro andrà perso.\n\nVuoi chiudere comunque?")) {
-                onReset();
-            }
+            setConfirmModal({
+                isOpen: true,
+                title: t('common.warning') || "Attenzione",
+                message: "Attenzione: non hai salvato le modifiche. Se chiudi ora, il lavoro andrà perso.\n\nVuoi chiudere comunque?",
+                type: 'warning',
+                onConfirm: () => {
+                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                    onReset();
+                }
+            });
         } else {
             onReset();
         }
@@ -437,7 +464,14 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
         }
         if (textToCopy) {
             navigator.clipboard.writeText(textToCopy);
-            alert(t('results.link_copied') || "Prompt Copiato!");
+            setConfirmModal({
+                isOpen: true,
+                title: "Copiato",
+                message: t('results.link_copied') || "Prompt Copiato!",
+                type: 'success',
+                singleButton: true,
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            });
         }
     };
 
@@ -447,7 +481,17 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
         try {
             const blob = await generateSonificationVideo(correctedResult, (p) => setVideoProgress(p), { title: videoTitle, author: videoAuthor });
             setGeneratedVideoBlob(blob); saveAs(blob, `kinetic_proof_${safeHash.substring(0, 8)}.mp4`);
-        } catch (e) { console.error(e); alert("Errore video: " + (e instanceof Error ? e.message : String(e))); } finally { setIsVideoRendering(false); }
+        } catch (e) {
+            console.error(e);
+            setConfirmModal({
+                isOpen: true,
+                title: "Errore Video",
+                message: "Errore video: " + (e instanceof Error ? e.message : String(e)),
+                type: 'danger',
+                singleButton: true,
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            });
+        } finally { setIsVideoRendering(false); }
     };
     const fetchBlobIfMissing = async (blob: Blob, url: string): Promise<Blob> => {
         if (blob && blob.size > 0) return blob;
@@ -474,13 +518,35 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
 
             const sacContainer = await createSacContainer({ imageHash: correctedResult.imageHash, audioHash: correctedResult.audioHash, config: correctedResult.configUsed, blockAnalysisResult: correctedResult.blockAnalysisResult, culturalSelectionResult: correctedResult.culturalSelectionResult, transformedEvents: correctedResult.audioOutput.events.filter(e => !e.isAccompaniment), canvas: canvas, audioWavBlob: audioBlob, midiBlob: midiBlob, totalDuration: correctedResult.audioOutput.duration, scanPattern: correctedResult.scanPattern, videoBlob: generatedVideoBlob || undefined });
             saveAs(sacContainer.blob, sacContainer.fileName);
-        } catch (e) { console.error("SAC failed", e); if (correctedResult.sacContainer?.blob) saveAs(correctedResult.sacContainer.blob, correctedResult.sacContainer.fileName || "project.sac"); else alert("Errore SAC."); }
+        } catch (e) {
+            console.error("SAC failed", e);
+            if (correctedResult.sacContainer?.blob) saveAs(correctedResult.sacContainer.blob, correctedResult.sacContainer.fileName || "project.sac");
+            else {
+                setConfirmModal({
+                    isOpen: true,
+                    title: "Errore SAC",
+                    message: "Errore durante la creazione del container SAC.",
+                    type: 'danger',
+                    singleButton: true,
+                    onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+                });
+            }
+        }
     };
 
     const handleDownloadWav = async () => {
         const blob = await fetchBlobIfMissing(correctedResult.audioOutput.audioWavBlob, correctedResult.audioOutput.audioUrl || "");
         if (blob.size > 0) saveAs(blob, 'generated_audio.wav');
-        else alert("Audio non disponibile per il download.");
+        else {
+            setConfirmModal({
+                isOpen: true,
+                title: "Download",
+                message: "Audio non disponibile per il download.",
+                type: 'warning',
+                singleButton: true,
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            });
+        }
     };
 
     const visualProfile = useMemo(() => {
@@ -741,7 +807,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                     <div className="flex gap-3 mt-4 pt-3 border-t border-brand-secondary/30">
                                         <button onClick={handleClose} className={`flex-1 ${isHistoryView ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-red-500/20 hover:bg-red-500/30 text-red-300'} py-2 rounded text-xs font-bold transition-colors ${isHistoryView ? '' : 'border border-red-500/30'} flex items-center justify-center gap-2`}>
                                             <i className={`fas ${isHistoryView ? 'fa-arrow-left' : 'fa-times'}`}></i>
-                                            {isHistoryView ? t('results.back_to_list') : "CHIUDI"}
+                                            {isHistoryView ? t('results.back_to_list') : (t('results.close') || "CHIUDI")}
                                         </button>
                                         {!isHistoryView && (
                                             <button
@@ -750,13 +816,25 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                                 className={`flex-1 ${hasSaved ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-green-500/20 hover:bg-green-500/30 text-green-300 border-green-500/30'} py-2 rounded text-xs font-bold transition-colors border flex items-center justify-center gap-2`}
                                             >
                                                 {isSaving ? (
-                                                    <><i className="fas fa-spinner fa-spin"></i> SALVATAGGIO...</>
+                                                    <><i className="fas fa-spinner fa-spin"></i> {t('results.saving') || "SALVATAGGIO..."}</>
                                                 ) : (
-                                                    hasSaved ? <><i className="fas fa-check"></i> SALVATO</> : <><i className="fas fa-save"></i> {t('showcase.save') || "SALVA"}</>
+                                                    hasSaved ? <><i className="fas fa-check"></i> {t('results.saved') || "SALVATO"}</> : <><i className="fas fa-save"></i> {t('showcase.save') || "SALVA"}</>
                                                 )}
                                             </button>
                                         )}
                                     </div>
+                                    {!isHistoryView && !hasSaved && (
+                                        <div className="mt-4 animate-fade-in">
+                                            <label className="block text-[10px] font-bold text-brand-text-secondary uppercase mb-1">{t('results.work_name') || "Nome dell'opera"}</label>
+                                            <input
+                                                type="text"
+                                                className="w-full bg-black/40 border border-brand-secondary/50 p-2 rounded text-sm text-white focus:border-brand-accent outline-none placeholder:text-white/20"
+                                                placeholder={t('results.enter_name') || "Inserisci un nome..."}
+                                                value={workTitle}
+                                                onChange={(e) => setWorkTitle(e.target.value)}
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -895,6 +973,16 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                     </div>
                 </InfoCard>
             </div>
+
+            <ConfirmationModal
+                isOpen={confirmModal.isOpen}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                type={confirmModal.type}
+                singleButton={confirmModal.singleButton}
+                onConfirm={confirmModal.onConfirm}
+                onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+            />
         </div>
     );
 };

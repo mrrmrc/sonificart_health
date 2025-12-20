@@ -55,7 +55,7 @@ export const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, isAdmin, userCredits
                             <span className="font-display font-black text-xl tracking-tight text-white leading-none group-hover:text-brand-accent transition-colors">
                                 Sonific<span className="text-brand-accent">A.R.T.</span>
                             </span>
-                            <span className="text-[10px] font-mono text-brand-text-secondary/70 border border-white/10 px-1.5 rounded bg-white/5">
+                            <span className="text-[10px] font-mono text-brand-text-secondary/70 border border-white/10 px-1.5 rounded bg-white/5 hidden md:block">
                                 v1.15
                             </span>
                         </div>
@@ -114,7 +114,7 @@ export const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, isAdmin, userCredits
                 {/* --- RIGHT: ACTIONS --- */}
                 <div className="flex items-center gap-4 shrink-0">
 
-                    <button onClick={onOpenHelp} className="text-white/70 hover:text-brand-accent transition-colors" title="Guida Framework">
+                    <button onClick={onOpenHelp} className="hidden md:block text-white/70 hover:text-brand-accent transition-colors" title="Guida Framework">
                         <i className="fas fa-book-open text-lg"></i>
                     </button>
 
@@ -124,7 +124,7 @@ export const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, isAdmin, userCredits
                             onClick={() => setIsLangOpen(!isLangOpen)}
                             className="text-xs font-bold text-white/70 hover:text-white uppercase flex items-center gap-1 bg-white/5 px-2 py-1 rounded border border-white/10"
                         >
-                            {languages.find(l => l.code === language)?.flag} {language} <i className="fas fa-chevron-down text-[8px]"></i>
+                            {languages.find(l => l.code === language)?.flag} <span className="hidden xs:inline">{language}</span> <i className="fas fa-chevron-down text-[8px]"></i>
                         </button>
 
                         {isLangOpen && (
@@ -200,16 +200,28 @@ export const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, isAdmin, userCredits
                             {t('nav.access')}
                         </button>
                         <button onClick={() => { navigate('/showcase'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">
-                            {t('nav.showcase')}
+                            <i className="fas fa-th-large mr-3 w-5 text-center text-gray-400"></i> {t('nav.showcase')}
+                        </button>
+                        <button onClick={() => { onOpenHelp(); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">
+                            <i className="fas fa-book-open mr-3 w-5 text-center text-gray-400"></i> {t('help.title')}
                         </button>
                         {isLoggedIn && (
                             <>
-                                <button onClick={() => { navigate('/sonification'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">{t('nav.sonify')}</button>
-                                <button onClick={() => { navigate('/verification'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">{t('nav.verify')}</button>
-                                <button onClick={() => { navigate('/dashboard'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">{t('nav.dashboard')}</button>
+                                <button onClick={() => { navigate('/sonification'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">
+                                    <i className="fas fa-plus-circle mr-3 w-5 text-center text-gray-400"></i> {t('nav.sonify')}
+                                </button>
+                                <button onClick={() => { navigate('/verification'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">
+                                    <i className="fas fa-shield-alt mr-3 w-5 text-center text-gray-400"></i> {t('nav.verify')}
+                                </button>
+                                <button onClick={() => { navigate('/dashboard'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">
+                                    <i className="fas fa-folder-open mr-3 w-5 text-center text-gray-400"></i> {t('nav.dashboard')}
+                                </button>
+                                <button onClick={() => { navigate('/profile'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">
+                                    <i className="fas fa-user mr-3 w-5 text-center text-gray-400"></i> {t('nav.profile') || 'Profilo'}
+                                </button>
                                 {isAdmin && (
                                     <button onClick={() => { navigate('/admin'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-red-400 font-bold hover:bg-white/5 rounded-lg border border-red-500/20">
-                                        <i className="fas fa-user-shield mr-2"></i> {t('nav.admin')}
+                                        <i className="fas fa-user-shield mr-3 w-5 text-center"></i> {t('nav.admin')}
                                     </button>
                                 )}
                                 <div className="px-4 py-3 text-sm text-gray-400 flex items-center gap-2">

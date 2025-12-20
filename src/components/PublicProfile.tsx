@@ -85,9 +85,28 @@ interface PublicProfileProps {
 }
 
 export const PublicProfile: React.FC<PublicProfileProps> = ({ user }) => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [editName, setEditName] = useState(user?.name || '');
+    const [editAvatar, setEditAvatar] = useState(user?.avatarUrl || '');
+    const [editLogo, setEditLogo] = useState(user?.customLogoUrl || '');
+    const [editEmail, setEditEmail] = useState(user?.email || '');
+    const [editPassword, setEditPassword] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+
+    // RESTORED STATES
     const [projects, setProjects] = useState<ShowcaseProject[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [selectedProject, setSelectedProject] = useState<ShowcaseProject | null>(null);
+
+    useEffect(() => {
+        if (user) {
+            setEditName(user.name);
+            setEditAvatar(user.avatarUrl || '');
+            setEditLogo(user.customLogoUrl || '');
+            setEditEmail(user.email);
+            setEditPassword('');
+        }
+    }, [user]);
 
     useEffect(() => {
         const loadProfileData = async () => {
@@ -95,7 +114,6 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ user }) => {
             setIsLoading(true);
             try {
                 const allProjects = await api.getShowcase();
-                // FIX: Aggiunto tipo esplicito (p: ShowcaseProject)
                 const userProjects = allProjects.filter((p: ShowcaseProject) => p.author === user.name || p.ownerId === user.id);
                 setProjects(userProjects);
             } catch (e) {
@@ -107,6 +125,27 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ user }) => {
         loadProfileData();
     }, [user]);
 
+    const handleSaveProfile = async () => {
+        setIsSaving(true);
+        try {
+            await api.updateProfile({
+                name: editName,
+                email: editEmail,
+                avatarUrl: editAvatar,
+                customLogoUrl: editLogo,
+                password: editPassword || undefined
+            });
+            // Update local state if needed (user comes from context usually)
+            window.location.reload(); // Semplice ma efficace per aggiornare la sessione
+        } catch (e) {
+            console.error(e);
+            alert("Errore durante il salvataggio.");
+        } finally {
+            setIsSaving(false);
+            setIsEditing(false);
+        }
+    };
+
     if (!user) return <div className="text-center p-10 text-brand-text-secondary">Utente non trovato.</div>;
 
     return (
@@ -114,30 +153,112 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ user }) => {
 
             {/* Profile Header */}
             <div className="relative bg-brand-secondary/50 rounded-xl p-8 mb-12 border border-brand-secondary flex flex-col md:flex-row items-center gap-8">
-                <div className="w-32 h-32 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 p-1 shadow-2xl">
-                    <div className="w-full h-full rounded-full bg-[#0f172a] flex items-center justify-center overflow-hidden">
-                        {user.avatarUrl ? (
-                            <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
-                        ) : (
-                            <span className="text-4xl font-bold text-white">{user.name?.substring(0, 2).toUpperCase() || 'UT'}</span>
-                        )}
+                <div className="relative group">
+                    <div className="w-32 h-32 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 p-1 shadow-2xl overflow-hidden">
+                        <div className="w-full h-full rounded-full bg-[#0f172a] flex items-center justify-center overflow-hidden relative">
+                            {editAvatar || user.avatarUrl ? (
+                                <img src={editAvatar || user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+                            ) : (
+                                <span className="text-4xl font-bold text-white">{user.name?.substring(0, 2).toUpperCase() || 'UT'}</span>
+                            )}
+                        </div>
                     </div>
                 </div>
 
-                <div className="text-center md:text-left flex-grow">
-                    <div className="flex items-center justify-center md:justify-start gap-3 mb-2">
-                        <h1 className="text-3xl font-bold text-white">{user.name}</h1>
-                        {user.isPro && <span className="bg-brand-accent/20 text-brand-accent text-xs font-bold px-2 py-1 rounded border border-brand-accent/30">PRO ARTIST</span>}
-                    </div>
-                    <p className="text-brand-text-secondary max-w-2xl">
-                        Artista sonoro su SonificA.R.T.
-                    </p>
-
-                    <div className="flex gap-4 mt-4 justify-center md:justify-start">
-                        <div className="text-center">
-                            <span className="block text-xl font-bold text-white">{projects.length}</span>
-                            <span className="text-xs text-brand-text-secondary uppercase">Opere Pubbliche</span>
+                <div className="text-center md:text-left flex-grow space-y-6">
+                    <div className="flex flex-col md:flex-row md:items-center justify-center md:justify-start gap-3">
+                        <div className="flex flex-col gap-2 w-full max-w-sm">
+                            {isEditing ? (
+                                <>
+                                    <label className="text-[10px] text-brand-accent uppercase font-bold text-left">Nome Visualizzato</label>
+                                    <input
+                                        className="bg-white/5 border border-white/10 rounded px-3 py-2 text-xl font-bold text-white focus:outline-none focus:border-brand-accent w-full"
+                                        value={editName}
+                                        onChange={e => setEditName(e.target.value)}
+                                        placeholder="Tuo Nome"
+                                    />
+                                </>
+                            ) : (
+                                <h1 className="text-3xl font-bold text-white">{user.name}</h1>
+                            )}
                         </div>
+                        <div className="flex gap-2">
+                            {user.isPro && !isEditing && <span className="bg-brand-accent/20 text-brand-accent text-[10px] font-bold px-2 py-1 rounded border border-brand-accent/30 tracking-tight">PRO ARTIST</span>}
+                            {user.tier === 'custom' && !isEditing && <span className="bg-purple-500/20 text-purple-400 text-[10px] font-bold px-2 py-1 rounded border border-purple-500/30 tracking-tight">CUSTOM PARTNER</span>}
+                        </div>
+                    </div>
+
+                    {isEditing && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
+                            <div className="space-y-1">
+                                <label className="block text-[10px] text-brand-accent uppercase font-bold text-left">Foto Profilo (URL)</label>
+                                <input
+                                    className="bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-brand-accent w-full"
+                                    value={editAvatar}
+                                    onChange={e => setEditAvatar(e.target.value)}
+                                    placeholder="https://.../avatar.jpg"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="block text-[10px] text-brand-accent uppercase font-bold text-left">Email</label>
+                                <input
+                                    className="bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-brand-accent w-full"
+                                    value={editEmail}
+                                    onChange={e => setEditEmail(e.target.value)}
+                                    placeholder="email@esempio.com"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="block text-[10px] text-brand-accent uppercase font-bold text-left">Nuova Password (opzionale)</label>
+                                <input
+                                    type="password"
+                                    className="bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-brand-accent w-full"
+                                    value={editPassword}
+                                    onChange={e => setEditPassword(e.target.value)}
+                                    placeholder="Lascia vuoto per non cambiare"
+                                />
+                            </div>
+                            {user.tier === 'custom' && (
+                                <div className="space-y-1 md:col-span-2">
+                                    <label className="block text-[10px] text-brand-accent uppercase font-bold text-left">Logo Partner (URL)</label>
+                                    <input
+                                        className="bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-brand-accent w-full"
+                                        value={editLogo}
+                                        onChange={e => setEditLogo(e.target.value)}
+                                        placeholder="https://.../logo-partner.png"
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <div className="flex gap-4 mt-6 justify-center md:justify-start">
+                        {isEditing ? (
+                            <>
+                                <button
+                                    onClick={handleSaveProfile}
+                                    disabled={isSaving}
+                                    className="bg-brand-accent text-brand-primary px-6 py-2 rounded-full font-bold text-sm shadow-lg hover:shadow-brand-accent/20 transition-all flex items-center gap-2"
+                                >
+                                    {isSaving ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-check"></i>}
+                                    SALVA MODIFICHE
+                                </button>
+                                <button
+                                    onClick={() => { setIsEditing(false); setEditName(user.name); setEditAvatar(user.avatarUrl || ''); setEditLogo(user.customLogoUrl || ''); }}
+                                    className="bg-white/5 text-white/50 px-6 py-2 rounded-full font-bold text-sm border border-white/10 hover:text-white transition-all"
+                                >
+                                    ANNULLA
+                                </button>
+                            </>
+                        ) : (
+                            <button
+                                onClick={() => setIsEditing(true)}
+                                className="bg-white/10 text-white px-6 py-2 rounded-full font-bold text-sm border border-white/10 hover:bg-white/20 transition-all flex items-center gap-2"
+                            >
+                                <i className="fas fa-edit"></i>
+                                MODIFICA PROFILO
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
+import { ConfirmationModal } from './ConfirmationModal';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface RequestAccessModalProps {
@@ -25,6 +26,9 @@ export const RequestAccessModal: React.FC<RequestAccessModalProps> = ({ isOpen, 
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // MODAL STATE
+    const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean, title: string, message: string, onConfirm: () => void, type: 'info' | 'warning' | 'danger' | 'success', singleButton?: boolean }>({ isOpen: false, title: '', message: '', onConfirm: () => { }, type: 'info' });
+
     useEffect(() => {
         setFormData(prev => ({
             ...prev,
@@ -46,11 +50,27 @@ export const RequestAccessModal: React.FC<RequestAccessModalProps> = ({ isOpen, 
         setIsSubmitting(true);
         try {
             await api.requestAccess(formData);
-            alert(t('request_access.success'));
-            onClose();
+            setConfirmModal({
+                isOpen: true,
+                title: "Richiesta Inviata",
+                message: t('request_access.success') || "La tua richiesta è stata inviata con successo. Riceverai presto una email di conferma.",
+                type: 'success',
+                singleButton: true,
+                onConfirm: () => {
+                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                    onClose();
+                }
+            });
         } catch (error) {
             console.error(error);
-            alert(t('request_access.error'));
+            setConfirmModal({
+                isOpen: true,
+                title: "Errore",
+                message: t('request_access.error') || "Si è verificato un errore durante l'invio della richiesta.",
+                type: 'danger',
+                singleButton: true,
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            });
         } finally {
             setIsSubmitting(false);
         }
@@ -152,6 +172,16 @@ export const RequestAccessModal: React.FC<RequestAccessModalProps> = ({ isOpen, 
                     </button>
                 </form>
             </div>
+
+            <ConfirmationModal
+                isOpen={confirmModal.isOpen}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                type={confirmModal.type}
+                singleButton={confirmModal.singleButton}
+                onConfirm={confirmModal.onConfirm}
+                onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+            />
         </div>
     );
 };

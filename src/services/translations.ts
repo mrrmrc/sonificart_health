@@ -85,13 +85,14 @@ export const translations = {
       verify: "VERIFICA",
       dashboard: "LE TUE OPERE",
       admin: "ADMIN",
-      login: "ACCEDI"
+      login: "ACCEDI",
+      profile: "PROFILO"
     },
     landing: {
       badge: "Framework v1.0 Stable",
-      title_start: "Immagini",
-      title_end: "e suoni",
-      subtitle: "Trasforma ogni pixel in frequenza. Il primo framework deterministico per la <strong>sonificazione scientifica</strong> e <strong>artistica</strong>.",
+      title_start: "Il suono",
+      title_end: "delle immagini",
+      subtitle: "Non una semplice interpretazione, ma un'architettura acustica oggettiva. SonificA.R.T. è il framework deterministico per la trasduzione rigorosa dei dati visivi in frequenze sonore, validato da protocolli di ricerca scientifica (<a href=\"https://zenodo.org/records/17622067\" target=\"_blank\" class=\"underline text-brand-accent hover:text-white transition-colors\">Zenodo DOI: 17622067</a>). Trasforma ogni pixel in un evento sonoro matematicamente certificato.",
       cta_start: "INIZIA A CREARE",
       cta_explore: "ESPLORA VETRINA",
       features: {
@@ -506,13 +507,14 @@ export const translations = {
       verify: "VERIFY",
       dashboard: "YOUR WORKS",
       admin: "ADMIN",
-      login: "LOGIN"
+      login: "LOGIN",
+      profile: "PROFILE"
     },
     landing: {
       badge: "Framework v1.0 Stable",
-      title_start: "The Sound",
-      title_end: "Of The Image",
-      subtitle: "Transform every pixel into frequency. The first deterministic framework for <strong>scientific</strong> and <strong>artistic</strong> sonification.",
+      title_start: "The sound",
+      title_end: "of images",
+      subtitle: "More than just creative synthesis: the only deterministic framework accredited for the rigorous transduction of visual data into sound frequencies. Based on scientific research protocols (<a href=\"https://zenodo.org/records/17622067\" target=\"_blank\" class=\"underline text-brand-accent hover:text-white transition-colors\">Zenodo DOI: 17622067</a>), SonificA.R.T. transforms images into an objective and reproducible acoustic architecture.",
       cta_start: "START CREATING",
       cta_explore: "EXPLORE GALLERY",
       features: {
@@ -916,8 +918,8 @@ export const translations = {
     },
     nav: { home: "ACCUEIL", access: "DEMANDER ACCÈS", sonify: "CRÉER MUSIQUE", showcase: "GALERIE", verify: "VÉRIFIER", dashboard: "VOS ŒUVRES", admin: "ADMIN", login: "CONNEXION" },
     landing: {
-      badge: "Framework v1.0", title_start: "Le Son", title_end: "De L'Image",
-      subtitle: "Transformez chaque pixel en fréquence. Le premier framework déterministe pour la sonification scientifique et artistique.",
+      badge: "Framework v1.0", title_start: "Le Son", title_end: "des images",
+      subtitle: "Bien plus qu'une synthèse créative : l'unique framework déterministe accrédité pour la transduction rigoureuse des données visuelles en fréquences sonores. Basé sur des protocoles de recherche scientifique (<a href=\"https://zenodo.org/records/17622067\" target=\"_blank\" class=\"underline text-brand-accent hover:text-white transition-colors\">Zenodo DOI: 17622067</a>), SonificA.R.T. transforme l'image en une architecture acoustique objective et reproductible.",
       cta_start: "COMMENCER", cta_explore: "EXPLORER",
       features: { color: "Colorimétrie", color_desc: "Analyse perceptivement uniforme.", culture: "Base de données", culture_desc: "48 traditions musicales.", deter: "Déterminisme", deter_desc: "Sortie toujours identique." },
       pricing: {
@@ -1047,7 +1049,7 @@ export const translations = {
       credits_question: "¿Tienes suficientes créditos para esta ejecución?"
     },
     nav: { home: "INICIO", access: "SOLICITAR ACCESO", sonify: "CREAR MÚSICA", showcase: "GALERÍA", verify: "VERIFICAR", dashboard: "TUS OBRAS", admin: "ADMIN", login: "ACCESO" },
-    landing: { badge: "Framework v1.0", title_start: "El Sonido", title_end: "De La Imagen", subtitle: "Transforma...", cta_start: "EMPEZAR", cta_explore: "EXPLORAR", features: { color: "Colorimetría", color_desc: "...", culture: "Base de datos", culture_desc: "...", deter: "Determinismo", deter_desc: "..." }, pricing: { title: "Precios", subtitle: "...", monthly: "Mensual", annual: "Anual", month: "mes", year: "año", recommended: "Recomendado", free: { title: "Gratis", price: "0 €", desc: "...", btn: "Crear cuenta", f1: "5 Créditos", f2: "...", f3: "...", f4: "...", f5: "..." }, pro: { title: "Pro", price_monthly: "8.80 €", price_annual: "88.00 €", desc: "...", btn: "Solicitar", f1: "Ilimitado", f2: "...", f3: "...", f4: "...", f5: "...", f6: "..." }, custom: { title: "Instituciones", subtitle: "A medida", desc: "...", btn: "Contacto", f1: "...", f2: "...", f3: "...", f4: "...", f5: "..." } } },
+    landing: { badge: "Framework v1.0", title_start: "El sonido", title_end: "de las imágenes", subtitle: "Más que una simple interpretación, una arquitectura acústica objetiva. SonificA.R.T. es el único framework determinista acreditado para la transducción rigurosa de datos visuales en frecuencias sonoras, validado por protocolos de investigación científica (<a href=\"https://zenodo.org/records/17622067\" target=\"_blank\" class=\"underline text-brand-accent hover:text-white transition-colors\">Zenodo DOI: 17622067</a>). Transforma cada píxel en un evento sonoro matemáticamente certificado.", cta_start: "EMPEZAR", cta_explore: "EXPLORAR", features: { color: "Colorimetría", color_desc: "...", culture: "Base de datos", culture_desc: "...", deter: "Determinismo", deter_desc: "..." }, pricing: { title: "Precios", subtitle: "...", monthly: "Mensual", annual: "Anual", month: "mes", year: "año", recommended: "Recomendado", free: { title: "Gratis", price: "0 €", desc: "...", btn: "Crear cuenta", f1: "5 Créditos", f2: "...", f3: "...", f4: "...", f5: "..." }, pro: { title: "Pro", price_monthly: "8.80 €", price_annual: "88.00 €", desc: "...", btn: "Solicitar", f1: "Ilimitado", f2: "...", f3: "...", f4: "...", f5: "...", f6: "..." }, custom: { title: "Instituciones", subtitle: "A medida", desc: "...", btn: "Contacto", f1: "...", f2: "...", f3: "...", f4: "...", f5: "..." } } },
     help: {
       title: "Manual de Usuario",
       tabs: { guide: "Guía", glossary: "Glosario", faq: "FAQ", science: "Ciencia" },

@@ -257,6 +257,26 @@ if ($action === 'save_sonification' && $method === 'POST') {
     }
 }
 
+// --- GET USER INFO (Pubblica) ---
+if ($action === 'get_user_info') {
+    $id = $input['id'] ?? $_GET['id'] ?? null;
+    if (!$id)
+        sendResponse(["error" => "No ID"], 400);
+    $stmt = $pdo->prepare("SELECT name, avatar_url, custom_logo_url, tier FROM users WHERE id = ?");
+    $stmt->execute([$id]);
+    $u = $stmt->fetch();
+    if ($u) {
+        sendResponse([
+            "name" => $u['name'],
+            "avatarUrl" => $u['avatar_url'],
+            "customLogoUrl" => $u['custom_logo_url'],
+            "tier" => $u['tier']
+        ]);
+    } else {
+        sendResponse(["error" => "User not found"], 404);
+    }
+}
+
 // --- GET HISTORY (Protetta) ---
 if ($action === 'get_history' && $method === 'POST') {
     $stmt = $pdo->prepare("SELECT * FROM history WHERE user_id = ? ORDER BY timestamp DESC");
@@ -272,7 +292,7 @@ if ($action === 'get_history' && $method === 'POST') {
             "paradigm" => $h['paradigm'],
             "traditionName" => $h['tradition_name'],
             "musicGenerationPrompt" => isset($h['music_generation_prompt']) ? json_decode($h['music_generation_prompt'], true) : null,
-            "generatedAiTrackUrl" => $h['generated_ai_track_url'] ?? null,
+            "generatedAiTrackUrl" => $h['generated_ai_track_url'] ? ((strpos($h['generated_ai_track_url'], 'http') === 0) ? $h['generated_ai_track_url'] : $baseUrl . (strpos($h['generated_ai_track_url'], '/') === 0 ? '' : '/') . $h['generated_ai_track_url']) : null,
             "configUsed" => isset($h['config_json']) ? json_decode($h['config_json'], true) : null,
             "events" => isset($h['event_data']) ? json_decode($h['event_data'], true) : null,
             "blockData" => isset($h['block_data']) ? json_decode($h['block_data'], true) : null
@@ -281,16 +301,36 @@ if ($action === 'get_history' && $method === 'POST') {
     sendResponse($mapped);
 }
 
-// --- GET SHOWCASE (Pubblica) ---
+// --- GET SHOWCASE (Pubblica + Admin) ---
 if ($action === 'get_showcase' && $method === 'GET') {
     try {
-        $stmt = $pdo->query("SELECT * FROM showcase WHERE is_public = 1 ORDER BY priority DESC, created_at DESC");
+        $includeAll = isset($_GET['all']) && $_GET['all'] == '1';
+        $where = $includeAll ? "1=1" : "is_public = 1";
+        $stmt = $pdo->query("SELECT * FROM showcase WHERE $where ORDER BY priority DESC, created_at DESC");
         $projects = $stmt->fetchAll();
         $mapped = array_map(function ($p) use ($baseUrl) {
             $audio = $p['audio_url'] ? ((strpos($p['audio_url'], '/') === 0) ? $baseUrl . $p['audio_url'] : $p['audio_url']) : null;
             $video = $p['video_url'] ? ((strpos($p['video_url'], '/') === 0) ? $baseUrl . $p['video_url'] : $p['video_url']) : null;
             $img = (strpos($p['image_url'], '/') === 0) ? $baseUrl . $p['image_url'] : $p['image_url'];
-            return ["id" => (string) $p['id'], "historyId" => (string) ($p['history_id'] ?? ''), "title" => $p['title'], "date" => $p['created_at'], "author" => $p['author_name'], "ownerId" => $p['owner_id'], "description" => $p['description'], "imageUrl" => $img, "audioUrl" => $audio, "videoUrl" => $video, "paradigm" => $p['paradigm'], "tradition" => $p['tradition'], "tags" => $p['tags'] ? explode(',', $p['tags']) : [], "stats" => ["duration" => $p['duration'], "notes" => (int) $p['notes_count']], "priority" => (int) $p['priority']];
+            return [
+                "id" => (string) $p['id'],
+                "historyId" => (string) ($p['history_id'] ?? ''),
+                "title" => $p['title'],
+                "date" => $p['created_at'],
+                "author" => $p['author_name'],
+                "ownerId" => $p['owner_id'],
+                "description" => $p['description'],
+                "imageUrl" => $img,
+                "audioUrl" => $audio,
+                "videoUrl" => $video,
+                "paradigm" => $p['paradigm'],
+                "tradition" => $p['tradition'],
+                "tags" => $p['tags'] ? explode(',', $p['tags']) : [],
+                "stats" => ["duration" => $p['duration'], "notes" => (int) $p['notes_count']],
+                "priority" => (int) $p['priority'],
+                "isPublic" => (bool) $p['is_public'],
+                "isFeatured" => (bool) ($p['is_featured'] ?? 0)
+            ];
         }, $projects);
         sendResponse($mapped);
     } catch (Exception $e) {
@@ -335,12 +375,15 @@ if ($action === 'publish_history' && $method === 'POST') {
             $priority = (int) ($input['metadata']['priority'] ?? 0);
             $customMediaUrl = $input['customMediaUrl'] ?? null;
             $customMediaType = $input['customMediaType'] ?? null;
-            $finalAudio = ($customMediaType === 'audio') ? $customMediaUrl : ($e['audio_url'] ?? null);
-            $finalVideo = ($customMediaType === 'video') ? $customMediaUrl : null;
+
+            // Priorità: media caricato durante pub > ai_track history > audio_url history (scientifico)
+            $finalAudio = ($customMediaType === 'audio') ? $customMediaUrl : ($e['generated_ai_track_url'] ?: ($e['audio_url'] ?: null));
+            $finalVideo = ($customMediaType === 'video') ? $customMediaUrl : ($e['video_url'] ?? null);
 
             $stmt = $pdo->prepare("INSERT INTO showcase (title, author_name, description, image_url, audio_url, video_url, paradigm, tradition, tags, duration, notes_count, created_at, owner_id, is_public, priority, history_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '3m', 1024, NOW(), ?, 1, ?, ?)");
             $stmt->execute([$input['metadata']['title'], $author, $input['metadata']['description'], $e['image_url'], $finalAudio, $finalVideo, $e['paradigm'], $e['tradition_name'], $tags, $userId, $priority, $e['id']]);
-            sendResponse(["success" => true]);
+            $newId = $pdo->lastInsertId();
+            sendResponse(["success" => true, "id" => $newId]);
         } else {
             sendResponse(["error" => "Not found"], 404);
         }
@@ -357,7 +400,20 @@ if ($action === 'login' && $method === 'POST') {
     $stmt->execute([$email]);
     $user = $stmt->fetch();
     if ($user && $user['password'] === $password) {
-        sendResponse(["token" => "user_" . $user['id'], "user" => ["id" => (string) $user['id'], "name" => $user['name'], "email" => $user['email'], "isPro" => (bool) $user['is_pro'], "isAdmin" => (bool) $user['is_admin'], "credits" => (int) $user['credits'], "avatarUrl" => $user['avatar_url']]]);
+        sendResponse([
+            "token" => "user_" . $user['id'],
+            "user" => [
+                "id" => (string) $user['id'],
+                "name" => $user['name'],
+                "email" => $user['email'],
+                "isPro" => (bool) $user['is_pro'],
+                "isAdmin" => (bool) $user['is_admin'],
+                "credits" => (int) $user['credits'],
+                "avatarUrl" => $user['avatar_url'],
+                "customLogoUrl" => $user['custom_logo_url'] ?? null,
+                "tier" => $user['tier'] ?? 'free'
+            ]
+        ]);
     } else {
         sendResponse(["error" => "Credenziali non valide"], 401);
     }
@@ -445,9 +501,62 @@ if ($action === 'check_session') {
     $stmt->execute([$userId]);
     $u = $stmt->fetch();
     if ($u)
-        sendResponse(["user" => ["id" => (string) $u['id'], "name" => $u['name'], "email" => $u['email'], "isPro" => (bool) $u['is_pro'], "isAdmin" => (bool) $u['is_admin'], "credits" => (int) $u['credits'], "avatarUrl" => $u['avatar_url']]]);
+        sendResponse([
+            "user" => [
+                "id" => (string) $u['id'],
+                "name" => $u['name'],
+                "email" => $u['email'],
+                "isPro" => (bool) $u['is_pro'],
+                "isAdmin" => (bool) $u['is_admin'],
+                "credits" => (int) $u['credits'],
+                "avatarUrl" => $u['avatar_url'],
+                "customLogoUrl" => $u['custom_logo_url'] ?? null,
+                "tier" => $u['tier'] ?? 'free'
+            ]
+        ]);
     else
         sendResponse(["error" => "User not found"], 401);
+}
+
+// --- UPDATE PROFILE ---
+if ($action === 'update_profile' && $method === 'POST') {
+    $name = $input['name'] ?? null;
+    $email = $input['email'] ?? null;
+    $avatarUrl = $input['avatarUrl'] ?? null;
+    $customLogoUrl = $input['customLogoUrl'] ?? null;
+    $password = $input['password'] ?? null;
+
+    $parts = [];
+    $params = [];
+    if ($name) {
+        $parts[] = "name=?";
+        $params[] = $name;
+    }
+    if ($email) {
+        $parts[] = "email=?";
+        $params[] = $email;
+    }
+    if ($avatarUrl) {
+        $parts[] = "avatar_url=?";
+        $params[] = $avatarUrl;
+    }
+    if ($customLogoUrl) {
+        $parts[] = "custom_logo_url=?";
+        $params[] = $customLogoUrl;
+    }
+    if ($password) {
+        $parts[] = "password=?";
+        $params[] = $password;
+    }
+
+    if (empty($parts))
+        sendResponse(["error" => "No changes"], 400);
+
+    $sql = "UPDATE users SET " . implode(", ", $parts) . " WHERE id=?";
+    $params[] = $userId;
+
+    $pdo->prepare($sql)->execute($params);
+    sendResponse(["success" => true]);
 }
 
 // --- CONSUME CREDITS (Protetta) ---
@@ -561,7 +670,7 @@ if ($userId) {
             sendResponse(["success" => true]);
         }
         if ($action === 'get_users') {
-            $rawUsers = $pdo->query("SELECT id, name, email, is_pro, is_admin, credits, avatar_url, created_at FROM users ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+            $rawUsers = $pdo->query("SELECT id, name, email, is_pro, is_admin, credits, avatar_url, custom_logo_url, tier, created_at FROM users ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
             $users = [];
             foreach ($rawUsers as $u) {
                 $users[] = [
@@ -572,6 +681,8 @@ if ($userId) {
                     "isAdmin" => (bool) $u['is_admin'],
                     "credits" => (int) $u['credits'],
                     "avatarUrl" => $u['avatar_url'],
+                    "customLogoUrl" => $u['custom_logo_url'] ?? null,
+                    "tier" => $u['tier'] ?? 'free',
                     "registeredAt" => $u['created_at']
                 ];
             }
@@ -597,7 +708,47 @@ if ($userId) {
                 sendResponse(["success" => true]);
             }
         }
+        if ($action === 'update_showcase_item') {
+            $id = $input['id'];
+            $title = $input['title'] ?? null;
+            $description = $input['description'] ?? null;
+            $isPublic = isset($input['isPublic']) ? ($input['isPublic'] ? 1 : 0) : null;
+            $priority = isset($input['priority']) ? (int) $input['priority'] : null;
+            $isFeatured = isset($input['isFeatured']) ? ($input['isFeatured'] ? 1 : 0) : null;
+
+            $parts = [];
+            $params = [];
+            if ($title !== null) {
+                $parts[] = "title=?";
+                $params[] = $title;
+            }
+            if ($description !== null) {
+                $parts[] = "description=?";
+                $params[] = $description;
+            }
+            if ($isPublic !== null) {
+                $parts[] = "is_public=?";
+                $params[] = $isPublic;
+            }
+            if ($priority !== null) {
+                $parts[] = "priority=?";
+                $params[] = $priority;
+            }
+            if ($isFeatured !== null) {
+                $parts[] = "is_featured=?";
+                $params[] = $isFeatured;
+            }
+
+            if (!empty($parts)) {
+                $sql = "UPDATE showcase SET " . implode(", ", $parts) . " WHERE id=?";
+                $params[] = $id;
+                $pdo->prepare($sql)->execute($params);
+            }
+            sendResponse(["success" => true]);
+        }
         if ($action === 'delete_showcase_item') {
+            // Non eliminare, ma nascondere se richiesto. Tuttavia l'admin ha chiesto di non eliminare.
+            // Lasciamo l'azione ma la disabiliteremo nel frontend.
             $pdo->prepare("DELETE FROM showcase WHERE id = ?")->execute([$input['id']]);
             sendResponse(["success" => true]);
         }
@@ -625,9 +776,11 @@ if ($userId) {
             $isPro = !empty($input['isPro']) ? 1 : 0;
             $isAdmin = !empty($input['isAdmin']) ? 1 : 0;
             $credits = (int) ($input['credits'] ?? 5);
+            $tier = $input['tier'] ?? 'free';
+            $customLogoUrl = $input['customLogoUrl'] ?? null;
 
-            $sql = "UPDATE users SET name=?, email=?, is_pro=?, is_admin=?, credits=?";
-            $params = [$name, $email, $isPro, $isAdmin, $credits];
+            $sql = "UPDATE users SET name=?, email=?, is_pro=?, is_admin=?, credits=?, tier=?, custom_logo_url=?";
+            $params = [$name, $email, $isPro, $isAdmin, $credits, $tier, $customLogoUrl];
 
             if (!empty($input['password'])) {
                 $sql .= ", password=?";
@@ -640,7 +793,7 @@ if ($userId) {
                 $pdo->prepare($sql)->execute($params);
                 sendResponse(["success" => true]);
             } catch (Exception $e) {
-                sendResponse(["error" => "Update failed"], 400);
+                sendResponse(["error" => "Update failed: " . $e->getMessage()], 400);
             }
         }
     }
