@@ -39,6 +39,14 @@ try {
     exit();
 }
 
+// Ensure Database Schema is up to date
+try {
+    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_expires_at DATETIME DEFAULT NULL");
+    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS tier VARCHAR(20) DEFAULT 'free'");
+} catch (Exception $e) {
+    // Ignore if column already exists or other minor issues
+}
+
 // HELPERS
 function sendResponse($data, $code = 200)
 {
@@ -400,18 +408,31 @@ if ($action === 'login' && $method === 'POST') {
     $stmt->execute([$email]);
     $user = $stmt->fetch();
     if ($user && $user['password'] === $password) {
+        $tier = $user['tier'] ?? 'free';
+
+        // Check Expiration
+        $isPro = (bool) $user['is_pro'];
+        if ($isPro && !empty($user['pro_expires_at'])) {
+            if (strtotime($user['pro_expires_at']) < time()) {
+                $isPro = false;
+                $pdo->prepare("UPDATE users SET is_pro = 0, tier = 'free' WHERE id = ?")->execute([$user['id']]);
+                $tier = 'free';
+            }
+        }
+
         sendResponse([
             "token" => "user_" . $user['id'],
             "user" => [
                 "id" => (string) $user['id'],
                 "name" => $user['name'],
                 "email" => $user['email'],
-                "isPro" => (bool) $user['is_pro'],
+                "isPro" => $isPro,
                 "isAdmin" => (bool) $user['is_admin'],
                 "credits" => (int) $user['credits'],
                 "avatarUrl" => $user['avatar_url'],
                 "customLogoUrl" => $user['custom_logo_url'] ?? null,
-                "tier" => $user['tier'] ?? 'free'
+                "tier" => $tier,
+                "proExpiresAt" => $user['pro_expires_at'] ?? null
             ]
         ]);
     } else {
@@ -499,23 +520,35 @@ if ($action === 'upload_media' && $method === 'POST') {
 if ($action === 'check_session') {
     $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
     $stmt->execute([$userId]);
-    $u = $stmt->fetch();
-    if ($u)
+    if ($u) {
+        $tier = $u['tier'] ?? 'free';
+        $isPro = (bool) $u['is_pro'];
+
+        if ($isPro && !empty($u['pro_expires_at'])) {
+            if (strtotime($u['pro_expires_at']) < time()) {
+                $isPro = false;
+                $pdo->prepare("UPDATE users SET is_pro = 0, tier = 'free' WHERE id = ?")->execute([$u['id']]);
+                $tier = 'free';
+            }
+        }
+
         sendResponse([
             "user" => [
                 "id" => (string) $u['id'],
                 "name" => $u['name'],
                 "email" => $u['email'],
-                "isPro" => (bool) $u['is_pro'],
+                "isPro" => $isPro,
                 "isAdmin" => (bool) $u['is_admin'],
                 "credits" => (int) $u['credits'],
                 "avatarUrl" => $u['avatar_url'],
                 "customLogoUrl" => $u['custom_logo_url'] ?? null,
-                "tier" => $u['tier'] ?? 'free'
+                "tier" => $tier,
+                "proExpiresAt" => $u['pro_expires_at'] ?? null
             ]
         ]);
-    else
+    } else {
         sendResponse(["error" => "User not found"], 401);
+    }
 }
 
 // --- UPDATE PROFILE ---
@@ -688,8 +721,66 @@ if ($userId) {
             }
             sendResponse($users);
         }
-        if ($action === 'admin_approve_request') { /* omitted for brevity but safe to add back if needed */
-            sendResponse(["success" => true]);
+        if ($action === 'admin_approve_request') {
+            $reqId = $input['id'];
+            $stmt = $pdo->prepare("SELECT * FROM registration_requests WHERE id = ?");
+            $stmt->execute([$reqId]);
+            $req = $stmt->fetch();
+
+            if (!$req)
+                sendResponse(["error" => "Richiesta non trovata"], 404);
+
+            $name = $req['name'];
+            $email = $req['email'];
+            $plan = $req['plan']; // 'Mensile' o 'Annuale' o 'Enterprise'
+
+            // 1. Generate Password
+            $password = generatePassword(12);
+
+            // 2. Calculate Expiration
+            $days = ($plan === 'Annuale') ? 366 : 31; // Add an extra day buffer
+            $expiresAt = date('Y-m-d H:i:s', strtotime("+$days days"));
+
+            // 3. Create or Update User
+            $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
+            $stmt->execute([$email]);
+            $existing = $stmt->fetch();
+
+            if ($existing) {
+                $stmt = $pdo->prepare("UPDATE users SET is_pro = 1, pro_expires_at = ?, tier = 'pro', credits = 9999 WHERE id = ?");
+                $stmt->execute([$expiresAt, $existing['id']]);
+                $userId = $existing['id'];
+            } else {
+                $avatar = "https://api.dicebear.com/7.x/avataaars/svg?seed=" . urlencode($name);
+                $stmt = $pdo->prepare("INSERT INTO users (name, email, password, is_pro, pro_expires_at, tier, credits, avatar_url) VALUES (?, ?, ?, 1, ?, 'pro', 9999, ?)");
+                $stmt->execute([$name, $email, $password, $expiresAt, $avatar]);
+                $userId = $pdo->lastInsertId();
+            }
+
+            // 4. Send Welcome Email
+            $body = "
+                <p>Gentile <strong>$name</strong>,</p>
+                <p>Siamo lieti di comunicarti che la tua richiesta per l'accesso <strong>SonificA.R.T. PRO</strong> è stata approvata!</p>
+                <div style='background: #f8fafc; border: 1px solid #e2e8f0; padding: 20px; border-radius: 8px; margin: 20px 0;'>
+                    <p style='margin:0; font-size: 14px; color: #64748b;'>Ecco le tue credenziali di accesso:</p>
+                    <p style='margin: 10px 0; font-size: 16px;'><strong>Email:</strong> $email</p>
+                    <p style='margin: 10px 0; font-size: 16px;'><strong>Password Temporanea:</strong> <code style='background:#f1f5f9; padding:2px 5px; border-radius:3px;'>$password</code></p>
+                </div>
+                <p>Puoi accedere subito alla piattaforma cliccando il pulsante qui sotto:</p>
+                <p style='text-align: center; margin: 30px 0;'>
+                    <a href='https://sonificart.com' style='background: #2dd4bf; color: #0f172a; padding: 12px 25px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;'>Inizia a Creare</a>
+                </p>
+                <p style='font-size: 13px; color: #64748b; font-style: italic;'>Ti raccomandiamo di cambiare la password al tuo primo accesso dalla sezione Profilo.</p>
+                <p>Il tuo abbonamento <strong>$plan</strong> è ora attivo fino al " . date('d/m/Y', strtotime($expiresAt)) . ".</p>
+                <p>Buon lavoro,<br><em>Il Team SonificA.R.T.</em></p>
+            ";
+
+            sendHtmlEmail($email, "Accesso PRO Attivato - SonificA.R.T.", "Benvenuto in SonificA.R.T. PRO", $body);
+
+            // 5. Delete Request
+            $pdo->prepare("DELETE FROM registration_requests WHERE id = ?")->execute([$reqId]);
+
+            sendResponse(["success" => true, "message" => "Utente approvato e credenziali inviate."]);
         }
         if ($action === 'admin_get_requests') {
             $reqs = $pdo->query("SELECT id, name, email, plan, piva, institution_type, purpose, website, invoice_sent, paid, created_at FROM registration_requests ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);

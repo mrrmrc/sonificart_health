@@ -15,7 +15,7 @@ import { ImageUploader } from '../components/ImageUploader';
 import { ImagePreview } from '../components/ImagePreview';
 import { ConfigPanel } from '../components/ConfigPanel';
 import { ParadigmInfo } from '../components/ParadigmInfo';
-import { initialSettings, scientificSteps } from '../config/defaults';
+import { initialSettings, scientificSteps, artisticSteps, hybridSteps } from '../config/defaults';
 import { reconstructResultFromPartialData } from '../utils/dataUtils';
 
 interface OutletContextType {
@@ -160,7 +160,12 @@ export const SonificationPage: React.FC = () => {
 
     const startSonification = async () => {
         if (!imageFile || !user) { setIsLoginModalOpen(true); return; }
-        setProcessingSteps(scientificSteps.map(s => ({ ...s, status: 'pending' })));
+
+        let initialSteps = scientificSteps;
+        if (paradigm === 'artistic') initialSteps = artisticSteps;
+        else if (paradigm === 'hybrid') initialSteps = hybridSteps;
+
+        setProcessingSteps(initialSteps.map(s => ({ ...s, status: 'pending' })));
         setIsProcessing(true); setResult(null); setIsViewingHistory(false);
         try {
             await new Promise(r => setTimeout(r, 500));

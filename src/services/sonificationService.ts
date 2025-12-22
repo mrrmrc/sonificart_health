@@ -813,6 +813,8 @@ export async function sonifyImage(
 
 
 // --- ARTISTIC & HYBRID PARADIGMS ---
+import { generateStabilityAudio } from './stabilityAudioService';
+
 async function sonifyImageArtisticOrHybrid(
     file: File,
     config: ConfigSettings,
@@ -825,125 +827,111 @@ async function sonifyImageArtisticOrHybrid(
     let t = performance.now();
     const traditions = await getCulturalTraditions();
 
-    const stepOffset = paradigm === 'hybrid' ? 1 : 0;
+    // AI Preliminary Steps (0 and 1 for Hybrid, 0 for Artistic)
+    let musicPrompt: MusicGenerationPrompt;
+    let scanPatternNameForAI: string = "";
 
-    progressCallback(1 + stepOffset, 'active');
+    if (paradigm === 'hybrid') {
+        progressCallback(0, 'active');
+        const imageDescription = await describeImageContent(file);
+        timings.aiImageDescription = performance.now() - t; t = performance.now();
+        progressCallback(0, 'completed');
+
+        progressCallback(1, 'active');
+        // We need a temporary cultural selection just for the prompt name if we don't have analysis yet
+        // but the current structure does analysis AFTER AI steps. 
+        // Let's use a dummy name or calculate it quickly if needed.
+        scanPatternNameForAI = "Dynamic Hybrid Scan";
+        musicPrompt = await generateMusicPromptFromAnalysisHybrid({ name: 'Cross-Cultural' } as any, { avg_saturation: 0.5 } as any, scanPatternNameForAI, imageDescription);
+        timings.aiCreativeFusion = performance.now() - t; t = performance.now();
+        progressCallback(1, 'completed');
+    } else {
+        progressCallback(0, 'active');
+        musicPrompt = await generateMusicPromptFromAnalysis({ name: 'Aesthetic Search' } as any, { avg_saturation: 0.5 } as any, "Artistic Scan");
+        timings.aiConsultation = performance.now() - t; t = performance.now();
+        progressCallback(0, 'completed');
+    }
+
+    const stepOffset = paradigm === 'hybrid' ? 2 : 1;
+
+    // Standard Processing Steps
+    progressCallback(0 + stepOffset, 'active');
     const { canvas, imageData, imageBounds } = await standardizeImage(file);
-
-    // Generate the exact Blob for SAC and Hash
     const standardizedImageBlob = await canvasToBlob(canvas, 'image/jpeg', 0.9);
     const standardizedImageUrl = URL.createObjectURL(standardizedImageBlob);
     const imageFileHash = bufferToHex(await calculateSHA256(await standardizedImageBlob.arrayBuffer()));
-
     timings.standardization = performance.now() - t; t = performance.now();
+    progressCallback(0 + stepOffset, 'completed');
+
+    progressCallback(1 + stepOffset, 'active');
+    const imageHash = await calculateDeterministicHash(imageData, config);
+    timings.hashCalculation = performance.now() - t; t = performance.now();
     progressCallback(1 + stepOffset, 'completed');
 
     progressCallback(2 + stepOffset, 'active');
-    const imageHash = await calculateDeterministicHash(imageData, config);
-    timings.hashCalculation = performance.now() - t; t = performance.now();
+    const blockAnalysisResult = await analyzeBlocks(imageData, config.pixelCount, imageBounds);
+    timings.blockAnalysis = performance.now() - t; t = performance.now();
     progressCallback(2 + stepOffset, 'completed');
 
     progressCallback(3 + stepOffset, 'active');
-    const blockAnalysisResult = await analyzeBlocks(imageData, config.pixelCount, imageBounds);
-    timings.blockAnalysis = performance.now() - t; t = performance.now();
-    progressCallback(3 + stepOffset, 'completed');
-
-    progressCallback(4 + stepOffset, 'active');
     const mappedBlocks: MappedBlock[] = [];
     for (const block of blockAnalysisResult.blocks) {
         mappedBlocks.push({ blockData: block, mapping: mapPixelToNote(block) });
     }
     timings.universalMapping = performance.now() - t; t = performance.now();
-    progressCallback(4 + stepOffset, 'completed');
+    progressCallback(3 + stepOffset, 'completed');
 
-    progressCallback(5 + stepOffset, 'active');
+    progressCallback(4 + stepOffset, 'active');
     const culturalSelectionResult = selectCulturalTradition(blockAnalysisResult.globalStats, traditions);
     const { tradition } = culturalSelectionResult;
     timings.culturalSelection = performance.now() - t; t = performance.now();
-    progressCallback(5 + stepOffset, 'completed');
+    progressCallback(4 + stepOffset, 'completed');
 
-    const { name: scanPatternName } = scanPatternOverride === 'auto'
+    const { pattern: scanPatternEnum, name: scanPatternName } = scanPatternOverride === 'auto'
         ? determineCulturalScanPattern(tradition.cultural_family)
         : getManualScanPatternDetails(scanPatternOverride);
 
-    progressCallback(0, 'active');
-    let musicPrompt: MusicGenerationPrompt;
-    if (paradigm === 'hybrid') {
-        const imageDescription = await describeImageContent(file);
-        timings.aiImageDescription = performance.now() - t; t = performance.now();
-        progressCallback(0, 'completed');
-        progressCallback(1, 'active');
-        musicPrompt = await generateMusicPromptFromAnalysisHybrid(tradition, blockAnalysisResult.globalStats, scanPatternName, imageDescription);
-        timings.aiCreativeFusion = performance.now() - t; t = performance.now();
-        progressCallback(1, 'completed');
-    } else {
-        musicPrompt = await generateMusicPromptFromAnalysis(tradition, blockAnalysisResult.globalStats, scanPatternName);
-        timings.aiConsultation = performance.now() - t; t = performance.now();
-        progressCallback(0, 'completed');
-    }
-
-    progressCallback(6 + stepOffset, 'active');
-
-    const { pattern: scanPatternEnum } = scanPatternOverride === 'auto'
-        ? determineCulturalScanPattern(tradition.cultural_family)
-        : getManualScanPatternDetails(scanPatternOverride);
-
-    // Framework v1.0: Always Square Grid
+    progressCallback(5 + stepOffset, 'active');
     const gridW = blockAnalysisResult.gridSize;
     const gridH = blockAnalysisResult.gridSize;
-
     const scanSequence = generateScanSequence(gridW, gridH, scanPatternEnum);
-
     const baseEventDurationSeconds = config.noteDurationSeconds;
     const melodyEvents: TransformedNoteEvent[] = [];
     let currentTime = 0;
-
     let contentScanPosition = 0;
     for (const blockIndex of scanSequence) {
         const mappedBlock = mappedBlocks[blockIndex];
-
         if (mappedBlock.blockData.isFiller) continue;
-
         const transformed = transformNote(mappedBlock, tradition);
         let seed = generateDeterministicSeed(contentScanPosition, transformed.baseNote);
         const { duration: adjustedDuration, nextSeed } = adjustTiming(baseEventDurationSeconds, tradition, contentScanPosition, scanSequence.length, seed);
         seed = nextSeed;
         const event: TransformedNoteEvent = { ...transformed, time: currentTime, duration: adjustedDuration };
         melodyEvents.push(event);
-
         if (oscClient) {
             oscClient.send(new OSC.Message('/sonificart/note', event.midiFloat, event.velocity, event.duration, event.articulation));
         }
-
         currentTime += adjustedDuration;
         contentScanPosition++;
     }
     const totalDurationSeconds = currentTime;
     timings.culturalTransformation = performance.now() - t; t = performance.now();
+    progressCallback(5 + stepOffset, 'completed');
 
+    progressCallback(6 + stepOffset, 'active');
     const accompanimentEvents = config.enableAccompaniment
         ? generateAccompaniment(melodyEvents, tradition, config.bpm)
         : [];
     const allEvents = [...melodyEvents, ...accompanimentEvents];
-
-    // Use new optimized DSP engine
     const { blob: audioWavBlob } = await synthesizeAudio(allEvents, totalDurationSeconds, config);
-
     const audioUrl = URL.createObjectURL(audioWavBlob);
-
-    // Updated exportMidi call
     const midiBlob = exportMidi(allEvents, tradition, config);
-
     const audioHashBuffer = await calculateSHA256(await audioWavBlob.arrayBuffer());
     const audioHash = bufferToHex(audioHashBuffer);
-
-    // Physical hashes
     const audioBlobHash = bufferToHex(await calculateSHA256(await audioWavBlob.arrayBuffer()));
     const midiBlobHash = bufferToHex(await calculateSHA256(await midiBlob.arrayBuffer()));
-
     timings.audioSynthesis = performance.now() - t; t = performance.now();
 
-    // --- FIX: DEFINIZIONE ESPLICITA ---
     const audioOutput: AudioOutputResult = {
         events: allEvents,
         eventsCount: allEvents.length,
@@ -953,17 +941,32 @@ async function sonifyImageArtisticOrHybrid(
         audioWavBlob,
         midiBlob,
     };
-    // ----------------------------------
+    progressCallback(6 + stepOffset, 'completed');
+
+    // AI EXTENDED MUSIC GENERATION (Final Step)
+    progressCallback(7 + stepOffset, 'active');
+    let aiTrackUrl: string | null = null;
+    try {
+        const aiAudioBlob = await generateStabilityAudio(
+            musicPrompt.stability_prompt,
+            musicPrompt.negative_prompt,
+            45
+        );
+        aiTrackUrl = URL.createObjectURL(aiAudioBlob);
+        timings.aiMusicGeneration = performance.now() - t; t = performance.now();
+    } catch (e) {
+        console.error("Stability AI Failed:", e);
+    }
+    progressCallback(7 + stepOffset, 'completed');
 
     const sacContainer = await createSacContainer({
         imageHash, audioHash, config, blockAnalysisResult, culturalSelectionResult,
         transformedEvents: melodyEvents, canvas,
-        imageJpegBlob: standardizedImageBlob, // PASS BLOB DIRECTLY
+        imageJpegBlob: standardizedImageBlob,
         audioWavBlob, midiBlob, totalDuration: totalDurationSeconds,
         scanPattern: { name: scanPatternName, sequence: scanSequence },
     });
     timings.sacCreation = performance.now() - t;
-    progressCallback(6 + stepOffset, 'completed');
 
     timings.totalProcessingTime = Object.values(timings).reduce((sum: number, val) => (typeof val === 'number' ? sum + val : sum), 0);
 
@@ -972,7 +975,7 @@ async function sonifyImageArtisticOrHybrid(
         standardizedImageUrl,
         blockAnalysisResult, culturalSelectionResult,
         scanPattern: { name: scanPatternName, sequence: scanSequence },
-        audioOutput, // ORA ESISTE!
+        audioOutput,
         sacContainer,
         validationResult: {
             determinism: { passed: false, message: `Modalità ${paradigm.charAt(0).toUpperCase() + paradigm.slice(1)} (Non-Deterministico)` },
@@ -987,7 +990,8 @@ async function sonifyImageArtisticOrHybrid(
         },
         performanceMetrics: timings,
         musicGenerationPrompt: musicPrompt,
-        paradigm: paradigm, // Assegnazione esplicita
+        generatedAiTrackUrl: aiTrackUrl,
+        paradigm: paradigm,
     };
 }
 

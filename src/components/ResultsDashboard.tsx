@@ -847,65 +847,106 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                 {/* --- SEZIONE CONCEPT & AI RIGENERATA CON MULTI-TAB --- */}
                 {isArtisticMode && correctedResult.musicGenerationPrompt && (
                     <InfoCard title={t('results.concept_title') || "Concept & Interpretazione AI"} icon="fa-wand-magic-sparkles" className="lg:col-span-3 relative overflow-hidden">
-                        <div className='space-y-4'>
-
-                            {/* SELETTORE TAB PROMPT */}
-                            <div className="flex items-center justify-between border-b border-white/10 pb-2">
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={() => setActivePromptTab('suno')}
-                                        className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${activePromptTab === 'suno' ? 'bg-brand-accent text-brand-primary' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}
-                                    >
-                                        {t('results.suno_label') || "SUNO (Meta)"}
-                                    </button>
-                                    <button
-                                        onClick={() => setActivePromptTab('udio')}
-                                        className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${activePromptTab === 'udio' ? 'bg-blue-400 text-brand-primary' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}
-                                    >
-                                        {t('results.udio_label') || "UDIO (Tags)"}
-                                    </button>
-                                    <button
-                                        onClick={() => setActivePromptTab('stability')}
-                                        className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${activePromptTab === 'stability' ? 'bg-purple-400 text-brand-primary' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}
-                                    >
-                                        {t('results.stability_label') || "STABILITY"}
+                        <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+                            <div className='space-y-4'>
+                                {/* SELETTORE TAB PROMPT */}
+                                <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => setActivePromptTab('suno')}
+                                            className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${activePromptTab === 'suno' ? 'bg-brand-accent text-brand-primary' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}
+                                        >
+                                            {t('results.suno_label') || "SUNO (Meta)"}
+                                        </button>
+                                        <button
+                                            onClick={() => setActivePromptTab('udio')}
+                                            className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${activePromptTab === 'udio' ? 'bg-blue-400 text-brand-primary' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}
+                                        >
+                                            {t('results.udio_label') || "UDIO (Tags)"}
+                                        </button>
+                                        <button
+                                            onClick={() => setActivePromptTab('stability')}
+                                            className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${activePromptTab === 'stability' ? 'bg-purple-400 text-brand-primary' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}
+                                        >
+                                            {t('results.stability_label') || "STABILITY"}
+                                        </button>
+                                    </div>
+                                    <button onClick={copyPrompt} className="text-xs text-brand-accent hover:text-white transition-colors font-bold uppercase flex items-center gap-1">
+                                        <i className="fas fa-copy"></i> {t('results.copy') || "Copia"}
                                     </button>
                                 </div>
-                                <button onClick={copyPrompt} className="text-xs text-brand-accent hover:text-white transition-colors font-bold uppercase flex items-center gap-1">
-                                    <i className="fas fa-copy"></i> {t('results.copy') || "Copia"}
-                                </button>
+
+                                {/* AREA TESTO PROMPT DINAMICA */}
+                                <div className="bg-brand-primary/70 p-3 rounded-md text-sm font-mono break-words border border-white/10 min-h-[80px] flex items-center">
+                                    {activePromptTab === 'suno' && (
+                                        <span className="text-brand-accent">{correctedResult.musicGenerationPrompt.suno_prompt || correctedResult.musicGenerationPrompt.stability_prompt}</span>
+                                    )}
+                                    {activePromptTab === 'udio' && (
+                                        <span className="text-blue-300">{correctedResult.musicGenerationPrompt.udio_prompt || correctedResult.musicGenerationPrompt.stability_prompt}</span>
+                                    )}
+                                    {activePromptTab === 'stability' && (
+                                        <span className="text-purple-300">{correctedResult.musicGenerationPrompt.stability_prompt}</span>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <h5 className="text-brand-text-secondary text-xs mb-1 font-bold">{t('results.concept_ita') || "Concept (Ita)"}:</h5>
+                                    <p className="text-sm text-brand-text-secondary italic">"{correctedResult.musicGenerationPrompt.main_prompt_ita}"</p>
+                                </div>
                             </div>
 
-                            {/* AREA TESTO PROMPT DINAMICA */}
-                            <div className="bg-brand-primary/70 p-3 rounded-md text-sm font-mono break-words border border-white/10 min-h-[80px] flex items-center">
-                                {activePromptTab === 'suno' && (
-                                    <span className="text-brand-accent">{correctedResult.musicGenerationPrompt.suno_prompt || correctedResult.musicGenerationPrompt.stability_prompt}</span>
-                                )}
-                                {activePromptTab === 'udio' && (
-                                    <span className="text-blue-300">{correctedResult.musicGenerationPrompt.udio_prompt || correctedResult.musicGenerationPrompt.stability_prompt}</span>
-                                )}
-                                {activePromptTab === 'stability' && (
-                                    <span className="text-purple-300">{correctedResult.musicGenerationPrompt.stability_prompt}</span>
+                            {/* --- NUOVA SEZIONE AI EXTENDED AUDIO --- */}
+                            <div className="bg-brand-primary/40 p-4 rounded-xl border border-brand-accent/20 flex flex-col justify-between">
+                                <div>
+                                    <h4 className="text-brand-accent font-bold mb-2 flex items-center gap-2">
+                                        <i className="fas fa-bolt"></i>
+                                        {t('results.ai_extended_title') || "AI Extended Version (Stable Audio)"}
+                                    </h4>
+                                    <p className="text-[10px] text-brand-text-secondary mb-4 leading-relaxed">
+                                        {t('results.ai_extended_desc') || "Questa traccia è stata generata da Stability AI elaborando i dati estratti dall'immagine come prompt compositivo."}
+                                    </p>
+                                </div>
+
+                                {correctedResult.generatedAiTrackUrl ? (
+                                    <div className="space-y-3">
+                                        <AudioPlayer
+                                            audioRef={useRef<HTMLAudioElement>(null)}
+                                            audioUrl={correctedResult.generatedAiTrackUrl}
+                                            onPlay={() => { }}
+                                            onStop={() => { }}
+                                            onTimeUpdate={() => { }}
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                const link = document.createElement('a');
+                                                link.href = correctedResult.generatedAiTrackUrl!;
+                                                link.download = `ai_extended_${safeHash.substring(0, 8)}.mp3`;
+                                                link.click();
+                                            }}
+                                            className="w-full py-2 bg-brand-accent/10 border border-brand-accent/30 text-brand-accent rounded-md text-xs font-bold hover:bg-brand-accent/20 transition-all flex items-center justify-center gap-2"
+                                        >
+                                            <i className="fas fa-download"></i>
+                                            {t('results.download_ai_mp3') || "Scarica Versione MP3"}
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="text-center p-4 bg-black/20 rounded border border-dashed border-white/10">
+                                        <p className="text-xs text-brand-text-secondary">{t('results.ai_not_generated') || "Generazione AI non completata."}</p>
+                                    </div>
                                 )}
                             </div>
+                        </div>
 
+                        {/* PARAMETRI TECNICI E GIUSTIFICAZIONE */}
+                        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5 mt-4">
                             <div>
-                                <h5 className="text-brand-text-secondary text-xs mb-1 font-bold">{t('results.concept_ita') || "Concept (Ita)"}:</h5>
-                                <p className="text-sm text-brand-text-secondary italic">"{correctedResult.musicGenerationPrompt.main_prompt_ita}"</p>
+                                <h5 className="text-brand-text-secondary text-[10px] uppercase font-bold">{t('results.tech_specs') || "Specifiche Tecniche"}</h5>
+                                <p className="text-xs text-white font-mono">{correctedResult.musicGenerationPrompt.technical_parameters}</p>
                             </div>
-
-                            {/* PARAMETRI TECNICI E GIUSTIFICAZIONE */}
-                            <div className="grid grid-cols-2 gap-4 pt-2 border-t border-white/5">
-                                <div>
-                                    <h5 className="text-brand-text-secondary text-[10px] uppercase font-bold">{t('results.tech_specs') || "Specifiche Tecniche"}</h5>
-                                    <p className="text-xs text-white font-mono">{correctedResult.musicGenerationPrompt.technical_parameters}</p>
-                                </div>
-                                <div>
-                                    <h5 className="text-brand-text-secondary text-[10px] uppercase font-bold">{t('results.ai_reason') || "Ragionamento AI"}</h5>
-                                    <p className="text-xs text-brand-text-secondary leading-tight">{correctedResult.musicGenerationPrompt.justification}</p>
-                                </div>
+                            <div>
+                                <h5 className="text-brand-text-secondary text-[10px] uppercase font-bold">{t('results.ai_reason') || "Ragionamento AI"}</h5>
+                                <p className="text-xs text-brand-text-secondary leading-tight">{correctedResult.musicGenerationPrompt.justification}</p>
                             </div>
-
                         </div>
                     </InfoCard>
                 )}

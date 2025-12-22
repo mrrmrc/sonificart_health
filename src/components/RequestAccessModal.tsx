@@ -88,10 +88,14 @@ export const RequestAccessModal: React.FC<RequestAccessModalProps> = ({ isOpen, 
                         <i className="fas fa-file-invoice"></i>
                     </div>
                     <h3 className="text-2xl font-bold text-white">{t('request_access.title')}</h3>
-                    <p className="text-sm text-brand-text-secondary mt-3 bg-white/5 p-3 rounded border border-white/5 text-left">
-                        {t('request_access.subtitle')}
-                        <br /><br />
-                        <em className="text-brand-accent">{t('request_access.activation_note')}</em>
+                    <p className="text-[13px] text-brand-text-secondary mt-3 bg-white/5 p-4 rounded border border-white/5 text-left leading-relaxed">
+                        <span className="block mb-3 font-medium text-white/90">
+                            {t('request_access.subtitle')}
+                        </span>
+                        <span className="block mb-3 italic">
+                            {t('request_access.legal_disclaimer')}
+                        </span>
+                        <em className="text-brand-accent font-medium">{t('request_access.activation_note')}</em>
                     </p>
                 </div>
 
@@ -110,9 +114,12 @@ export const RequestAccessModal: React.FC<RequestAccessModalProps> = ({ isOpen, 
                                         }`}
                                 >
                                     <div className="text-sm font-bold leading-tight">
-                                        {plan === 'Enterprise' ? 'Custom / Istituzioni' : (plan === 'Annuale' ? 'PRO Annuale' : 'PRO Mensile')}
+                                        {plan === 'Enterprise' ? t('request_access.plan_enterprise') : (plan === 'Annuale' ? t('request_access.plan_annual') : t('request_access.plan_monthly'))}
                                     </div>
-                                    {plan === 'Annuale' && <div className="text-[10px] opacity-70 mt-1">-20%</div>}
+                                    <div className="text-[11px] mt-1 font-medium opacity-90">
+                                        {plan === 'Enterprise' ? t('request_access.plan_enterprise_price') : (plan === 'Annuale' ? t('request_access.plan_annual_price') : t('request_access.plan_monthly_price'))}
+                                    </div>
+                                    {plan === 'Annuale' && <div className="text-[9px] font-bold bg-white/20 px-1.5 py-0.5 rounded mt-1">-20%</div>}
                                 </div>
                             ))}
                         </div>
