@@ -1,51 +1,1138 @@
-
 [
-    { "id": 1, "name": "Maqam Hijaz", "cultural_family": "Middle Eastern", "region": "Arab World, Turkey, Persia", "description": "Characterized by an augmented second interval, creating a distinctive and dramatic sound.", "character": "Drammatico, intenso, evocativo", "scale_cents": [0, 50, 150, 355, 498, 600, 702, 800, 906, 1200], "profile": { "color_temp": 0.1, "saturation": 0.8, "hue_diversity": 0.7 } },
-    { "id": 2, "name": "Maqam Rast", "cultural_family": "Middle Eastern", "region": "Arab World, Persia", "description": "The foundational Maqam, often compared to the Western major scale but with neutral thirds.", "character": "Maestoso, equilibrato, nobile", "scale_cents": [0, 204, 355, 498, 702, 906, 1055, 1200], "profile": { "color_temp": 0.4, "saturation": 0.6, "hue_diversity": 0.6 } },
-    { "id": 3, "name": "Maqam Bayati", "cultural_family": "Middle Eastern", "region": "Levant, Egypt", "description": "Features a neutral second and is known for its soulful and melancholic character.", "character": "Malinconico, profondo, passionale", "scale_cents": [0, 150, 300, 498, 702, 800, 1000, 1200], "profile": { "color_temp": 0.7, "saturation": 0.5, "hue_diversity": 0.4 } },
-    { "id": 4, "name": "Maqam Saba", "cultural_family": "Middle Eastern", "region": "Iraq, Levant", "description": "A highly emotional Maqam with unstable intervals and a unique descending character.", "character": "Angosciato, instabile, tormentato", "scale_cents": [0, 150, 300, 384, 498, 702, 800, 1000], "profile": { "color_temp": 0.2, "saturation": 0.9, "hue_diversity": 0.8 } },
-    { "id": 5, "name": "Maqam Nahawand", "cultural_family": "Middle Eastern", "region": "Egypt, Persia", "description": "Similar to the Western minor scale, often used for romantic or grand themes.", "character": "Romantico, ampio, nostalgico", "scale_cents": [0, 200, 300, 500, 700, 800, 1000, 1200], "profile": { "color_temp": 0.8, "saturation": 0.4, "hue_diversity": 0.5 } },
-    { "id": 6, "name": "Maqam Kurd", "cultural_family": "Middle Eastern", "region": "Kurdish regions, Levant", "description": "Based on the Phrygian mode, it evokes a sense of folk-like simplicity and earthiness.", "character": "Terreste, semplice, folk", "scale_cents": [0, 100, 300, 500, 700, 800, 1000, 1200], "profile": { "color_temp": 0.6, "saturation": 0.6, "hue_diversity": 0.3 } },
-    { "id": 7, "name": "Dastgah-e Shur", "cultural_family": "Middle Eastern", "region": "Persia (Iran)", "description": "Considered the 'mother of Persian modes', it is deeply expressive and widely used.", "character": "Espressivo, lirico, spirituale", "scale_cents": [0, 204, 355, 498, 702, 906, 1000, 1200], "profile": { "color_temp": 0.5, "saturation": 0.7, "hue_diversity": 0.6 } },
-    { "id": 8, "name": "Turkish Hicaz", "cultural_family": "Middle Eastern", "region": "Turkey", "description": "The Turkish variant of Hijaz, used in both classical and popular Ottoman music.", "character": "Passionale, esotico, vibrante", "scale_cents": [0, 133, 400, 500, 700, 833, 1100, 1200], "profile": { "color_temp": 0.1, "saturation": 0.8, "hue_diversity": 0.7 } },
-    { "id": 9, "name": "Maqam Ajam", "cultural_family": "Middle Eastern", "region": "Arab World", "description": "Equivalent to the Western major scale, conveying joy, strength, and clarity.", "character": "Gioioso, forte, chiaro", "scale_cents": [0, 200, 400, 500, 700, 900, 1100, 1200], "profile": { "color_temp": 0.6, "saturation": 0.7, "hue_diversity": 0.4 } },
-    { "id": 10, "name": "Mugam Segah", "cultural_family": "Middle Eastern", "region": "Azerbaijan", "description": "An Azeri mode with a focus on the neutral third, central to Mugam traditions.", "character": "Spirituale, meditativo, antico", "scale_cents": [0, 204, 355, 498, 702, 906, 1055, 1200], "profile": { "color_temp": 0.7, "saturation": 0.5, "hue_diversity": 0.5 } },
-    { "id": 11, "name": "Andalusian Nubah", "cultural_family": "Middle Eastern", "region": "North Africa", "description": "A suite form from Moorish Spain, with complex rhythmic cycles and modal evolution.", "character": "Raffinato, poetico, storico", "scale_cents": [0, 150, 300, 500, 700, 800, 1000, 1200], "profile": { "color_temp": 0.5, "saturation": 0.6, "hue_diversity": 0.7 } },
-    { "id": 12, "name": "Iraqi Maqam", "cultural_family": "Middle Eastern", "region": "Iraq", "description": "A specific repertoire and performance practice of Maqam in Baghdad, highly refined.", "character": "Colto, complesso, narrativo", "scale_cents": [0, 150, 355, 498, 702, 800, 1055, 1200], "profile": { "color_temp": 0.3, "saturation": 0.7, "hue_diversity": 0.8 } },
-    { "id": 13, "name": "Raga Yaman", "cultural_family": "South Asian", "region": "North India", "description": "A heptatonic scale corresponding to the Lydian mode, often performed in the evening.", "character": "Calmo, meditativo, romantico", "scale_cents": [0, 204, 408, 590, 702, 906, 1110, 1200], "profile": { "color_temp": 0.3, "saturation": 0.6, "hue_diversity": 0.5 }, "timing_profile": { "rubato": 0.15 } },
-    { "id": 14, "name": "Raga Bhairav", "cultural_family": "South Asian", "region": "North India, Pakistan", "description": "A morning Raga with flat second and sixth degrees, evoking seriousness and devotion.", "character": "Devozionale, serio, pacifico", "scale_cents": [0, 112, 408, 498, 702, 814, 1110, 1200], "profile": { "color_temp": 0.6, "saturation": 0.4, "hue_diversity": 0.3 }, "timing_profile": { "rubato": 0.1 } },
-    { "id": 15, "name": "Raga Todi", "cultural_family": "South Asian", "region": "North India", "description": "A morning Raga expressing gentle pathos and longing, with flat 2nd, 3rd, and 6th.", "character": "Malinconico, supplichevole, gentile", "scale_cents": [0, 112, 316, 590, 702, 814, 1110, 1200], "profile": { "color_temp": 0.8, "saturation": 0.5, "hue_diversity": 0.4 }, "timing_profile": { "rubato": 0.2 } },
-    { "id": 16, "name": "Raga Malkauns", "cultural_family": "South Asian", "region": "India", "description": "A late-night pentatonic Raga with a powerful, meditative, and introspective mood.", "character": "Potente, introspettivo, maestoso", "scale_cents": [0, 316, 498, 814, 1018, 1200], "profile": { "color_temp": 0.9, "saturation": 0.3, "hue_diversity": 0.2 }, "timing_profile": { "rubato": 0.1 } },
-    { "id": 17, "name": "Raga Darbari", "cultural_family": "South Asian", "region": "North India", "description": "A grave, late-night Raga known for its deep, oscillating notes and profound mood.", "character": "Profondo, grave, regale", "scale_cents": [0, 204, 316, 498, 702, 814, 1018, 1200], "profile": { "color_temp": 0.8, "saturation": 0.6, "hue_diversity": 0.4 }, "timing_profile": { "rubato": 0.25 } },
-    { "id": 18, "name": "Carnatic Mayamalavagowla", "cultural_family": "South Asian", "region": "South India", "description": "The fundamental scale for beginners in Carnatic music, similar to Bhairav.", "character": "Fondamentale, didattico, sacro", "scale_cents": [0, 112, 408, 498, 702, 814, 1110, 1200], "profile": { "color_temp": 0.5, "saturation": 0.5, "hue_diversity": 0.5 } },
-    { "id": 19, "name": "Raga Bhimpalasi", "cultural_family": "South Asian", "region": "North India", "description": "An afternoon Raga with a pentatonic ascent and heptatonic descent, expresses longing.", "character": "Nostalgico, romantico, pacifico", "scale_cents": [0, 316, 498, 702, 814, 1018, 1200], "profile": { "color_temp": 0.4, "saturation": 0.7, "hue_diversity": 0.6 }, "timing_profile": { "rubato": 0.15 } },
-    { "id": 20, "name": "Raga Bageshri", "cultural_family": "South Asian", "region": "North India", "description": "A late-night Raga conveying the pain of separation and the wait for a lover.", "character": "Romantico, malinconico, sensuale", "scale_cents": [0, 204, 316, 498, 702, 906, 1018, 1200], "profile": { "color_temp": 0.9, "saturation": 0.6, "hue_diversity": 0.5 }, "timing_profile": { "rubato": 0.2 } },
-    { "id": 21, "name": "Carnatic Shankarabharanam", "cultural_family": "South Asian", "region": "South India", "description": "Equivalent to the Western major scale, a parent scale for many ragas.", "character": "Grandioso, celebrativo, positivo", "scale_cents": [0, 204, 408, 498, 702, 906, 1110, 1200], "profile": { "color_temp": 0.6, "saturation": 0.8, "hue_diversity": 0.7 } },
-    { "id": 22, "name": "Qawwali Music", "cultural_family": "South Asian", "region": "Pakistan, North India", "description": "Sufi devotional music with strong vocal performances and driving rhythms.", "character": "Devozionale, estatico, ritmico", "scale_cents": [0, 200, 300, 500, 700, 900, 1000, 1200], "profile": { "color_temp": 0.2, "saturation": 0.9, "hue_diversity": 0.8 } },
-    { "id": 23, "name": "Pentatonic Chinese (Gong)", "cultural_family": "East Asian", "region": "China", "description": "A foundational anhemitonic (no semitones) pentatonic scale associated with the earth element.", "character": "Contemplativo, equilibrato, stabile", "scale_cents": [0, 204, 408, 702, 906, 1200], "profile": { "color_temp": 0.5, "saturation": 0.4, "hue_diversity": 0.3 } },
-    { "id": 24, "name": "Japanese In-Sen Scale", "cultural_family": "East Asian", "region": "Japan", "description": "A pentatonic scale with characteristic half steps, used for koto and shamisen music.", "character": "Drammatico, teso, evocativo", "scale_cents": [0, 100, 500, 700, 800, 1200], "profile": { "color_temp": 0.7, "saturation": 0.5, "hue_diversity": 0.4 } },
-    { "id": 25, "name": "Javanese Gamelan Slendro", "cultural_family": "East Asian", "region": "Indonesia (Java)", "description": "A pentatonic scale with nearly equidistant intervals, a core tuning of Gamelan music.", "character": "Mistico, ipnotico, metallico", "scale_cents": [0, 240, 480, 720, 960, 1200], "profile": { "color_temp": 0.4, "saturation": 0.7, "hue_diversity": 0.5 } },
-    { "id": 26, "name": "Javanese Gamelan Pelog", "cultural_family": "East Asian", "region": "Indonesia (Java)", "description": "A heptatonic scale with large and small intervals, from which pentatonic subsets are chosen.", "character": "Solenne, regale, complesso", "scale_cents": [0, 120, 400, 550, 700, 800, 1050, 1200], "profile": { "color_temp": 0.6, "saturation": 0.6, "hue_diversity": 0.7 } },
-    { "id": 27, "name": "Korean Pyeongjo Mode", "cultural_family": "East Asian", "region": "Korea", "description": "A pentatonic mode often used in folk music, conveying a bright and peaceful mood.", "character": "Brillante, pacifico, sereno", "scale_cents": [0, 200, 400, 700, 900, 1200], "profile": { "color_temp": 0.6, "saturation": 0.7, "hue_diversity": 0.4 } },
-    { "id": 28, "name": "Vietnamese Hue Style", "cultural_family": "East Asian", "region": "Vietnam", "description": "Music of the imperial court, featuring unique microtonal inflections and ornamentation.", "character": "Elegante, nostalgico, poetico", "scale_cents": [0, 250, 400, 700, 950, 1200], "profile": { "color_temp": 0.5, "saturation": 0.6, "hue_diversity": 0.6 } },
-    { "id": 29, "name": "Japanese Gagaku Ryo", "cultural_family": "East Asian", "region": "Japan", "description": "A scale from ancient court music, similar to the Lydian mode, creating a feeling of suspension.", "character": "Antico, sospeso, cerimoniale", "scale_cents": [0, 200, 400, 600, 700, 900, 1100, 1200], "profile": { "color_temp": 0.8, "saturation": 0.3, "hue_diversity": 0.3 } },
-    { "id": 30, "name": "Mongolian Long Song", "cultural_family": "East Asian", "region": "Mongolia", "description": "Characterized by wide vocal ranges and free rhythm, based on pentatonic scales.", "character": "Ampio, libero, pastorale", "scale_cents": [0, 200, 400, 700, 900, 1200], "profile": { "color_temp": 0.3, "saturation": 0.8, "hue_diversity": 0.4 } },
-    { "id": 31, "name": "Thai Classical Scale", "cultural_family": "East Asian", "region": "Thailand", "description": "A seven-note equidistant scale, where each step is approximately 171 cents.", "character": "Decorativo, brillante, unico", "scale_cents": [0, 171, 342, 513, 684, 855, 1026, 1200], "profile": { "color_temp": 0.4, "saturation": 0.9, "hue_diversity": 0.8 } },
-    { "id": 32, "name": "Balinese Gamelan", "cultural_family": "East Asian", "region": "Indonesia (Bali)", "description": "Known for its shimmering, fast-paced, and rhythmically complex interlocking patterns.", "character": "Dinamico, scintillante, energico", "scale_cents": [0, 150, 400, 500, 750, 900, 1150, 1200], "profile": { "color_temp": 0.2, "saturation": 1, "hue_diversity": 0.9 } },
-    { "id": 33, "name": "Gregorian Mode 1 (Dorian)", "cultural_family": "European", "region": "Medieval Europe", "description": "A diatonic mode with a characteristic minor sixth, used extensively in early sacred chant.", "character": "Solenne, spirituale, sereno", "scale_cents": [0, 200, 300, 500, 700, 900, 1000, 1200], "profile": { "color_temp": 0.8, "saturation": 0.2, "hue_diversity": 0.2 } },
-    { "id": 34, "name": "Phrygian Dominant", "cultural_family": "European", "region": "Spain, Balkans", "description": "Also known as Spanish Gypsy scale, it is a hallmark of Flamenco music.", "character": "Appassionato, teso, flamenco", "scale_cents": [0, 100, 400, 500, 700, 800, 1000, 1200], "profile": { "color_temp": 0.1, "saturation": 0.9, "hue_diversity": 0.6 } },
-    { "id": 35, "name": "Celtic Air (Aeolian)", "cultural_family": "European", "region": "Ireland, Scotland", "description": "The natural minor scale, common in ballads and slow airs, evoking melancholy.", "character": "Nostalgico, lirico, narrativo", "scale_cents": [0, 200, 300, 500, 700, 800, 1000, 1200], "profile": { "color_temp": 0.9, "saturation": 0.4, "hue_diversity": 0.3 } },
-    { "id": 36, "name": "Byzantine Chromatic", "cultural_family": "European", "region": "Greece, Eastern Europe", "description": "A scale used in Greek Orthodox chant, with two augmented second intervals.", "character": "Mistico, sacro, antico", "scale_cents": [0, 100, 400, 500, 700, 800, 1100, 1200], "profile": { "color_temp": 0.6, "saturation": 0.6, "hue_diversity": 0.7 } },
-    { "id": 37, "name": "Hungarian Minor Scale", "cultural_family": "European", "region": "Hungary, Roma", "description": "A harmonic minor scale with a raised fourth, giving it a distinctive character.", "character": "Drammatico, energico, folk", "scale_cents": [0, 200, 300, 600, 700, 800, 1100, 1200], "profile": { "color_temp": 0.3, "saturation": 0.8, "hue_diversity": 0.8 } },
-    { "id": 38, "name": "Swedish Lydian-Dominant", "cultural_family": "European", "region": "Scandinavia", "description": "A Lydian scale with a flat 7th, common in Nordic folk music, especially polskas.", "character": "Magico, arioso, danzante", "scale_cents": [0, 200, 400, 600, 700, 900, 1000, 1200], "profile": { "color_temp": 0.9, "saturation": 0.5, "hue_diversity": 0.4 } },
-    { "id": 39, "name": "Russian Minor (Gypsy)", "cultural_family": "European", "region": "Russia, Eastern Europe", "description": "A scale with a minor third and sixth but major second and seventh, very dramatic.", "character": "Appassionato, malinconico, teatrale", "scale_cents": [0, 200, 300, 600, 700, 800, 1100, 1200], "profile": { "color_temp": 0.2, "saturation": 0.8, "hue_diversity": 0.7 } },
-    { "id": 40, "name": "Alpine Yodel Mode", "cultural_family": "European", "region": "Alps (Switzerland, Austria)", "description": "Often based on major pentatonic scales to facilitate large vocal leaps.", "character": "Gioioso, aperto, celebrativo", "scale_cents": [0, 200, 400, 700, 900, 1200], "profile": { "color_temp": 0.7, "saturation": 0.8, "hue_diversity": 0.5 } },
-    { "id": 41, "name": "West African Pentatonic", "cultural_family": "African", "region": "West Africa (Mali, Senegal)", "description": "A common pentatonic scale used by instruments like the Kora and Balafon.", "character": "Ritmico, fluido, narrativo", "scale_cents": [0, 200, 400, 700, 900, 1200], "profile": { "color_temp": 0.2, "saturation": 0.9, "hue_diversity": 0.9 }, "timing_profile": { "swing": 1.15 } },
-    { "id": 42, "name": "Ethiopian Ambasel Scale", "cultural_family": "African", "region": "Ethiopia", "description": "A pentatonic scale with a unique intervallic structure, used in traditional ballads.", "character": "Nostalgico, evocativo, unico", "scale_cents": [0, 200, 500, 700, 1000, 1200], "profile": { "color_temp": 0.4, "saturation": 0.7, "hue_diversity": 0.6 } },
-    { "id": 43, "name": "Mbira Music (Shona)", "cultural_family": "African", "region": "Zimbabwe", "description": "Complex polyrhythmic music based on a heptatonic scale with a distinctive tuning.", "character": "Ispiratore, poliritmico, spirituale", "scale_cents": [0, 220, 380, 550, 720, 930, 1080, 1200], "profile": { "color_temp": 0.3, "saturation": 0.8, "hue_diversity": 0.8 } },
-    { "id": 44, "name": "Ewe Music (Ghana)", "cultural_family": "African", "region": "Ghana, Togo", "description": "Focuses on complex drum ensembles and bell patterns, often with a heptatonic modal feel.", "character": "Comunitario, ritmico, energico", "scale_cents": [0, 200, 350, 500, 700, 900, 1050, 1200], "profile": { "color_temp": 0.1, "saturation": 1, "hue_diversity": 0.9 }, "timing_profile": { "swing": 1.2 } },
-    { "id": 45, "name": "Mande Balafon Scale", "cultural_family": "African", "region": "West Africa", "description": "An equidistant heptatonic scale used for the balafon, a gourd-resonated xylophone.", "character": "Danzante, percussivo, brillante", "scale_cents": [0, 171, 342, 513, 684, 855, 1026, 1200], "profile": { "color_temp": 0.2, "saturation": 0.9, "hue_diversity": 0.8 } },
-    { "id": 46, "name": "Gnawa Music (Morocco)", "cultural_family": "African", "region": "Morocco", "description": "Ritual trance music based on pentatonic scales, played on the guembri and qraqeb.", "character": "Ipnotico, rituale, curativo", "scale_cents": [0, 300, 500, 700, 1000, 1200], "profile": { "color_temp": 0.3, "saturation": 0.8, "hue_diversity": 0.7 } },
-    { "id": 47, "name": "Wassoulou Music (Mali)", "cultural_family": "African", "region": "Mali", "description": "A popular music genre based on a pentatonic scale, driven by strong female vocalists.", "character": "Potente, danzabile, sociale", "scale_cents": [0, 300, 500, 700, 1000, 1200], "profile": { "color_temp": 0.1, "saturation": 0.9, "hue_diversity": 0.8 }, "timing_profile": { "swing": 1.1 } },
-    { "id": 48, "name": "Afro-Cuban Clave Rhythm", "cultural_family": "African", "region": "Cuba, African Diaspora", "description": "While primarily rhythmic, melodies often use pentatonic or hexatonic scales.", "character": "Sincopato, danzante, fusion", "scale_cents": [0, 200, 500, 700, 900, 1000, 1200], "profile": { "color_temp": 0.1, "saturation": 1, "hue_diversity": 1 }, "timing_profile": { "swing": 1.25 } }
+    {
+        "id": 1,
+        "name": "Maqam Hijaz",
+        "cultural_family": "Middle Eastern",
+        "region": "Arab World, Turkey, Persia",
+        "description": "Characterized by an augmented second interval, creating a distinctive and dramatic sound.",
+        "character": "Drammatico, intenso, evocativo",
+        "scale_cents": [
+            0,
+            50,
+            150,
+            355,
+            498,
+            600,
+            702,
+            800,
+            906,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.1,
+            "saturation": 0.8,
+            "hue_diversity": 0.7
+        }
+    },
+    {
+        "id": 2,
+        "name": "Maqam Rast",
+        "cultural_family": "Middle Eastern",
+        "region": "Arab World, Persia",
+        "description": "The foundational Maqam, often compared to the Western major scale but with neutral thirds.",
+        "character": "Maestoso, equilibrato, nobile",
+        "scale_cents": [
+            0,
+            204,
+            355,
+            498,
+            702,
+            906,
+            1055,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.4,
+            "saturation": 0.6,
+            "hue_diversity": 0.6
+        }
+    },
+    {
+        "id": 3,
+        "name": "Maqam Bayati",
+        "cultural_family": "Middle Eastern",
+        "region": "Levant, Egypt",
+        "description": "Features a neutral second and is known for its soulful and melancholic character.",
+        "character": "Malinconico, profondo, passionale",
+        "scale_cents": [
+            0,
+            150,
+            300,
+            498,
+            702,
+            800,
+            1000,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.7,
+            "saturation": 0.5,
+            "hue_diversity": 0.4
+        }
+    },
+    {
+        "id": 4,
+        "name": "Maqam Saba",
+        "cultural_family": "Middle Eastern",
+        "region": "Iraq, Levant",
+        "description": "A highly emotional Maqam with unstable intervals and a unique descending character.",
+        "character": "Angosciato, instabile, tormentato",
+        "scale_cents": [
+            0,
+            150,
+            300,
+            384,
+            498,
+            702,
+            800,
+            1000
+        ],
+        "profile": {
+            "color_temp": 0.2,
+            "saturation": 0.9,
+            "hue_diversity": 0.8
+        }
+    },
+    {
+        "id": 5,
+        "name": "Maqam Nahawand",
+        "cultural_family": "Middle Eastern",
+        "region": "Egypt, Persia",
+        "description": "Similar to the Western minor scale, often used for romantic or grand themes.",
+        "character": "Romantico, ampio, nostalgico",
+        "scale_cents": [
+            0,
+            200,
+            300,
+            500,
+            700,
+            800,
+            1000,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.8,
+            "saturation": 0.4,
+            "hue_diversity": 0.5
+        }
+    },
+    {
+        "id": 6,
+        "name": "Maqam Kurd",
+        "cultural_family": "Middle Eastern",
+        "region": "Kurdish regions, Levant",
+        "description": "Based on the Phrygian mode, it evokes a sense of folk-like simplicity and earthiness.",
+        "character": "Terreste, semplice, folk",
+        "scale_cents": [
+            0,
+            100,
+            300,
+            500,
+            700,
+            800,
+            1000,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.6,
+            "saturation": 0.6,
+            "hue_diversity": 0.3
+        }
+    },
+    {
+        "id": 7,
+        "name": "Dastgah-e Shur",
+        "cultural_family": "Middle Eastern",
+        "region": "Persia (Iran)",
+        "description": "Considered the 'mother of Persian modes', it is deeply expressive and widely used.",
+        "character": "Espressivo, lirico, spirituale",
+        "scale_cents": [
+            0,
+            204,
+            355,
+            498,
+            702,
+            906,
+            1000,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.5,
+            "saturation": 0.7,
+            "hue_diversity": 0.6
+        }
+    },
+    {
+        "id": 8,
+        "name": "Turkish Hicaz",
+        "cultural_family": "Middle Eastern",
+        "region": "Turkey",
+        "description": "The Turkish variant of Hijaz, used in both classical and popular Ottoman music.",
+        "character": "Passionale, esotico, vibrante",
+        "scale_cents": [
+            0,
+            133,
+            400,
+            500,
+            700,
+            833,
+            1100,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.1,
+            "saturation": 0.8,
+            "hue_diversity": 0.7
+        }
+    },
+    {
+        "id": 9,
+        "name": "Maqam Ajam",
+        "cultural_family": "Middle Eastern",
+        "region": "Arab World",
+        "description": "Equivalent to the Western major scale, conveying joy, strength, and clarity.",
+        "character": "Gioioso, forte, chiaro",
+        "scale_cents": [
+            0,
+            200,
+            400,
+            500,
+            700,
+            900,
+            1100,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.6,
+            "saturation": 0.7,
+            "hue_diversity": 0.4
+        }
+    },
+    {
+        "id": 10,
+        "name": "Mugam Segah",
+        "cultural_family": "Middle Eastern",
+        "region": "Azerbaijan",
+        "description": "An Azeri mode with a focus on the neutral third, central to Mugam traditions.",
+        "character": "Spirituale, meditativo, antico",
+        "scale_cents": [
+            0,
+            204,
+            355,
+            498,
+            702,
+            906,
+            1055,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.7,
+            "saturation": 0.5,
+            "hue_diversity": 0.5
+        }
+    },
+    {
+        "id": 11,
+        "name": "Andalusian Nubah",
+        "cultural_family": "Middle Eastern",
+        "region": "North Africa",
+        "description": "A suite form from Moorish Spain, with complex rhythmic cycles and modal evolution.",
+        "character": "Raffinato, poetico, storico",
+        "scale_cents": [
+            0,
+            150,
+            300,
+            500,
+            700,
+            800,
+            1000,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.5,
+            "saturation": 0.6,
+            "hue_diversity": 0.7
+        }
+    },
+    {
+        "id": 12,
+        "name": "Iraqi Maqam",
+        "cultural_family": "Middle Eastern",
+        "region": "Iraq",
+        "description": "A specific repertoire and performance practice of Maqam in Baghdad, highly refined.",
+        "character": "Colto, complesso, narrativo",
+        "scale_cents": [
+            0,
+            150,
+            355,
+            498,
+            702,
+            800,
+            1055,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.3,
+            "saturation": 0.7,
+            "hue_diversity": 0.8
+        }
+    },
+    {
+        "id": 13,
+        "name": "Raga Yaman",
+        "cultural_family": "South Asian",
+        "region": "North India",
+        "description": "A heptatonic scale corresponding to the Lydian mode, often performed in the evening.",
+        "character": "Calmo, meditativo, romantico",
+        "scale_cents": [
+            0,
+            204,
+            408,
+            590,
+            702,
+            906,
+            1110,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.3,
+            "saturation": 0.6,
+            "hue_diversity": 0.5
+        },
+        "timing_profile": {
+            "rubato": 0.15
+        }
+    },
+    {
+        "id": 14,
+        "name": "Raga Bhairav",
+        "cultural_family": "South Asian",
+        "region": "North India, Pakistan",
+        "description": "A morning Raga with flat second and sixth degrees, evoking seriousness and devotion.",
+        "character": "Devozionale, serio, pacifico",
+        "scale_cents": [
+            0,
+            112,
+            408,
+            498,
+            702,
+            814,
+            1110,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.6,
+            "saturation": 0.4,
+            "hue_diversity": 0.3
+        },
+        "timing_profile": {
+            "rubato": 0.1
+        }
+    },
+    {
+        "id": 15,
+        "name": "Raga Todi",
+        "cultural_family": "South Asian",
+        "region": "North India",
+        "description": "A morning Raga expressing gentle pathos and longing, with flat 2nd, 3rd, and 6th.",
+        "character": "Malinconico, supplichevole, gentile",
+        "scale_cents": [
+            0,
+            112,
+            316,
+            590,
+            702,
+            814,
+            1110,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.8,
+            "saturation": 0.5,
+            "hue_diversity": 0.4
+        },
+        "timing_profile": {
+            "rubato": 0.2
+        }
+    },
+    {
+        "id": 16,
+        "name": "Raga Malkauns",
+        "cultural_family": "South Asian",
+        "region": "India",
+        "description": "A late-night pentatonic Raga with a powerful, meditative, and introspective mood.",
+        "character": "Potente, introspettivo, maestoso",
+        "scale_cents": [
+            0,
+            316,
+            498,
+            814,
+            1018,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.9,
+            "saturation": 0.3,
+            "hue_diversity": 0.2
+        },
+        "timing_profile": {
+            "rubato": 0.1
+        }
+    },
+    {
+        "id": 17,
+        "name": "Raga Darbari",
+        "cultural_family": "South Asian",
+        "region": "North India",
+        "description": "A grave, late-night Raga known for its deep, oscillating notes and profound mood.",
+        "character": "Profondo, grave, regale",
+        "scale_cents": [
+            0,
+            204,
+            316,
+            498,
+            702,
+            814,
+            1018,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.8,
+            "saturation": 0.6,
+            "hue_diversity": 0.4
+        },
+        "timing_profile": {
+            "rubato": 0.25
+        }
+    },
+    {
+        "id": 18,
+        "name": "Carnatic Mayamalavagowla",
+        "cultural_family": "South Asian",
+        "region": "South India",
+        "description": "The fundamental scale for beginners in Carnatic music, similar to Bhairav.",
+        "character": "Fondamentale, didattico, sacro",
+        "scale_cents": [
+            0,
+            112,
+            408,
+            498,
+            702,
+            814,
+            1110,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.5,
+            "saturation": 0.5,
+            "hue_diversity": 0.5
+        }
+    },
+    {
+        "id": 19,
+        "name": "Raga Bhimpalasi",
+        "cultural_family": "South Asian",
+        "region": "North India",
+        "description": "An afternoon Raga with a pentatonic ascent and heptatonic descent, expresses longing.",
+        "character": "Nostalgico, romantico, pacifico",
+        "scale_cents": [
+            0,
+            316,
+            498,
+            702,
+            814,
+            1018,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.4,
+            "saturation": 0.7,
+            "hue_diversity": 0.6
+        },
+        "timing_profile": {
+            "rubato": 0.15
+        }
+    },
+    {
+        "id": 20,
+        "name": "Raga Bageshri",
+        "cultural_family": "South Asian",
+        "region": "North India",
+        "description": "A late-night Raga conveying the pain of separation and the wait for a lover.",
+        "character": "Romantico, malinconico, sensuale",
+        "scale_cents": [
+            0,
+            204,
+            316,
+            498,
+            702,
+            906,
+            1018,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.9,
+            "saturation": 0.6,
+            "hue_diversity": 0.5
+        },
+        "timing_profile": {
+            "rubato": 0.2
+        }
+    },
+    {
+        "id": 21,
+        "name": "Carnatic Shankarabharanam",
+        "cultural_family": "South Asian",
+        "region": "South India",
+        "description": "Equivalent to the Western major scale, a parent scale for many ragas.",
+        "character": "Grandioso, celebrativo, positivo",
+        "scale_cents": [
+            0,
+            204,
+            408,
+            498,
+            702,
+            906,
+            1110,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.6,
+            "saturation": 0.8,
+            "hue_diversity": 0.7
+        }
+    },
+    {
+        "id": 22,
+        "name": "Qawwali Music",
+        "cultural_family": "South Asian",
+        "region": "Pakistan, North India",
+        "description": "Sufi devotional music with strong vocal performances and driving rhythms.",
+        "character": "Devozionale, estatico, ritmico",
+        "scale_cents": [
+            0,
+            200,
+            300,
+            500,
+            700,
+            900,
+            1000,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.2,
+            "saturation": 0.9,
+            "hue_diversity": 0.8
+        }
+    },
+    {
+        "id": 23,
+        "name": "Pentatonic Chinese (Gong)",
+        "cultural_family": "East Asian",
+        "region": "China",
+        "description": "A foundational anhemitonic (no semitones) pentatonic scale associated with the earth element.",
+        "character": "Contemplativo, equilibrato, stabile",
+        "scale_cents": [
+            0,
+            204,
+            408,
+            702,
+            906,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.5,
+            "saturation": 0.4,
+            "hue_diversity": 0.3
+        }
+    },
+    {
+        "id": 24,
+        "name": "Japanese In-Sen Scale",
+        "cultural_family": "East Asian",
+        "region": "Japan",
+        "description": "A pentatonic scale with characteristic half steps, used for koto and shamisen music.",
+        "character": "Drammatico, teso, evocativo",
+        "scale_cents": [
+            0,
+            100,
+            500,
+            700,
+            800,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.7,
+            "saturation": 0.5,
+            "hue_diversity": 0.4
+        }
+    },
+    {
+        "id": 25,
+        "name": "Javanese Gamelan Slendro",
+        "cultural_family": "East Asian",
+        "region": "Indonesia (Java)",
+        "description": "A pentatonic scale with nearly equidistant intervals, a core tuning of Gamelan music.",
+        "character": "Mistico, ipnotico, metallico",
+        "scale_cents": [
+            0,
+            240,
+            480,
+            720,
+            960,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.4,
+            "saturation": 0.7,
+            "hue_diversity": 0.5
+        }
+    },
+    {
+        "id": 26,
+        "name": "Javanese Gamelan Pelog",
+        "cultural_family": "East Asian",
+        "region": "Indonesia (Java)",
+        "description": "A heptatonic scale with large and small intervals, from which pentatonic subsets are chosen.",
+        "character": "Solenne, regale, complesso",
+        "scale_cents": [
+            0,
+            120,
+            400,
+            550,
+            700,
+            800,
+            1050,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.6,
+            "saturation": 0.6,
+            "hue_diversity": 0.7
+        }
+    },
+    {
+        "id": 27,
+        "name": "Korean Pyeongjo Mode",
+        "cultural_family": "East Asian",
+        "region": "Korea",
+        "description": "A pentatonic mode often used in folk music, conveying a bright and peaceful mood.",
+        "character": "Brillante, pacifico, sereno",
+        "scale_cents": [
+            0,
+            200,
+            400,
+            700,
+            900,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.6,
+            "saturation": 0.7,
+            "hue_diversity": 0.4
+        }
+    },
+    {
+        "id": 28,
+        "name": "Vietnamese Hue Style",
+        "cultural_family": "East Asian",
+        "region": "Vietnam",
+        "description": "Music of the imperial court, featuring unique microtonal inflections and ornamentation.",
+        "character": "Elegante, nostalgico, poetico",
+        "scale_cents": [
+            0,
+            250,
+            400,
+            700,
+            950,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.5,
+            "saturation": 0.6,
+            "hue_diversity": 0.6
+        }
+    },
+    {
+        "id": 29,
+        "name": "Japanese Gagaku Ryo",
+        "cultural_family": "East Asian",
+        "region": "Japan",
+        "description": "A scale from ancient court music, similar to the Lydian mode, creating a feeling of suspension.",
+        "character": "Antico, sospeso, cerimoniale",
+        "scale_cents": [
+            0,
+            200,
+            400,
+            600,
+            700,
+            900,
+            1100,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.8,
+            "saturation": 0.3,
+            "hue_diversity": 0.3
+        }
+    },
+    {
+        "id": 30,
+        "name": "Mongolian Long Song",
+        "cultural_family": "East Asian",
+        "region": "Mongolia",
+        "description": "Characterized by wide vocal ranges and free rhythm, based on pentatonic scales.",
+        "character": "Ampio, libero, pastorale",
+        "scale_cents": [
+            0,
+            200,
+            400,
+            700,
+            900,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.3,
+            "saturation": 0.8,
+            "hue_diversity": 0.4
+        }
+    },
+    {
+        "id": 31,
+        "name": "Thai Classical Scale",
+        "cultural_family": "East Asian",
+        "region": "Thailand",
+        "description": "A seven-note equidistant scale, where each step is approximately 171 cents.",
+        "character": "Decorativo, brillante, unico",
+        "scale_cents": [
+            0,
+            171,
+            342,
+            513,
+            684,
+            855,
+            1026,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.4,
+            "saturation": 0.9,
+            "hue_diversity": 0.8
+        }
+    },
+    {
+        "id": 32,
+        "name": "Balinese Gamelan",
+        "cultural_family": "East Asian",
+        "region": "Indonesia (Bali)",
+        "description": "Known for its shimmering, fast-paced, and rhythmically complex interlocking patterns.",
+        "character": "Dinamico, scintillante, energico",
+        "scale_cents": [
+            0,
+            150,
+            400,
+            500,
+            750,
+            900,
+            1150,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.2,
+            "saturation": 1,
+            "hue_diversity": 0.9
+        }
+    },
+    {
+        "id": 33,
+        "name": "Gregorian Mode 1 (Dorian)",
+        "cultural_family": "European",
+        "region": "Medieval Europe",
+        "description": "A diatonic mode with a characteristic minor sixth, used extensively in early sacred chant.",
+        "character": "Solenne, spirituale, sereno",
+        "scale_cents": [
+            0,
+            200,
+            300,
+            500,
+            700,
+            900,
+            1000,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.8,
+            "saturation": 0.2,
+            "hue_diversity": 0.2
+        }
+    },
+    {
+        "id": 34,
+        "name": "Phrygian Dominant",
+        "cultural_family": "European",
+        "region": "Spain, Balkans",
+        "description": "Also known as Spanish Gypsy scale, it is a hallmark of Flamenco music.",
+        "character": "Appassionato, teso, flamenco",
+        "scale_cents": [
+            0,
+            100,
+            400,
+            500,
+            700,
+            800,
+            1000,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.1,
+            "saturation": 0.9,
+            "hue_diversity": 0.6
+        }
+    },
+    {
+        "id": 35,
+        "name": "Celtic Air (Aeolian)",
+        "cultural_family": "European",
+        "region": "Ireland, Scotland",
+        "description": "The natural minor scale, common in ballads and slow airs, evoking melancholy.",
+        "character": "Nostalgico, lirico, narrativo",
+        "scale_cents": [
+            0,
+            200,
+            300,
+            500,
+            700,
+            800,
+            1000,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.9,
+            "saturation": 0.4,
+            "hue_diversity": 0.3
+        }
+    },
+    {
+        "id": 36,
+        "name": "Byzantine Chromatic",
+        "cultural_family": "European",
+        "region": "Greece, Eastern Europe",
+        "description": "A scale used in Greek Orthodox chant, with two augmented second intervals.",
+        "character": "Mistico, sacro, antico",
+        "scale_cents": [
+            0,
+            100,
+            400,
+            500,
+            700,
+            800,
+            1100,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.6,
+            "saturation": 0.6,
+            "hue_diversity": 0.7
+        }
+    },
+    {
+        "id": 37,
+        "name": "Hungarian Minor Scale",
+        "cultural_family": "European",
+        "region": "Hungary, Roma",
+        "description": "A harmonic minor scale with a raised fourth, giving it a distinctive character.",
+        "character": "Drammatico, energico, folk",
+        "scale_cents": [
+            0,
+            200,
+            300,
+            600,
+            700,
+            800,
+            1100,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.3,
+            "saturation": 0.8,
+            "hue_diversity": 0.8
+        }
+    },
+    {
+        "id": 38,
+        "name": "Swedish Lydian-Dominant",
+        "cultural_family": "European",
+        "region": "Scandinavia",
+        "description": "A Lydian scale with a flat 7th, common in Nordic folk music, especially polskas.",
+        "character": "Magico, arioso, danzante",
+        "scale_cents": [
+            0,
+            200,
+            400,
+            600,
+            700,
+            900,
+            1000,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.9,
+            "saturation": 0.5,
+            "hue_diversity": 0.4
+        }
+    },
+    {
+        "id": 39,
+        "name": "Russian Minor (Gypsy)",
+        "cultural_family": "European",
+        "region": "Russia, Eastern Europe",
+        "description": "A scale with a minor third and sixth but major second and seventh, very dramatic.",
+        "character": "Appassionato, malinconico, teatrale",
+        "scale_cents": [
+            0,
+            200,
+            300,
+            600,
+            700,
+            800,
+            1100,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.2,
+            "saturation": 0.8,
+            "hue_diversity": 0.7
+        }
+    },
+    {
+        "id": 40,
+        "name": "Alpine Yodel Mode",
+        "cultural_family": "European",
+        "region": "Alps (Switzerland, Austria)",
+        "description": "Often based on major pentatonic scales to facilitate large vocal leaps.",
+        "character": "Gioioso, aperto, celebrativo",
+        "scale_cents": [
+            0,
+            200,
+            400,
+            700,
+            900,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.7,
+            "saturation": 0.8,
+            "hue_diversity": 0.5
+        }
+    },
+    {
+        "id": 41,
+        "name": "West African Pentatonic",
+        "cultural_family": "African",
+        "region": "West Africa (Mali, Senegal)",
+        "description": "A common pentatonic scale used by instruments like the Kora and Balafon.",
+        "character": "Ritmico, fluido, narrativo",
+        "scale_cents": [
+            0,
+            200,
+            400,
+            700,
+            900,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.2,
+            "saturation": 0.9,
+            "hue_diversity": 0.9
+        },
+        "timing_profile": {
+            "swing": 1.15
+        }
+    },
+    {
+        "id": 42,
+        "name": "Ethiopian Ambasel Scale",
+        "cultural_family": "African",
+        "region": "Ethiopia",
+        "description": "A pentatonic scale with a unique intervallic structure, used in traditional ballads.",
+        "character": "Nostalgico, evocativo, unico",
+        "scale_cents": [
+            0,
+            200,
+            500,
+            700,
+            1000,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.4,
+            "saturation": 0.7,
+            "hue_diversity": 0.6
+        }
+    },
+    {
+        "id": 43,
+        "name": "Mbira Music (Shona)",
+        "cultural_family": "African",
+        "region": "Zimbabwe",
+        "description": "Complex polyrhythmic music based on a heptatonic scale with a distinctive tuning.",
+        "character": "Ispiratore, poliritmico, spirituale",
+        "scale_cents": [
+            0,
+            220,
+            380,
+            550,
+            720,
+            930,
+            1080,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.3,
+            "saturation": 0.8,
+            "hue_diversity": 0.8
+        }
+    },
+    {
+        "id": 44,
+        "name": "Ewe Music (Ghana)",
+        "cultural_family": "African",
+        "region": "Ghana, Togo",
+        "description": "Focuses on complex drum ensembles and bell patterns, often with a heptatonic modal feel.",
+        "character": "Comunitario, ritmico, energico",
+        "scale_cents": [
+            0,
+            200,
+            350,
+            500,
+            700,
+            900,
+            1050,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.1,
+            "saturation": 1,
+            "hue_diversity": 0.9
+        },
+        "timing_profile": {
+            "swing": 1.2
+        }
+    },
+    {
+        "id": 45,
+        "name": "Mande Balafon Scale",
+        "cultural_family": "African",
+        "region": "West Africa",
+        "description": "An equidistant heptatonic scale used for the balafon, a gourd-resonated xylophone.",
+        "character": "Danzante, percussivo, brillante",
+        "scale_cents": [
+            0,
+            171,
+            342,
+            513,
+            684,
+            855,
+            1026,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.2,
+            "saturation": 0.9,
+            "hue_diversity": 0.8
+        }
+    },
+    {
+        "id": 46,
+        "name": "Gnawa Music (Morocco)",
+        "cultural_family": "African",
+        "region": "Morocco",
+        "description": "Ritual trance music based on pentatonic scales, played on the guembri and qraqeb.",
+        "character": "Ipnotico, rituale, curativo",
+        "scale_cents": [
+            0,
+            300,
+            500,
+            700,
+            1000,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.3,
+            "saturation": 0.8,
+            "hue_diversity": 0.7
+        }
+    },
+    {
+        "id": 47,
+        "name": "Wassoulou Music (Mali)",
+        "cultural_family": "African",
+        "region": "Mali",
+        "description": "A popular music genre based on a pentatonic scale, driven by strong female vocalists.",
+        "character": "Potente, danzabile, sociale",
+        "scale_cents": [
+            0,
+            300,
+            500,
+            700,
+            1000,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.1,
+            "saturation": 0.9,
+            "hue_diversity": 0.8
+        },
+        "timing_profile": {
+            "swing": 1.1
+        }
+    },
+    {
+        "id": 48,
+        "name": "Afro-Cuban Clave Rhythm",
+        "cultural_family": "African",
+        "region": "Cuba, African Diaspora",
+        "description": "While primarily rhythmic, melodies often use pentatonic or hexatonic scales.",
+        "character": "Sincopato, danzante, fusion",
+        "scale_cents": [
+            0,
+            200,
+            500,
+            700,
+            900,
+            1000,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.1,
+            "saturation": 1,
+            "hue_diversity": 1
+        },
+        "timing_profile": {
+            "swing": 1.25
+        }
+    },
+    {
+        "id": 49,
+        "name": "Cinematic Ambient",
+        "cultural_family": "Neutral",
+        "region": "Universal",
+        "description": "Atmospheric and evocative soundscapes that blend cinematic pads with subtle organic textures, designed to reflect the visual essence without geographical constraints.",
+        "character": "Atmosferico, cinematico, universale",
+        "scale_cents": [
+            0,
+            200,
+            400,
+            500,
+            700,
+            900,
+            1100,
+            1200
+        ],
+        "profile": {
+            "color_temp": 0.5,
+            "saturation": 0.5,
+            "hue_diversity": 0.5
+        }
+    }
 ]

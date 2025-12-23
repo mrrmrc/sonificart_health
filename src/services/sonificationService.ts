@@ -12,6 +12,22 @@ import OSC from 'osc-js';
 
 let CULTURAL_TRADITIONS_CACHE: Tradition[] | null = null;
 
+const DEFAULT_CINEMATIC_TRADITION: Tradition = {
+    id: 999,
+    name: "Cinematic Ambient",
+    cultural_family: "Neutral",
+    region: "Universal",
+    description: "Atmospheric soundscape designed to reflect visual essence without geographical constraints.",
+    character: "Atmosferico, cinematico, universale",
+    scale_cents: [0, 200, 400, 500, 700, 900, 1100, 1200],
+    baseFrequency: 440,
+    profile: {
+        color_temp: 0.5,
+        saturation: 0.5,
+        hue_diversity: 0.5
+    }
+};
+
 async function getCulturalTraditions(): Promise<Tradition[]> {
     if (CULTURAL_TRADITIONS_CACHE) {
         return CULTURAL_TRADITIONS_CACHE;
@@ -37,6 +53,7 @@ function determineCulturalScanPattern(culturalFamily: string): { pattern: ScanPa
         case 'East Asian': return { pattern: ScanPattern.SCANLINES_VERTICAL, name: "Linee di scansione verticali alternate" };
         case 'European': return { pattern: ScanPattern.BOUSTROPHEDON_LTR, name: "Boustrophedon (da sinistra a destra)" };
         case 'African': return { pattern: ScanPattern.BOUSTROPHEDON_RTL, name: "Boustrophedon (da destra a sinistra)" };
+        case 'Neutral': return { pattern: ScanPattern.LINEAR, name: "Neutral Cinematic Scan" };
         default: return { pattern: ScanPattern.LINEAR, name: "Lineare (da sinistra a destra, dall'alto in basso)" };
     }
 }
@@ -380,14 +397,27 @@ function mapPixelToNote(block: BlockData): UniversalMapping {
 }
 
 
-function selectCulturalTradition(stats: BlockAnalysisResult['globalStats'], traditions: Tradition[]): CulturalSelectionResult {
-    let bestTradition = traditions[0];
+function selectCulturalTradition(stats: BlockAnalysisResult['globalStats'], traditions: Tradition[], preferNeutral: boolean = false): CulturalSelectionResult {
+    // SE NEUTRAL PREFERRED, CERCA IL MATCH CINEMATICO (CON FALLBACK HARDCODED)
+    if (preferNeutral) {
+        const cinematic = traditions.find(t => t.cultural_family === 'Neutral') || DEFAULT_CINEMATIC_TRADITION;
+        return {
+            tradition: cinematic,
+            scoreBreakdown: { colorTemperature: 1, saturation: 1, hueDiversity: 1, total: 1 }
+        };
+    }
+
+    // Filtriamo le tradizioni 'Neutral' dal pool di matching scientifico/geografico
+    const regionalTraditions = traditions.filter(t => t.cultural_family !== 'Neutral');
+    const pool = regionalTraditions.length > 0 ? regionalTraditions : traditions;
+
+    let bestTradition = pool[0];
     let maxScore = -1;
     let bestScoreBreakdown: ScoreBreakdown = { colorTemperature: 0, saturation: 0, hueDiversity: 0, total: 0 };
 
     const colorTemp = 0.5 - (stats.avg_b / 256);
 
-    for (const tradition of traditions) {
+    for (const tradition of pool) {
         const tempScore = 1 - Math.abs(colorTemp - tradition.profile.color_temp);
         const satScore = 1 - Math.abs(stats.avg_saturation - tradition.profile.saturation);
         const hueScore = 1 - Math.abs(stats.hue_diversity - tradition.profile.hue_diversity);
@@ -650,6 +680,7 @@ export async function sonifyImage(
     const traditions = await getCulturalTraditions();
 
     progressCallback(0, 'active');
+    const imageDescription = await describeImageContent(file);
     const { canvas, imageData, imageBounds } = await standardizeImage(file);
     // Generate the exact Blob that will be used in the SAC for hash consistency
     const standardizedImageBlob = await canvasToBlob(canvas, 'image/jpeg', 0.9);
@@ -680,7 +711,7 @@ export async function sonifyImage(
     progressCallback(3, 'completed');
 
     progressCallback(4, 'active');
-    const culturalSelectionResult = selectCulturalTradition(blockAnalysisResult.globalStats, traditions);
+    const culturalSelectionResult = selectCulturalTradition(blockAnalysisResult.globalStats, traditions, false);
     timings.culturalSelection = performance.now() - t; t = performance.now();
     progressCallback(4, 'completed');
 
@@ -807,13 +838,19 @@ export async function sonifyImage(
             midiBlobHash: midiBlobHash
         },
         performanceMetrics: timings,
-        musicGenerationPrompt: null,
+        musicGenerationPrompt: await generateMusicPromptFromAnalysis(
+            culturalSelectionResult.tradition,
+            blockAnalysisResult.globalStats,
+            scanPatternName,
+            totalDurationSeconds,
+            imageDescription
+        ),
     };
 }
 
 
 // --- ARTISTIC & HYBRID PARADIGMS ---
-import { generateStabilityAudio } from './stabilityAudioService';
+import { generateStabilityAudio } from './stabilityService';
 
 async function sonifyImageArtisticOrHybrid(
     file: File,
@@ -828,31 +865,15 @@ async function sonifyImageArtisticOrHybrid(
     const traditions = await getCulturalTraditions();
 
     // AI Preliminary Steps (0 and 1 for Hybrid, 0 for Artistic)
-    let musicPrompt: MusicGenerationPrompt;
-    let scanPatternNameForAI: string = "";
-
+    let imageDescription = "";
     if (paradigm === 'hybrid') {
         progressCallback(0, 'active');
-        const imageDescription = await describeImageContent(file);
+        imageDescription = await describeImageContent(file);
         timings.aiImageDescription = performance.now() - t; t = performance.now();
         progressCallback(0, 'completed');
-
-        progressCallback(1, 'active');
-        // We need a temporary cultural selection just for the prompt name if we don't have analysis yet
-        // but the current structure does analysis AFTER AI steps. 
-        // Let's use a dummy name or calculate it quickly if needed.
-        scanPatternNameForAI = "Dynamic Hybrid Scan";
-        musicPrompt = await generateMusicPromptFromAnalysisHybrid({ name: 'Cross-Cultural' } as any, { avg_saturation: 0.5 } as any, scanPatternNameForAI, imageDescription);
-        timings.aiCreativeFusion = performance.now() - t; t = performance.now();
-        progressCallback(1, 'completed');
-    } else {
-        progressCallback(0, 'active');
-        musicPrompt = await generateMusicPromptFromAnalysis({ name: 'Aesthetic Search' } as any, { avg_saturation: 0.5 } as any, "Artistic Scan");
-        timings.aiConsultation = performance.now() - t; t = performance.now();
-        progressCallback(0, 'completed');
     }
+    const stepOffset = paradigm === 'hybrid' ? 1 : 0; // Revised offset since we removed a step
 
-    const stepOffset = paradigm === 'hybrid' ? 2 : 1;
 
     // Standard Processing Steps
     progressCallback(0 + stepOffset, 'active');
@@ -882,7 +903,7 @@ async function sonifyImageArtisticOrHybrid(
     progressCallback(3 + stepOffset, 'completed');
 
     progressCallback(4 + stepOffset, 'active');
-    const culturalSelectionResult = selectCulturalTradition(blockAnalysisResult.globalStats, traditions);
+    const culturalSelectionResult = selectCulturalTradition(blockAnalysisResult.globalStats, traditions, false);
     const { tradition } = culturalSelectionResult;
     timings.culturalSelection = performance.now() - t; t = performance.now();
     progressCallback(4 + stepOffset, 'completed');
@@ -943,21 +964,52 @@ async function sonifyImageArtisticOrHybrid(
     };
     progressCallback(6 + stepOffset, 'completed');
 
-    // AI EXTENDED MUSIC GENERATION (Final Step)
+    // AI MODALITIES: Generate Prompts with REAL Data
     progressCallback(7 + stepOffset, 'active');
+    let musicPrompt: MusicGenerationPrompt;
+
+    // Per il prompt AI usiamo la tradizione CINEMATICA per garantire l'atmosfera corretta su SUNO/UDIO
+    // ma manteniamo i dati della tradizione originale (es. Maqam, Flamenco) nel framework per la sintesi del WAV deterministico
+    const aiTradition = traditions.find(t => t.id === 49 || t.name === "Cinematic Ambient") || DEFAULT_CINEMATIC_TRADITION;
+
+    if (paradigm === 'hybrid') {
+        musicPrompt = await generateMusicPromptFromAnalysis(
+            aiTradition,
+            blockAnalysisResult.globalStats,
+            scanPatternName,
+            totalDurationSeconds,
+            imageDescription
+        );
+        timings.aiCreativeFusion = performance.now() - t; t = performance.now();
+    } else {
+        musicPrompt = await generateMusicPromptFromAnalysis(
+            aiTradition,
+            blockAnalysisResult.globalStats,
+            scanPatternName,
+            totalDurationSeconds,
+            "Analisi Artistica"
+        );
+        timings.aiConsultation = performance.now() - t; t = performance.now();
+    }
+    progressCallback(7 + stepOffset, 'completed');
+
+    // AI EXTENDED MUSIC GENERATION (Final Step)
+    progressCallback(8 + stepOffset, 'active');
     let aiTrackUrl: string | null = null;
     try {
+        console.log(`Starting AI Extended Generation (Target: ${totalDurationSeconds.toFixed(2)}s)...`);
         const aiAudioBlob = await generateStabilityAudio(
             musicPrompt.stability_prompt,
             musicPrompt.negative_prompt,
-            45
+            totalDurationSeconds,
+            audioWavBlob // Passiamo il WAV originale come riferimento Audio-to-Audio!
         );
         aiTrackUrl = URL.createObjectURL(aiAudioBlob);
         timings.aiMusicGeneration = performance.now() - t; t = performance.now();
     } catch (e) {
         console.error("Stability AI Failed:", e);
     }
-    progressCallback(7 + stepOffset, 'completed');
+    progressCallback(8 + stepOffset, 'completed');
 
     const sacContainer = await createSacContainer({
         imageHash, audioHash, config, blockAnalysisResult, culturalSelectionResult,

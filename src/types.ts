@@ -59,6 +59,7 @@ export interface MusicGenerationPrompt {
     udio_prompt: string;      // Ottimizzato per Udio (Tags descrittivi)
     stability_prompt: string; // Ottimizzato per Stable Audio (Frase discorsiva)
     negative_prompt: string;
+    suno_lyrics: string;      // NEW: Marcatori temporali per sincronizzazione
 }
 
 

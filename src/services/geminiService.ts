@@ -35,16 +35,19 @@ export async function describeImageContent(imageFile: File): Promise<string> {
 export async function generateMusicPromptFromAnalysis(
     tradition: Tradition,
     analysisStats: BlockAnalysisResult['globalStats'],
-    scanPatternName: string
+    scanPatternName: string,
+    durationSeconds: number,
+    imageDescription: string = "Analisi Scientifica Pura"
 ): Promise<MusicGenerationPrompt> {
-    return generateMusicPromptFromAnalysisHybrid(tradition, analysisStats, scanPatternName, "Analisi Scientifica Pura");
+    return generateMusicPromptFromAnalysisHybrid(tradition, analysisStats, scanPatternName, imageDescription, durationSeconds);
 }
 
 export async function generateMusicPromptFromAnalysisHybrid(
     tradition: Tradition,
     analysisStats: BlockAnalysisResult['globalStats'],
     scanPatternName: string,
-    imageDescription: string
+    imageDescription: string,
+    durationSeconds: number
 ): Promise<MusicGenerationPrompt> {
 
     if (!GOOGLE_API_KEY) {
@@ -53,35 +56,38 @@ export async function generateMusicPromptFromAnalysisHybrid(
 
     const ai = new GoogleGenAI({ apiKey: GOOGLE_API_KEY });
 
-    // PROMPT OTTIMIZZATO MULTI-PIATTAFORMA
+    // PROMPT ALTAMENTE DETTAGLIATO - FUSIONE SEMANTICA AGGRESSIVA - FORZATURA DURATA
     const textPart = {
-        text: `RUOLO: Sei un esperto Music Prompt Engineer per le principali AI generative (Suno, Udio, Stable Audio).
-OBIETTIVO: Creare metadati musicali precisi partendo da una sonificazione visiva.
+        text: `RUOLO: Sei un esperto Music Prompt Engineer senior, specializzato nella "FUSIONE SEMANTICA" tra dati visivi e traduzioni culturali musicali per AI generative (Suno, Udio, Stable Audio).
 
-INPUT VISIVO: "${imageDescription}"
-DATI SONIFICAZIONE:
-- Tradizione: '${tradition.name}' ('${tradition.character}')
-- Saturazione Colore: ${(analysisStats.avg_saturation * 100).toFixed(0)}%
-- Pattern Scansione: '${scanPatternName}'
+OBIETTIVO: Creare una guida musicale che sia un ibrido perfetto tra il "Soggetto dell'Immagine" e la "Tradizione Musicale" suggerita dal framework SonificA.R.T.
 
-COMPITO: Genera 3 varianti di prompt per estendere/arrangiare questa sonificazione.
-1. **SUNO v3.5**: Usa "Meta Tags" tra parentesi quadre. Esempio: "[Dark Ambient], [Oud Solo], [Experimental]".
-2. **UDIO**: Usa tags descrittivi separati da virgola. Esempio: dark ambient, oud solo, cinematic, slow tempo.
-3. **STABILITY / MUSICGEN**: Usa una frase descrittiva fluida in inglese. Esempio: "A dark ambient track featuring an oud solo...".
+DATI DI INPUT:
+- SOGGETTO VISIVO (CRITICO): "${imageDescription}"
+- TRADIZIONE MUSICALE: '${tradition.name}' (Carattere: '${tradition.character}')
+- Descrizione Cultura: "${tradition.description}"
+- Statistiche Colore (CIE LAB): Saturazione al ${(analysisStats.avg_saturation * 100).toFixed(0)}%, Diversità cromatica al ${(analysisStats.hue_diversity * 100).toFixed(0)}%
+- DURATA DA RISPETTARE: ${durationSeconds.toFixed(1)} secondi.
+- Pattern di Scansione: '${scanPatternName}'
 
-REGOLE:
-- L'audio di input è sperimentale/microtonale: usa tag come "[Experimental]", "[Abstract]" per guidare l'AI.
-- Se non c'è voce nell'immagine, specifica sempre "[Instrumental]".
+REQUISITI DI FUSIONE SEMANTICA (MANDATORI):
+1. **Iniezione Parole Chiave Visive**: Devi inserire nel prompt i termini chiave estratti dal SOGGETTO VISIVO ("${imageDescription}"). Se vedi "Stonehenge", il prompt DEVE contenere parole come "Ancient Stones", "Monoliths", "Sarsen stones", "Druidic silence", "Neolithic ritual".
+2. **Ibridazione Strumentale**: Non limitarti alla strumentazione classica della tradizione '${tradition.name}'. Inventa suoni ibridi basati sull'immagine. (Es: Se è Stonehenge + Andaluso: "Stone-percussion echoing between monoliths", "Oud melody carried by the morning wind over Salisbury Plain").
+3. **Atmosfera Contestuale**: L'atmosfera non deve essere solo quella della tradizione, ma deve riflettere il luogo/soggetto dell'immagine.
 
-OUTPUT RICHIESTO (JSON):
-Genera un JSON valido con:
-- **main_prompt_ita**: Descrizione estetica sintetica in Italiano.
-- **technical_parameters**: BPM e Chiave (es. "Free Tempo, Microtonal").
-- **justification**: Motivo tecnico della scelta.
-- **suno_prompt**: Prompt ottimizzato per SUNO (Meta Tags).
-- **udio_prompt**: Prompt ottimizzato per UDIO (Tags).
-- **stability_prompt**: Prompt ottimizzato per STABILITY (Discorsivo).
-- **negative_prompt**: Elementi da evitare (Inglese).
+FORZATURA DURATA SUNO (CRITICO):
+- Inizia SEMPRE con: "[Duration: ${durationSeconds.toFixed(0)}s], [Strictly ${durationSeconds.toFixed(0)} seconds limit], [Fast Ending], [No Extension]".
+- Termina SEMPRE con: "[Outro: Dissolve at ${durationSeconds.toFixed(0)}s], [End at ${durationSeconds.toFixed(0)}s], [Silence], [End]".
+
+STRUTTURA OUTPUT RICHIESTA (JSON):
+- **main_prompt_ita**: Descrizione poetica e tecnica che spieghi come la musicalità '${tradition.name}' descriva specificamente '${imageDescription}'.
+- **technical_parameters**: BPM, Chiave, Scala, e Strumentazione Ibrida suggerita.
+- **justification**: Spiegazione di come il soggetto visivo sia stato fuso con la tradizione musicale.
+- **suno_prompt**: Il mega-prompt di tag. DEVE contenere sia i tag musicali che i tag del SOGGETTO VISIVO.
+- **udio_prompt**: Tag separati da virgola (Musicali + Visivi + Durata).
+- **stability_prompt**: Descrizione fluida (Musicali + Visivi + Durata).
+- **negative_prompt**: Elementi da evitare.
+- **suno_lyrics**: Marcatori temporali basati sulla durata di ${durationSeconds.toFixed(0)} secondi. Inserisci un marcatore ogni 30 secondi (es: [0:00], [0:30], [1:00]) accompagnato da una breve descrizione della sezione strumentale (es: [0:00] Intro Ambientale, [0:30] Sviluppo Ritmico).
 
 Rispondi SOLO con il JSON.`
     };
@@ -101,9 +107,10 @@ Rispondi SOLO con il JSON.`
                         suno_prompt: { type: Type.STRING },
                         udio_prompt: { type: Type.STRING },
                         stability_prompt: { type: Type.STRING },
-                        negative_prompt: { type: Type.STRING }
+                        negative_prompt: { type: Type.STRING },
+                        suno_lyrics: { type: Type.STRING }
                     },
-                    required: ["main_prompt_ita", "technical_parameters", "justification", "suno_prompt", "udio_prompt", "stability_prompt", "negative_prompt"]
+                    required: ["main_prompt_ita", "technical_parameters", "justification", "suno_prompt", "udio_prompt", "stability_prompt", "negative_prompt", "suno_lyrics"]
                 }
             }
         });
@@ -124,7 +131,8 @@ Rispondi SOLO con il JSON.`
             suno_prompt: "[Experimental], [Instrumental], [Cinematic], [Ambient]",
             udio_prompt: "experimental, instrumental, cinematic, ambient",
             stability_prompt: "Cinematic score, emotional, orchestral, clear sound",
-            negative_prompt: "percussion, text, speech"
+            negative_prompt: "percussion, text, speech",
+            suno_lyrics: "[0:00] Intro, [0:30] Development, [End]"
         };
     }
 }

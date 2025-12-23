@@ -41,9 +41,9 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
 
     const getColors = () => {
         switch (type) {
-            case 'danger': return { bg: 'bg-red-500/10', border: 'border-red-500/50', text: 'text-red-400', button: 'bg-red-600 hover:bg-red-500' };
-            case 'warning': return { bg: 'bg-yellow-500/10', border: 'border-yellow-500/50', text: 'text-yellow-400', button: 'bg-yellow-600 hover:bg-yellow-500 text-black' };
-            case 'success': return { bg: 'bg-green-500/10', border: 'border-green-500/50', text: 'text-green-400', button: 'bg-green-600 hover:bg-green-500 text-brand-primary' };
+            case 'danger': return { bg: 'bg-red-500/10', border: 'border-red-500/50', text: 'text-red-400', button: 'bg-red-600 hover:bg-red-500 text-white' };
+            case 'warning': return { bg: 'bg-yellow-500/10', border: 'border-yellow-500/50', text: 'text-yellow-400', button: 'bg-brand-accent hover:bg-brand-accent-light text-brand-primary' };
+            case 'success': return { bg: 'bg-green-500/10', border: 'border-green-500/50', text: 'text-green-400', button: 'bg-brand-accent hover:bg-brand-accent-light text-brand-primary' };
             default: return { bg: 'bg-brand-secondary/40', border: 'border-white/10', text: 'text-brand-accent', button: 'bg-brand-accent text-brand-primary hover:bg-brand-accent-light' };
         }
     };

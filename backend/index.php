@@ -192,7 +192,7 @@ function sendHtmlEmail($to, $subject, $title, $bodyContent)
     </body>
     </html>";
 
-    @mail($to, $subject, $template, $headers);
+    return @mail($to, $subject, $template, $headers);
 }
 
 function generatePassword($length = 10)
@@ -520,6 +520,7 @@ if ($action === 'upload_media' && $method === 'POST') {
 if ($action === 'check_session') {
     $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
     $stmt->execute([$userId]);
+    $u = $stmt->fetch();
     if ($u) {
         $tier = $u['tier'] ?? 'free';
         $isPro = (bool) $u['is_pro'];
@@ -738,7 +739,8 @@ if ($userId) {
             $password = generatePassword(12);
 
             // 2. Calculate Expiration
-            $days = ($plan === 'Annuale') ? 366 : 31; // Add an extra day buffer
+            $isAnnual = (stripos($plan, 'Annuale') !== false);
+            $days = $isAnnual ? 366 : 31;
             $expiresAt = date('Y-m-d H:i:s', strtotime("+$days days"));
 
             // 3. Create or Update User
@@ -746,15 +748,16 @@ if ($userId) {
             $stmt->execute([$email]);
             $existing = $stmt->fetch();
 
+            $targetUserId = null;
             if ($existing) {
                 $stmt = $pdo->prepare("UPDATE users SET is_pro = 1, pro_expires_at = ?, tier = 'pro', credits = 9999 WHERE id = ?");
                 $stmt->execute([$expiresAt, $existing['id']]);
-                $userId = $existing['id'];
+                $targetUserId = $existing['id'];
             } else {
                 $avatar = "https://api.dicebear.com/7.x/avataaars/svg?seed=" . urlencode($name);
                 $stmt = $pdo->prepare("INSERT INTO users (name, email, password, is_pro, pro_expires_at, tier, credits, avatar_url) VALUES (?, ?, ?, 1, ?, 'pro', 9999, ?)");
                 $stmt->execute([$name, $email, $password, $expiresAt, $avatar]);
-                $userId = $pdo->lastInsertId();
+                $targetUserId = $pdo->lastInsertId();
             }
 
             // 4. Send Welcome Email
@@ -775,12 +778,12 @@ if ($userId) {
                 <p>Buon lavoro,<br><em>Il Team SonificA.R.T.</em></p>
             ";
 
-            sendHtmlEmail($email, "Accesso PRO Attivato - SonificA.R.T.", "Benvenuto in SonificA.R.T. PRO", $body);
+            $mailSent = sendHtmlEmail($email, "Accesso PRO Attivato - SonificA.R.T.", "Benvenuto in SonificA.R.T. PRO", $body);
 
             // 5. Delete Request
             $pdo->prepare("DELETE FROM registration_requests WHERE id = ?")->execute([$reqId]);
 
-            sendResponse(["success" => true, "message" => "Utente approvato e credenziali inviate."]);
+            sendResponse(["success" => true, "message" => "Utente approvato e credenziali inviate.", "mail_status" => $mailSent]);
         }
         if ($action === 'admin_get_requests') {
             $reqs = $pdo->query("SELECT id, name, email, plan, piva, institution_type, purpose, website, invoice_sent, paid, created_at FROM registration_requests ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);

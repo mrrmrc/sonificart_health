@@ -889,7 +889,36 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                     )}
                                 </div>
 
-                                <div>
+                                {activePromptTab !== 'stability' && (
+                                    <div className="mt-4 border-t border-white/10 pt-3">
+                                        <div className="flex items-center justify-between mb-1">
+                                            <h5 className="text-brand-text-secondary text-xs font-bold uppercase tracking-wider">{t('results.pdc_lyrics') || "Lyrics (Sincronizzazione PDC)"}:</h5>
+                                            <button
+                                                onClick={() => {
+                                                    if (correctedResult.musicGenerationPrompt?.suno_lyrics) {
+                                                        navigator.clipboard.writeText(correctedResult.musicGenerationPrompt.suno_lyrics);
+                                                        setConfirmModal({
+                                                            isOpen: true,
+                                                            title: "Testo Copiato",
+                                                            message: "Timestamp di sincronizzazione copiati! Incollali nel campo Lyrics.",
+                                                            type: 'success',
+                                                            singleButton: true,
+                                                            onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+                                                        });
+                                                    }
+                                                }}
+                                                className="text-[10px] text-brand-accent hover:text-white transition-colors font-bold uppercase"
+                                            >
+                                                <i className="fas fa-copy"></i> {t('results.copy_lyrics') || "Copia Sync Tags"}
+                                            </button>
+                                        </div>
+                                        <div className="bg-black/20 p-2 rounded text-[11px] font-mono text-white/70 line-clamp-2 overflow-y-auto max-h-16 border border-white/5">
+                                            {correctedResult.musicGenerationPrompt?.suno_lyrics || "[0:00] Intro, [0:30] Sviluppo..."}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="mt-4">
                                     <h5 className="text-brand-text-secondary text-xs mb-1 font-bold">{t('results.concept_ita') || "Concept (Ita)"}:</h5>
                                     <p className="text-sm text-brand-text-secondary italic">"{correctedResult.musicGenerationPrompt.main_prompt_ita}"</p>
                                 </div>

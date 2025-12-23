@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
 import { User } from '../types';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface LoginModalProps {
     isOpen: boolean;
@@ -45,6 +46,7 @@ const PrivacyContentModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
 export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLoginSuccess }) => {
     const [view, setView] = useState<'login' | 'register' | 'forgot'>('login');
     const [email, setEmail] = useState('');
+    const [confirmEmail, setConfirmEmail] = useState('');
     const [password, setPassword] = useState('');
     const [name, setName] = useState('');
     const [gdprConsent, setGdprConsent] = useState(false);
@@ -52,6 +54,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
     const [error, setError] = useState<string | null>(null);
     const [successMsg, setSuccessMsg] = useState<string | null>(null);
     const [showPrivacy, setShowPrivacy] = useState(false);
+    const { t } = useLanguage();
 
     useEffect(() => {
         if (isOpen) {
@@ -61,6 +64,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
             setError(null);
             setSuccessMsg(null);
             setEmail('');
+            setConfirmEmail('');
             setPassword('');
             setName('');
             setGdprConsent(false);
@@ -79,8 +83,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
         try {
             if (view === 'register') {
                 if (!gdprConsent) throw new Error("Accetta la Privacy Policy per continuare.");
+                if (email !== confirmEmail) throw new Error(t('login.email_mismatch'));
+                if (password.length < 6) throw new Error("La password deve essere di almeno 6 caratteri.");
                 const user = await api.register(name, email, password);
-                setSuccessMsg(`Registrazione riuscita! Email di benvenuto inviata a ${email}.`);
+                setSuccessMsg(`${t('login.register')} riuscita! Email di benvenuto inviata a ${email}.`);
                 // Wait briefly then log in
                 setTimeout(() => onLoginSuccess(user), 3000);
             }
@@ -124,14 +130,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
                         {/* HEADER */}
                         <div className="text-center mb-6">
                             <h2 className="text-2xl font-bold text-white">
-                                {view === 'login' && 'Accedi'}
-                                {view === 'register' && 'Crea Account'}
-                                {view === 'forgot' && 'Recupero Password'}
+                                {view === 'login' && t('login.login')}
+                                {view === 'register' && t('login.create_account')}
+                                {view === 'forgot' && t('login.forgot_password')}
                             </h2>
                             <p className="text-sm text-brand-text-secondary mt-2">
-                                {view === 'login' && 'Accedi alla tua dashboard.'}
-                                {view === 'register' && 'Ricevi 5 Crediti Gratuiti.'}
-                                {view === 'forgot' && 'Inserisci la tua email per recuperare l\'accesso.'}
+                                {view === 'login' && t('login.login_subtitle')}
+                                {view === 'register' && t('login.register_subtitle')}
+                                {view === 'forgot' && t('login.forgot_password_subtitle') || 'Inserisci la tua email per recuperare l\'accesso.'}
                             </p>
                         </div>
 
@@ -149,14 +155,22 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
                             )}
 
                             <div>
-                                <label className="block text-sm font-medium text-brand-text-primary mb-1">Email</label>
+                                <label className="block text-sm font-medium text-brand-text-primary mb-1">{t('login.email')}</label>
                                 <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full p-3 bg-brand-primary border border-brand-secondary rounded-md text-white focus:outline-none focus:border-brand-accent" placeholder="name@example.com" />
                             </div>
+
+                            {view === 'register' && (
+                                <div>
+                                    <label className="block text-sm font-medium text-brand-text-primary mb-1">{t('login.confirm_email')}</label>
+                                    <input type="email" value={confirmEmail} onChange={(e) => setConfirmEmail(e.target.value)} required className="w-full p-3 bg-brand-primary border border-brand-secondary rounded-md text-white focus:outline-none focus:border-brand-accent" placeholder="name@example.com" />
+                                </div>
+                            )}
 
                             {view !== 'forgot' && (
                                 <div>
                                     <label className="block text-sm font-medium text-brand-text-primary mb-1">Password</label>
                                     <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="w-full p-3 bg-brand-primary border border-brand-secondary rounded-md text-white focus:outline-none focus:border-brand-accent" placeholder="••••••••" />
+                                    {view === 'register' && <span className="text-[10px] text-gray-500 block mt-1">Minimo 6 caratteri</span>}
                                 </div>
                             )}
 
@@ -178,7 +192,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
                             )}
 
                             <button type="submit" disabled={isLoading} className="w-full bg-brand-accent hover:bg-brand-accent-light text-brand-primary font-bold py-3 px-4 rounded-md transition-colors disabled:opacity-50">
-                                {isLoading ? <i className="fas fa-circle-notch fa-spin"></i> : (view === 'login' ? 'Accedi' : view === 'register' ? 'Registrati' : 'Invia Email')}
+                                {isLoading ? <i className="fas fa-circle-notch fa-spin"></i> : (view === 'login' ? t('login.login') : view === 'register' ? t('login.register') : 'Invia Email')}
                             </button>
                         </form>
 

@@ -126,6 +126,10 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ user }) => {
     }, [user]);
 
     const handleSaveProfile = async () => {
+        if (editPassword && editPassword.length < 6) {
+            alert("La password deve essere di almeno 6 caratteri.");
+            return;
+        }
         setIsSaving(true);
         try {
             await api.updateProfile({
@@ -217,6 +221,7 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ user }) => {
                                     onChange={e => setEditPassword(e.target.value)}
                                     placeholder="Lascia vuoto per non cambiare"
                                 />
+                                <span className="text-[10px] text-gray-500 block mt-1">Minimo 6 caratteri</span>
                             </div>
                             {user.tier === 'custom' && (
                                 <div className="space-y-1 md:col-span-2">

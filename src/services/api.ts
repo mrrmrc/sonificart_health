@@ -56,8 +56,18 @@ export const api = {
         try {
             const response = await fetch(`${API_BASE_URL}/index.php?action=check_session`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auth_token: token }) });
             const data = await handleResponse(response);
+            if (!data.user) {
+                // Se la risposta è positiva ma non c'è l'utente, puliamo il token
+                localStorage.removeItem(STORAGE_KEYS.TOKEN);
+                return null;
+            }
             return data.user;
-        } catch { return null; }
+        } catch (error) {
+            // Se c'è un errore (401, User not found, ecc.), puliamo il token per permettere il login
+            console.warn("Session check failed, clearing token:", error);
+            localStorage.removeItem(STORAGE_KEYS.TOKEN);
+            return null;
+        }
     },
 
     logout: async () => localStorage.removeItem(STORAGE_KEYS.TOKEN),
@@ -216,19 +226,22 @@ export const api = {
         return await handleResponse(response);
     },
 
-    approveAccessRequest: async (id: string): Promise<void> => {
+    approveAccessRequest: async (id: string): Promise<any> => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        await fetch(`${API_BASE_URL}/index.php?action=admin_approve_request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, auth_token: token }) });
+        const response = await fetch(`${API_BASE_URL}/index.php?action=admin_approve_request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, auth_token: token }) });
+        return handleResponse(response);
     },
 
-    rejectAccessRequest: async (id: string): Promise<void> => {
+    rejectAccessRequest: async (id: string): Promise<any> => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        await fetch(`${API_BASE_URL}/index.php?action=admin_reject_request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, auth_token: token }) });
+        const response = await fetch(`${API_BASE_URL}/index.php?action=admin_reject_request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, auth_token: token }) });
+        return handleResponse(response);
     },
 
-    updateAccessRequest: async (id: string, field: string, value: boolean): Promise<void> => {
+    updateAccessRequest: async (id: string, field: string, value: boolean): Promise<any> => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        await fetch(`${API_BASE_URL}/index.php?action=admin_update_request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value, auth_token: token }) });
+        const response = await fetch(`${API_BASE_URL}/index.php?action=admin_update_request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value, auth_token: token }) });
+        return handleResponse(response);
     },
 
     getSystemStats: async (): Promise<SystemStats> => {

@@ -202,12 +202,36 @@ export const AdminPanel: React.FC = () => {
         setConfirmModal({
             isOpen: true,
             title: "Approva Richiesta",
-            message: "Approvare questa richiesta? L'utente dovrà essere aggiornato manualmente a PRO.",
-            type: 'warning',
+            message: "Approvare questa richiesta? L'utente riceverà automaticamente le credenziali PRO via email.",
+            type: 'success',
             onConfirm: async () => {
                 setConfirmModal(prev => ({ ...prev, isOpen: false }));
-                await api.approveAccessRequest(id);
-                loadData();
+                setIsLoading(true);
+                try {
+                    const res = await api.approveAccessRequest(id);
+                    await loadData();
+                    setConfirmModal({
+                        isOpen: true,
+                        title: "Successo",
+                        message: res.mail_status
+                            ? "Richiesta approvata e email inviata con successo!"
+                            : "Utente creato ma l'invio della mail è fallito. Controlla i log del server.",
+                        type: res.mail_status ? 'success' : 'warning',
+                        singleButton: true,
+                        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+                    });
+                } catch (e) {
+                    setConfirmModal({
+                        isOpen: true,
+                        title: "Errore",
+                        message: "Errore durante l'approvazione: " + (e instanceof Error ? e.message : "Errore sconosciuto"),
+                        type: 'danger',
+                        singleButton: true,
+                        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+                    });
+                } finally {
+                    setIsLoading(false);
+                }
             }
         });
     };
