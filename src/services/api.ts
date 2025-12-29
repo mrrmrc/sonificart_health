@@ -13,59 +13,114 @@ const handleResponse = async (response: Response) => {
     if (response.status === 413) {
         throw new Error("File troppo grande (Errore 413). Il server ha rifiutato l'upload. Riduci la durata o contatta l'assistenza per aumentare il limite di upload.");
     }
+
     const text = await response.text();
+    let data: any = null;
+
     try {
-        const data = JSON.parse(text);
-        if (!response.ok) throw new Error(data.error || data.message || `HTTP Error ${response.status}`);
-        return data;
+        data = JSON.parse(text);
     } catch (e) {
-        if (e instanceof Error && e.message.includes("File troppo grande")) throw e;
-        console.error("Server Error Response:", text);
-        // Fallback for non-JSON errors (e.g. PHP Fatal Error HTML)
-        throw new Error(`Errore Server (${response.status}): ${text.substring(0, 100)}...`);
+        // Resilience: try to extract JSON if response is mangled
+        const match = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+        if (match) {
+            try { data = JSON.parse(match[0]); } catch (inner) { /* ignore */ }
+        }
     }
+
+    if (!response.ok) {
+        const errorMessage = data?.error || data?.message || `Errore ${response.status}`;
+        // If we have a clean JSON error, throw only that. 
+        // Otherwise prefix with technical info for actual server crashes.
+        if (data) {
+            throw new Error(errorMessage);
+        } else {
+            throw new Error(`Errore Server (${response.status}): ${text.substring(0, 120)}...`);
+        }
+    }
+
+    return data;
 };
 
 export const api = {
     login: async (email: string, password: string): Promise<User> => {
-        const response = await fetch(`${API_BASE_URL}/index.php?action=login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
+        const response = await fetch(`${API_BASE_URL}/index.php?action=login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+        });
         const data = await handleResponse(response);
-        localStorage.setItem(STORAGE_KEYS.TOKEN, data.token);
+        if (data.token) {
+            localStorage.setItem(STORAGE_KEYS.TOKEN, data.token);
+        }
         return data.user;
     },
 
     register: async (name: string, email: string, password: string): Promise<User> => {
-        const response = await fetch(`${API_BASE_URL}/index.php?action=register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, email, password }) });
+        const response = await fetch(`${API_BASE_URL}/index.php?action=register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, email, password })
+        });
         const data = await handleResponse(response);
-        localStorage.setItem(STORAGE_KEYS.TOKEN, data.token);
+        if (data.token && data.token !== 'undefined' && data.token !== 'null') {
+            localStorage.setItem(STORAGE_KEYS.TOKEN, data.token);
+        }
         return data.user;
     },
 
     requestAccess: async (data: any): Promise<void> => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const params = new URLSearchParams();
+        Object.keys(data).forEach(key => params.append(key, data[key]));
+        if (token) params.append('auth_token', token);
+
         await fetch(`${API_BASE_URL}/index.php?action=request_access`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...data, auth_token: token })
+            body: params
         });
     },
 
     checkSession: async (): Promise<User | null> => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        if (!token) return null;
+        if (!token || token === 'undefined' || token === 'null') {
+            if (token) localStorage.removeItem(STORAGE_KEYS.TOKEN);
+            return null;
+        }
         try {
-            const response = await fetch(`${API_BASE_URL}/index.php?action=check_session`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auth_token: token }) });
+            // TRIPLE PASS authentication for maximum stability
+            const url = `${API_BASE_URL}/index.php?action=check_session&auth_token=${encodeURIComponent(token)}`;
+            const params = new URLSearchParams();
+            params.append('auth_token', token);
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: params
+            });
             const data = await handleResponse(response);
             if (!data.user) {
-                // Se la risposta è positiva ma non c'è l'utente, puliamo il token
+                console.warn("Session check returned no user, clearing token.");
                 localStorage.removeItem(STORAGE_KEYS.TOKEN);
                 return null;
             }
             return data.user;
         } catch (error) {
-            // Se c'è un errore (401, User not found, ecc.), puliamo il token per permettere il login
-            console.warn("Session check failed, clearing token:", error);
-            localStorage.removeItem(STORAGE_KEYS.TOKEN);
+            const msg = error instanceof Error ? error.message : "";
+            const lowercaseMsg = msg.toLowerCase();
+
+            // Definitive authentication failures
+            if (lowercaseMsg.includes("unauthorized") ||
+                lowercaseMsg.includes("not found") ||
+                lowercaseMsg.includes("credenziali") ||
+                lowercaseMsg.includes("invalid token")) {
+                console.warn("Session check definitively failed, clearing token:", msg);
+                localStorage.removeItem(STORAGE_KEYS.TOKEN);
+            } else {
+                console.error("Network/Server error during checkSession. Holding token.", error);
+            }
             return null;
         }
     },
@@ -74,7 +129,16 @@ export const api = {
 
     consumeCredit: async (userId: string, cost: number) => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        const response = await fetch(`${API_BASE_URL}/index.php?action=consume_credits`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cost, auth_token: token }) });
+        const params = new URLSearchParams();
+        params.append('cost', cost.toString());
+        if (token) params.append('auth_token', token);
+
+        const url = `${API_BASE_URL}/index.php?action=consume_credits&auth_token=${encodeURIComponent(token || '')}`;
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+        });
         const data = await handleResponse(response);
         return data.credits;
     },
@@ -82,9 +146,14 @@ export const api = {
     saveSonification: async (result: SonificationResult, paradigm: Paradigm, title?: string) => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
 
+        if (!token) {
+            console.error("Save attempt failed: No auth token found in localStorage.");
+            throw new Error("Sessione non valida o scaduta. Effettua nuovamente il login per salvare la tua opera.");
+        }
+
         // Prepare FormData for Multipart Upload (Faster & Robust)
         const formData = new FormData();
-        formData.append('auth_token', token || '');
+        formData.append('auth_token', token);
         formData.append('imageHash', result.imageHash);
         formData.append('paradigm', paradigm);
         formData.append('traditionName', title || result.culturalSelectionResult.tradition.name);
@@ -122,29 +191,42 @@ export const api = {
             throw new Error("Errore nella preparazione dei file per l'upload.");
         }
 
+        const urlWithToken = `${API_BASE_URL}/index.php?action=save_sonification&auth_token=${encodeURIComponent(token)}`;
+
         try {
-            const response = await fetch(`${API_BASE_URL}/index.php?action=save_sonification&auth_token=${encodeURIComponent(token || '')}`, {
+            console.log("Attempting full save...", result.imageHash);
+            const response = await fetch(urlWithToken, {
                 method: 'POST',
-                headers: { 'Authorization': token ? `Bearer ${token}` : '' },
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
                 body: formData,
             });
             const data = await handleResponse(response);
             if (!data.success) throw new Error(data.error || "Salvataggio incompleto (Server Error).");
+            return data;
         } catch (error) {
-            console.warn("Salvataggio Full fallito, tento salvataggio Lite (no audio)...", error);
+            console.warn("Salvataggio Full fallito (probabilmente limiti upload o timeout), tento salvataggio Lite (no audio)...", error);
+
+            // Re-prepare formData without audio for Lite attempt
             formData.delete('audioFile');
 
             try {
-                const responseLite = await fetch(`${API_BASE_URL}/index.php?action=save_sonification&auth_token=${encodeURIComponent(token || '')}`, {
+                const responseLite = await fetch(urlWithToken, {
                     method: 'POST',
-                    headers: { 'Authorization': token ? `Bearer ${token}` : '' },
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
                     body: formData,
                 });
                 const dataLite = await handleResponse(responseLite);
                 if (!dataLite.success) throw new Error(dataLite.error || "Salvataggio Lite fallito.");
-                // Removed native alert. Handled by return if needed, but for now we just log it or let it pass.
+                return dataLite;
             } catch (liteError) {
                 console.error("Anche il salvataggio Lite è fallito.", liteError);
+                if (liteError instanceof Error && (liteError.message.includes("401") || liteError.message.toLowerCase().includes("unauthorized"))) {
+                    throw new Error("Errore di autenticazione (401). Prova a fare logout e rientrare.");
+                }
                 throw new Error("Impossibile salvare l'opera. Verifica la connessione o contatta l'assistenza.");
             }
         }
@@ -161,38 +243,76 @@ export const api = {
         return handleResponse(response);
     },
 
-    publishFromHistory: async (entry: DashboardEntry, metadata: any, user: User, customMedia: { url: string, type: string } | null) => {
+    publishFromHistory: async (entryId: string, metadata: any, customMedia: { url: string, type: string } | null) => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        const response = await fetch(`${API_BASE_URL}/index.php?action=publish_history`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                entryId: entry.id,
-                metadata,
-                customMediaUrl: customMedia?.url,
-                customMediaType: customMedia?.type,
-                auth_token: token
-            })
+        const body = {
+            entryId: entryId,
+            metadata: metadata,
+            customMediaUrl: customMedia?.url || null,
+            customMediaType: customMedia?.type || null,
+            auth_token: token
+        };
+
+        const response = await fetch(`${API_BASE_URL}/index.php?action=publish_history&auth_token=${encodeURIComponent(token || '')}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
         });
         return await handleResponse(response);
     },
 
     updateProfile: async (data: { name?: string, email?: string, avatarUrl?: string, customLogoUrl?: string, password?: string }) => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        const response = await fetch(`${API_BASE_URL}/index.php?action=update_profile`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...data, auth_token: token }) });
+        const params = new URLSearchParams();
+        Object.keys(data).forEach(key => params.append(key, (data as any)[key]));
+        if (token) params.append('auth_token', token);
+
+        const response = await fetch(`${API_BASE_URL}/index.php?action=update_profile`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+        });
         return await handleResponse(response);
     },
 
     getHistory: async () => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        const response = await fetch(`${API_BASE_URL}/index.php?action=get_history&t=${new Date().getTime()}`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auth_token: token })
-        });
-        return await handleResponse(response);
+        if (!token) throw new Error("Unauthorized");
+
+        const url = `${API_BASE_URL}/index.php?action=get_history&auth_token=${encodeURIComponent(token)}&t=${new Date().getTime()}`;
+
+        // TRIPLE PASS: URL, Header, and Body
+        const params = new URLSearchParams();
+        params.append('auth_token', token);
+
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: params
+            });
+            return await handleResponse(response);
+        } catch (e) {
+            // Robust Fallback: try GET with token in URL and Header if POST feels too heavy (413) or fails
+            console.warn("History POST failed, attempting GET fallback...", e);
+            const getResponse = await fetch(url, {
+                method: 'GET',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            return await handleResponse(getResponse);
+        }
     },
 
     deleteHistoryItem: async (id: string) => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        const response = await fetch(`${API_BASE_URL}/index.php?action=delete_history_item`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, auth_token: token }) });
+        const response = await fetch(`${API_BASE_URL}/index.php?action=delete_history_item`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, auth_token: token })
+        });
         await handleResponse(response);
     },
 
@@ -205,18 +325,27 @@ export const api = {
 
     updateShowcaseItem: async (item: Partial<ShowcaseProject> & { id: string }) => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const params = new URLSearchParams();
+        Object.keys(item).forEach(key => params.append(key, (item as any)[key]));
+        if (token) params.append('auth_token', token);
+
         await fetch(`${API_BASE_URL}/index.php?action=update_showcase_item`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...item, auth_token: token })
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
         });
     },
 
     deleteShowcaseItem: async (id: string) => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const params = new URLSearchParams();
+        params.append('id', id);
+        if (token) params.append('auth_token', token);
+
         await fetch(`${API_BASE_URL}/index.php?action=delete_showcase_item`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id, auth_token: token })
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
         });
     },
 
@@ -228,31 +357,69 @@ export const api = {
 
     approveAccessRequest: async (id: string): Promise<any> => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        const response = await fetch(`${API_BASE_URL}/index.php?action=admin_approve_request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, auth_token: token }) });
+        const params = new URLSearchParams();
+        params.append('id', id);
+        if (token) params.append('auth_token', token);
+
+        const response = await fetch(`${API_BASE_URL}/index.php?action=admin_approve_request`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+        });
         return handleResponse(response);
     },
 
     rejectAccessRequest: async (id: string): Promise<any> => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        const response = await fetch(`${API_BASE_URL}/index.php?action=admin_reject_request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, auth_token: token }) });
+        const params = new URLSearchParams();
+        params.append('id', id);
+        if (token) params.append('auth_token', token);
+
+        const response = await fetch(`${API_BASE_URL}/index.php?action=admin_reject_request`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+        });
         return handleResponse(response);
     },
 
     updateAccessRequest: async (id: string, field: string, value: boolean): Promise<any> => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        const response = await fetch(`${API_BASE_URL}/index.php?action=admin_update_request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value, auth_token: token }) });
+        const params = new URLSearchParams();
+        params.append('id', id);
+        params.append('field', field);
+        params.append('value', value.toString());
+        if (token) params.append('auth_token', token);
+
+        const response = await fetch(`${API_BASE_URL}/index.php?action=admin_update_request`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+        });
         return handleResponse(response);
     },
 
     getSystemStats: async (): Promise<SystemStats> => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        const response = await fetch(`${API_BASE_URL}/index.php?action=get_stats`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auth_token: token }) });
+        const params = new URLSearchParams();
+        if (token) params.append('auth_token', token);
+        const response = await fetch(`${API_BASE_URL}/index.php?action=get_stats`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+        });
         return await handleResponse(response);
     },
 
     getSystemLogs: async (): Promise<SystemLog[]> => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        const response = await fetch(`${API_BASE_URL}/index.php?action=get_logs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auth_token: token }) });
+        const params = new URLSearchParams();
+        if (token) params.append('auth_token', token);
+        const response = await fetch(`${API_BASE_URL}/index.php?action=get_logs`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+        });
         return await handleResponse(response);
     },
 
@@ -263,22 +430,54 @@ export const api = {
 
     getAllUsers: async (): Promise<User[]> => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        const response = await fetch(`${API_BASE_URL}/index.php?action=get_users`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auth_token: token }) });
+        const params = new URLSearchParams();
+        if (token) params.append('auth_token', token);
+        const response = await fetch(`${API_BASE_URL}/index.php?action=get_users`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+        });
         return await handleResponse(response);
     },
 
     adminCreateUser: async (u: any) => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        await fetch(`${API_BASE_URL}/index.php?action=admin_create_user`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...u, auth_token: token }) });
+        const params = new URLSearchParams();
+        Object.keys(u).forEach(key => params.append(key, u[key]));
+        if (token) params.append('auth_token', token);
+        await fetch(`${API_BASE_URL}/index.php?action=admin_create_user`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+        });
     },
 
     updateUser: async (u: any) => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        await fetch(`${API_BASE_URL}/index.php?action=admin_update_user`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...u, auth_token: token }) });
+        const params = new URLSearchParams();
+        Object.keys(u).forEach(key => params.append(key, u[key]));
+        if (token) params.append('auth_token', token);
+        await fetch(`${API_BASE_URL}/index.php?action=admin_update_user`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+        });
     },
 
     deleteUser: async (id: string) => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
-        await fetch(`${API_BASE_URL}/index.php?action=delete_user`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, auth_token: token }) });
+        const params = new URLSearchParams();
+        params.append('id', id);
+        if (token) params.append('auth_token', token);
+        await fetch(`${API_BASE_URL}/index.php?action=delete_user`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+        });
     },
+
+    cleanAuthSession: () => {
+        localStorage.removeItem(STORAGE_KEYS.TOKEN);
+        window.location.reload();
+    }
 };

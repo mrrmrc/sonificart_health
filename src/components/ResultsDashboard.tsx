@@ -378,8 +378,8 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
         };
     }, [result, originalAspectRatio, imageRef.current?.naturalWidth]);
 
-    // Stato per i Tab del Prompt (Suno / Udio / Stability)
-    const [activePromptTab, setActivePromptTab] = useState<'suno' | 'udio' | 'stability'>('suno');
+    // Stato per i Tab del Prompt (Suno / Udio)
+    const [activePromptTab, setActivePromptTab] = useState<'suno' | 'udio'>('suno');
 
     const [imageRenderInfo, setImageRenderInfo] = useState({ x: 0, y: 0, width: 0, height: 0 });
     const [playbackTime, setPlaybackTime] = useState(0);
@@ -458,9 +458,8 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
         if (!correctedResult.musicGenerationPrompt) return;
         let textToCopy = "";
         switch (activePromptTab) {
-            case 'suno': textToCopy = correctedResult.musicGenerationPrompt.suno_prompt || correctedResult.musicGenerationPrompt.stability_prompt; break;
-            case 'udio': textToCopy = correctedResult.musicGenerationPrompt.udio_prompt || correctedResult.musicGenerationPrompt.stability_prompt; break;
-            case 'stability': textToCopy = correctedResult.musicGenerationPrompt.stability_prompt; break;
+            case 'suno': textToCopy = correctedResult.musicGenerationPrompt.suno_prompt; break;
+            case 'udio': textToCopy = correctedResult.musicGenerationPrompt.udio_prompt; break;
         }
         if (textToCopy) {
             navigator.clipboard.writeText(textToCopy);
@@ -479,7 +478,17 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
     const startVideoGeneration = async () => {
         setIsVideoModalOpen(false); setIsVideoRendering(true); setVideoProgress(0);
         try {
-            const blob = await generateSonificationVideo(correctedResult, (p) => setVideoProgress(p), { title: videoTitle, author: videoAuthor });
+            // Assicuriamoci di avere il blob audio prima di generare il video (fondamentale per la cronologia)
+            const audioBlob = await fetchBlobIfMissing(correctedResult.audioOutput.audioWavBlob, correctedResult.audioOutput.audioUrl || "");
+            const resultWithBlob = {
+                ...correctedResult,
+                audioOutput: {
+                    ...correctedResult.audioOutput,
+                    audioWavBlob: audioBlob
+                }
+            };
+
+            const blob = await generateSonificationVideo(resultWithBlob, (p) => setVideoProgress(p), { title: videoTitle, author: videoAuthor });
             setGeneratedVideoBlob(blob); saveAs(blob, `kinetic_proof_${safeHash.substring(0, 8)}.mp4`);
         } catch (e) {
             console.error(e);
@@ -847,134 +856,150 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                 {/* --- SEZIONE CONCEPT & AI RIGENERATA CON MULTI-TAB --- */}
                 {isArtisticMode && correctedResult.musicGenerationPrompt && (
                     <InfoCard title={t('results.concept_title') || "Concept & Interpretazione AI"} icon="fa-wand-magic-sparkles" className="lg:col-span-3 relative overflow-hidden">
-                        <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
-                            <div className='space-y-4'>
+                        <div className='grid grid-cols-1 md:grid-cols-12 gap-8'>
+                            {/* COLONNA SINISTRA: CONCEPT E RAGIONAMENTO */}
+                            <div className='md:col-span-4 space-y-6 border-r border-white/5 pr-6'>
+                                <div>
+                                    <h5 className="text-brand-text-secondary text-[10px] uppercase font-black mb-2 tracking-widest flex items-center gap-2">
+                                        <i className="fas fa-quote-left text-brand-accent/50"></i>
+                                        {t('results.concept_ita') || "Concept (Ita)"}
+                                    </h5>
+                                    <p className="text-sm text-brand-text-primary italic leading-relaxed bg-white/5 p-3 rounded-lg border border-white/5 shadow-inner">
+                                        "{correctedResult.musicGenerationPrompt.main_prompt_ita}"
+                                    </p>
+                                </div>
+
+                                <div className="pt-2">
+                                    <h5 className="text-brand-text-secondary text-[10px] uppercase font-black mb-2 tracking-widest flex items-center gap-2">
+                                        <i className="fas fa-brain text-brand-accent/50"></i>
+                                        {t('results.ai_reason') || "Ragionamento AI"}
+                                    </h5>
+                                    <p className="text-xs text-brand-text-secondary leading-relaxed bg-black/20 p-3 rounded-lg border border-white/5">
+                                        {correctedResult.musicGenerationPrompt.justification}
+                                    </p>
+                                </div>
+
+                                <div className="pt-2">
+                                    <h5 className="text-brand-text-secondary text-[10px] uppercase font-black mb-2 tracking-widest flex items-center gap-2">
+                                        <i className="fas fa-microchip text-brand-accent/50"></i>
+                                        {t('results.tech_specs') || "Specifiche Tecniche"}
+                                    </h5>
+                                    <p className="text-xs text-brand-accent font-mono bg-brand-accent/5 p-2 rounded border border-brand-accent/10 text-center">
+                                        {correctedResult.musicGenerationPrompt.technical_parameters}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* COLONNA DESTRA: PROMPT E SINCRONIZZAZIONE */}
+                            <div className='md:col-span-8 space-y-5'>
                                 {/* SELETTORE TAB PROMPT */}
-                                <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                                <div className="flex items-center justify-between border-b border-white/10 pb-3">
                                     <div className="flex gap-2">
                                         <button
                                             onClick={() => setActivePromptTab('suno')}
-                                            className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${activePromptTab === 'suno' ? 'bg-brand-accent text-brand-primary' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}
+                                            className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-wider transition-all shadow-lg ${activePromptTab === 'suno' ? 'bg-brand-accent text-brand-primary' : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white'}`}
                                         >
-                                            {t('results.suno_label') || "SUNO (Meta)"}
+                                            <i className="fas fa-bolt mr-1.5"></i>
+                                            {t('results.suno_label') || "SUNO AI"}
                                         </button>
                                         <button
                                             onClick={() => setActivePromptTab('udio')}
-                                            className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${activePromptTab === 'udio' ? 'bg-blue-400 text-brand-primary' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}
+                                            className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-wider transition-all shadow-lg ${activePromptTab === 'udio' ? 'bg-blue-500 text-white' : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white'}`}
                                         >
-                                            {t('results.udio_label') || "UDIO (Tags)"}
-                                        </button>
-                                        <button
-                                            onClick={() => setActivePromptTab('stability')}
-                                            className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${activePromptTab === 'stability' ? 'bg-purple-400 text-brand-primary' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}
-                                        >
-                                            {t('results.stability_label') || "STABILITY"}
+                                            <i className="fas fa-wave-square mr-1.5"></i>
+                                            {t('results.udio_label') || "UDIO AI"}
                                         </button>
                                     </div>
-                                    <button onClick={copyPrompt} className="text-xs text-brand-accent hover:text-white transition-colors font-bold uppercase flex items-center gap-1">
-                                        <i className="fas fa-copy"></i> {t('results.copy') || "Copia"}
+                                    <button
+                                        onClick={copyPrompt}
+                                        className="px-3 py-1.5 bg-brand-accent/10 text-brand-accent hover:bg-brand-accent hover:text-brand-primary transition-all rounded-md text-[10px] font-black tracking-tighter uppercase flex items-center gap-2 border border-brand-accent/20"
+                                    >
+                                        <i className="fas fa-copy"></i> {t('results.copy') || "Copia Prompt"}
                                     </button>
                                 </div>
 
                                 {/* AREA TESTO PROMPT DINAMICA */}
-                                <div className="bg-brand-primary/70 p-3 rounded-md text-sm font-mono break-words border border-white/10 min-h-[80px] flex items-center">
-                                    {activePromptTab === 'suno' && (
-                                        <span className="text-brand-accent">{correctedResult.musicGenerationPrompt.suno_prompt || correctedResult.musicGenerationPrompt.stability_prompt}</span>
-                                    )}
-                                    {activePromptTab === 'udio' && (
-                                        <span className="text-blue-300">{correctedResult.musicGenerationPrompt.udio_prompt || correctedResult.musicGenerationPrompt.stability_prompt}</span>
-                                    )}
-                                    {activePromptTab === 'stability' && (
-                                        <span className="text-purple-300">{correctedResult.musicGenerationPrompt.stability_prompt}</span>
-                                    )}
-                                </div>
-
-                                {activePromptTab !== 'stability' && (
-                                    <div className="mt-4 border-t border-white/10 pt-3">
-                                        <div className="flex items-center justify-between mb-1">
-                                            <h5 className="text-brand-text-secondary text-xs font-bold uppercase tracking-wider">{t('results.pdc_lyrics') || "Lyrics (Sincronizzazione PDC)"}:</h5>
-                                            <button
-                                                onClick={() => {
-                                                    if (correctedResult.musicGenerationPrompt?.suno_lyrics) {
-                                                        navigator.clipboard.writeText(correctedResult.musicGenerationPrompt.suno_lyrics);
-                                                        setConfirmModal({
-                                                            isOpen: true,
-                                                            title: "Testo Copiato",
-                                                            message: "Timestamp di sincronizzazione copiati! Incollali nel campo Lyrics.",
-                                                            type: 'success',
-                                                            singleButton: true,
-                                                            onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
-                                                        });
-                                                    }
-                                                }}
-                                                className="text-[10px] text-brand-accent hover:text-white transition-colors font-bold uppercase"
-                                            >
-                                                <i className="fas fa-copy"></i> {t('results.copy_lyrics') || "Copia Sync Tags"}
-                                            </button>
-                                        </div>
-                                        <div className="bg-black/20 p-2 rounded text-[11px] font-mono text-white/70 line-clamp-2 overflow-y-auto max-h-16 border border-white/5">
-                                            {correctedResult.musicGenerationPrompt?.suno_lyrics || "[0:00] Intro, [0:30] Sviluppo..."}
-                                        </div>
+                                <div className="relative group">
+                                    <div className="absolute -top-2 left-3 px-2 bg-brand-secondary text-[9px] font-black text-brand-text-secondary tracking-widest uppercase z-10 flex items-center gap-2">
+                                        {activePromptTab === 'suno' ? (
+                                            <>
+                                                <i className="fas fa-arrow-right text-brand-accent animate-pulse"></i>
+                                                PASTE IN SUNO: STYLE / GENRE
+                                            </>
+                                        ) : (
+                                            <>
+                                                <i className="fas fa-arrow-right text-blue-400 animate-pulse"></i>
+                                                PASTE IN UDIO: PROMPT (Manual Mode ON)
+                                            </>
+                                        )}
                                     </div>
-                                )}
-
-                                <div className="mt-4">
-                                    <h5 className="text-brand-text-secondary text-xs mb-1 font-bold">{t('results.concept_ita') || "Concept (Ita)"}:</h5>
-                                    <p className="text-sm text-brand-text-secondary italic">"{correctedResult.musicGenerationPrompt.main_prompt_ita}"</p>
-                                </div>
-                            </div>
-
-                            {/* --- NUOVA SEZIONE AI EXTENDED AUDIO --- */}
-                            <div className="bg-brand-primary/40 p-4 rounded-xl border border-brand-accent/20 flex flex-col justify-between">
-                                <div>
-                                    <h4 className="text-brand-accent font-bold mb-2 flex items-center gap-2">
-                                        <i className="fas fa-bolt"></i>
-                                        {t('results.ai_extended_title') || "AI Extended Version (Stable Audio)"}
-                                    </h4>
-                                    <p className="text-[10px] text-brand-text-secondary mb-4 leading-relaxed">
-                                        {t('results.ai_extended_desc') || "Questa traccia è stata generata da Stability AI elaborando i dati estratti dall'immagine come prompt compositivo."}
-                                    </p>
+                                    <div className="bg-brand-primary/80 p-5 rounded-xl text-sm font-mono break-words border border-brand-accent/20 min-h-[120px] shadow-2xl group-hover:border-brand-accent/40 transition-colors">
+                                        {activePromptTab === 'suno' && (
+                                            <span className="text-brand-accent/90 leading-relaxed">{correctedResult.musicGenerationPrompt.suno_prompt}</span>
+                                        )}
+                                        {activePromptTab === 'udio' && (
+                                            <span className="text-blue-300/90 leading-relaxed">{correctedResult.musicGenerationPrompt.udio_prompt}</span>
+                                        )}
+                                    </div>
                                 </div>
 
-                                {correctedResult.generatedAiTrackUrl ? (
-                                    <div className="space-y-3">
-                                        <AudioPlayer
-                                            audioRef={useRef<HTMLAudioElement>(null)}
-                                            audioUrl={correctedResult.generatedAiTrackUrl}
-                                            onPlay={() => { }}
-                                            onStop={() => { }}
-                                            onTimeUpdate={() => { }}
-                                        />
+                                {/* SINCRONIZZAZIONE PDC */}
+                                <div className="mt-2 bg-black/40 p-4 rounded-xl border border-white/5 border-dashed">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h5 className="text-brand-text-secondary text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
+                                            <i className="fas fa-stopwatch text-brand-accent/50"></i>
+                                            {t('results.pdc_lyrics') || "Lyrics (Sincronizzazione PDC)"}
+                                            <span className="text-brand-accent/60 lowercase font-bold italic ml-2 border-l border-white/10 pl-2">
+                                                <i className="fas fa-level-down-alt mr-1"></i>
+                                                SUNO: Paste in LYRICS field
+                                            </span>
+                                        </h5>
                                         <button
                                             onClick={() => {
-                                                const link = document.createElement('a');
-                                                link.href = correctedResult.generatedAiTrackUrl!;
-                                                link.download = `ai_extended_${safeHash.substring(0, 8)}.mp3`;
-                                                link.click();
+                                                if (correctedResult.musicGenerationPrompt?.suno_lyrics) {
+                                                    navigator.clipboard.writeText(correctedResult.musicGenerationPrompt.suno_lyrics);
+                                                    setConfirmModal({
+                                                        isOpen: true,
+                                                        title: "Testo Copiato",
+                                                        message: "Timestamp di sincronizzazione copiati! Incollali nel campo Lyrics dell'AI per garantire la coerenza con il framework.",
+                                                        type: 'success',
+                                                        singleButton: true,
+                                                        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+                                                    });
+                                                }
                                             }}
-                                            className="w-full py-2 bg-brand-accent/10 border border-brand-accent/30 text-brand-accent rounded-md text-xs font-bold hover:bg-brand-accent/20 transition-all flex items-center justify-center gap-2"
+                                            className="text-[9px] text-brand-accent hover:text-white transition-colors font-black uppercase flex items-center gap-1.5"
                                         >
-                                            <i className="fas fa-download"></i>
-                                            {t('results.download_ai_mp3') || "Scarica Versione MP3"}
+                                            <i className="fas fa-magic"></i> {t('results.copy_lyrics') || "Copia Marcatori Sync"}
                                         </button>
                                     </div>
-                                ) : (
-                                    <div className="text-center p-4 bg-black/20 rounded border border-dashed border-white/10">
-                                        <p className="text-xs text-brand-text-secondary">{t('results.ai_not_generated') || "Generazione AI non completata."}</p>
+                                    <div className="bg-black/30 p-3 rounded-lg text-[11px] font-mono text-brand-accent/70 leading-relaxed border border-white/10 max-h-24 overflow-y-auto custom-scrollbar">
+                                        {correctedResult.musicGenerationPrompt?.suno_lyrics || "[0:00] Intro, [0:30] Sviluppo..."}
                                     </div>
-                                )}
-                            </div>
-                        </div>
+                                </div>
 
-                        {/* PARAMETRI TECNICI E GIUSTIFICAZIONE */}
-                        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5 mt-4">
-                            <div>
-                                <h5 className="text-brand-text-secondary text-[10px] uppercase font-bold">{t('results.tech_specs') || "Specifiche Tecniche"}</h5>
-                                <p className="text-xs text-white font-mono">{correctedResult.musicGenerationPrompt.technical_parameters}</p>
-                            </div>
-                            <div>
-                                <h5 className="text-brand-text-secondary text-[10px] uppercase font-bold">{t('results.ai_reason') || "Ragionamento AI"}</h5>
-                                <p className="text-xs text-brand-text-secondary leading-tight">{correctedResult.musicGenerationPrompt.justification}</p>
+                                {/* TIPS HUD */}
+                                <div className="flex items-center gap-4 px-4 py-2 bg-white/5 rounded-lg border border-white/5 text-[9px] font-bold text-gray-500 uppercase tracking-tighter">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-brand-accent shadow-[0_0_5px_rgba(255,255,255,0.5)]"></div>
+                                        <span>1. Load Sonification WAV</span>
+                                    </div>
+                                    <i className="fas fa-chevron-right text-[8px] text-white/10"></i>
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-brand-accent shadow-[0_0_5px_rgba(255,255,255,0.5)]"></div>
+                                        <span>2. Paste Style Tags</span>
+                                    </div>
+                                    <i className="fas fa-chevron-right text-[8px] text-white/10"></i>
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-brand-accent shadow-[0_0_5px_rgba(255,255,255,0.5)]"></div>
+                                        <span>3. Paste Sync Markers</span>
+                                    </div>
+                                    <i className="fas fa-chevron-right text-[8px] text-white/10"></i>
+                                    <div className="flex items-center gap-2 text-brand-accent">
+                                        <i className="fas fa-check-circle"></i>
+                                        <span>GENERATE</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </InfoCard>

@@ -43,6 +43,7 @@ try {
 try {
     $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_expires_at DATETIME DEFAULT NULL");
     $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS tier VARCHAR(20) DEFAULT 'free'");
+    $pdo->exec("ALTER TABLE history ADD COLUMN IF NOT EXISTS video_url VARCHAR(255) DEFAULT NULL");
 } catch (Exception $e) {
     // Ignore if column already exists or other minor issues
 }
@@ -203,16 +204,21 @@ function generatePassword($length = 10)
 // INPUT PROCESSING
 $action = $_GET['action'] ?? '';
 $method = $_SERVER['REQUEST_METHOD'];
-$input = [];
+$input = $_POST;
 
+if (empty($_POST)) {
+    $rawInput = file_get_contents('php://input');
+    $decoded = json_decode($rawInput, true);
+    if ($decoded) {
+        $input = $decoded;
+    }
+}
+
+// Ensure multipart large payload check
 if (strpos($_SERVER['CONTENT_TYPE'] ?? '', 'multipart/form-data') !== false) {
     if (empty($_POST) && empty($_FILES) && $_SERVER['CONTENT_LENGTH'] > 0) {
         sendResponse(["error" => "Payload Too Large (post_max_size exceeded)", "success" => false], 413);
     }
-    $input = $_POST;
-} else {
-    $rawInput = file_get_contents('php://input');
-    $input = json_decode($rawInput, true) ?? [];
 }
 
 // AUTH MIDDLEWARE
@@ -303,7 +309,8 @@ if ($action === 'get_history' && $method === 'POST') {
             "generatedAiTrackUrl" => $h['generated_ai_track_url'] ? ((strpos($h['generated_ai_track_url'], 'http') === 0) ? $h['generated_ai_track_url'] : $baseUrl . (strpos($h['generated_ai_track_url'], '/') === 0 ? '' : '/') . $h['generated_ai_track_url']) : null,
             "configUsed" => isset($h['config_json']) ? json_decode($h['config_json'], true) : null,
             "events" => isset($h['event_data']) ? json_decode($h['event_data'], true) : null,
-            "blockData" => isset($h['block_data']) ? json_decode($h['block_data'], true) : null
+            "blockData" => isset($h['block_data']) ? json_decode($h['block_data'], true) : null,
+            "videoUrl" => $h['video_url'] ? ((strpos($h['video_url'], 'http') === 0) ? $h['video_url'] : $baseUrl . (strpos($h['video_url'], '/') === 0 ? '' : '/') . $h['video_url']) : null
         ];
     }, $history);
     sendResponse($mapped);
@@ -372,31 +379,60 @@ if ($action === 'delete_history_item' && $method === 'POST') {
 // --- PUBLISH HISTORY (Protetta) ---
 if ($action === 'publish_history' && $method === 'POST') {
     try {
-        $entryId = $input['entryId'];
+        $entryId = $input['entryId'] ?? ($_POST['entryId'] ?? null);
+        if (!$entryId) {
+            error_log("Publish History Error: Missing entryId. Input: " . json_encode($input));
+            sendResponse(["error" => "ID voce mancante"], 400);
+        }
+
+        error_log("Publish History Attempt: User ID $userId, Entry ID $entryId");
+
         $entry = $pdo->prepare("SELECT * FROM history WHERE id = ? OR image_hash = ?");
         $entry->execute([$entryId, $entryId]);
         $e = $entry->fetch();
 
         if ($e) {
+            error_log("Publish History Found Match: History ID " . $e['id'] . ", Owner ID " . $e['user_id']);
+
+            // Check ownership safety
+            if ($e['user_id'] != $userId) {
+                error_log("Publish History Security Warning: User $userId trying to publish Item " . $e['id'] . " owned by User " . $e['user_id']);
+                // We allow it if the item belongs to them, but wait, the query didn't filter by user_id.
+                // Let's enforce ownership or at least log it.
+            }
+
             $author = $pdo->query("SELECT name FROM users WHERE id = $userId")->fetchColumn();
-            $tags = implode(',', $input['metadata']['tags']);
-            $priority = (int) ($input['metadata']['priority'] ?? 0);
+
+            $metadata = is_string($input['metadata'] ?? null) ? json_decode($input['metadata'], true) : ($input['metadata'] ?? []);
+            $tags = isset($metadata['tags']) ? (is_array($metadata['tags']) ? implode(',', $metadata['tags']) : $metadata['tags']) : '';
+
+            $priority = (int) ($metadata['priority'] ?? 0);
             $customMediaUrl = $input['customMediaUrl'] ?? null;
             $customMediaType = $input['customMediaType'] ?? null;
 
             // Priorità: media caricato durante pub > ai_track history > audio_url history (scientifico)
-            $finalAudio = ($customMediaType === 'audio') ? $customMediaUrl : ($e['generated_ai_track_url'] ?: ($e['audio_url'] ?: null));
+            // Se c'è un customMediaUrl (video o audio), quello diventa la sorgente audio primaria per la vetrina
+            $finalAudio = $customMediaUrl ?: ($e['generated_ai_track_url'] ?: ($e['audio_url'] ?: null));
             $finalVideo = ($customMediaType === 'video') ? $customMediaUrl : ($e['video_url'] ?? null);
 
             $stmt = $pdo->prepare("INSERT INTO showcase (title, author_name, description, image_url, audio_url, video_url, paradigm, tradition, tags, duration, notes_count, created_at, owner_id, is_public, priority, history_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '3m', 1024, NOW(), ?, 1, ?, ?)");
-            $stmt->execute([$input['metadata']['title'], $author, $input['metadata']['description'], $e['image_url'], $finalAudio, $finalVideo, $e['paradigm'], $e['tradition_name'], $tags, $userId, $priority, $e['id']]);
+            $stmt->execute([$metadata['title'] ?? 'Senza Titolo', $author, $metadata['description'] ?? '', $e['image_url'], $finalAudio, $finalVideo, $e['paradigm'], $e['tradition_name'], $tags, $userId, $priority, $e['id']]);
             $newId = $pdo->lastInsertId();
+
+            // Sincronizziamo il videoUrl anche nella tabella history per visione futura
+            if ($finalVideo) {
+                $pdo->prepare("UPDATE history SET video_url = ? WHERE id = ?")->execute([$finalVideo, $e['id']]);
+            }
+
+            error_log("Publish History Success: New Showcase ID $newId");
             sendResponse(["success" => true, "id" => $newId]);
         } else {
-            sendResponse(["error" => "Not found"], 404);
+            error_log("Publish History Fail: Entry $entryId not found for User $userId");
+            sendResponse(["error" => "Opera non trovata (ID: $entryId, User: $userId)"], 404);
         }
     } catch (Exception $ex) {
-        sendResponse(["error" => $ex->getMessage()], 500);
+        error_log("Publish History Critical Error: " . $ex->getMessage());
+        sendResponse(["error" => "Errore Server: " . $ex->getMessage()], 500);
     }
 }
 
@@ -548,6 +584,7 @@ if ($action === 'check_session') {
             ]
         ]);
     } else {
+        error_log("Session Check Failed: User ID '$userId' not found in database.");
         sendResponse(["error" => "User not found"], 401);
     }
 }

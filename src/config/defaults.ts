@@ -21,7 +21,6 @@ export const artisticSteps: ProcessingStep[] = [
     { id: 6, name: 'Cultural Selection', status: 'pending' },
     { id: 7, name: 'Cultural Transformation', status: 'pending' },
     { id: 8, name: 'Deterministic Audio Synthesis', status: 'pending' },
-    { id: 9, name: 'AI Extended Music Gen', status: 'pending' },
 ];
 
 export const hybridSteps: ProcessingStep[] = [
@@ -34,7 +33,6 @@ export const hybridSteps: ProcessingStep[] = [
     { id: 7, name: 'Cultural Selection', status: 'pending' },
     { id: 8, name: 'Cultural Transformation', status: 'pending' },
     { id: 9, name: 'Deterministic Audio Synthesis', status: 'pending' },
-    { id: 10, name: 'AI Extended Music Gen', status: 'pending' },
 ];
 
 export const initialSettings: ConfigSettings = {

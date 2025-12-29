@@ -51,6 +51,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, us
     const audioRef = useRef<HTMLAudioElement>(null);
     const hasVideo = !!project.videoUrl;
     const isOwner = user && (user.isAdmin || user.id === project.ownerId);
+    const canDelete = !!onDelete && isOwner;
 
     const getAbsoluteUrl = (url: string | undefined) => {
         if (!url) return null;
@@ -143,7 +144,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, us
                 {/* MEDIA AREA */}
                 <div className={`${museumMode ? 'w-full md:w-3/5' : 'w-full md:w-2/3'} bg-black relative flex items-center justify-center h-64 sm:h-80 md:h-auto shrink-0`}>
                     {hasVideo ? (
-                        <video src={project.videoUrl} controls autoPlay className="w-full h-full object-contain" />
+                        <video src={fixImage(project.videoUrl)} controls autoPlay className="w-full h-full object-contain" />
                     ) : (
                         <img src={fixImage(project.imageUrl)} alt={project.title} className="w-full h-full object-contain" />
                     )}
@@ -215,13 +216,61 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, us
                         </div>
                     )}
 
-                    {!hasVideo && (
-                        <div className="bg-brand-secondary/20 p-4 rounded-xl border border-brand-secondary/30 shadow-inner mb-4">
-                            <div className="flex items-center gap-3 mb-3">
-                                <i className="fas fa-music text-brand-accent"></i>
-                                <h4 className="text-sm font-bold text-white">{t('showcase.audio_track')}</h4>
-                            </div>
-                            {audioUrl ? <AudioPlayer audioRef={audioRef} audioUrl={audioUrl} /> : <div className="h-10 bg-white/5 rounded animate-pulse w-full"></div>}
+                    {/* MEDIA CENTER & ACTIONS */}
+                    {!museumMode && (
+                        <div className="mt-auto pt-6 border-t border-white/10">
+                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Media Center</h3>
+
+                            {/* AUDIO PLAYER (Sempre visibile se c'è audio e non è video full) */}
+                            {(!hasVideo || museumMode) && (
+                                <div className="bg-black/20 p-3 rounded-lg border border-white/5 mb-4">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-[10px] text-gray-400 font-bold uppercase"><i className="fas fa-waveform mr-1"></i> Traccia Audio</span>
+                                    </div>
+                                    {audioUrl ? <AudioPlayer audioRef={audioRef} audioUrl={audioUrl} /> : <div className="h-8 bg-white/5 rounded animate-pulse"></div>}
+                                </div>
+                            )}
+
+                            {/* VIDEO ACTIONS */}
+                            {hasVideo && (
+                                <div className="bg-purple-900/10 p-4 rounded-xl border border-purple-500/20 mb-6 group hover:border-purple-500/40 transition-colors">
+                                    <h4 className="text-[10px] font-bold text-purple-300 uppercase tracking-wide mb-3 flex items-center justify-between">
+                                        <span><i className="fas fa-cube mr-1"></i> Asset Sinestetico</span>
+                                        <span className="bg-purple-500/20 text-purple-200 px-1.5 py-0.5 rounded text-[9px]">MP4 READY</span>
+                                    </h4>
+                                    <div className="flex gap-2">
+                                        <a
+                                            href={project.videoUrl}
+                                            download={`${project.title.replace(/\s+/g, '_')}_synesthetic.mp4`}
+                                            className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white text-xs font-bold rounded flex flex-col items-center justify-center gap-1 border border-white/10 transition-all hover:border-purple-500/50"
+                                        >
+                                            <i className="fas fa-download text-lg mb-1 text-purple-400"></i>
+                                            <span>Scarica Video</span>
+                                        </a>
+                                        {canDelete && (
+                                            <button
+                                                onClick={() => onDelete && onDelete(project.id)}
+                                                className="flex-1 py-3 bg-red-500/5 hover:bg-red-500/10 text-red-400 text-xs font-bold rounded flex flex-col items-center justify-center gap-1 border border-red-500/10 transition-all hover:border-red-500/50"
+                                            >
+                                                <i className="fas fa-trash text-lg mb-1"></i>
+                                                <span>Elimina Opera</span>
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Solo DELETE se non c'è video ma si può cancellare */}
+                            {!hasVideo && canDelete && (
+                                <div className="mt-4 pt-4 border-t border-white/5">
+                                    <button
+                                        onClick={() => onDelete && onDelete(project.id)}
+                                        className="w-full py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-bold rounded border border-red-500/20 flex items-center justify-center gap-2"
+                                    >
+                                        <i className="fas fa-trash"></i> Elimina Opera Definitivamente
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
 

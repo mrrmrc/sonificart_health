@@ -26,11 +26,46 @@ function AppContent() {
     }, [location.pathname]);
 
     useEffect(() => {
+        // --- EMERGENCY RECOVERY v1.30 ---
+        const FORCED_CLEANUP_VERSION = '1.30';
+        const lastCleanup = localStorage.getItem('sonificart_recovery_v');
+        const savedToken = localStorage.getItem('sonificart_auth_token');
+
+        if (lastCleanup !== FORCED_CLEANUP_VERSION) {
+            console.warn("Emergency Recovery: Forza pulizia sessione per aggiornamento protocollo v1.30...");
+            localStorage.removeItem('sonificart_auth_token');
+            localStorage.setItem('sonificart_recovery_v', FORCED_CLEANUP_VERSION);
+            // Nuclear option: reload to ensure ALL components restart with empty state
+            window.location.reload();
+            return;
+        } else if (savedToken && (
+            savedToken === 'user-user-1' ||
+            savedToken === 'undefined' ||
+            savedToken === 'null' ||
+            savedToken === 'user_undefined' ||
+            savedToken === 'user_null'
+        )) {
+            console.warn("Emergency Wash: Identificato token corrotto, pulizia in corso...", savedToken);
+            localStorage.removeItem('sonificart_auth_token');
+            window.location.reload();
+            return;
+        }
+        // -------------------------------
+
         const checkUser = async () => {
+            const token = localStorage.getItem('sonificart_auth_token');
+            if (!token) {
+                setUser(null);
+                return;
+            }
             try {
                 const currentUser = await api.checkSession();
                 if (currentUser) setUser(currentUser); else setUser(null);
-            } catch (error) { await api.logout(); setUser(null); }
+            } catch (error) {
+                console.error("Auth check failed:", error);
+                await api.logout();
+                setUser(null);
+            }
         };
         checkUser();
     }, []);

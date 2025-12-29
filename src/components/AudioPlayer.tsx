@@ -4,12 +4,22 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 interface AudioPlayerProps {
     audioUrl: string;
     onPlay?: () => void;
-    onStop?: () => void;
+    onPause?: () => void;
+    onStop?: () => void; // Legacy synonym for onPause
+    onEnded?: () => void;
     onTimeUpdate?: (time: number) => void;
     audioRef: React.RefObject<HTMLAudioElement>;
 }
 
-export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioRef, audioUrl, onPlay, onStop, onTimeUpdate }) => {
+export const AudioPlayer: React.FC<AudioPlayerProps> = ({
+    audioRef,
+    audioUrl,
+    onPlay: onPlayProp,
+    onPause: onPauseProp,
+    onStop: onStopProp,
+    onEnded: onEndedProp,
+    onTimeUpdate
+}) => {
     const [isPlaying, setIsPlaying] = useState(false);
     const [progress, setProgress] = useState(0);
     const [duration, setDuration] = useState(0);
@@ -18,22 +28,23 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioRef, audioUrl, on
     const progressRef = useRef<HTMLDivElement>(null);
 
     const onLoadedMetadata = useCallback(() => {
-        if(audioRef.current) setDuration(audioRef.current.duration);
+        if (audioRef.current) setDuration(audioRef.current.duration);
     }, [audioRef]);
 
     const onTimeUpdateCallback = useCallback(() => {
-        if(audioRef.current) {
+        if (audioRef.current) {
             const { currentTime, duration } = audioRef.current;
             setCurrentTime(currentTime);
             setProgress((currentTime / duration) * 100);
-            if(onTimeUpdate) onTimeUpdate(currentTime);
+            if (onTimeUpdate) onTimeUpdate(currentTime);
         }
     }, [onTimeUpdate, audioRef]);
 
     const onEnded = useCallback(() => {
         setIsPlaying(false);
-        if(onStop) onStop();
-    }, [onStop]);
+        if (onEndedProp) onEndedProp();
+        if (onStopProp) onStopProp();
+    }, [onEndedProp, onStopProp]);
 
 
     useEffect(() => {
@@ -50,7 +61,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioRef, audioUrl, on
             audio.removeEventListener('ended', onEnded);
         };
     }, [onLoadedMetadata, onTimeUpdateCallback, onEnded, audioRef]);
-    
+
     useEffect(() => {
         if (audioRef.current) {
             audioRef.current.src = audioUrl;
@@ -68,14 +79,15 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioRef, audioUrl, on
 
         if (isPlaying) {
             audio.pause();
-            if(onStop) onStop();
+            if (onPauseProp) onPauseProp();
+            if (onStopProp) onStopProp();
         } else {
             audio.play().catch(e => console.error("Audio play failed:", e));
-            if(onPlay) onPlay();
+            if (onPlayProp) onPlayProp();
         }
         setIsPlaying(!isPlaying);
     };
-    
+
     const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
         const progressBar = progressRef.current;
         const audio = audioRef.current;
@@ -84,10 +96,10 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioRef, audioUrl, on
         const rect = progressBar.getBoundingClientRect();
         const clickX = e.clientX - rect.left;
         const width = progressBar.offsetWidth;
-        
+
         audio.currentTime = (clickX / width) * duration;
     };
-    
+
     const formatTime = (time: number) => {
         const minutes = Math.floor(time / 60);
         const seconds = Math.floor(time % 60);
@@ -103,7 +115,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioRef, audioUrl, on
             <div className="flex items-center gap-2 w-full">
                 <span className="text-xs text-brand-text-secondary font-mono w-10 text-center">{formatTime(currentTime)}</span>
                 <div ref={progressRef} onClick={handleProgressClick} className="w-full h-2 bg-brand-secondary rounded-full cursor-pointer">
-                    <div style={{ width: `${progress}%`}} className="h-full bg-brand-accent rounded-full transition-all duration-150"></div>
+                    <div style={{ width: `${progress}%` }} className="h-full bg-brand-accent rounded-full transition-all duration-150"></div>
                 </div>
                 <span className="text-xs text-brand-text-secondary font-mono w-10 text-center">{formatTime(duration)}</span>
             </div>

@@ -850,7 +850,6 @@ export async function sonifyImage(
 
 
 // --- ARTISTIC & HYBRID PARADIGMS ---
-import { generateStabilityAudio } from './stabilityService';
 
 async function sonifyImageArtisticOrHybrid(
     file: File,
@@ -993,22 +992,6 @@ async function sonifyImageArtisticOrHybrid(
     }
     progressCallback(7 + stepOffset, 'completed');
 
-    // AI EXTENDED MUSIC GENERATION (Final Step)
-    progressCallback(8 + stepOffset, 'active');
-    let aiTrackUrl: string | null = null;
-    try {
-        console.log(`Starting AI Extended Generation (Target: ${totalDurationSeconds.toFixed(2)}s)...`);
-        const aiAudioBlob = await generateStabilityAudio(
-            musicPrompt.stability_prompt,
-            musicPrompt.negative_prompt,
-            totalDurationSeconds,
-            audioWavBlob // Passiamo il WAV originale come riferimento Audio-to-Audio!
-        );
-        aiTrackUrl = URL.createObjectURL(aiAudioBlob);
-        timings.aiMusicGeneration = performance.now() - t; t = performance.now();
-    } catch (e) {
-        console.error("Stability AI Failed:", e);
-    }
     progressCallback(8 + stepOffset, 'completed');
 
     const sacContainer = await createSacContainer({
@@ -1042,7 +1025,6 @@ async function sonifyImageArtisticOrHybrid(
         },
         performanceMetrics: timings,
         musicGenerationPrompt: musicPrompt,
-        generatedAiTrackUrl: aiTrackUrl,
         paradigm: paradigm,
     };
 }

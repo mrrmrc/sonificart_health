@@ -54,10 +54,8 @@ export interface MusicGenerationPrompt {
     main_prompt_ita: string;
     technical_parameters: string;
     justification: string;
-    // Modifichiamo qui: rendiamo espliciti i vari prompt
     suno_prompt: string;      // Ottimizzato per Suno (Meta Tags)
     udio_prompt: string;      // Ottimizzato per Udio (Tags descrittivi)
-    stability_prompt: string; // Ottimizzato per Stable Audio (Frase discorsiva)
     negative_prompt: string;
     suno_lyrics: string;      // NEW: Marcatori temporali per sincronizzazione
 }
@@ -212,7 +210,6 @@ export interface SonificationResult {
 
     validationHashes: ValidationHashes;
     musicGenerationPrompt?: MusicGenerationPrompt | null;
-    generatedAiTrackUrl?: string | null;
     generatedVideoBlob?: Blob;
 }
 
@@ -254,7 +251,12 @@ export interface DashboardEntry {
     audioUrl?: string | null;
     validationHashes?: ValidationHashes;
     musicGenerationPrompt?: MusicGenerationPrompt | null;
-    generatedAiTrackUrl?: string | null;
+    // Extended fields from backend
+    configUsed?: ConfigSettings;
+    events?: any[]; // Compressed format from backend
+    blockData?: BlockAnalysisResult;
+    imageHash?: string;
+    videoUrl?: string | null;
 }
 
 export interface MusicGenResponse {

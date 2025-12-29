@@ -58,7 +58,7 @@ export async function generateMusicPromptFromAnalysisHybrid(
 
     // PROMPT ALTAMENTE DETTAGLIATO - FUSIONE SEMANTICA AGGRESSIVA - FORZATURA DURATA
     const textPart = {
-        text: `RUOLO: Sei un esperto Music Prompt Engineer senior, specializzato nella "FUSIONE SEMANTICA" tra dati visivi e traduzioni culturali musicali per AI generative (Suno, Udio, Stable Audio).
+        text: `RUOLO: Sei un esperto Music Prompt Engineer senior, specializzato nella "FUSIONE SEMANTICA" tra dati visivi e traduzioni culturali musicali per AI generative (Suno, Udio).
 
 OBIETTIVO: Creare una guida musicale che sia un ibrido perfetto tra il "Soggetto dell'Immagine" e la "Tradizione Musicale" suggerita dal framework SonificA.R.T.
 
@@ -74,11 +74,17 @@ REQUISITI DI FUSIONE SEMANTICA (MANDATORI):
 1. **Iniezione Parole Chiave Visive**: Devi inserire nel prompt i termini chiave estratti dal SOGGETTO VISIVO ("${imageDescription}"). Se vedi "Stonehenge", il prompt DEVE contenere parole come "Ancient Stones", "Monoliths", "Sarsen stones", "Druidic silence", "Neolithic ritual".
 2. **Ibridazione Strumentale**: Non limitarti alla strumentazione classica della tradizione '${tradition.name}'. Inventa suoni ibridi basati sull'immagine. (Es: Se è Stonehenge + Andaluso: "Stone-percussion echoing between monoliths", "Oud melody carried by the morning wind over Salisbury Plain").
 3. **Atmosfera Contestuale**: L'atmosfera non deve essere solo quella della tradizione, ma deve riflettere il luogo/soggetto dell'immagine.
-4. **COESIONE ARTISTICA**: Il prompt deve suggerire all'AI di integrare la tessitura sonora del file WAV di riferimento in modo fluido e armonioso, mantenendo la coerenza con l'atmosfera visiva.
+4. **FEDELTÀ AL RIFERIMENTO (CRITICO)**: Il prompt deve ordinare all'AI di restare estremanente fedele alla struttura armonica e ritmica del file WAV caricato. Usa tag come "[Very faithful to reference]", "[Maintain original melody]", "[Instrumental focus]".
 
 FORZATURA DURATA SUNO (CRITICO):
-- Inizia SEMPRE con: "[Duration: ${durationSeconds.toFixed(0)}s], [Strictly ${durationSeconds.toFixed(0)} seconds limit], [Fast Ending], [No Extension]".
+- Inizia SEMPRE con: "[Duration: ${durationSeconds.toFixed(0)}s], [Strictly ${durationSeconds.toFixed(0)} seconds limit], [Fast Ending], [No Extension], [Strictly Instrumental], [No Vocals]".
 - Termina SEMPRE con: "[Outro: Dissolve at ${durationSeconds.toFixed(0)}s], [End at ${durationSeconds.toFixed(0)}s], [Silence], [End]".
+
+REGOLE PER "suno_lyrics" (IMPORTANTE):
+- NON SCRIVERE TESTO POETICO O DESCRIZIONI FUORI DAI MARKER.
+- Usa solo marcatori temporali e tag musicali brevi tra parentesi quadre.
+- Esempio corretto: "[0:00] [Intro Instrumental] [0:30] [Middle Section Instrumental] [End at ${durationSeconds.toFixed(0)}s]"
+- Evita formati come "[0:00] La voce dice..." perché Suno la canterà. Usa solo istruzioni per l'orchestra/sintetizzatori.
 
 STRUTTURA OUTPUT RICHIESTA (JSON):
 - **main_prompt_ita**: Descrizione poetica e tecnica che spieghi come la musicalità '${tradition.name}' descriva specificamente '${imageDescription}'.
@@ -86,9 +92,8 @@ STRUTTURA OUTPUT RICHIESTA (JSON):
 - **justification**: Spiegazione di come il soggetto visivo sia stato fuso con la tradizione musicale.
 - **suno_prompt**: Il mega-prompt di tag. DEVE contenere sia i tag musicali che i tag del SOGGETTO VISIVO.
 - **udio_prompt**: Tag separati da virgola (Musicali + Visivi + Durata).
-- **stability_prompt**: Descrizione fluida (Musicali + Visivi + Durata).
 - **negative_prompt**: Elementi da evitare.
-- **suno_lyrics**: Marcatori temporali basati sulla durata di ${durationSeconds.toFixed(0)} secondi. Inserisci un marcatore ogni 30 secondi (es: [0:00], [0:30], [1:00]) accompagnato da una breve descrizione della sezione strumentale (es: [0:00] Intro Ambientale, [0:30] Sviluppo Ritmico).
+- **suno_lyrics**: Marcatori temporali e tag strutturali strumentali ESCLUSIVAMENTE in parentesi quadre per obbligare la durata di ${durationSeconds.toFixed(0)} secondi.
 
 Rispondi SOLO con il JSON.`
     };
@@ -107,11 +112,10 @@ Rispondi SOLO con il JSON.`
                         justification: { type: Type.STRING },
                         suno_prompt: { type: Type.STRING },
                         udio_prompt: { type: Type.STRING },
-                        stability_prompt: { type: Type.STRING },
                         negative_prompt: { type: Type.STRING },
                         suno_lyrics: { type: Type.STRING }
                     },
-                    required: ["main_prompt_ita", "technical_parameters", "justification", "suno_prompt", "udio_prompt", "stability_prompt", "negative_prompt", "suno_lyrics"]
+                    required: ["main_prompt_ita", "technical_parameters", "justification", "suno_prompt", "udio_prompt", "negative_prompt", "suno_lyrics"]
                 }
             }
         });
@@ -131,7 +135,6 @@ Rispondi SOLO con il JSON.`
             justification: "Errore connessione AI, uso parametri standard.",
             suno_prompt: "[Experimental], [Instrumental], [Cinematic], [Ambient]",
             udio_prompt: "experimental, instrumental, cinematic, ambient",
-            stability_prompt: "Cinematic score, emotional, orchestral, clear sound",
             negative_prompt: "percussion, text, speech",
             suno_lyrics: "[0:00] Intro, [0:30] Development, [End]"
         };

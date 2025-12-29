@@ -20,5 +20,5 @@ export const DashboardPage: React.FC = () => {
 
     if (!user) return <div className="text-center text-white pt-20">Effettua il login per vedere la Dashboard.</div>;
 
-    return <UserDashboard onLoadEntry={handleLoadEntry} />;
+    return <UserDashboard user={user} onLoadEntry={handleLoadEntry} />;
 };

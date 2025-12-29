@@ -201,9 +201,6 @@ export const reconstructResultFromPartialData = (
         validationHashes: { imageBlobHash: "", audioBlobHash: "", midiBlobHash: "" },
 
         // Recupero prompt se presente (supporto camelCase e snake_case)
-        musicGenerationPrompt: partialData.musicGenerationPrompt || partialData.music_generation_prompt || meta.music_generation_prompt || null,
-
-        // Recupero eventuale traccia AI generata
-        generatedAiTrackUrl: partialData.generatedAiTrackUrl || partialData.generated_ai_track_url || null
+        musicGenerationPrompt: partialData.musicGenerationPrompt || partialData.music_generation_prompt || meta.music_generation_prompt || null
     };
 };

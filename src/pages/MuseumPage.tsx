@@ -19,7 +19,9 @@ export const MuseumPage: React.FC = () => {
     const [project, setProject] = useState<ShowcaseProject | null>(null);
     const [owner, setOwner] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isPlaying, setIsPlaying] = useState(false);
     const audioRef = React.useRef<HTMLAudioElement>(null);
+    const videoRef = React.useRef<HTMLVideoElement>(null);
 
     useEffect(() => {
         if (!projectId) {
@@ -85,8 +87,38 @@ export const MuseumPage: React.FC = () => {
             <div className="relative z-10 flex-grow flex flex-col items-center justify-center p-6 space-y-8">
 
                 {/* Artwork Frame */}
-                <div className="w-full max-w-sm aspect-square rounded-2xl shadow-2xl overflow-hidden border border-white/20 transform hover:scale-[1.02] transition-transform duration-700">
-                    <img src={fixImage(project.imageUrl)} alt={project.title} className="w-full h-full object-cover" />
+                <div
+                    className="w-full max-w-sm aspect-square rounded-2xl shadow-2xl overflow-hidden border border-white/20 transform hover:scale-[1.02] transition-transform duration-700 relative cursor-pointer"
+                    onClick={() => {
+                        if (audioRef.current) {
+                            if (isPlaying) audioRef.current.pause();
+                            else audioRef.current.play();
+                        }
+                    }}
+                >
+                    {project.videoUrl ? (
+                        <>
+                            <video
+                                ref={videoRef}
+                                src={fixImage(project.videoUrl)}
+                                className="w-full h-full object-cover"
+                                loop
+                                playsInline
+                                muted={true} // Audio is handled by AudioPlayer for consistency
+                                onPlay={() => setIsPlaying(true)}
+                                onPause={() => setIsPlaying(false)}
+                            />
+                            {!isPlaying && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px] transition-all">
+                                    <div className="w-16 h-16 rounded-full bg-brand-accent/80 flex items-center justify-center text-brand-primary text-2xl animate-pulse">
+                                        <i className="fas fa-play ml-1"></i>
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <img src={fixImage(project.imageUrl)} alt={project.title} className="w-full h-full object-cover" />
+                    )}
                 </div>
 
                 {/* Info */}
@@ -101,6 +133,22 @@ export const MuseumPage: React.FC = () => {
                     <AudioPlayer
                         audioUrl={project.audioUrl || ""}
                         audioRef={audioRef}
+                        onPlay={() => {
+                            setIsPlaying(true);
+                            if (videoRef.current) videoRef.current.play();
+                        }}
+                        onPause={() => {
+                            setIsPlaying(false);
+                            if (videoRef.current) videoRef.current.pause();
+                        }}
+                        onTimeUpdate={(time) => {
+                            if (videoRef.current) {
+                                // Sync video time with audio time if drift > 0.3s
+                                if (Math.abs(videoRef.current.currentTime - time) > 0.3) {
+                                    videoRef.current.currentTime = time;
+                                }
+                            }
+                        }}
                     />
                 </div>
             </div>
