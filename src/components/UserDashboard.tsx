@@ -25,6 +25,11 @@ const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPub
     const [syncAudioFile, setSyncAudioFile] = useState<File | null>(null);
     const [isGeneratingSync, setIsGeneratingSync] = useState(false);
     const [syncProgress, setSyncProgress] = useState(0);
+    const [allTraditions, setAllTraditions] = useState<any[]>([]);
+
+    useEffect(() => {
+        fetch('/data/traditions.json').then(res => res.json()).then(data => setAllTraditions(data)).catch(e => console.error(e));
+    }, []);
 
     // FIX: Store uploaded result to correct QR Code immediately
     const [uploadedMedia, setUploadedMedia] = useState<{ url: string, type: string } | null>(null);
@@ -65,7 +70,7 @@ const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPub
                     imageHash: entry.id,
                     standardizedImageUrl: fixImage(entry.imageUrl),
                     blockAnalysisResult: entry.blockData || { gridSize: 32, blocks: [] },
-                    culturalSelectionResult: { tradition: { name: entry.traditionName } },
+                    culturalSelectionResult: { tradition: allTraditions.find(t => t.name === entry.traditionName) || { name: entry.traditionName, cultural_family: 'Neutral' } },
                     scanPattern: { name: "Path Originale" },
                     audioOutput: {
                         events: entry.events ? decompressEvents(entry.events) : [],
@@ -83,8 +88,22 @@ const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPub
                 const localUrl = URL.createObjectURL(videoBlob);
                 setLocalVideoUrl(localUrl);
 
+                // Detect correct extension
+                const ext = videoBlob.type.includes('mp4') ? 'mp4' : 'webm';
+                const fileName = `synesthetic_experience.${ext}`;
+
                 // Trasformiamo il Blob in un File per l'uploader esistente
-                finalFileToUpload = new File([videoBlob], "synesthetic_experience.mp4", { type: 'video/mp4' });
+                finalFileToUpload = new File([videoBlob], fileName, { type: videoBlob.type });
+
+                // AUTOMATIC SAVE TO HISTORY
+                // Salviamo silenziosamente il video appena generato nello storico, così l'utente lo ritrova
+                try {
+                    await api.attachVideoToHistory(entry.id, videoBlob, fileName);
+                    console.log("Video automaticamente salvato nello storico con estensione " + ext);
+                } catch (saveErr) {
+                    console.warn("Non è stato possibile salvare il video nello storico (ma procedo con la pubblicazione)", saveErr);
+                }
+
             } catch (err) {
                 console.error("Sync-Video error:", err);
                 throw new Error("Errore durante la creazione dell'esperienza sinestetica. Assicurati che il file audio sia valido.");
@@ -193,85 +212,165 @@ const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPub
             <div className="relative w-full max-w-2xl bg-[#1e1e2e] rounded-xl shadow-2xl border border-white/10 animate-zoom-in overflow-hidden" onClick={e => e.stopPropagation()}>
                 <div className="p-8">
                     {step === 1 ? (
-                        <form onSubmit={handleSubmit} className="space-y-6">
-                            <h3 className="text-2xl font-bold text-white mb-6">Pubblica in Vetrina</h3>
-                            <div className="flex flex-col sm:flex-row gap-6">
-                                <img src={fixImage(entry.imageUrl)} className="w-full sm:w-1/3 h-48 sm:h-32 object-cover rounded-lg border border-white/10" alt="Preview" />
-                                <div className="w-full sm:w-2/3 space-y-4">
-                                    <input required type="text" className="w-full bg-black/30 border border-white/10 p-2 rounded text-white" value={title} onChange={e => setTitle(e.target.value)} />
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        <div className="p-2 bg-black/20 rounded border border-white/5 hover:border-brand-accent/30 transition-colors">
-                                            <label className="block text-[8px] font-bold text-gray-500 uppercase mb-1">Standard</label>
-                                            <label className="block text-[10px] font-bold text-brand-text-secondary uppercase mb-1 cursor-pointer flex items-center gap-2">
-                                                <i className="fas fa-upload text-brand-accent"></i>
-                                                <span>Carica Media</span>
-                                                <input type="file" accept="video/*,audio/*" className="hidden" onChange={e => { setCustomFile(e.target.files ? e.target.files[0] : null); setSyncAudioFile(null); }} />
-                                            </label>
-                                            <p className="text-[9px] text-gray-600 truncate">{customFile ? customFile.name : "Video o Audio custom"}</p>
+                        <>
+                            {isGeneratingSync ? (
+                                <div className="flex flex-col items-center justify-center py-8 px-4 animate-fade-in text-center space-y-8">
+
+                                    {/* IMAGE SCANNING VISUALIZATION */}
+                                    <div className="relative w-full max-w-sm aspect-video rounded-xl overflow-hidden shadow-[0_0_50px_rgba(168,85,247,0.25)] border border-purple-500/50 group">
+                                        <img src={fixImage(entry.imageUrl)} className="w-full h-full object-cover filter grayscale-[0.3]" alt="Analysis Target" />
+
+                                        {/* Processed Area (Top to Bottom) */}
+                                        <div
+                                            className="absolute inset-x-0 top-0 bg-purple-600/20 backdrop-brightness-110 backdrop-contrast-125 transition-all duration-300 ease-linear border-b-2 border-brand-accent shadow-[0_0_20px_#2dd4bf] z-10"
+                                            style={{ height: `${syncProgress}%` }}
+                                        >
+                                            {/* Shimmer */}
+                                            <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-transparent animate-shimmer" style={{ backgroundSize: '200% 100%' }}></div>
                                         </div>
-                                        <div className={`p-2 bg-purple-900/10 rounded border ${syncAudioFile ? 'border-purple-500/50' : 'border-white/5'} hover:border-purple-500/30 transition-colors relative overflow-hidden group`}>
-                                            <div className="absolute top-0 right-0 p-1 opacity-20 group-hover:opacity-100"><i className="fas fa-bolt text-purple-400 text-[10px]"></i></div>
-                                            <label className="block text-[8px] font-bold text-purple-400 uppercase mb-1">Potenziato</label>
-                                            <label className="block text-[10px] font-bold text-purple-300 uppercase mb-1 cursor-pointer flex items-center gap-2">
-                                                <i className="fas fa-magic"></i>
-                                                <span>Sync-Audio</span>
-                                                <input type="file" accept="audio/*" className="hidden" onChange={e => { setSyncAudioFile(e.target.files ? e.target.files[0] : null); setCustomFile(null); }} />
-                                            </label>
-                                            <p className="text-[9px] text-purple-400/60 truncate">{syncAudioFile ? syncAudioFile.name : "Genera Video Sinestetico"}</p>
+
+                                        {/* Scan Line (Glowing) */}
+                                        <div
+                                            className="absolute inset-x-0 h-1 bg-white shadow-[0_0_15px_white] z-20 transition-all duration-300 ease-linear opacity-80"
+                                            style={{ top: `${syncProgress}%` }}
+                                        ></div>
+
+                                        {/* Overlay Grid (Tech effect) */}
+                                        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:20px_20px] pointer-events-none"></div>
+                                    </div>
+
+                                    <div className="space-y-2 max-w-md">
+                                        <h3 className="text-2xl font-bold text-white font-display">
+                                            {syncProgress < 30 ? "Analisi Cromatica..." : syncProgress < 70 ? "Sincronizzazione Audio..." : "Rendering Sinestetico..."}
+                                        </h3>
+                                        <p className="text-purple-300 text-sm animate-pulse">
+                                            L'IA sta scansionando la tua opera per generare l'esperienza visiva.
+                                        </p>
+                                    </div>
+
+                                    <div className="w-full max-w-sm space-y-2">
+                                        <div className="flex justify-between text-xs font-bold uppercase tracking-widest text-brand-accent">
+                                            <span>Avanzamento</span>
+                                            <span>{Math.round(syncProgress)}%</span>
+                                        </div>
+                                        <div className="w-full bg-black/40 rounded-full h-1 border border-white/5 overflow-hidden">
+                                            <div
+                                                className="h-full bg-brand-accent shadow-[0_0_10px_#2dd4bf] transition-all duration-300"
+                                                style={{ width: `${syncProgress}%` }}
+                                            ></div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                            <textarea className="w-full bg-black/30 border border-white/10 p-2 rounded text-white h-20" value={description} onChange={e => setDescription(e.target.value)} placeholder="Descrizione..." />
+                            ) : (
+                                <form onSubmit={handleSubmit} className="space-y-6">
+                                    <h3 className="2xl font-bold text-white mb-6">Pubblica in Vetrina</h3>
+                                    <div className="flex flex-col sm:flex-row gap-6">
+                                        <img src={fixImage(entry.imageUrl)} className="w-full sm:w-1/3 h-48 sm:h-32 object-cover rounded-lg border border-white/10" alt="Preview" />
+                                        <div className="w-full sm:w-2/3 space-y-4">
+                                            <input required type="text" className="w-full bg-black/30 border border-white/10 p-2 rounded text-white font-bold" value={title} onChange={e => setTitle(e.target.value)} />
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 
-                            {/* SYNC GENERATION PROGRESS */}
-                            {isGeneratingSync && (
-                                <div className="p-4 bg-purple-900/20 border border-purple-500/30 rounded-lg animate-pulse">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="text-xs font-bold text-purple-300 flex items-center gap-2"><i className="fas fa-spinner fa-spin"></i> Generazione Esperienza Sinestetica...</span>
-                                        <span className="text-xs font-mono text-purple-400">{syncProgress}%</span>
-                                    </div>
-                                    <div className="w-full bg-black/40 rounded-full h-1.5 border border-purple-500/10 overflow-hidden">
-                                        <div className="bg-gradient-to-r from-purple-600 to-brand-accent h-full transition-all duration-200" style={{ width: `${syncProgress}%` }}></div>
-                                    </div>
-                                    <p className="text-[9px] text-purple-400/60 mt-2 italic text-center">Stiamo fondendo i tuoi pixel con la nuova traccia sonora...</p>
-                                </div>
-                            )}
+                                                {/* OPTION 1: STANDARD UPLOAD */}
+                                                <div className={`p-3 bg-black/20 rounded-lg border ${customFile ? 'border-brand-accent' : 'border-white/5'} hover:border-brand-accent/50 transition-colors cursor-pointer`} onClick={() => document.getElementById('file-upload-input')?.click()}>
+                                                    <label className="block text-[9px] font-bold text-gray-400 uppercase mb-2">Opzione 1: Upload Diretto</label>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${customFile ? 'bg-brand-accent text-brand-primary' : 'bg-white/5 text-gray-500'}`}>
+                                                            <i className="fas fa-upload text-xs"></i>
+                                                        </div>
+                                                        <div>
+                                                            <span className={`block text-xs font-bold ${customFile ? 'text-brand-accent' : 'text-gray-300'}`}>
+                                                                {customFile ? "File Selezionato" : "Carica Media"}
+                                                            </span>
+                                                            <span className="text-[9px] text-gray-500 block truncate max-w-[120px]">
+                                                                {customFile ? customFile.name : "Video o Audio custom"}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <input id="file-upload-input" type="file" accept="video/*,audio/*" className="hidden" onChange={e => { setCustomFile(e.target.files ? e.target.files[0] : null); setSyncAudioFile(null); }} />
+                                                </div>
 
-                            {/* PROGRESS BAR */}
-                            {isSubmitting && (customFile || syncAudioFile) && (
-                                <div className="space-y-1 pt-2">
-                                    <div className="flex justify-between text-[10px] font-bold text-brand-accent uppercase tracking-widest">
-                                        <span>{isGeneratingSync ? 'Rilevamento...' : 'Upload In Corso'}</span>
-                                        <span>{uploadProgress}%</span>
-                                    </div>
-                                    <div className="w-full bg-black/40 rounded-full h-1.5 border border-white/5 overflow-hidden">
-                                        <div className="bg-brand-accent h-full transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div>
-                                    </div>
-                                </div>
-                            )}
+                                                {/* OPTION 2: SYNESTHETIC GENERATION */}
+                                                <div className={`p-3 bg-purple-900/10 rounded-lg border ${syncAudioFile ? 'border-purple-500' : 'border-purple-500/20'} hover:border-purple-500/50 transition-colors relative overflow-hidden group cursor-pointer`} onClick={() => !entry.videoUrl && document.getElementById('sync-audio-input')?.click()}>
+                                                    <div className="absolute top-0 right-0 p-1 opacity-20 group-hover:opacity-100"><i className="fas fa-bolt text-purple-400 text-[10px]"></i></div>
+                                                    <label className="block text-[9px] font-bold text-purple-400/80 uppercase mb-2">Opzione 2: Generazione AI</label>
 
-                            <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
-                                <button type="button" onClick={onClose} className="text-gray-400 text-sm">Annulla</button>
-                                <div className="flex justify-center mt-4">
-                                    {isGeneratingSync || (isSubmitting && syncAudioFile) ? (
-                                        <button type="button" disabled className="bg-purple-900/50 text-purple-300 font-bold py-3 px-10 rounded-full flex items-center gap-3 border border-purple-500/30">
-                                            <i className="fas fa-spinner fa-spin"></i>
-                                            <span>ELABORAZIONE SINESTETICA IN CORSO...</span>
-                                        </button>
-                                    ) : syncAudioFile ? (
-                                        <button type="submit" disabled={isSubmitting} className="bg-gradient-to-r from-purple-600 to-brand-accent text-white font-bold py-3 px-10 rounded-full hover:scale-105 transition-transform shadow-lg shadow-purple-500/20 flex items-center gap-3">
-                                            <i className="fas fa-magic"></i>
-                                            <span>GENERA & PUBBLICA ESPERIENZA SINESTETICA</span>
-                                        </button>
-                                    ) : (
-                                        <button type="submit" disabled={isSubmitting} className="bg-brand-accent text-brand-primary font-bold py-3 px-10 rounded-full hover:scale-105 transition-transform disabled:opacity-50">
-                                            {isSubmitting ? 'UPLOADING...' : customFile ? "PUBBLICA CON MEDIA CUSTOM" : "CONFERMA PUBBLICAZIONE"}
-                                        </button>
+                                                    {entry.videoUrl && !syncAudioFile ? (
+                                                        <div className="animate-fade-in text-center">
+                                                            <div className="text-[10px] font-bold text-green-400 mb-2 flex items-center justify-center gap-1">
+                                                                <i className="fas fa-check-circle"></i> VIDEO PRONTO
+                                                            </div>
+                                                            <div className="grid grid-cols-2 gap-2">
+                                                                <button type="button" onClick={(e) => { e.stopPropagation(); window.open(entry.videoUrl || "", '_blank'); }} className="py-1 bg-purple-600/20 text-purple-300 rounded text-[9px] hover:bg-purple-600/40 border border-purple-500/20">PLAY</button>
+                                                                <label className="py-1 bg-purple-600/20 text-purple-300 rounded text-[9px] hover:bg-purple-600/40 border border-purple-500/20 cursor-pointer text-center">
+                                                                    RIGENERA
+                                                                    <input id="sync-audio-input" type="file" accept="audio/*" className="hidden" onChange={e => { setSyncAudioFile(e.target.files ? e.target.files[0] : null); setCustomFile(null); }} />
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex items-center gap-3">
+                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${syncAudioFile ? 'bg-purple-500 text-white' : 'bg-purple-500/10 text-purple-400'}`}>
+                                                                <i className="fas fa-magic text-xs"></i>
+                                                            </div>
+                                                            <div>
+                                                                <span className={`block text-xs font-bold ${syncAudioFile ? 'text-purple-400' : 'text-gray-300'}`}>
+                                                                    {syncAudioFile ? "Audio Caricato" : "Genera Video da Audio"}
+                                                                </span>
+                                                                <span className="text-[9px] text-gray-500 block truncate max-w-[120px]">
+                                                                    {syncAudioFile ? syncAudioFile.name : "Carica traccia MP3/WAV"}
+                                                                </span>
+                                                            </div>
+                                                            <input id="sync-audio-input" type="file" accept="audio/*" className="hidden" onChange={e => { setSyncAudioFile(e.target.files ? e.target.files[0] : null); setCustomFile(null); }} />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <textarea className="w-full bg-black/30 border border-white/10 p-3 rounded text-white text-sm h-24 focus:border-brand-accent outline-none transition-colors" value={description} onChange={e => setDescription(e.target.value)} placeholder="Aggiungi una descrizione per la vetrina..." />
+
+                                    {/* STATUS BAR FOR UPLOAD ONLY (Sync is handled globally above) */}
+                                    {isSubmitting && !isGeneratingSync && (customFile || syncAudioFile) && (
+                                        <div className="space-y-1 pt-2">
+                                            <div className="flex justify-between text-[10px] font-bold text-brand-accent uppercase tracking-widest">
+                                                <span>Upload In Corso</span>
+                                                <span>{uploadProgress}%</span>
+                                            </div>
+                                            <div className="w-full bg-black/40 rounded-full h-1.5 border border-white/5 overflow-hidden">
+                                                <div className="bg-brand-accent h-full transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div>
+                                            </div>
+                                        </div>
                                     )}
-                                </div>
-                            </div>
-                        </form>
+
+                                    <div className="pt-6 mt-2 border-t border-white/10 flex flex-col gap-3">
+                                        {syncAudioFile ? (
+                                            <button
+                                                type="button"
+                                                onClick={handleSubmit}
+                                                disabled={isSubmitting}
+                                                className="w-full bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white font-bold py-4 rounded-xl shadow-lg shadow-purple-900/30 hover:shadow-purple-900/50 transition-all flex items-center justify-center gap-2 group"
+                                            >
+                                                <i className="fas fa-wand-magic-sparkles group-hover:rotate-12 transition-transform"></i>
+                                                <span>GENERA VIDEO & PUBBLICA</span>
+                                            </button>
+                                        ) : (
+                                            <button
+                                                type="submit"
+                                                disabled={isSubmitting}
+                                                className={`w-full font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 uppercase tracking-wide
+                                                    ${isSubmitting
+                                                        ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                                                        : 'bg-brand-accent hover:bg-brand-accent-light text-brand-primary shadow-brand-accent/20 hover:shadow-brand-accent/40'}`}
+                                            >
+                                                {isSubmitting ? 'Pubblicazione in corso...' : customFile ? "PUBBLICA CON MEDIA CUSTOM" : "PUBBLICA ORA"}
+                                                {!isSubmitting && <i className="fas fa-arrow-right"></i>}
+                                            </button>
+                                        )}
+                                        <button type="button" onClick={onClose} disabled={isSubmitting || isGeneratingSync} className="text-gray-500 text-xs hover:text-white transition-colors py-2">Annulla e torna indietro</button>
+                                    </div>
+                                </form>
+                            )}
+                        </>
                     ) : (
                         <div className="text-center space-y-6 animate-fade-in">
                             <h3 className="text-2xl font-bold text-white">Pubblicazione Completata!</h3>
@@ -358,7 +457,23 @@ const HistoryItem: React.FC<{ item: DashboardEntry; onView: () => void; onPublis
         <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto mt-2 sm:mt-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-white/5">
             <div className="flex gap-2">
                 <button onClick={(e) => { e.stopPropagation(); onView(); }} className="bg-brand-primary hover:bg-white/10 text-white text-[10px] sm:text-xs font-bold py-2 px-3 sm:px-4 rounded border border-white/10">Sonificazione</button>
-                {isPro && onPublishClick && <button onClick={(e) => { e.stopPropagation(); onPublishClick(); }} className="bg-purple-600/20 text-purple-300 hover:bg-purple-600 hover:text-white text-[10px] sm:text-xs font-bold py-2 px-3 sm:px-4 rounded border border-purple-500/30">Galleria</button>}
+                {item.videoUrl && (
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            const link = document.createElement('a');
+                            link.href = item.videoUrl || "";
+                            link.download = `synesthetic_${(item.traditionName || "opera").replace(/\s+/g, '_')}.mp4`;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                        }}
+                        className="bg-purple-600/20 text-purple-300 hover:bg-purple-600 hover:text-white text-[10px] sm:text-xs font-bold py-2 px-3 sm:px-4 rounded border border-purple-500/30 flex items-center gap-1"
+                    >
+                        <i className="fas fa-video"></i> VIDEO
+                    </button>
+                )}
+                {isPro && onPublishClick && <button onClick={(e) => { e.stopPropagation(); onPublishClick(); }} className="bg-purple-600/20 text-purple-300 hover:bg-purple-600 hover:text-white text-[10px] sm:text-xs font-bold py-2 px-3 sm:px-4 rounded border border-purple-500/30">Pubblica</button>}
             </div>
             <button onClick={(e) => { e.stopPropagation(); if (onDelete) onDelete(); }} className="bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white p-2 rounded ml-2"><i className="fas fa-trash text-xs"></i></button>
         </div>

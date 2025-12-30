@@ -1045,6 +1045,22 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                     <DataRow label={t('results.total_time')} value={`${correctedResult.performanceMetrics?.totalProcessingTime?.toFixed(0) || 0} ms`} />
                 </InfoCard>
 
+                {/* ARCHIVED VIDEO PLAYER */}
+                {((result as any).videoUrl || generatedVideoBlob) && (
+                    <InfoCard title={t('results.video_title') || "Esperienza Sinestetica"} icon="fa-video" className="bg-purple-900/20 border-purple-500/30">
+                        <div className="rounded-lg overflow-hidden border border-purple-500/20 shadow-lg mb-3">
+                            <video
+                                src={generatedVideoBlob ? URL.createObjectURL(generatedVideoBlob) : (result as any).videoUrl}
+                                controls
+                                className="w-full h-auto aspect-video"
+                            />
+                        </div>
+                        <p className="text-[10px] text-purple-300 italic text-center">
+                            {generatedVideoBlob ? "Video generato in questa sessione." : "Video recuperato dall'archivio."}
+                        </p>
+                    </InfoCard>
+                )}
+
                 <InfoCard title={t('results.download_artifacts')} icon="fa-download">
                     <div className="flex flex-col gap-2 mt-2 relative">
                         {!isPro && (
@@ -1059,8 +1075,12 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                         <button disabled={!isPro} onClick={() => saveAs(correctedResult.audioOutput.midiBlob, 'musical_notation.mid')} className="w-full bg-brand-accent/20 text-brand-accent py-1 rounded hover:bg-brand-accent/30 disabled:opacity-50">
                             <i className="fas fa-music mr-2"></i> {t('results.download_midi')}
                         </button>
-                        <button disabled={!isPro} onClick={handleVideoAction} className="w-full bg-purple-600/30 text-purple-300 py-1 rounded hover:bg-purple-600/50 border border-purple-500/30 relative">
-                            <i className="fas fa-video mr-2"></i> {generatedVideoBlob ? t('results.download_video') : t('results.generate_video')}
+                        <button disabled={!isPro} onClick={() => {
+                            if (generatedVideoBlob) saveAs(generatedVideoBlob, `kinetic_proof_${safeHash.substring(0, 8)}.mp4`);
+                            else if ((result as any).videoUrl) saveAs((result as any).videoUrl, `kinetic_proof_${safeHash.substring(0, 8)}.mp4`);
+                            else handleVideoAction();
+                        }} className="w-full bg-purple-600/30 text-purple-300 py-1 rounded hover:bg-purple-600/50 border border-purple-500/30 relative">
+                            <i className="fas fa-video mr-2"></i> {(generatedVideoBlob || (result as any).videoUrl) ? t('results.download_video') : t('results.generate_video')}
                         </button>
                         <button disabled={!isPro} onClick={handleDownloadSac} className="w-full bg-brand-accent font-bold text-brand-primary py-2 rounded hover:bg-brand-accent-light mt-2 shadow-lg disabled:opacity-50">
                             <i className="fas fa-box mr-2"></i> {t('results.download_sac')}

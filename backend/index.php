@@ -356,7 +356,7 @@ if ($action === 'get_showcase' && $method === 'GET') {
 // --- DELETE HISTORY ITEM (Protetta) ---
 if ($action === 'delete_history_item' && $method === 'POST') {
     $entryId = $input['id'] ?? '';
-    $stmt = $pdo->prepare("SELECT image_url, audio_url FROM history WHERE id = ? AND user_id = ?");
+    $stmt = $pdo->prepare("SELECT image_url, audio_url, video_url FROM history WHERE id = ? AND user_id = ?");
     $stmt->execute([$entryId, $userId]);
     $item = $stmt->fetch();
     if ($item) {
@@ -364,6 +364,8 @@ if ($action === 'delete_history_item' && $method === 'POST') {
             @unlink(__DIR__ . '/../' . $item['image_url']);
         if (!empty($item['audio_url']) && strpos($item['audio_url'], '/media') !== false)
             @unlink(__DIR__ . '/../' . $item['audio_url']);
+        if (!empty($item['video_url']) && strpos($item['video_url'], '/media') !== false)
+            @unlink(__DIR__ . '/../' . $item['video_url']);
 
         $pdo->prepare("DELETE FROM history WHERE id = ?")->execute([$entryId]);
         // Cascata Showcase
@@ -373,6 +375,112 @@ if ($action === 'delete_history_item' && $method === 'POST') {
         sendResponse(["success" => true]);
     } else {
         sendResponse(["error" => "Not found"], 404);
+    }
+}
+
+// --- ATTACH VIDEO TO HISTORY (Protetta) ---
+if ($action === 'attach_video_to_history' && $method === 'POST') {
+    $entryId = $_POST['entryId'] ?? null;
+    if (!$entryId)
+        sendResponse(["error" => "No ID"], 400);
+
+    // Verify ownership
+    $stmt = $pdo->prepare("SELECT user_id FROM history WHERE id = ?");
+    $stmt->execute([$entryId]);
+    $ownerId = $stmt->fetchColumn();
+
+    if ($ownerId != $userId) {
+        sendResponse(["error" => "Unauthorized access to this item"], 403);
+    }
+
+    $finalVideoUrl = "";
+
+    // 1. Check if URL provided directly (Chunked Upload Flow)
+    if (isset($_POST['videoUrl']) && !empty($_POST['videoUrl'])) {
+        $finalVideoUrl = $_POST['videoUrl'];
+    }
+    // 2. Fallback to standard HTTP Upload
+    else if (isset($_FILES['videoFile']) && $_FILES['videoFile']['error'] === UPLOAD_ERR_OK) {
+        $file = $_FILES['videoFile'];
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        $allowed = ['mp4', 'webm', 'mov'];
+        if (!in_array($ext, $allowed))
+            $ext = 'mp4'; // Fallback
+
+        $targetDir = __DIR__ . '/../media/custom/';
+        if (!file_exists($targetDir))
+            mkdir($targetDir, 0755, true);
+
+        $newFileName = 'vid_' . $entryId . '_' . time() . '.' . $ext;
+        $targetPath = $targetDir . $newFileName;
+
+        if (move_uploaded_file($file['tmp_name'], $targetPath)) {
+            $finalVideoUrl = "/media/custom/" . $newFileName;
+        } else {
+            sendResponse(["error" => "Errore nel salvataggio del file video"], 500);
+        }
+    } else {
+        // Only error if neither is provided
+        sendResponse(["error" => "File video mancante o errore upload"], 400);
+    }
+
+    if ($finalVideoUrl) {
+        $pdo->prepare("UPDATE history SET video_url = ? WHERE id = ?")->execute([$finalVideoUrl, $entryId]);
+        sendResponse(["success" => true, "videoUrl" => $finalVideoUrl]);
+    }
+}
+
+// --- ATTACH AUDIO TO HISTORY (Protetta) ---
+if ($action === 'attach_audio_to_history' && $method === 'POST') {
+    $entryId = $_POST['entryId'] ?? null;
+    if (!$entryId)
+        sendResponse(["error" => "No ID"], 400);
+
+    // Verify ownership
+    $stmt = $pdo->prepare("SELECT user_id FROM history WHERE id = ?");
+    $stmt->execute([$entryId]);
+    $ownerId = $stmt->fetchColumn();
+    if ($ownerId != $userId)
+        sendResponse(["error" => "Unauthorized"], 403);
+
+    $finalAudioUrl = "";
+
+    // 1. Check URL (Chunked)
+    if (isset($_POST['audioUrl']) && !empty($_POST['audioUrl'])) {
+        $finalAudioUrl = $_POST['audioUrl'];
+    }
+    // 2. Fallback File Upload
+    else if (isset($_FILES['audioFile']) && $_FILES['audioFile']['error'] === UPLOAD_ERR_OK) {
+        $file = $_FILES['audioFile'];
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        $allowed = ['mp3', 'wav', 'ogg', 'm4a'];
+        // Strict fallback not needed if extension is valid but we can default to mp3 if needed
+        if (!in_array($ext, $allowed))
+            $ext = 'mp3';
+
+        $targetDir = __DIR__ . '/../media/custom/';
+        if (!file_exists($targetDir))
+            mkdir($targetDir, 0755, true);
+
+        $newFileName = 'aud_' . $entryId . '_' . time() . '.' . $ext;
+        $targetPath = $targetDir . $newFileName;
+
+        if (move_uploaded_file($file['tmp_name'], $targetPath)) {
+            $finalAudioUrl = "/media/custom/" . $newFileName;
+        } else {
+            sendResponse(["error" => "Errore upload audio"], 500);
+        }
+    } else {
+        sendResponse(["error" => "Nessun audio fornito"], 400);
+    }
+
+    if ($finalAudioUrl) {
+        $pdo->prepare("UPDATE history SET audio_url = ? WHERE id = ?")->execute([$finalAudioUrl, $entryId]);
+        // Also update showcase if present? Ideally yes, but showcase links to history item via ID usually?
+        // Wait, showcase table copies URLs. We should update showcase too if it exists.
+        $pdo->prepare("UPDATE showcase SET audio_url = ? WHERE image_url = (SELECT image_url FROM history WHERE id = ?)")->execute([$finalAudioUrl, $entryId]);
+
+        sendResponse(["success" => true, "audioUrl" => $finalAudioUrl]);
     }
 }
 
@@ -699,6 +807,35 @@ if ($action === 'request_access' && $method === 'POST') {
     sendResponse(["success" => true]);
 }
 
+// --- DELETE SHOWCASE ITEM (Owner or Admin) ---
+if ($action === 'delete_showcase_item' && $method === 'POST') {
+    $id = $input['id'] ?? null;
+    if (!$id)
+        sendResponse(["error" => "No ID"], 400);
+
+    $stmt = $pdo->prepare("SELECT owner_id FROM showcase WHERE id = ?");
+    $stmt->execute([$id]);
+    $item = $stmt->fetch();
+
+    if (!$item)
+        sendResponse(["error" => "Item not found"], 404);
+
+    // Check Admin
+    $isAdmin = false;
+    if ($userId) {
+        $stmt2 = $pdo->prepare("SELECT is_admin FROM users WHERE id = ?");
+        $stmt2->execute([$userId]);
+        $isAdmin = (bool) $stmt2->fetchColumn();
+    }
+
+    if ($item['owner_id'] == $userId || $isAdmin) {
+        $pdo->prepare("DELETE FROM showcase WHERE id = ?")->execute([$id]);
+        sendResponse(["success" => true]);
+    } else {
+        sendResponse(["error" => "Unauthorized"], 403);
+    }
+}
+
 // --- ADMIN ROUTES (Protetta + Check) ---
 if ($userId) {
     $stmt = $pdo->prepare("SELECT is_admin FROM users WHERE id = ?");
@@ -877,12 +1014,7 @@ if ($userId) {
             }
             sendResponse(["success" => true]);
         }
-        if ($action === 'delete_showcase_item') {
-            // Non eliminare, ma nascondere se richiesto. Tuttavia l'admin ha chiesto di non eliminare.
-            // Lasciamo l'azione ma la disabiliteremo nel frontend.
-            $pdo->prepare("DELETE FROM showcase WHERE id = ?")->execute([$input['id']]);
-            sendResponse(["success" => true]);
-        }
+
         if ($action === 'admin_create_user') {
             $name = $input['name'];
             $email = $input['email'];

@@ -38,7 +38,8 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, us
     const { t } = useLanguage();
     const [audioUrl, setAudioUrl] = useState<string | null>(project.audioUrl || null);
     const [isGenerating, setIsGenerating] = useState(!project.audioUrl);
-    const [isQrZoomed, setIsQrZoomed] = useState(false);
+    const [zoomedQrUrl, setZoomedQrUrl] = useState<string | null>(null);
+    const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
     // EDIT MODE STATES
     const [isEditing, setIsEditing] = useState(false);
@@ -63,6 +64,9 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, us
     const qrTargetUrl = museumLink;
     const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrTargetUrl)}`;
 
+    const videoShareUrl = project.videoUrl ? getAbsoluteUrl(project.videoUrl) : null;
+    const qrVideoImgUrl = videoShareUrl ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(videoShareUrl)}` : null;
+
     useEffect(() => {
         if (!project.audioUrl && !hasVideo) {
             setIsGenerating(true);
@@ -78,18 +82,14 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, us
         }
     }, [project, hasVideo]);
 
-    const handleDelete = (e: React.MouseEvent) => {
+    const handleDeleteClick = (e: React.MouseEvent) => {
         e.stopPropagation();
-        setConfirmModal({
-            isOpen: true,
-            title: t('showcase.remove'),
-            message: t('showcase.confirm_delete'),
-            type: 'danger',
-            onConfirm: () => {
-                setConfirmModal(prev => ({ ...prev, isOpen: false }));
-                onDelete?.(project.id);
-            }
-        });
+        setIsDeleteConfirmOpen(true);
+    };
+
+    const handleConfirmDelete = () => {
+        setIsDeleteConfirmOpen(false);
+        onDelete?.(project.id);
     };
 
     const handleSave = async (e: React.MouseEvent) => {
@@ -119,8 +119,22 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, us
         navigator.clipboard.writeText(qrTargetUrl);
         setConfirmModal({
             isOpen: true,
-            title: "Link Copiato",
+            title: "Link Oper Copiato",
             message: t('showcase.link_copied'),
+            type: 'success',
+            singleButton: true,
+            onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+        });
+    };
+
+    const handleShareVideo = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!videoShareUrl) return;
+        navigator.clipboard.writeText(videoShareUrl);
+        setConfirmModal({
+            isOpen: true,
+            title: "Link Video Copiato",
+            message: "Link del video copiato negli appunti!",
             type: 'success',
             singleButton: true,
             onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
@@ -130,7 +144,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, us
     return (
         <div className={`fixed inset-0 z-[100] flex items-center justify-center bg-black/95 ${museumMode ? '' : 'backdrop-blur-md'} animate-fade-in p-4`} onClick={museumMode ? undefined : onClose}>
 
-            {isQrZoomed && <QrZoomModal url={qrImgUrl} onClose={() => setIsQrZoomed(false)} />}
+            {zoomedQrUrl && <QrZoomModal url={zoomedQrUrl} onClose={() => setZoomedQrUrl(null)} />}
 
             <div className={`bg-[#0f172a] w-full ${museumMode ? 'max-w-4xl h-[90vh]' : 'max-w-6xl h-full md:h-[85vh]'} rounded-2xl overflow-hidden shadow-2xl flex flex-col md:flex-row border border-white/10 animate-zoom-in relative`} onClick={e => e.stopPropagation()}>
 
@@ -202,18 +216,22 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, us
                     </div>
 
                     {!museumMode && (
-                        <div className="bg-white/5 p-4 rounded-xl border border-white/10 mb-6 flex items-center gap-4">
-                            <div className="w-20 h-20 bg-white p-1 rounded cursor-pointer hover:scale-105 transition-transform" onClick={() => setIsQrZoomed(true)}>
-                                <img src={qrImgUrl} alt="QR" className="w-full h-full" />
-                            </div>
-                            <div className="flex flex-col gap-2 flex-grow">
-                                <h4 className="text-xs font-bold text-white uppercase">{t('showcase.share_work')}</h4>
-                                <div className="flex gap-2">
-                                    <button onClick={() => setIsQrZoomed(true)} className="flex-1 py-1.5 bg-black/40 hover:bg-black/60 text-white text-[10px] font-bold rounded border border-white/10">{t('showcase.scan_qr')}</button>
-                                    <button onClick={handleShare} className="flex-1 py-1.5 bg-brand-accent/20 hover:bg-brand-accent/30 text-brand-accent text-[10px] font-bold rounded border border-brand-accent/20">{t('showcase.copy_link')}</button>
+                        <>
+                            <div className="bg-white/5 p-4 rounded-xl border border-white/10 mb-4 flex items-center gap-4">
+                                <div className="w-20 h-20 bg-white p-1 rounded cursor-pointer hover:scale-105 transition-transform" onClick={() => setZoomedQrUrl(qrImgUrl)}>
+                                    <img src={qrImgUrl} alt="QR" className="w-full h-full" />
+                                </div>
+                                <div className="flex flex-col gap-2 flex-grow">
+                                    <h4 className="text-xs font-bold text-white uppercase">{t('showcase.share_work')}</h4>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => setZoomedQrUrl(qrImgUrl)} className="flex-1 py-1.5 bg-black/40 hover:bg-black/60 text-white text-[10px] font-bold rounded border border-white/10">{t('showcase.scan_qr')}</button>
+                                        <button onClick={handleShare} className="flex-1 py-1.5 bg-brand-accent/20 hover:bg-brand-accent/30 text-brand-accent text-[10px] font-bold rounded border border-brand-accent/20">{t('showcase.copy_link')}</button>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+
+
+                        </>
                     )}
 
                     {/* MEDIA CENTER & ACTIONS */}
@@ -238,39 +256,30 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, us
                                         <span><i className="fas fa-cube mr-1"></i> Asset Sinestetico</span>
                                         <span className="bg-purple-500/20 text-purple-200 px-1.5 py-0.5 rounded text-[9px]">MP4 READY</span>
                                     </h4>
-                                    <div className="flex gap-2">
-                                        <a
-                                            href={project.videoUrl}
-                                            download={`${project.title.replace(/\s+/g, '_')}_synesthetic.mp4`}
-                                            className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white text-xs font-bold rounded flex flex-col items-center justify-center gap-1 border border-white/10 transition-all hover:border-purple-500/50"
-                                        >
-                                            <i className="fas fa-download text-lg mb-1 text-purple-400"></i>
-                                            <span>Scarica Video</span>
-                                        </a>
-                                        {canDelete && (
-                                            <button
-                                                onClick={() => onDelete && onDelete(project.id)}
-                                                className="flex-1 py-3 bg-red-500/5 hover:bg-red-500/10 text-red-400 text-xs font-bold rounded flex flex-col items-center justify-center gap-1 border border-red-500/10 transition-all hover:border-red-500/50"
-                                            >
-                                                <i className="fas fa-trash text-lg mb-1"></i>
-                                                <span>Elimina Opera</span>
+
+                                    {qrVideoImgUrl && (
+                                        <div className="flex gap-2 mb-3">
+                                            <button onClick={() => setZoomedQrUrl(qrVideoImgUrl)} className="flex-1 py-2 bg-black/40 hover:bg-black/60 text-white text-[10px] font-bold rounded border border-white/10 flex items-center justify-center gap-2">
+                                                <i className="fas fa-qrcode"></i> {t('showcase.scan_qr')}
                                             </button>
-                                        )}
-                                    </div>
+                                            <button onClick={handleShareVideo} className="flex-1 py-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 text-[10px] font-bold rounded border border-purple-500/20 flex items-center justify-center gap-2">
+                                                <i className="fas fa-link"></i> Copia Link
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    <a
+                                        href={project.videoUrl}
+                                        download={`${project.title.replace(/\s+/g, '_')}_synesthetic.mp4`}
+                                        className="w-full py-3 bg-white/5 hover:bg-white/10 text-white text-xs font-bold rounded flex flex-col items-center justify-center gap-1 border border-white/10 transition-all hover:border-purple-500/50"
+                                    >
+                                        <i className="fas fa-download text-lg mb-1 text-purple-400"></i>
+                                        <span>Scarica Video</span>
+                                    </a>
                                 </div>
                             )}
 
-                            {/* Solo DELETE se non c'è video ma si può cancellare */}
-                            {!hasVideo && canDelete && (
-                                <div className="mt-4 pt-4 border-t border-white/5">
-                                    <button
-                                        onClick={() => onDelete && onDelete(project.id)}
-                                        className="w-full py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-bold rounded border border-red-500/20 flex items-center justify-center gap-2"
-                                    >
-                                        <i className="fas fa-trash"></i> Elimina Opera Definitivamente
-                                    </button>
-                                </div>
-                            )}
+
                         </div>
                     )}
 
@@ -310,30 +319,26 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, us
                     )}
 
                     {isOwner && (
-                        <div className="mt-auto pt-6 border-t border-white/10 flex gap-3">
-                            {isEditing ? (
-                                <>
-                                    <button onClick={() => setIsEditing(false)} className="flex-1 py-3 px-4 bg-gray-600 hover:bg-gray-500 text-white rounded-lg text-xs font-bold transition-colors">{t('dashboard.cancel')}</button>
-                                    <button onClick={handleSave} disabled={isSaving} className="flex-1 py-3 px-4 bg-green-600 hover:bg-green-500 text-white rounded-lg text-xs font-bold transition-colors">
-                                        {isSaving ? t('showcase.saving') : t('showcase.save')}
-                                    </button>
-                                </>
-                            ) : (
-                                <>
-                                    <button onClick={(e) => { e.stopPropagation(); setIsEditing(true); }} className="flex-1 py-3 px-4 bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 border border-blue-500/30 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2">
-                                        <i className="fas fa-edit"></i> {t('showcase.edit')}
-                                    </button>
-                                    {!user?.isAdmin && (
-                                        <button onClick={handleDelete} className="flex-1 py-3 px-4 bg-red-500/10 hover:bg-red-500/40 text-red-400 border border-red-500/30 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2">
-                                            <i className="fas fa-trash"></i> {t('showcase.remove')}
-                                        </button>
-                                    )}
-                                </>
-                            )}
+                        <div className="mt-auto pt-6 border-t border-white/10">
+                            <button
+                                onClick={handleDeleteClick}
+                                className="w-full py-3 px-4 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 rounded-lg text-xs font-bold transition-all hover:shadow-lg hover:shadow-red-900/20 flex items-center justify-center gap-2"
+                            >
+                                <i className="fas fa-trash"></i> {t('showcase.remove')}
+                            </button>
                         </div>
                     )}
                 </div>
             </div>
+
+            <ConfirmationModal
+                isOpen={isDeleteConfirmOpen}
+                title={t('showcase.remove')}
+                message={t('showcase.confirm_delete')}
+                type="danger"
+                onConfirm={handleConfirmDelete}
+                onCancel={() => setIsDeleteConfirmOpen(false)}
+            />
 
             <ConfirmationModal
                 isOpen={confirmModal.isOpen}

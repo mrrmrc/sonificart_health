@@ -243,6 +243,120 @@ export const api = {
         return handleResponse(response);
     },
 
+    attachVideoToHistory: async (entryId: string, videoBlob: Blob, fileName: string = "generated_video.mp4"): Promise<string> => {
+        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        if (!token) throw new Error("Unauthorized");
+
+        const file = new File([videoBlob], fileName, { type: videoBlob.type });
+        let finalUrl = "";
+
+        // 1. CHUNKED UPLOAD STRATEGY (for files > 2MB)
+        const CHUNK_SIZE = 2 * 1024 * 1024;
+        const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+
+        if (totalChunks > 1) {
+            console.log(`Starting chunked upload for ${fileName} (${totalChunks} chunks)`);
+            const uploadId = `${Date.now()}-${fileName.replace(/[^a-zA-Z0-9.]/g, '')}`;
+
+            for (let i = 0; i < totalChunks; i++) {
+                const start = i * CHUNK_SIZE;
+                const end = Math.min(start + CHUNK_SIZE, file.size);
+                const chunk = file.slice(start, end);
+
+                const formData = new FormData();
+                formData.append('fileChunk', chunk, fileName);
+                formData.append('uploadId', uploadId);
+                formData.append('chunkIndex', String(i));
+                formData.append('totalChunks', String(totalChunks));
+                formData.append('originalFilename', fileName);
+                if (token) formData.append('auth_token', token);
+
+                // Manual fetch to upload_chunk endpoint
+                const response = await fetch(`${API_BASE_URL}/index.php?action=upload_chunk`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await handleResponse(response);
+                if (data.success && data.url) {
+                    finalUrl = data.url; // Last chunk returns URL
+                }
+            }
+        }
+
+        // 2. ATTACH TO HISTORY
+        const formData = new FormData();
+        formData.append('auth_token', token);
+        formData.append('entryId', entryId);
+
+        if (finalUrl) {
+            formData.append('videoUrl', finalUrl); // Pass the URL we just got
+        } else {
+            // If small enough, or chunking failed/skipped, send file directly
+            formData.append('videoFile', file);
+        }
+
+        const response = await fetch(`${API_BASE_URL}/index.php?action=attach_video_to_history`, {
+            method: 'POST',
+            body: formData
+        });
+        const data = await handleResponse(response);
+        return data.videoUrl;
+    },
+
+    // --- ATTACH AUDIO TO HISTORY (NEW) ---
+    attachAudioToHistory: async (entryId: string, audioBlob: Blob, fileName: string = "uploaded_audio.mp3"): Promise<string> => {
+        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        if (!token) throw new Error("Unauthorized");
+
+        const file = new File([audioBlob], fileName, { type: audioBlob.type });
+        let finalUrl = "";
+
+        // 1. Chunked Upload for Large Audio
+        const CHUNK_SIZE = 2 * 1024 * 1024;
+        const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+
+        if (totalChunks > 1) {
+            const uploadId = `aud-${Date.now()}-${fileName.replace(/[^a-zA-Z0-9.]/g, '')}`;
+            for (let i = 0; i < totalChunks; i++) {
+                const start = i * CHUNK_SIZE;
+                const end = Math.min(start + CHUNK_SIZE, file.size);
+                const chunk = file.slice(start, end);
+
+                const formData = new FormData();
+                formData.append('fileChunk', chunk, fileName);
+                formData.append('uploadId', uploadId);
+                formData.append('chunkIndex', String(i));
+                formData.append('totalChunks', String(totalChunks));
+                formData.append('originalFilename', fileName);
+                if (token) formData.append('auth_token', token);
+
+                const response = await fetch(`${API_BASE_URL}/index.php?action=upload_chunk`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await handleResponse(response);
+                if (data.success && data.url) finalUrl = data.url;
+            }
+        }
+
+        // 2. Attach
+        const formData = new FormData();
+        formData.append('auth_token', token);
+        formData.append('entryId', entryId);
+        if (finalUrl) {
+            formData.append('audioUrl', finalUrl);
+        } else {
+            formData.append('audioFile', file);
+        }
+
+        const response = await fetch(`${API_BASE_URL}/index.php?action=attach_audio_to_history`, {
+            method: 'POST',
+            body: formData
+        });
+        const data = await handleResponse(response);
+        return data.audioUrl;
+    },
+
     publishFromHistory: async (entryId: string, metadata: any, customMedia: { url: string, type: string } | null) => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
         const body = {
@@ -342,11 +456,12 @@ export const api = {
         params.append('id', id);
         if (token) params.append('auth_token', token);
 
-        await fetch(`${API_BASE_URL}/index.php?action=delete_showcase_item`, {
+        const response = await fetch(`${API_BASE_URL}/index.php?action=delete_showcase_item`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: params
         });
+        await handleResponse(response);
     },
 
     getAccessRequests: async (): Promise<any[]> => {
