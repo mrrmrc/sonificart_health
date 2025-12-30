@@ -854,7 +854,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
                 {/* --- SEZIONE CONCEPT & AI RIGENERATA CON MULTI-TAB --- */}
-                {isArtisticMode && correctedResult.musicGenerationPrompt && (
+                {correctedResult.paradigm?.toLowerCase().trim() !== 'scientific' && correctedResult.musicGenerationPrompt && (
                     <InfoCard title={t('results.concept_title') || "Concept & Interpretazione AI"} icon="fa-wand-magic-sparkles" className="lg:col-span-3 relative overflow-hidden">
                         <div className='grid grid-cols-1 md:grid-cols-12 gap-8'>
                             {/* COLONNA SINISTRA: CONCEPT E RAGIONAMENTO */}
