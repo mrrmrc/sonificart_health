@@ -50,6 +50,8 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, us
     const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean, title: string, message: string, onConfirm: () => void, type: 'info' | 'warning' | 'danger' | 'success', singleButton?: boolean }>({ isOpen: false, title: '', message: '', onConfirm: () => { }, type: 'info' });
 
     const audioRef = useRef<HTMLAudioElement>(null);
+    const videoRef = useRef<HTMLVideoElement>(null);
+
     const hasVideo = !!project.videoUrl;
     const isOwner = user && (user.isAdmin || user.id === project.ownerId);
     const canDelete = !!onDelete && isOwner;
@@ -156,12 +158,68 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, us
                 )}
 
                 {/* MEDIA AREA */}
-                <div className={`${museumMode ? 'w-full md:w-3/5' : 'w-full md:w-2/3'} bg-black relative flex items-center justify-center h-64 sm:h-80 md:h-auto shrink-0`}>
-                    {hasVideo ? (
-                        <video src={fixImage(project.videoUrl)} controls autoPlay className="w-full h-full object-contain" />
-                    ) : (
-                        <img src={fixImage(project.imageUrl)} alt={project.title} className="w-full h-full object-contain" />
-                    )}
+                <div className={`${museumMode ? 'w-full md:w-3/5' : 'w-full md:w-2/3'} bg-black relative flex flex-col`}>
+                    {/* Video/Image Container */}
+                    <div className="relative flex items-center justify-center h-64 sm:h-80 md:flex-grow">
+                        {hasVideo ? (
+                            <video
+                                ref={videoRef}
+                                src={fixImage(project.videoUrl)}
+                                className="w-full h-full object-contain"
+                                loop
+                                playsInline
+                                muted
+                                onEnded={() => {
+                                    // Se l'audio sta ancora suonando, riavvia il video
+                                    if (audioRef.current && !audioRef.current.paused) {
+                                        videoRef.current?.play();
+                                    }
+                                }}
+                            />
+                        ) : (
+                            <img src={fixImage(project.imageUrl)} alt={project.title} className="w-full h-full object-contain" />
+                        )}
+                    </div>
+
+                    {/* Audio Player sempre sotto l'immagine/video */}
+                    <div className="bg-black/80 backdrop-blur-sm p-4 border-t border-white/10">
+                        {audioUrl ? (
+                            <AudioPlayer
+                                audioRef={audioRef}
+                                audioUrl={audioUrl}
+                                onPlay={() => {
+                                    if (hasVideo && videoRef.current) {
+                                        videoRef.current.currentTime = audioRef.current?.currentTime || 0;
+                                        videoRef.current.play();
+                                    }
+                                }}
+                                onPause={() => {
+                                    if (hasVideo && videoRef.current) {
+                                        videoRef.current.pause();
+                                    }
+                                }}
+                                onTimeUpdate={(time) => {
+                                    if (hasVideo && videoRef.current && audioRef.current) {
+                                        // Sincronizza video con audio
+                                        const videoDuration = videoRef.current.duration;
+                                        const audioDuration = audioRef.current.duration;
+
+                                        if (videoDuration && audioDuration) {
+                                            // Se il video è più corto, usa il modulo per farlo loopare
+                                            const videoTime = time % videoDuration;
+
+                                            // Sincronizza solo se la differenza è significativa
+                                            if (Math.abs(videoRef.current.currentTime - videoTime) > 0.3) {
+                                                videoRef.current.currentTime = videoTime;
+                                            }
+                                        }
+                                    }
+                                }}
+                            />
+                        ) : (
+                            <div className="h-12 bg-white/5 rounded animate-pulse"></div>
+                        )}
+                    </div>
                 </div>
 
                 {/* INFO AREA */}
@@ -238,16 +296,6 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, us
                     {!museumMode && (
                         <div className="mt-auto pt-6 border-t border-white/10">
                             <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Media Center</h3>
-
-                            {/* AUDIO PLAYER (Sempre visibile se c'è audio e non è video full) */}
-                            {(!hasVideo || museumMode) && (
-                                <div className="bg-black/20 p-3 rounded-lg border border-white/5 mb-4">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="text-[10px] text-gray-400 font-bold uppercase"><i className="fas fa-waveform mr-1"></i> Traccia Audio</span>
-                                    </div>
-                                    {audioUrl ? <AudioPlayer audioRef={audioRef} audioUrl={audioUrl} /> : <div className="h-8 bg-white/5 rounded animate-pulse"></div>}
-                                </div>
-                            )}
 
                             {/* VIDEO ACTIONS */}
                             {hasVideo && (
