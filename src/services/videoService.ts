@@ -224,6 +224,10 @@ export async function generateSonificationVideo(
             const blocks = result.blockAnalysisResult.blocks;
             const gridSize = result.blockAnalysisResult.gridSize;
 
+            // OPTIMIZATION: Pre-calculate filtered events to avoid doing it every frame (60fps)
+            const videoEvents = result.audioOutput.events.filter(e => !e.isAccompaniment);
+            const originalDuration = result.audioOutput.duration || 30; // Fallback
+
             const draw = () => {
                 try {
                     if (!audioCtx) return;
@@ -232,7 +236,8 @@ export async function generateSonificationVideo(
                     const progress = Math.min(1, Math.max(0, elapsed / duration));
                     onProgress(progress * 100);
 
-                    if (elapsed >= (duration - 0.05)) { // Small buffer to ensure we don't overshoot
+                    if (elapsed >= duration) {
+                        // Stop exactly at duration (or slightly after to prevent audio cut)
                         if (recorder && recorder.state === 'recording') {
                             recorder.stop();
                             if (source) {
@@ -254,7 +259,8 @@ export async function generateSonificationVideo(
                     const usefulBins = Math.floor(bufferLength * 0.7);
                     const midPoint = Math.floor(usefulBins * 0.5);
 
-                    for (let i = 0; i < usefulBins; i++) {
+                    // Reduced loops for analysis if possible, but 70% of bins is okay.
+                    for (let i = 0; i < usefulBins; i += 2) { // OPTIMIZATION: Skip every other bin for speed (negligible visual difference)
                         const val = dataArray[i];
                         sum += val;
                         weightedSum += i * val;
@@ -262,14 +268,18 @@ export async function generateSonificationVideo(
                         if (i > midPoint) highSum += val;
                     }
 
+                    // Adjust sums because we skipped bins
+                    sum *= 2;
+                    weightedSum *= 2; // Rough approx
+
                     const avgVol = sum / usefulBins;
                     const normalizedVol = avgVol / 255;
-                    const normalizedBass = (bassSum / 20) / 255;
+                    const normalizedBass = (bassSum / 10) / 255; // Adjusted for loop skip
 
                     // SPACE COORDINATION: Centroid maps frequency to horizontal position (0 to 1)
                     const centroid = sum > 0 ? (weightedSum / sum) / usefulBins : 0.5;
-                    const targetX_norm = centroid; // Low freq = Left, High freq = Right
-                    const targetL = (highSum / (usefulBins - midPoint)) / 255 * 100;
+                    const targetX_norm = centroid;
+                    const targetL = (highSum / (usefulBins - midPoint)) / 255 * 100 * 2; // Adjusted
 
                     // --- 2. RENDERING ---
                     const camX = Math.sin(now * 0.3) * 25;
@@ -309,31 +319,33 @@ export async function generateSonificationVideo(
                     const effH = imgH * zoomDrift;
 
                     if (isSyncMode) {
-                        const chaos = timeDataArray[10] + timeDataArray[100];
-                        const seedIndex = Math.floor((timeDataArray[0] + chaos + elapsed * 50) % blocks.length);
+                        // SYNC MODE: Normalize current time to original sonification timeline
+                        // This ensures the cursor follows the original scan pattern
+                        // but stretched/compressed to fit the new audio duration.
+                        const normalizedTime = (elapsed / duration) * originalDuration;
 
-                        let bestBlock = blocks[seedIndex];
-                        let minScore = 99999;
+                        // Find event using pre-calculated array
+                        // Optimization: Use binary search or assume events are sorted? They are usually sorted.
+                        // For now, simpler optimization: Since time moves forward, we could cache the last index?
+                        // But finding in a few hundred/thousand items is okay if not creating new arrays.
+                        const active = videoEvents.find(e => e.time <= normalizedTime && (e.time + e.duration) > normalizedTime);
 
-                        // Select block that matches both Brightness and Frequency position
-                        for (let i = 0; i < 30; i++) {
-                            const idx = (seedIndex + i * 17) % blocks.length;
-                            const b = blocks[idx];
-                            if (!b || b.isFiller) continue;
-                            const bX_norm = b.position.x / gridSize;
-                            const score = Math.abs(b.lab.l - targetL) + Math.abs(bX_norm - targetX_norm) * 80;
-                            if (score < minScore) { minScore = score; bestBlock = b; }
-                        }
-
-                        if (bestBlock) {
-                            const nX = (bestBlock.position.x / gridSize) - 0.5;
-                            const nY = (bestBlock.position.y / gridSize) - 0.5;
+                        if (active && active.sourceBlock) {
+                            const nX = (active.sourceBlock.position.x / gridSize) - 0.5;
+                            const nY = (active.sourceBlock.position.y / gridSize) - 0.5;
                             targetX = centerX + (nX * effW);
                             targetY = centerY + (nY * effH);
+                        } else if (videoEvents.length > 0) {
+                            // Interpolate for fluidity
+                            const lastEvent = videoEvents[videoEvents.length - 1];
+                            if (normalizedTime >= lastEvent.time) {
+                                const b = lastEvent.sourceBlock;
+                                targetX = centerX + ((b.position.x / gridSize - 0.5) * effW);
+                                targetY = centerY + ((b.position.y / gridSize - 0.5) * effH);
+                            }
                         }
                     } else {
-                        const events = result.audioOutput.events.filter(e => !e.isAccompaniment);
-                        const active = events.find(e => e.time <= elapsed && (e.time + e.duration) > elapsed);
+                        const active = videoEvents.find(e => e.time <= elapsed && (e.time + e.duration) > elapsed);
                         if (active && active.sourceBlock) {
                             const nX = (active.sourceBlock.position.x / gridSize) - 0.5;
                             const nY = (active.sourceBlock.position.y / gridSize) - 0.5;
@@ -345,9 +357,10 @@ export async function generateSonificationVideo(
                     cursorX += (targetX - cursorX) * 0.15;
                     cursorY += (targetY - cursorY) * 0.15;
 
-                    // Particles (Sprite Based)
-                    if (normalizedVol > 0.05) {
-                        for (let i = 0; i < (Math.floor(normalizedVol * 4) + 1); i++) {
+                    // Particles (Optimized)
+                    if (normalizedVol > 0.05 && particles.length < 50) { // Limit max particles
+                        const count = Math.min(2, Math.floor(normalizedVol * 3)); // Reduce spawn rate
+                        for (let i = 0; i < count; i++) {
                             particles.push({
                                 x: cursorX, y: cursorY,
                                 vx: (Math.random() - 0.5) * (2 + normalizedBass * 8),
@@ -361,7 +374,7 @@ export async function generateSonificationVideo(
                     particles.forEach(p => {
                         p.x += p.vx; p.y += p.vy;
                         p.vx *= 0.98; p.vy *= 0.98;
-                        p.life -= 0.015;
+                        p.life -= 0.02; // Faster fade to cleanup quicker
                         if (p.life > 0) {
                             ctx.globalAlpha = p.life * 0.7;
                             const s = p.size * (0.5 + p.life * 0.5);
@@ -401,7 +414,7 @@ export async function generateSonificationVideo(
                     ctx.fillRect(0, footerY, width, 180);
 
                     // Re-calculate some audio values for the bars
-                    const lowFreq = bassSum / 20 / 255;
+                    const lowFreq = bassSum / 10 / 255; // Adjusted
                     const midFreq = (sum / usefulBins) / 255;
                     const highFreq = (highSum / (usefulBins - midPoint)) / 255;
 
@@ -409,8 +422,16 @@ export async function generateSonificationVideo(
                     let currentR = 255, currentG = 255, currentB = 255;
                     // Find out what block we are currently analyzing to get the RGB
                     if (!isSyncMode) {
-                        const events = result.audioOutput.events.filter(e => !e.isAccompaniment);
-                        const active = events.find(e => e.time <= elapsed && (e.time + e.duration) > elapsed);
+                        const active = videoEvents.find(e => e.time <= elapsed && (e.time + e.duration) > elapsed);
+                        if (active && active.sourceBlock) {
+                            currentR = active.sourceBlock.r;
+                            currentG = active.sourceBlock.g;
+                            currentB = active.sourceBlock.b;
+                        }
+                    } else {
+                        // Sync Mode RGB logic
+                        const normalizedTime = (elapsed / duration) * originalDuration;
+                        const active = videoEvents.find(e => e.time <= normalizedTime && (e.time + e.duration) > normalizedTime);
                         if (active && active.sourceBlock) {
                             currentR = active.sourceBlock.r;
                             currentG = active.sourceBlock.g;
