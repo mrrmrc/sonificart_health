@@ -44,6 +44,13 @@ try {
     $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_expires_at DATETIME DEFAULT NULL");
     $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS tier VARCHAR(20) DEFAULT 'free'");
     $pdo->exec("ALTER TABLE history ADD COLUMN IF NOT EXISTS video_url VARCHAR(255) DEFAULT NULL");
+    try {
+        // Force add title if not exists (handling older mysql versions gracefully if possible)
+        $pdo->exec("ALTER TABLE history ADD COLUMN IF NOT EXISTS title VARCHAR(255) DEFAULT NULL");
+    } catch (Exception $e) {
+        // Fallback for very old MySql where IF NOT EXISTS might fail in specific syntax? 
+        // Or column already exists.
+    }
 } catch (Exception $e) {
     // Ignore if column already exists or other minor issues
 }
@@ -119,6 +126,32 @@ function saveBase64File($base64Data, $type, $hash)
         mkdir($serverPath, 0755, true);
 
     if (file_put_contents($serverPath . $fileName, $data)) {
+        $webFolder = ($type === 'image') ? '/media/images/' : '/media/audio/';
+        if (strpos($hash, 'pub_') === 0)
+            $webFolder = '/media/custom/';
+        return $webFolder . $fileName;
+    }
+    return null;
+}
+
+// Helper per uploadFile (usato in save_sonification refactored)
+function uploadFile($file, $type, $hash)
+{
+    if (!$file || $file['error'] !== UPLOAD_ERR_OK)
+        return null;
+
+    $ext = ($type === 'image') ? 'jpg' : 'wav';
+    $folder = ($type === 'image') ? '../media/images/' : '../media/audio/';
+    if (strpos($hash, 'pub_') === 0)
+        $folder = '../media/custom/';
+
+    $fileName = $hash . '.' . $ext;
+    $serverPath = __DIR__ . '/' . $folder;
+
+    if (!file_exists($serverPath))
+        mkdir($serverPath, 0755, true);
+
+    if (move_uploaded_file($file['tmp_name'], $serverPath . $fileName)) {
         $webFolder = ($type === 'image') ? '/media/images/' : '/media/audio/';
         if (strpos($hash, 'pub_') === 0)
             $webFolder = '/media/custom/';
@@ -235,35 +268,46 @@ if (!$userId && !in_array($action, $publicActions)) {
 // --- SAVE SONIFICATION (Protetta) ---
 if ($action === 'save_sonification' && $method === 'POST') {
     try {
-        $hash = $input['imageHash'] ?? 'hash_' . time();
+        // Explicitly check Request/Post for title to ensure it's captured
+        $rawTitle = $_POST['title'] ?? $_REQUEST['title'] ?? $input['title'] ?? null;
 
-        $musicPrompt = (!empty($input['musicGenerationPrompt']) && $input['musicGenerationPrompt'] !== 'null') ? $input['musicGenerationPrompt'] : null;
-        if (is_array($musicPrompt))
-            $musicPrompt = json_encode($musicPrompt);
+        $finalTitle = $rawTitle;
+        if (!$finalTitle || $finalTitle === 'undefined' || $finalTitle === 'null') {
+            // Fallback if client sent "undefined" string or nothing
+            $finalTitle = "Opera Senza Titolo " . date('d/m/Y H:i');
+        }
 
-        $generatedAiTrackUrl = ($input['generatedAiTrackUrl'] !== 'null') ? ($input['generatedAiTrackUrl'] ?? null) : null;
+        // --- RESTORE MISSING VARIABLES ---
+        $hash = $_POST['imageHash'] ?? $input['imageHash'] ?? null;
+        if (!$hash)
+            throw new Exception("Image Hash is missing.");
 
-        $configJson = (!empty($input['configUsed']) && $input['configUsed'] !== 'null') ? $input['configUsed'] : null;
-        if (is_array($configJson))
-            $configJson = json_encode($configJson);
+        // Handle File Uploads
+        $imgUrl = null;
+        if (isset($_FILES['imageFile']) && $_FILES['imageFile']['error'] === UPLOAD_ERR_OK) {
+            $imgUrl = uploadFile($_FILES['imageFile'], 'image', $hash);
+        } else {
+            // Fallback to URL if provided in input (e.g. duplicate/restore)
+            $imgUrl = $input['imageUrl'] ?? null;
+        }
 
-        $eventData = (!empty($input['events']) && $input['events'] !== 'null') ? $input['events'] : null;
-        if (is_array($eventData))
-            $eventData = json_encode($eventData);
+        $audioUrl = null;
+        if (isset($_FILES['audioFile']) && $_FILES['audioFile']['error'] === UPLOAD_ERR_OK) {
+            $audioUrl = uploadFile($_FILES['audioFile'], 'audio', $hash);
+        } else {
+            // Fallback to URL if not uploading new audio
+            $audioUrl = $input['audioUrl'] ?? null;
+        }
 
-        $blockData = (!empty($input['blockData']) && $input['blockData'] !== 'null') ? $input['blockData'] : null;
-        if (is_array($blockData))
-            $blockData = json_encode($blockData);
+        $musicPrompt = $_POST['musicGenerationPrompt'] ?? $input['musicGenerationPrompt'] ?? null;
+        $configJson = $_POST['configUsed'] ?? $input['configUsed'] ?? null;
+        $blockData = $_POST['blockData'] ?? $input['blockData'] ?? null;
+        $eventData = $_POST['events'] ?? $input['events'] ?? null;
 
-        // Save Files
-        $imgUrl = isset($_FILES['imageFile']) ? saveUploadedFile('imageFile', 'image', $hash) : saveBase64File($input['imageUrl'] ?? '', 'image', $hash);
-        $audioUrl = isset($_FILES['audioFile']) ? saveUploadedFile('audioFile', 'audio', $hash) : saveBase64File($input['audioData'] ?? '', 'audio', $hash);
+        $generatedAiTrackUrl = $_POST['generatedAiTrackUrl'] ?? $input['generatedAiTrackUrl'] ?? null;
 
-        if (!$imgUrl)
-            $imgUrl = "placeholder.png";
-
-        $stmt = $pdo->prepare("INSERT INTO history (user_id, image_hash, paradigm, tradition_name, image_url, audio_url, music_generation_prompt, generated_ai_track_url, config_json, event_data, block_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$userId, $hash, $input['paradigm'] ?? 'scientific', $input['traditionName'] ?? 'Standard', $imgUrl, $audioUrl, $musicPrompt, $generatedAiTrackUrl, $configJson, $eventData, $blockData]);
+        $stmt = $pdo->prepare("INSERT INTO history (user_id, image_hash, paradigm, tradition_name, image_url, audio_url, music_generation_prompt, generated_ai_track_url, config_json, event_data, block_data, title) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$userId, $hash, $input['paradigm'] ?? 'scientific', $input['traditionName'] ?? 'Standard', $imgUrl, $audioUrl, $musicPrompt, $generatedAiTrackUrl, $configJson, $eventData, $blockData, $finalTitle]);
 
         sendResponse(["success" => true]);
     } catch (Exception $e) {
@@ -305,6 +349,7 @@ if ($action === 'get_history' && $method === 'POST') {
             "audioUrl" => $h['audio_url'] ? ((strpos($h['audio_url'], '/media') !== false) ? $baseUrl . $h['audio_url'] : $h['audio_url']) : null,
             "paradigm" => $h['paradigm'],
             "traditionName" => $h['tradition_name'],
+            "title" => $h['title'] ?? null,
             "musicGenerationPrompt" => isset($h['music_generation_prompt']) ? json_decode($h['music_generation_prompt'], true) : null,
             "generatedAiTrackUrl" => $h['generated_ai_track_url'] ? ((strpos($h['generated_ai_track_url'], 'http') === 0) ? $h['generated_ai_track_url'] : $baseUrl . (strpos($h['generated_ai_track_url'], '/') === 0 ? '' : '/') . $h['generated_ai_track_url']) : null,
             "configUsed" => isset($h['config_json']) ? json_decode($h['config_json'], true) : null,
@@ -522,9 +567,10 @@ if ($action === 'publish_history' && $method === 'POST') {
             // Se c'è un customMediaUrl (video o audio), quello diventa la sorgente audio primaria per la vetrina
             $finalAudio = $customMediaUrl ?: ($e['generated_ai_track_url'] ?: ($e['audio_url'] ?: null));
             $finalVideo = ($customMediaType === 'video') ? $customMediaUrl : ($e['video_url'] ?? null);
+            $finalTitle = $metadata['title'] ?? ($e['title'] ?? 'Senza Titolo');
 
             $stmt = $pdo->prepare("INSERT INTO showcase (title, author_name, description, image_url, audio_url, video_url, paradigm, tradition, tags, duration, notes_count, created_at, owner_id, is_public, priority, history_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '3m', 1024, NOW(), ?, 1, ?, ?)");
-            $stmt->execute([$metadata['title'] ?? 'Senza Titolo', $author, $metadata['description'] ?? '', $e['image_url'], $finalAudio, $finalVideo, $e['paradigm'], $e['tradition_name'], $tags, $userId, $priority, $e['id']]);
+            $stmt->execute([$finalTitle, $author, $metadata['description'] ?? '', $e['image_url'], $finalAudio, $finalVideo, $e['paradigm'], $e['tradition_name'], $tags, $userId, $priority, $e['id']]);
             $newId = $pdo->lastInsertId();
 
             // Sincronizziamo il videoUrl anche nella tabella history per visione futura

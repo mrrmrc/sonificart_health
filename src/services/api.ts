@@ -156,7 +156,9 @@ export const api = {
         formData.append('auth_token', token);
         formData.append('imageHash', result.imageHash);
         formData.append('paradigm', paradigm);
-        formData.append('traditionName', title || result.culturalSelectionResult.tradition.name);
+        const validTitle = (title && title.trim().length > 0) ? title : `Opera del ${new Date().toLocaleDateString()}`;
+        formData.append('title', validTitle);
+        formData.append('traditionName', result.culturalSelectionResult.tradition.name);
 
         // JSON Fields
         formData.append('musicGenerationPrompt', JSON.stringify(result.musicGenerationPrompt));

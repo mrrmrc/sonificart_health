@@ -2,7 +2,8 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import {
     SonificationResult, BlockAnalysisResult, CulturalSelectionResult,
-    TransformedNoteEvent, ConfigSettings, SacVerificationResult, ScanPatternData, Paradigm
+    TransformedNoteEvent, ConfigSettings, SacVerificationResult, ScanPatternData, Paradigm,
+    AcquisitionMetadata
 } from '../types';
 import { calculateSHA256, bufferToHex } from '../utils/cryptoUtils';
 
@@ -20,6 +21,8 @@ interface SacInputData {
     midiBlob: Blob;
     scanPattern: ScanPatternData;
     videoBlob?: Blob;
+    acquisitionMetadata?: AcquisitionMetadata;
+    title?: string | null;
 }
 
 async function canvasToBlob(canvas: OffscreenCanvas | HTMLCanvasElement, type: string, quality?: number): Promise<Blob> {
@@ -78,7 +81,9 @@ export async function createSacContainer(data: SacInputData) {
             deterministic: true,
             config_used: data.config,
             scan_pattern: data.scanPattern,
-            has_video: !!data.videoBlob
+            has_video: !!data.videoBlob,
+            acquisition_metadata: data.acquisitionMetadata,
+            title: data.title || null
         },
         musical_parameters: {
             tradition: {
@@ -191,6 +196,7 @@ export async function parseSacContainer(file: File): Promise<SonificationResult>
     const blockAnalysisResult = await readJson<BlockAnalysisResult>("block_analysis.json");
     const culturalSelectionResult = await readJson<CulturalSelectionResult>("cultural_selection.json");
     const sonData = await readJson<{ metadata: any, events: (Omit<TransformedNoteEvent, 'sourceBlock'> & { sourceBlockIndex: number })[] }>("sonification_data.json");
+    const acquisitionMetadata: AcquisitionMetadata | undefined = sonData.metadata.acquisition_metadata;
     const validation = (await readJson<{ validation: any }>("validation_report.json")).validation;
 
     const audioWavBlob = await readBlob("generated_audio.wav");
@@ -229,7 +235,9 @@ export async function parseSacContainer(file: File): Promise<SonificationResult>
         standardizedImageUrl: imageUrl,
 
         // FIX: Paradigm (default a scientific se manca nel SAC v1.0)
-        paradigm: 'scientific' as Paradigm,
+        paradigm: (sonData.metadata.paradigm || 'scientific') as Paradigm,
+        acquisitionMetadata,
+        title: sonData.metadata.title || null,
 
         blockAnalysisResult,
         culturalSelectionResult,

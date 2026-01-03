@@ -199,8 +199,8 @@ export async function generateSonificationVideo(
 
             // --- LAYOUT CONFIGURATION ---
             // Naximize Space usage as per user request
-            const footerHeight = 220;
-            const margin = 40; // Small margin for a sleek border-less look
+            const footerHeight = 180; // Reduced to give more space
+            const margin = 20; // Minimal margins
 
             // Image Dimensions
             const naturalW = img.naturalWidth || 512;
@@ -208,7 +208,7 @@ export async function generateSonificationVideo(
 
             // Calculate scale to fill width or height (Contain but MAXIMIZED)
             const scaleX = (width - margin * 2) / naturalW;
-            const scaleY = (height - margin * 2) / naturalH;
+            const scaleY = (height - footerHeight - margin) / naturalH;
             const baseScale = Math.min(scaleX, scaleY);
 
             const imgW = naturalW * baseScale;
@@ -232,10 +232,12 @@ export async function generateSonificationVideo(
                     const progress = Math.min(1, Math.max(0, elapsed / duration));
                     onProgress(progress * 100);
 
-                    if (elapsed >= duration) {
+                    if (elapsed >= (duration - 0.05)) { // Small buffer to ensure we don't overshoot
                         if (recorder && recorder.state === 'recording') {
                             recorder.stop();
-                            if (source) source.stop();
+                            if (source) {
+                                try { source.stop(); } catch (e) { }
+                            }
                         }
                         if (animationFrameId) cancelAnimationFrame(animationFrameId);
                         return;
@@ -390,43 +392,83 @@ export async function generateSonificationVideo(
                     const title = metadata?.title || "SINFONIA VISIVA";
                     const author = metadata?.author || "SonificA.R.T.";
 
-                    const grd = ctx.createLinearGradient(0, height - 220, 0, height);
+                    const footerY = height - 180;
+                    const grd = ctx.createLinearGradient(0, footerY, 0, height);
                     grd.addColorStop(0, 'rgba(0,0,0,0)');
-                    grd.addColorStop(0.5, 'rgba(0,0,0,0.6)');
-                    grd.addColorStop(1, 'rgba(0,0,0,0.9)');
+                    grd.addColorStop(0.4, 'rgba(0,0,0,0.8)');
+                    grd.addColorStop(1, 'rgba(0,0,0,0.95)');
                     ctx.fillStyle = grd;
-                    ctx.fillRect(0, height - 220, width, 220);
+                    ctx.fillRect(0, footerY, width, 180);
 
-                    // Waveform
-                    const startX = 60, endX = width - 260, waveW = endX - startX, waveY = height - 100;
-                    ctx.fillStyle = 'rgba(255,255,255,0.1)';
-                    ctx.fillRect(startX, height - 190, waveW, 2);
-                    ctx.fillStyle = '#fff';
-                    ctx.fillRect(startX, height - 190, waveW * progress, 2);
+                    // Re-calculate some audio values for the bars
+                    const lowFreq = bassSum / 20 / 255;
+                    const midFreq = (sum / usefulBins) / 255;
+                    const highFreq = (highSum / (usefulBins - midPoint)) / 255;
 
-                    ctx.font = '300 36px "Inter", sans-serif';
+                    // RGB Values from current analysis (to tint the bars)
+                    let currentR = 255, currentG = 255, currentB = 255;
+                    // Find out what block we are currently analyzing to get the RGB
+                    if (!isSyncMode) {
+                        const events = result.audioOutput.events.filter(e => !e.isAccompaniment);
+                        const active = events.find(e => e.time <= elapsed && (e.time + e.duration) > elapsed);
+                        if (active && active.sourceBlock) {
+                            currentR = active.sourceBlock.r;
+                            currentG = active.sourceBlock.g;
+                            currentB = active.sourceBlock.b;
+                        }
+                    }
+
+                    // --- DRAW RGB LED BARS ---
+                    const barWidth = 12;
+                    const barGap = 40;
+                    const barsStartX = width - 450;
+                    const barsY = height - 60;
+                    const maxBarH = 100;
+
+                    const drawLEDBar = (x: number, val: number, r: number, g: number, b: number, label: string) => {
+                        const h = val * maxBarH;
+                        // Glow shadow
+                        ctx.shadowBlur = 15 + val * 20;
+                        ctx.shadowColor = `rgba(${r},${g},${b},0.8)`;
+
+                        // LED segments look
+                        const segments = 10;
+                        const segH = maxBarH / segments;
+                        for (let i = 0; i < segments; i++) {
+                            const segY = barsY - (i + 1) * segH;
+                            const isActive = (i / segments) < val;
+                            ctx.fillStyle = isActive ? `rgba(${r},${g},${b},1)` : `rgba(${r},${g},${b},0.15)`;
+                            ctx.fillRect(x, segY + 1, barWidth, segH - 2);
+                        }
+
+                        ctx.shadowBlur = 0;
+                        ctx.font = 'bold 10px "Inter", sans-serif';
+                        ctx.fillStyle = `rgba(${r},${g},${b},0.6)`;
+                        ctx.fillText(label, x - 5, barsY + 15);
+                    };
+
+                    drawLEDBar(barsStartX, lowFreq, currentR, 50, 50, 'LOW');
+                    drawLEDBar(barsStartX + barGap, midFreq, 50, currentG, 50, 'MID');
+                    drawLEDBar(barsStartX + barGap * 2, highFreq, 50, 50, currentB, 'HIGH');
+
+                    // Title & Author (Left aligned)
+                    ctx.font = '600 42px "Outfit", sans-serif';
                     ctx.fillStyle = '#fff';
-                    ctx.fillText(title.toUpperCase(), 60, height - 90);
-                    ctx.font = '100 22px "Inter", sans-serif';
-                    ctx.fillStyle = '#aaa';
+                    ctx.fillText(title.toUpperCase(), 60, height - 95);
+                    ctx.font = '300 24px "Inter", sans-serif';
+                    ctx.fillStyle = 'rgba(255,255,255,0.5)';
                     ctx.fillText(author, 60, height - 55);
 
-                    const waveGrd = ctx.createLinearGradient(startX, 0, endX, 0);
-                    waveGrd.addColorStop(0, '#ff3366'); waveGrd.addColorStop(0.5, '#ffcc00'); waveGrd.addColorStop(1, '#00ccff');
-                    ctx.strokeStyle = waveGrd;
-                    ctx.lineWidth = 3;
-                    ctx.beginPath();
-                    const sX = waveW / usefulBins;
-                    ctx.moveTo(startX, waveY);
-                    for (let i = 0; i < usefulBins; i += 3) {
-                        const v = dataArray[i];
-                        ctx.lineTo(startX + (i * sX), waveY - (v / 255 * 100));
-                    }
-                    ctx.lineTo(endX, waveY);
-                    ctx.stroke();
+                    // Progress Bar (Slimmer)
+                    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+                    ctx.fillRect(60, height - 145, width - 360, 3);
+                    ctx.fillStyle = '#fff';
+                    ctx.shadowBlur = 10; ctx.shadowColor = '#fff';
+                    ctx.fillRect(60, height - 145, (width - 360) * progress, 3);
+                    ctx.shadowBlur = 0;
 
                     // Logo
-                    ctx.drawImage(logoImg, width - 200, height - 160, 110, 110);
+                    ctx.drawImage(logoImg, width - 180, height - 150, 90, 90);
 
                     ctx.restore();
                     animationFrameId = requestAnimationFrame(draw);

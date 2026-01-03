@@ -9,6 +9,7 @@ import { LandingPageWrapper } from "./pages/LandingPageWrapper";
 import { ProfilePage } from "./pages/ProfilePage";
 import { MuseumPage } from "./pages/MuseumPage";
 import { ErrorPage } from "./components/ErrorPage";
+import { ComparePage } from "./pages/ComparePage";
 
 export const router = createBrowserRouter([
     {
@@ -20,6 +21,7 @@ export const router = createBrowserRouter([
             { path: "sonification", element: <SonificationPage /> },
             { path: "showcase", element: <ShowcasePage /> },
             { path: "verification", element: <VerificationPage /> },
+            { path: "compare", element: <ComparePage /> },
             { path: "dashboard", element: <DashboardPage /> },
             { path: "profile", element: <ProfilePage /> },
             { path: "admin", element: <AdminPage /> },

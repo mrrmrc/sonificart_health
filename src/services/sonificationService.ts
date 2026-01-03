@@ -3,6 +3,8 @@ import {
     UniversalMapping, TransformedNoteEvent, CulturalSelectionResult, ScoreBreakdown, BlockData,
     PerformanceMetrics, MusicGenerationPrompt, InstrumentType, ScanPattern, ScanPatternOverride, AudioOutputResult
 } from '../types';
+import { NormalizationReport } from './imageNormalizationService';
+
 import { generateMusicPromptFromAnalysis, generateMusicPromptFromAnalysisHybrid, describeImageContent } from './geminiService';
 import { calculateSHA256, bufferToHex } from '../utils/cryptoUtils';
 import { exportMidi } from './midiService';
@@ -672,7 +674,9 @@ export async function sonifyImage(
     config: ConfigSettings,
     progressCallback: (stepIndex: number, status: 'active' | 'completed') => void,
     oscClient: OSC | null = null,
-    scanPatternOverride: ScanPatternOverride
+    scanPatternOverride: ScanPatternOverride,
+    normalizationReport?: NormalizationReport | null,
+    acquisitionMetadata?: SonificationResult['acquisitionMetadata']
 ): Promise<SonificationResult> {
     const timings: PerformanceMetrics = { totalProcessingTime: 0 };
     let t = performance.now();
@@ -809,6 +813,7 @@ export async function sonifyImage(
         imageJpegBlob: standardizedImageBlob, // PASS BLOB DIRECTLY
         audioWavBlob, midiBlob, totalDuration: totalDurationSeconds,
         scanPattern: { name: scanPatternName, sequence: scanSequence },
+        acquisitionMetadata,
     });
     timings.sacCreation = performance.now() - t;
     progressCallback(6, 'completed');
@@ -838,6 +843,7 @@ export async function sonifyImage(
             midiBlobHash: midiBlobHash
         },
         performanceMetrics: timings,
+        normalizationReport: normalizationReport || null,
         musicGenerationPrompt: await generateMusicPromptFromAnalysis(
             culturalSelectionResult.tradition,
             blockAnalysisResult.globalStats,
@@ -845,6 +851,7 @@ export async function sonifyImage(
             totalDurationSeconds,
             imageDescription
         ),
+        acquisitionMetadata,
     };
 }
 
@@ -857,7 +864,8 @@ async function sonifyImageArtisticOrHybrid(
     progressCallback: (stepIndex: number, status: 'active' | 'completed') => void,
     oscClient: OSC | null,
     paradigm: 'artistic' | 'hybrid',
-    scanPatternOverride: ScanPatternOverride
+    scanPatternOverride: ScanPatternOverride,
+    acquisitionMetadata?: SonificationResult['acquisitionMetadata']
 ): Promise<SonificationResult> {
     const timings: PerformanceMetrics = { totalProcessingTime: 0 };
     let t = performance.now();
@@ -1000,6 +1008,7 @@ async function sonifyImageArtisticOrHybrid(
         imageJpegBlob: standardizedImageBlob,
         audioWavBlob, midiBlob, totalDuration: totalDurationSeconds,
         scanPattern: { name: scanPatternName, sequence: scanSequence },
+        acquisitionMetadata,
     });
     timings.sacCreation = performance.now() - t;
 
@@ -1026,11 +1035,12 @@ async function sonifyImageArtisticOrHybrid(
         performanceMetrics: timings,
         musicGenerationPrompt: musicPrompt,
         paradigm: paradigm,
+        acquisitionMetadata,
     };
 }
 
-export const sonifyImageArtistic = (file: File, config: ConfigSettings, progressCallback: (stepIndex: number, status: 'active' | 'completed') => void, oscClient: OSC | null, scanPatternOverride: ScanPatternOverride) =>
-    sonifyImageArtisticOrHybrid(file, config, progressCallback, oscClient, 'artistic', scanPatternOverride);
+export const sonifyImageArtistic = (file: File, config: ConfigSettings, progressCallback: (stepIndex: number, status: 'active' | 'completed') => void, oscClient: OSC | null, scanPatternOverride: ScanPatternOverride, acquisitionMetadata?: SonificationResult['acquisitionMetadata']) =>
+    sonifyImageArtisticOrHybrid(file, config, progressCallback, oscClient, 'artistic', scanPatternOverride, acquisitionMetadata);
 
-export const sonifyImageHybrid = (file: File, config: ConfigSettings, progressCallback: (stepIndex: number, status: 'active' | 'completed') => void, oscClient: OSC | null, scanPatternOverride: ScanPatternOverride) =>
-    sonifyImageArtisticOrHybrid(file, config, progressCallback, oscClient, 'hybrid', scanPatternOverride);
+export const sonifyImageHybrid = (file: File, config: ConfigSettings, progressCallback: (stepIndex: number, status: 'active' | 'completed') => void, oscClient: OSC | null, scanPatternOverride: ScanPatternOverride, acquisitionMetadata?: SonificationResult['acquisitionMetadata']) =>
+    sonifyImageArtisticOrHybrid(file, config, progressCallback, oscClient, 'hybrid', scanPatternOverride, acquisitionMetadata);

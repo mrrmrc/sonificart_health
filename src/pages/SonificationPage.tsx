@@ -15,6 +15,8 @@ import { ImageUploader } from '../components/ImageUploader';
 import { ImagePreview } from '../components/ImagePreview';
 import { ConfigPanel } from '../components/ConfigPanel';
 import { ParadigmInfo } from '../components/ParadigmInfo';
+import { PhotoStandardizationModal } from '../components/PhotoStandardizationModal';
+import { NormalizationReport } from '../services/imageNormalizationService';
 import { initialSettings, scientificSteps, artisticSteps, hybridSteps } from '../config/defaults';
 import { reconstructResultFromPartialData } from '../utils/dataUtils';
 
@@ -42,6 +44,9 @@ export const SonificationPage: React.FC = () => {
     const [oscStatus, setOscStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
     const [oscError, setOscError] = useState<string | null>(null);
     const [isViewingHistory, setIsViewingHistory] = useState(false);
+    const [showStandardizationModal, setShowStandardizationModal] = useState(false);
+    const [normalizationReport, setNormalizationReport] = useState<NormalizationReport | null>(null);
+    const [acquisitionMetadata, setAcquisitionMetadata] = useState<SonificationResult['acquisitionMetadata']>(undefined);
 
     // MODAL STATE
     const [confirmModal, setConfirmModal] = useState<{
@@ -144,8 +149,10 @@ export const SonificationPage: React.FC = () => {
         }
     }, [location.state]);
 
-    const handleFileSelect = (file: File | null) => {
+    const handleFileSelect = (file: File | null, report?: NormalizationReport | null, acqMetadata?: SonificationResult['acquisitionMetadata']) => {
         setImageFile(file);
+        setNormalizationReport(report || null);
+        setAcquisitionMetadata(acqMetadata);
         if (file) { const url = URL.createObjectURL(file); setImageUrl(url); setResult(null); setIsViewingHistory(false); }
         else { setImageUrl(null); setResult(null); }
     };
@@ -172,9 +179,9 @@ export const SonificationPage: React.FC = () => {
             let res: SonificationResult;
             const progressCb = (stepIndex: number, status: 'active' | 'completed') => updateProcessingStep(stepIndex, status);
 
-            if (paradigm === 'scientific') res = await sonifyImage(imageFile, config, progressCb, oscClient, scanPatternOverride);
-            else if (paradigm === 'artistic') res = await sonifyImageArtistic(imageFile, config, progressCb, oscClient, scanPatternOverride);
-            else res = await sonifyImageHybrid(imageFile, config, progressCb, oscClient, scanPatternOverride);
+            if (paradigm === 'scientific') res = await sonifyImage(imageFile, config, progressCb, oscClient, scanPatternOverride, normalizationReport, acquisitionMetadata);
+            else if (paradigm === 'artistic') res = await sonifyImageArtistic(imageFile, config, progressCb, oscClient, scanPatternOverride, acquisitionMetadata);
+            else res = await sonifyImageHybrid(imageFile, config, progressCb, oscClient, scanPatternOverride, acquisitionMetadata);
 
             // REMOVED AUTO SAVE to ensure 100% progress means READY
             // if (user) await api.saveSonification(res, paradigm);
@@ -198,6 +205,7 @@ export const SonificationPage: React.FC = () => {
         if (!result || !user) return;
         try {
             await api.saveSonification(result, paradigm, title);
+            setResult(prev => prev ? { ...prev, title } : null);
         } catch (e) {
             console.error(e);
             throw e;
@@ -222,7 +230,24 @@ export const SonificationPage: React.FC = () => {
                         <div className="lg:col-span-7 transition-all duration-500 flex flex-col gap-6">
                             <div className="bg-slate-950/60 backdrop-blur-xl p-6 rounded-xl border border-white/10 shadow-2xl">
                                 <div className="mb-6"><h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2"><div className="w-6 h-6 rounded bg-brand-accent text-black flex items-center justify-center text-xs font-bold">1</div> {t('steps.select_paradigm')}</h3><ParadigmToggle selectedParadigm={paradigm} onParadigmChange={setParadigm} isPro={isUnlimited} /></div>
-                                <div className="border-t border-white/10 pt-6"><h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2"><div className="w-6 h-6 rounded bg-white text-black flex items-center justify-center text-xs font-bold">2</div> {t('steps.visual_input')}</h3><ImageUploader onFileSelect={handleFileSelect} hasFile={!!imageFile} /></div>
+                                <div className="border-t border-white/10 pt-6">
+                                    <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+                                        <div className="w-6 h-6 rounded bg-white text-black flex items-center justify-center text-xs font-bold">2</div>
+                                        {t('steps.visual_input')}
+                                    </h3>
+                                    <button
+                                        onClick={() => setShowStandardizationModal(true)}
+                                        className="w-full bg-gradient-to-r from-brand-accent/20 to-brand-accent/10 hover:from-brand-accent/30 hover:to-brand-accent/20 border border-brand-accent/30 rounded-lg p-6 transition-all duration-300 group"
+                                    >
+                                        <div className="flex items-center justify-center gap-3 mb-2">
+                                            <i className="fas fa-camera text-2xl text-brand-accent group-hover:scale-110 transition-transform"></i>
+                                            <span className="text-lg font-semibold text-white">Carica o Scatta Foto</span>
+                                        </div>
+                                        <p className="text-sm text-white/60 text-center">
+                                            {imageFile ? '✓ Immagine caricata - Clicca per cambiare' : 'Acquisizione guidata o normalizzazione automatica'}
+                                        </p>
+                                    </button>
+                                </div>
                                 {imageFile && imageUrl && <div className="mt-6 border-t border-white/10 pt-6"><ImagePreview file={imageFile} imageUrl={imageUrl} /></div>}
                             </div>
                         </div>
@@ -234,6 +259,16 @@ export const SonificationPage: React.FC = () => {
             )}
             {isProcessing && <div className="max-w-3xl mx-auto"><ProcessingView steps={processingSteps} imageUrl={imageUrl} /></div>}
             {result && imageUrl && (<div className="max-w-7xl mx-auto"><ResultsDashboard result={result} imageUrl={imageUrl} onReset={handleCloseResult} onSave={handleManualSave} user={user} onRequestAccess={() => setIsRequestAccessOpen(true)} isHistoryView={isViewingHistory} /></div>)}
+
+            {showStandardizationModal && (
+                <PhotoStandardizationModal
+                    onImageReady={(file, report, acqMetadata) => {
+                        handleFileSelect(file, report, acqMetadata);
+                        setShowStandardizationModal(false);
+                    }}
+                    onClose={() => setShowStandardizationModal(false)}
+                />
+            )}
 
             <ConfirmationModal
                 isOpen={confirmModal.isOpen}

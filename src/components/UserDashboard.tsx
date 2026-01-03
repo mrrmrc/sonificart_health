@@ -14,7 +14,7 @@ const fixImage = (url: string | undefined) => {
 // --- MODALE PUBBLICAZIONE (CON UPLOAD A PEZZI) ---
 const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPublish: (data: any, customMedia: { url: string, type: string } | null) => Promise<any>; onSuccess?: () => void }> = ({ entry, onClose, onPublish, onSuccess }) => {
     const [step, setStep] = useState<1 | 2>(1);
-    const [title, setTitle] = useState(`Opera del ${new Date(entry.timestamp).toLocaleDateString()}`);
+    const [title, setTitle] = useState(entry.title || `Opera del ${new Date(entry.timestamp).toLocaleDateString()}`);
     const [description, setDescription] = useState('');
     const [tags, setTags] = useState('');
     const [customFile, setCustomFile] = useState<File | null>(null);
@@ -450,7 +450,7 @@ const HistoryItem: React.FC<{ item: DashboardEntry; onView: () => void; onPublis
                 )}
             </div>
             <div className="flex-grow min-w-0">
-                <h4 className="text-white font-bold text-sm truncate">{item.traditionName || "Senza Titolo"}</h4>
+                <h4 className="text-white font-bold text-sm truncate">{item.title || "Senza Titolo"}</h4>
                 <div className="text-[10px] text-gray-500 mt-1 flex gap-2"><span className="bg-white/10 px-1.5 rounded uppercase">{item.paradigm}</span><span>{new Date(item.timestamp).toLocaleDateString()}</span></div>
             </div>
         </div>

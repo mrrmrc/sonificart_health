@@ -160,22 +160,35 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, us
                 {/* MEDIA AREA */}
                 <div className={`${museumMode ? 'w-full md:w-3/5' : 'w-full md:w-2/3'} bg-black relative flex flex-col`}>
                     {/* Video/Image Container */}
-                    <div className="relative flex items-center justify-center h-64 sm:h-80 md:flex-grow">
+                    <div className="relative flex items-center justify-center h-64 sm:h-80 md:flex-grow group/media">
                         {hasVideo ? (
-                            <video
-                                ref={videoRef}
-                                src={fixImage(project.videoUrl)}
-                                className="w-full h-full object-contain"
-                                loop
-                                playsInline
-                                muted
-                                onEnded={() => {
-                                    // Se l'audio sta ancora suonando, riavvia il video
-                                    if (audioRef.current && !audioRef.current.paused) {
-                                        videoRef.current?.play();
-                                    }
-                                }}
-                            />
+                            <>
+                                <video
+                                    ref={videoRef}
+                                    src={fixImage(project.videoUrl)}
+                                    className="w-full h-full object-contain"
+                                    loop
+                                    playsInline
+                                    muted
+                                    onEnded={() => {
+                                        // Se l'audio sta ancora suonando, riavvia il video
+                                        if (audioRef.current && !audioRef.current.paused) {
+                                            videoRef.current?.play();
+                                        }
+                                    }}
+                                />
+                                {/* FULLSCREEN BUTTON */}
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        videoRef.current?.requestFullscreen();
+                                    }}
+                                    className="absolute bottom-4 right-4 z-20 bg-black/60 hover:bg-black text-white p-2 rounded-full border border-white/20 opacity-0 group-hover/media:opacity-100 transition-opacity flex items-center justify-center w-10 h-10"
+                                    title="Tutto Schermo"
+                                >
+                                    <i className="fas fa-expand"></i>
+                                </button>
+                            </>
                         ) : (
                             <img src={fixImage(project.imageUrl)} alt={project.title} className="w-full h-full object-contain" />
                         )}
@@ -257,7 +270,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, us
                             />
                         ) : (
                             <p className="text-gray-300 leading-relaxed text-sm">
-                                {project.description || t('showcase.no_description')}
+                                {project.description || (project.paradigm === 'hybrid' ? "Esperienza multimodale generata dall'IA." : t('showcase.no_description'))}
                             </p>
                         )}
                     </div>
@@ -284,6 +297,19 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, us
                                     <div className="flex gap-2">
                                         <button onClick={() => setZoomedQrUrl(qrImgUrl)} className="flex-1 py-1.5 bg-black/40 hover:bg-black/60 text-white text-[10px] font-bold rounded border border-white/10">{t('showcase.scan_qr')}</button>
                                         <button onClick={handleShare} className="flex-1 py-1.5 bg-brand-accent/20 hover:bg-brand-accent/30 text-brand-accent text-[10px] font-bold rounded border border-brand-accent/20">{t('showcase.copy_link')}</button>
+                                    </div>
+
+                                    {/* SOCIAL SHARING FOR ALL */}
+                                    <div className="flex gap-2 mt-2">
+                                        <a href={`https://wa.me/?text=${encodeURIComponent('Guarda questa opera su SonificA.R.T.: ' + qrTargetUrl)}`} target="_blank" rel="noopener noreferrer" className="p-2 bg-[#25D366]/10 text-[#25D366] rounded hover:bg-[#25D366]/20 transition-colors" title="Condividi su WhatsApp">
+                                            <i className="fab fa-whatsapp"></i>
+                                        </a>
+                                        <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(qrTargetUrl)}`} target="_blank" rel="noopener noreferrer" className="p-2 bg-[#1877F2]/10 text-[#1877F2] rounded hover:bg-[#1877F2]/20 transition-colors" title="Condividi su Facebook">
+                                            <i className="fab fa-facebook-f"></i>
+                                        </a>
+                                        <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(qrTargetUrl)}`} target="_blank" rel="noopener noreferrer" className="p-2 bg-[#0A66C2]/10 text-[#0A66C2] rounded hover:bg-[#0A66C2]/20 transition-colors" title="Condividi su LinkedIn">
+                                            <i className="fab fa-linkedin-in"></i>
+                                        </a>
                                     </div>
                                 </div>
                             </div>
@@ -313,17 +339,32 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, us
                                             <button onClick={handleShareVideo} className="flex-1 py-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 text-[10px] font-bold rounded border border-purple-500/20 flex items-center justify-center gap-2">
                                                 <i className="fas fa-link"></i> Copia Link
                                             </button>
+                                            {isOwner && (
+                                                <a
+                                                    href={project.videoUrl}
+                                                    download={`video_${project.id}.mp4`}
+                                                    onClick={e => e.stopPropagation()}
+                                                    className="flex-1 py-2 bg-purple-600 hover:bg-purple-500 text-white text-[10px] font-bold rounded shadow-lg shadow-purple-500/20 flex items-center justify-center gap-2"
+                                                >
+                                                    <i className="fas fa-download"></i> Scarica
+                                                </a>
+                                            )}
                                         </div>
                                     )}
 
-                                    <a
-                                        href={project.videoUrl}
-                                        download={`${project.title.replace(/\s+/g, '_')}_synesthetic.mp4`}
-                                        className="w-full py-3 bg-white/5 hover:bg-white/10 text-white text-xs font-bold rounded flex flex-col items-center justify-center gap-1 border border-white/10 transition-all hover:border-purple-500/50"
-                                    >
-                                        <i className="fas fa-download text-lg mb-1 text-purple-400"></i>
-                                        <span>Scarica Video</span>
-                                    </a>
+                                    {!isOwner && (
+                                        <div className="flex gap-2 mt-2">
+                                            <a href={`https://wa.me/?text=${encodeURIComponent('Guarda questo video sinestetico su SonificA.R.T.: ' + videoShareUrl)}`} target="_blank" rel="noopener noreferrer" className="p-2 bg-[#25D366]/10 text-[#25D366] rounded hover:bg-[#25D366]/20 transition-colors" title="Condividi su WhatsApp">
+                                                <i className="fab fa-whatsapp"></i>
+                                            </a>
+                                            <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(videoShareUrl || '')}`} target="_blank" rel="noopener noreferrer" className="p-2 bg-[#1877F2]/10 text-[#1877F2] rounded hover:bg-[#1877F2]/20 transition-colors" title="Condividi su Facebook">
+                                                <i className="fab fa-facebook-f"></i>
+                                            </a>
+                                            <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(videoShareUrl || '')}`} target="_blank" rel="noopener noreferrer" className="p-2 bg-[#0A66C2]/10 text-[#0A66C2] rounded hover:bg-[#0A66C2]/20 transition-colors" title="Condividi su LinkedIn">
+                                                <i className="fab fa-linkedin-in"></i>
+                                            </a>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 

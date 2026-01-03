@@ -66,7 +66,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
     // MODAL STATE
     const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean, title: string, message: string, onConfirm: () => void, type: 'info' | 'warning' | 'danger' | 'success', singleButton?: boolean }>({ isOpen: false, title: '', message: '', onConfirm: () => { }, type: 'info' });
 
-    const [workTitle, setWorkTitle] = useState(`Opera del ${new Date().toLocaleDateString()}`);
+    const [workTitle, setWorkTitle] = useState(result.title || `Opera del ${new Date().toLocaleDateString()}`);
 
     const handleSaveClick = async () => {
         if (hasSaved || isSaving) return;
@@ -517,20 +517,37 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
 
     const handleDownloadSac = async () => {
         try {
-            const canvas = new OffscreenCanvas(512, 512); const ctx = canvas.getContext('2d');
+            const canvas = new OffscreenCanvas(512, 512); const ctx = canvas.getContext('2d', { willReadFrequently: true });
             const img = new Image(); img.src = correctedResult.standardizedImageUrl; await new Promise(r => { img.onload = r; });
             ctx?.drawImage(img, 0, 0, 512, 512);
 
             // Ensure we have the audio blob
             const audioBlob = await fetchBlobIfMissing(correctedResult.audioOutput.audioWavBlob, correctedResult.audioOutput.audioUrl || "");
-            const midiBlob = correctedResult.audioOutput.midiBlob; // MIDI likely needs regeneration or assumed empty for now if not stored
+            const midiBlob = correctedResult.audioOutput.midiBlob;
 
-            const sacContainer = await createSacContainer({ imageHash: correctedResult.imageHash, audioHash: correctedResult.audioHash, config: correctedResult.configUsed, blockAnalysisResult: correctedResult.blockAnalysisResult, culturalSelectionResult: correctedResult.culturalSelectionResult, transformedEvents: correctedResult.audioOutput.events.filter(e => !e.isAccompaniment), canvas: canvas, audioWavBlob: audioBlob, midiBlob: midiBlob, totalDuration: correctedResult.audioOutput.duration, scanPattern: correctedResult.scanPattern, videoBlob: generatedVideoBlob || undefined });
-            saveAs(sacContainer.blob, sacContainer.fileName);
+            const sacContainer = await createSacContainer({
+                imageHash: correctedResult.imageHash,
+                audioHash: correctedResult.audioHash,
+                config: correctedResult.configUsed,
+                blockAnalysisResult: correctedResult.blockAnalysisResult,
+                culturalSelectionResult: correctedResult.culturalSelectionResult,
+                transformedEvents: correctedResult.audioOutput.events.filter(e => !e.isAccompaniment),
+                canvas: canvas,
+                audioWavBlob: audioBlob,
+                midiBlob: midiBlob,
+                totalDuration: correctedResult.audioOutput.duration,
+                scanPattern: correctedResult.scanPattern,
+                videoBlob: generatedVideoBlob || undefined,
+                title: workTitle // ADDED TITLE HERE
+            });
+            const cleanTitle = workTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            saveAs(sacContainer.blob, `${cleanTitle}.sac`);
         } catch (e) {
             console.error("SAC failed", e);
-            if (correctedResult.sacContainer?.blob) saveAs(correctedResult.sacContainer.blob, correctedResult.sacContainer.fileName || "project.sac");
-            else {
+            if (correctedResult.sacContainer?.blob) {
+                const cleanTitle = (workTitle || correctedResult.title || 'sonification').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                saveAs(correctedResult.sacContainer.blob, `${cleanTitle}.sac`);
+            } else {
                 setConfirmModal({
                     isOpen: true,
                     title: "Errore SAC",
@@ -545,8 +562,10 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
 
     const handleDownloadWav = async () => {
         const blob = await fetchBlobIfMissing(correctedResult.audioOutput.audioWavBlob, correctedResult.audioOutput.audioUrl || "");
-        if (blob.size > 0) saveAs(blob, 'generated_audio.wav');
-        else {
+        if (blob.size > 0) {
+            const cleanTitle = workTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            saveAs(blob, `${cleanTitle}.wav`);
+        } else {
             setConfirmModal({
                 isOpen: true,
                 title: "Download",
@@ -675,6 +694,47 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
 
     return (
         <div className="animate-fade-in">
+            {/* Titolo Principale dell'Opera */}
+            <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex-grow">
+                    {!isHistoryView ? (
+                        <div className="group relative">
+                            <label className="block text-[10px] font-black text-brand-accent uppercase mb-1 tracking-widest flex items-center gap-2">
+                                <i className="fas fa-edit"></i>
+                                {t('results.work_name') || "Nome dell'opera"}
+                            </label>
+                            <input
+                                type="text"
+                                className={`w-full md:max-w-2xl bg-white/5 border-b-2 p-2 text-2xl md:text-3xl font-black text-white font-display outline-none transition-all placeholder:text-white/10 ${hasSaved ? 'border-green-500/50' : 'border-brand-accent/30 focus:border-brand-accent focus:bg-white/10'}`}
+                                placeholder={t('results.enter_name') || "Inserisci un nome..."}
+                                value={workTitle}
+                                onChange={(e) => { setWorkTitle(e.target.value); setHasSaved(false); }}
+                            />
+                            <p className="text-[10px] text-brand-text-secondary uppercase tracking-[0.2em] font-bold mt-2 flex items-center gap-2">
+                                {hasSaved && <i className="fas fa-check text-green-500"></i>}
+                                {isHistoryView ? "Archivio Sonificazione" : (hasSaved ? "Sonificazione Salvata (Modifica per salvare nuova copia)" : "Nuova Sonificazione Generata")}
+                            </p>
+                        </div>
+                    ) : (
+                        <div>
+                            <h2 className="text-2xl md:text-3xl font-black text-white font-display flex items-center gap-3">
+                                <i className="fas fa-file-audio text-brand-accent"></i>
+                                {workTitle}
+                            </h2>
+                            <p className="text-[10px] text-brand-text-secondary uppercase tracking-[0.2em] font-bold mt-1">
+                                {isHistoryView ? "Archivio Sonificazione" : "Sonificazione Salvata"}
+                            </p>
+                        </div>
+                    )}
+                </div>
+                {!isHistoryView && !hasSaved && (
+                    <div className="flex items-center gap-2 bg-brand-accent/10 px-4 py-2 rounded-full border border-brand-accent/20 self-start md:self-center">
+                        <span className="w-2 h-2 rounded-full bg-brand-accent animate-pulse"></span>
+                        <span className="text-xs font-black text-brand-accent uppercase tracking-widest">{t('results.unsaved') || "DA SALVARE"}</span>
+                    </div>
+                )}
+            </div>
+
             {isVideoModalOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md animate-fade-in p-4">
                     <div className="bg-brand-secondary p-6 rounded-xl shadow-2xl border border-brand-accent/30 max-w-md w-full animate-zoom-in" onClick={e => e.stopPropagation()}>
@@ -822,7 +882,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                             <button
                                                 onClick={handleSaveClick}
                                                 disabled={hasSaved || isSaving}
-                                                className={`flex-1 ${hasSaved ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-green-500/20 hover:bg-green-500/30 text-green-300 border-green-500/30'} py-2 rounded text-xs font-bold transition-colors border flex items-center justify-center gap-2`}
+                                                className={`flex-1 ${hasSaved ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-brand-accent text-brand-primary hover:bg-brand-accent-light'} py-2 rounded text-xs font-black transition-colors border-none flex items-center justify-center gap-2 shadow-lg shadow-brand-accent/10`}
                                             >
                                                 {isSaving ? (
                                                     <><i className="fas fa-spinner fa-spin"></i> {t('results.saving') || "SALVATAGGIO..."}</>
@@ -832,18 +892,6 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                             </button>
                                         )}
                                     </div>
-                                    {!isHistoryView && !hasSaved && (
-                                        <div className="mt-4 animate-fade-in">
-                                            <label className="block text-[10px] font-bold text-brand-text-secondary uppercase mb-1">{t('results.work_name') || "Nome dell'opera"}</label>
-                                            <input
-                                                type="text"
-                                                className="w-full bg-black/40 border border-brand-secondary/50 p-2 rounded text-sm text-white focus:border-brand-accent outline-none placeholder:text-white/20"
-                                                placeholder={t('results.enter_name') || "Inserisci un nome..."}
-                                                value={workTitle}
-                                                onChange={(e) => setWorkTitle(e.target.value)}
-                                            />
-                                        </div>
-                                    )}
                                 </div>
                             </div>
                         </div>
@@ -1029,16 +1077,43 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                 </InfoCard>
 
                 <InfoCard title={t('results.analysis_synthesis')} icon="fa-cogs">
-                    <DataRow label={t('results.grid')} value={`${correctedResult.blockAnalysisResult?.gridSize || 32}x${correctedResult.blockAnalysisResult?.gridSize || 32}`} />
-                    <DataRow label={t('results.audio_events')} value={correctedResult.audioOutput?.eventsCount || 0} />
-                    <DataRow label={t('results.duration')} value={`${safeDuration.toFixed(2)}s`} />
-                    <DataRow label={t('results.audio_quality') || "Qualità Audio"} value="44.1kHz WAV" />
+                    <div className="grid grid-cols-2 gap-2">
+                        <DataRow label={t('results.grid')} value={`${correctedResult.blockAnalysisResult?.gridSize || 32}x${correctedResult.blockAnalysisResult?.gridSize || 32}`} />
+                        <DataRow label={t('results.audio_events')} value={correctedResult.audioOutput?.eventsCount || 0} />
+                        <DataRow label={t('results.duration')} value={`${safeDuration.toFixed(2)}s`} />
+                        <DataRow label={t('results.audio_quality') || "Qualità Audio"} value="44.1kHz WAV" />
+                    </div>
                 </InfoCard>
 
                 <InfoCard title={t('results.forensic_certificate')} icon="fa-fingerprint">
-                    <DataRow label={t('results.image_hash')} value={safeHash.substring(0, 16) + '...'} />
-                    <DataRow label={t('results.audio_hash')} value={(correctedResult.audioHash || (correctedResult.audioOutput as any)?.audioHash || "---").substring(0, 16) + '...'} />
-                    <DataRow label={t('results.framework_ver') || "Framework Ver."} value="1.0" />
+                    <div className="grid grid-cols-1 gap-1">
+                        <DataRow label={t('results.image_hash')} value={safeHash.substring(0, 16) + '...'} />
+                        <DataRow label={t('results.audio_hash')} value={(correctedResult.audioHash || (correctedResult.audioOutput as any)?.audioHash || "---").substring(0, 16) + '...'} />
+                        <DataRow label={t('results.framework_ver') || "Framework Ver."} value="1.0" />
+                    </div>
+                </InfoCard>
+
+                <InfoCard title={t('results.acquisition_details') || "Dettagli Acquisizione"} icon="fa-camera">
+                    <div className="space-y-4">
+                        <DataRow
+                            label={t('results.method') || "Metodo"}
+                            value={
+                                <span className="capitalize text-white font-bold">
+                                    {correctedResult.acquisitionMetadata?.method === 'camera' ? 'Direct Photo' :
+                                        correctedResult.acquisitionMetadata?.method === 'upload' ? 'Image Upload' :
+                                            'Restored'}
+                                </span>
+                            }
+                        />
+                        {correctedResult.acquisitionMetadata?.offsets && (
+                            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 bg-black/20 p-2 rounded border border-brand-accent/10">
+                                <DataRow label="EXP" value={(correctedResult.acquisitionMetadata.offsets.exposure >= 0 ? '+' : '') + correctedResult.acquisitionMetadata.offsets.exposure.toFixed(1)} />
+                                <DataRow label="WB" value={(correctedResult.acquisitionMetadata.offsets.whiteBalance >= 0 ? '+' : '') + correctedResult.acquisitionMetadata.offsets.whiteBalance.toFixed(0)} />
+                                <DataRow label="CONT" value={(correctedResult.acquisitionMetadata.offsets.contrast >= 0 ? '+' : '') + correctedResult.acquisitionMetadata.offsets.contrast.toFixed(0)} />
+                                <DataRow label="STAB" value={(correctedResult.acquisitionMetadata.offsets.stability >= 0 ? '+' : '') + correctedResult.acquisitionMetadata.offsets.stability.toFixed(0)} />
+                            </div>
+                        )}
+                    </div>
                 </InfoCard>
 
                 <InfoCard title={t('results.performance')} icon="fa-bolt">
@@ -1061,7 +1136,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                     </InfoCard>
                 )}
 
-                <InfoCard title={t('results.download_artifacts')} icon="fa-download">
+                <InfoCard title={t('results.download_artifacts')} icon="fa-download" className="bg-brand-accent/5 border-brand-accent/20">
                     <div className="flex flex-col gap-2 mt-2 relative">
                         {!isPro && (
                             <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] z-20 flex flex-col items-center justify-center rounded-lg text-center p-4 border border-brand-accent/20">
@@ -1069,20 +1144,23 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                 <button onClick={onRequestAccess} className="px-4 py-1.5 bg-brand-accent text-black text-xs font-bold rounded-full">{t('results.unlock') || "Sblocca"}</button>
                             </div>
                         )}
-                        <button disabled={!isPro} onClick={handleDownloadWav} className="w-full bg-brand-accent/20 text-brand-accent py-1 rounded hover:bg-brand-accent/30 disabled:opacity-50">
-                            <i className="fas fa-file-audio mr-2"></i> {t('results.download_wav')}
-                        </button>
-                        <button disabled={!isPro} onClick={() => saveAs(correctedResult.audioOutput.midiBlob, 'musical_notation.mid')} className="w-full bg-brand-accent/20 text-brand-accent py-1 rounded hover:bg-brand-accent/30 disabled:opacity-50">
-                            <i className="fas fa-music mr-2"></i> {t('results.download_midi')}
-                        </button>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button disabled={!isPro} onClick={handleDownloadWav} className="bg-brand-accent/10 text-brand-accent py-2 rounded hover:bg-brand-accent/20 text-xs font-bold border border-brand-accent/20">
+                                <i className="fas fa-file-audio mr-2"></i> WAV
+                            </button>
+                            <button disabled={!isPro} onClick={() => saveAs(correctedResult.audioOutput.midiBlob, 'musical_notation.mid')} className="bg-brand-accent/10 text-brand-accent py-2 rounded hover:bg-brand-accent/20 text-xs font-bold border border-brand-accent/20">
+                                <i className="fas fa-music mr-2"></i> MIDI
+                            </button>
+                        </div>
                         <button disabled={!isPro} onClick={() => {
-                            if (generatedVideoBlob) saveAs(generatedVideoBlob, `kinetic_proof_${safeHash.substring(0, 8)}.mp4`);
-                            else if ((result as any).videoUrl) saveAs((result as any).videoUrl, `kinetic_proof_${safeHash.substring(0, 8)}.mp4`);
+                            const cleanTitle = workTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                            if (generatedVideoBlob) saveAs(generatedVideoBlob, `${cleanTitle}_video.mp4`);
+                            else if ((result as any).videoUrl) saveAs((result as any).videoUrl, `${cleanTitle}_video.mp4`);
                             else handleVideoAction();
-                        }} className="w-full bg-purple-600/30 text-purple-300 py-1 rounded hover:bg-purple-600/50 border border-purple-500/30 relative">
+                        }} className="w-full bg-purple-600/10 text-purple-300 py-2 rounded hover:bg-purple-600/20 border border-purple-500/20 text-xs font-bold">
                             <i className="fas fa-video mr-2"></i> {(generatedVideoBlob || (result as any).videoUrl) ? t('results.download_video') : t('results.generate_video')}
                         </button>
-                        <button disabled={!isPro} onClick={handleDownloadSac} className="w-full bg-brand-accent font-bold text-brand-primary py-2 rounded hover:bg-brand-accent-light mt-2 shadow-lg disabled:opacity-50">
+                        <button disabled={!isPro} onClick={handleDownloadSac} className="w-full bg-brand-accent font-black text-brand-primary py-3 rounded hover:bg-brand-accent-light mt-1 shadow-lg disabled:opacity-50 text-[10px] uppercase tracking-widest">
                             <i className="fas fa-box mr-2"></i> {t('results.download_sac')}
                         </button>
                     </div>

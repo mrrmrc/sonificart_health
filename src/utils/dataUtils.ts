@@ -171,6 +171,7 @@ export const reconstructResultFromPartialData = (
         standardizedImageUrl: imgUrl,
         sacContainer: { blob: new Blob(), fileName: filename },
         generatedVideoBlob: videoBlob,
+        title: partialData.title || meta.title || null,
 
         audioOutput: {
             audioUrl: audioUrl || "",

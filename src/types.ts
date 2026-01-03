@@ -191,6 +191,18 @@ export interface ValidationHashes {
     midiBlobHash: string;
 }
 
+export interface AcquisitionMetadata {
+    method: 'camera' | 'upload' | 'restored';
+    offsets?: {
+        exposure: number;
+        whiteBalance: number;
+        contrast: number;
+        stability: number;
+        focus: number;
+    };
+    timestamp: string;
+}
+
 export interface SonificationResult {
     imageHash: string;
     audioHash: string;
@@ -209,8 +221,11 @@ export interface SonificationResult {
     performanceMetrics: PerformanceMetrics;
 
     validationHashes: ValidationHashes;
+    normalizationReport?: any | null;  // Import from imageNormalizationService
     musicGenerationPrompt?: MusicGenerationPrompt | null;
     generatedVideoBlob?: Blob;
+    acquisitionMetadata?: AcquisitionMetadata;
+    title?: string | null;
 }
 
 export interface SacVerificationDetails {
@@ -257,6 +272,7 @@ export interface DashboardEntry {
     blockData?: BlockAnalysisResult;
     imageHash?: string;
     videoUrl?: string | null;
+    title?: string | null;
 }
 
 export interface MusicGenResponse {

@@ -92,6 +92,10 @@ export const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, isAdmin, userCredits
                                 {t('nav.verify')}
                                 <ActiveIndicator isActive={currentView === 'verification'} />
                             </button>
+                            <button onClick={() => navigate('/compare')} className={navLinkClass('compare')}>
+                                COMPARA
+                                <ActiveIndicator isActive={currentView === 'compare'} />
+                            </button>
                             <button onClick={() => navigate('/dashboard')} className={navLinkClass('dashboard')}>
                                 {t('nav.dashboard')}
                                 <ActiveIndicator isActive={currentView === 'dashboard'} />
