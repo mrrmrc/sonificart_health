@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { DashboardEntry, User, TransformedNoteEvent } from '../types';
+import { DashboardEntry, User, TransformedNoteEvent, SonificationResult } from '../types';
 import { api, USE_MOCK_BACKEND } from '../services/api';
 import { ConfirmationModal } from './ConfirmationModal';
 import { generateSonificationVideo } from '../services/videoService';
+import { VideoGenService } from '../services/VideoGenService';
+import { LivePerformanceOverlay } from './LivePerformanceOverlay';
 
 const fixImage = (url: string | undefined) => {
     if (!url) return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
@@ -12,7 +14,7 @@ const fixImage = (url: string | undefined) => {
 };
 
 // --- MODALE PUBBLICAZIONE (CON UPLOAD A PEZZI) ---
-const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPublish: (data: any, customMedia: { url: string, type: string } | null) => Promise<any>; onSuccess?: () => void }> = ({ entry, onClose, onPublish, onSuccess }) => {
+const PublishModal: React.FC<{ user?: User; entry: DashboardEntry; onClose: () => void; onPublish: (data: any, customMedia: { url: string, type: string } | null) => Promise<any>; onSuccess?: () => void; onLaunchPerformance?: (data: SonificationResult, audioBlob: Blob) => void }> = ({ user, entry, onClose, onPublish, onSuccess, onLaunchPerformance }) => {
     const [step, setStep] = useState<1 | 2>(1);
     const [title, setTitle] = useState(entry.title || `Opera del ${new Date(entry.timestamp).toLocaleDateString()}`);
     const [description, setDescription] = useState('');
@@ -25,18 +27,48 @@ const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPub
     const [syncAudioFile, setSyncAudioFile] = useState<File | null>(null);
     const [isGeneratingSync, setIsGeneratingSync] = useState(false);
     const [syncProgress, setSyncProgress] = useState(0);
+    const [useWebcam, setUseWebcam] = useState(false);
     const [allTraditions, setAllTraditions] = useState<any[]>([]);
-
-    useEffect(() => {
-        fetch('/data/traditions.json').then(res => res.json()).then(data => setAllTraditions(data)).catch(e => console.error(e));
-    }, []);
 
     // FIX: Store uploaded result to correct QR Code immediately
     const [uploadedMedia, setUploadedMedia] = useState<{ url: string, type: string } | null>(null);
     const [localVideoUrl, setLocalVideoUrl] = useState<string | null>(null);
+    // NEW: Persistent Video State for Option 1
+    const [activeVideoUrl, setActiveVideoUrl] = useState<string | null>(entry.videoUrl || null);
+
+    useEffect(() => {
+        fetch('/data/traditions.json').then(res => res.json()).then(data => setAllTraditions(data)).catch(e => console.error(e));
+        // Init active video
+        setActiveVideoUrl(entry.videoUrl || null);
+    }, [entry.videoUrl]); // React to prop change
 
     // Modal State for inside PublishModal
     const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean, title: string, message: string, onConfirm: () => void, type: 'info' | 'warning' | 'danger' | 'success', singleButton?: boolean }>({ isOpen: false, title: '', message: '', onConfirm: () => { }, type: 'info' });
+
+    // NEW: Track which type of success to show ('static' for Option 1, 'live' for Option 2)
+    const [successType, setSuccessType] = useState<'static' | 'live' | null>(null);
+
+    // HELPER: Delete Video
+    const handleDeleteVideo = async () => {
+        setConfirmModal({
+            isOpen: true,
+            title: "Elimina Video",
+            message: "Sei sicuro di voler eliminare il video generato? Questa azione non può essere annullata.",
+            type: 'danger',
+            onConfirm: async () => {
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                try {
+                    await api.detachVideoFromHistory(entry.id);
+                    setActiveVideoUrl(null); // Clear local state immediately
+                    setUploadedMedia(null);
+                    setCustomFile(null); // Reset upload state
+                } catch (e) {
+                    console.error("Delete failed", e);
+                    alert("Errore durante l'eliminazione del video.");
+                }
+            }
+        });
+    }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -45,107 +77,92 @@ const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPub
 
         let finalFileToUpload = customFile;
 
-        // Se abbiamo un syncAudioFile, dobbiamo generare il video prima di procedere
+        // Determine Success Type based on input
         if (syncAudioFile) {
-            setIsGeneratingSync(true);
+            setSuccessType('live');
+        } else {
+            setSuccessType('static');
+        }
+
+        // SE ABBIAMO UN SYNC AUDIO FILE (Opzione 2 - LIVE)
+        if (syncAudioFile) {
+            // LIVE MODE DIRECT FLOW
             try {
-                // Ricostruiamo un SonificationResult fittizio ma valido per il videoService
-                const blocks = entry.blockData?.blocks || [];
-
-                // Helper per decodificare gli eventi compressi
-                const decompressEvents = (evs: any[]) => evs.map((e: any) => {
-                    const bx = e[4], by = e[5];
-                    const matchingBlock = blocks.find(b => b.position.x === bx && b.position.y === by);
-                    return {
-                        time: e[0],
-                        duration: e[1],
-                        midiFloat: e[2],
-                        velocity: e[3],
-                        noteName: e[6] || "N/A",
-                        sourceBlock: matchingBlock || { r: 0, g: 0, b: 0, position: { x: bx, y: by } }
-                    };
-                });
-
-                const mockResult: any = {
-                    imageHash: entry.id,
-                    standardizedImageUrl: fixImage(entry.imageUrl),
-                    blockAnalysisResult: entry.blockData || { gridSize: 32, blocks: [] },
-                    culturalSelectionResult: { tradition: allTraditions.find(t => t.name === entry.traditionName) || { name: entry.traditionName, cultural_family: 'Neutral' } },
-                    scanPattern: { name: "Path Originale" },
-                    audioOutput: {
-                        events: entry.events ? decompressEvents(entry.events) : [],
-                        audioWavBlob: new Blob() // Fallback non usato perché c'è override
-                    }
-                };
-
-                const videoBlob = await generateSonificationVideo(mockResult, (p: number) => setSyncProgress(p), {
-                    title: title,
-                    author: "SonificA.R.T. Sync",
-                    overrideAudioBlob: syncAudioFile
-                });
-
-                // Creiamo un URL locale per il download immediato
-                const localUrl = URL.createObjectURL(videoBlob);
-                setLocalVideoUrl(localUrl);
-
-                // Detect correct extension
-                const ext = videoBlob.type.includes('mp4') ? 'mp4' : 'webm';
-                const fileName = `synesthetic_experience.${ext}`;
-
-                // Trasformiamo il Blob in un File per l'uploader esistente
-                finalFileToUpload = new File([videoBlob], fileName, { type: videoBlob.type });
-
-                // AUTOMATIC SAVE TO HISTORY
-                // Salviamo silenziosamente il video appena generato nello storico, così l'utente lo ritrova
-                try {
-                    await api.attachVideoToHistory(entry.id, videoBlob, fileName);
-                    console.log("Video automaticamente salvato nello storico con estensione " + ext);
-                } catch (saveErr) {
-                    console.warn("Non è stato possibile salvare il video nello storico (ma procedo con la pubblicazione)", saveErr);
-                }
-
-            } catch (err) {
-                console.error("Sync-Video error:", err);
-                throw new Error("Errore durante la creazione dell'esperienza sinestetica. Assicurati che il file audio sia valido.");
-            } finally {
-                setIsGeneratingSync(false);
+                const audioUrl = await api.attachAudioToHistory(
+                    entry.id,
+                    syncAudioFile,
+                    `synesthetic_audio_${Date.now()}.mp3`,
+                    (p) => setUploadProgress(p)
+                );
+                console.log("Audio associato all'esperienza live:", audioUrl);
+            } catch (saveErr) {
+                console.warn("Impossibile salvare l'audio nello storico:", saveErr);
+                alert("Errore caricamento audio. Riprova.");
+                setIsSubmitting(false);
+                return;
             }
+
+            setSuccessType('live');
+            setStep(2); // Go to success only for Option 2
+            setIsSubmitting(false);
+            if (onSuccess) onSuccess();
+            return;
         }
 
         let customMediaResult: { url: string, type: string } | null = null;
+        let generatedVideoUrl: string | null = null;
 
         try {
-            if (finalFileToUpload) {
-                const CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB per pezzo
-                const totalChunks = Math.ceil(finalFileToUpload.size / CHUNK_SIZE);
-                const uploadId = `${Date.now()}-${finalFileToUpload.name.replace(/[^a-zA-Z0-9.]/g, '')}`;
+            // OPTION 1: CUSTOM FILE (Audio) -> Client-Side Generation (Canvas + MediaRecorder)
+            if (customFile) {
+                setActiveVideoUrl(null); // Clear any existing video state
 
-                for (let i = 0; i < totalChunks; i++) {
-                    const start = i * CHUNK_SIZE;
-                    const end = Math.min(start + CHUNK_SIZE, finalFileToUpload.size);
-                    const chunk = finalFileToUpload.slice(start, end);
+                // 1. Upload Audio First (Persist audio)
+                const audioUrl = await api.attachAudioToHistory(
+                    entry.id,
+                    customFile,
+                    `custom_audio_${Date.now()}.mp3`,
+                    (p) => setUploadProgress(Math.min(p * 0.30, 30)) // 30% for audio upload
+                );
 
-                    const formData = new FormData();
-                    formData.append('fileChunk', chunk, finalFileToUpload.name);
-                    formData.append('uploadId', uploadId);
-                    formData.append('chunkIndex', String(i));
-                    formData.append('totalChunks', String(totalChunks));
-                    formData.append('originalFilename', finalFileToUpload.name);
+                // 2. Client-Side Generation
+                setUploadProgress(35);
 
-                    const response = await api.uploadChunk(formData);
+                // Use VideoGenService locally
+                // Note: fixImage ensures we have a valid URL (dataURI or absolute http)
+                // If it's a relative path on server, fixImage adds domain, but we need to ensure CORS.
+                // VideoGenService handles crossOrigin="anonymous".
 
-                    if (response.success && response.url) {
-                        customMediaResult = { url: response.url, type: response.type };
-                    }
+                const generatedVideoBlob = await VideoGenService.generateVideo({
+                    imageUrl: fixImage(entry.imageUrl),
+                    audioBlob: customFile,
+                    // duration automatically detected from audio
+                    title: title || "SONIFICART VIDEO",
+                    author: user?.name,
+                    onProgress: (p: number) => setUploadProgress(35 + (p * 0.35)) // 35% to 70% range
+                });
 
-                    setUploadProgress(Math.round(((i + 1) / totalChunks) * 100));
-                }
-            }
+                // 3. Upload Generated Video
+                setUploadProgress(75);
 
-            if (customMediaResult) {
+                const finalVideoUrl = await api.attachVideoToHistory(
+                    entry.id,
+                    generatedVideoBlob,
+                    `gen_cl_${entry.id}_${Date.now()}.mp4`
+                );
+
+                generatedVideoUrl = finalVideoUrl;
+                customMediaResult = { url: finalVideoUrl, type: 'video/mp4' };
+
+                // VISUAL UPDATE IN PLACE
+                setActiveVideoUrl(finalVideoUrl);
+                setLocalVideoUrl(null);
                 setUploadedMedia(customMediaResult);
+
+                setUploadProgress(100);
             }
 
+            // Normal publish flow (metadata update)
             const result = await onPublish({
                 title, description, tags: tags.split(',').map(t => t.trim()).filter(t => t.length > 0)
             }, customMediaResult);
@@ -154,11 +171,15 @@ const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPub
                 setPublishedId(result.id);
             }
 
-            setStep(2);
-            if (onSuccess) onSuccess();
+            // NOTE: For Option 1, we stay in Step 1 now (as requested), to show the "managed" card state.
+            // Option 2 goes to Step 2 (handled above).
+
+            if (onSuccess) onSuccess(); // Trigger reload in bg
+
         } catch (e) {
             console.error(e);
-            const errorMsg = e instanceof Error ? e.message : "Impossibile completare la pubblicazione. Verifica la connessione e riprova.";
+            // ... Error handling
+            const errorMsg = e instanceof Error ? e.message : "Impossibile completare l'operazione.";
             setConfirmModal({
                 isOpen: true,
                 title: "Errore",
@@ -173,7 +194,6 @@ const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPub
     };
 
     // ... resto del componente
-    // MODIFICA: Il link pubblico usa l'id reale della vetrina se disponibile, altrimenti fallback
     const idToUse = publishedId || entry.id;
     const publicLink = `https://sonificart.com/?gallery_id=${idToUse}`;
 
@@ -184,144 +204,239 @@ const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPub
         return `https://sonificart.com${url.startsWith('/') ? '' : '/'}${url}`;
     };
 
-    // FIX: Prioritize uploaded media URL, then local audio URL
-    const mediaTarget = getAbsoluteUrl(uploadedMedia?.url) || getAbsoluteUrl(entry.audioUrl);
+    // QR & Media Targets
+    const videoTarget = getAbsoluteUrl(activeVideoUrl);
+    const audioTarget = getAbsoluteUrl(entry.audioUrl);
 
-    // Se non abbiamo un file media diretto, mandiamo alla pagina in modalità "museum" (più pulita)
-    const museumLink = `https://sonificart.com/museum?id=${idToUse}`;
-    const qrTarget = museumLink; // Consigliato per avere il controllo sul branding (logo custom)
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrTarget)}`;
-    const downloadQR = async () => {
+    // QR Generation
+    const getVideoQr = () => videoTarget ? `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(videoTarget)}` : null;
+    const getAudioQr = () => audioTarget ? `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(audioTarget)}` : null;
+
+    const downloadQR = async (url: string, name: string) => {
         try {
-            const res = await fetch(qrUrl);
+            const res = await fetch(url);
             const blob = await res.blob();
-            const url = window.URL.createObjectURL(blob);
+            const blobUrl = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url;
-            a.download = `QR_${entry.id}.png`;
+            a.href = blobUrl;
+            a.download = name;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-        } catch (e) {
-            console.error(e);
-        }
+        } catch (e) { console.error(e); }
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 animate-fade-in p-4" onClick={onClose}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 animate-fade-in p-4">
             <div className="relative w-full max-w-2xl bg-[#1e1e2e] rounded-xl shadow-2xl border border-white/10 animate-zoom-in overflow-hidden" onClick={e => e.stopPropagation()}>
                 <div className="p-8">
                     {step === 1 ? (
                         <>
                             {isGeneratingSync ? (
                                 <div className="flex flex-col items-center justify-center py-8 px-4 animate-fade-in text-center space-y-8">
-
-                                    {/* IMAGE SCANNING VISUALIZATION */}
+                                    {/* ... SYNC ANIMATION REMAINS SAME ... */}
                                     <div className="relative w-full max-w-sm aspect-video rounded-xl overflow-hidden shadow-[0_0_50px_rgba(168,85,247,0.25)] border border-purple-500/50 group">
                                         <img src={fixImage(entry.imageUrl)} className="w-full h-full object-cover filter grayscale-[0.3]" alt="Analysis Target" />
-
-                                        {/* Processed Area (Top to Bottom) */}
-                                        <div
-                                            className="absolute inset-x-0 top-0 bg-purple-600/20 backdrop-brightness-110 backdrop-contrast-125 transition-all duration-300 ease-linear border-b-2 border-brand-accent shadow-[0_0_20px_#2dd4bf] z-10"
-                                            style={{ height: `${syncProgress}%` }}
-                                        >
-                                            {/* Shimmer */}
-                                            <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-transparent animate-shimmer" style={{ backgroundSize: '200% 100%' }}></div>
-                                        </div>
-
-                                        {/* Scan Line (Glowing) */}
-                                        <div
-                                            className="absolute inset-x-0 h-1 bg-white shadow-[0_0_15px_white] z-20 transition-all duration-300 ease-linear opacity-80"
-                                            style={{ top: `${syncProgress}%` }}
-                                        ></div>
-
-                                        {/* Overlay Grid (Tech effect) */}
+                                        <div className="absolute inset-x-0 top-0 bg-purple-600/20 backdrop-brightness-110 backdrop-contrast-125 transition-all duration-300 ease-linear border-b-2 border-brand-accent shadow-[0_0_20px_#2dd4bf] z-10" style={{ height: `${syncProgress}%` }}><div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-transparent animate-shimmer" style={{ backgroundSize: '200% 100%' }}></div></div>
+                                        <div className="absolute inset-x-0 h-1 bg-white shadow-[0_0_15px_white] z-20 transition-all duration-300 ease-linear opacity-80" style={{ top: `${syncProgress}%` }}></div>
                                         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:20px_20px] pointer-events-none"></div>
                                     </div>
-
                                     <div className="space-y-2 max-w-md">
                                         <h3 className="text-2xl font-bold text-white font-display">
                                             {syncProgress < 30 ? "Analisi Cromatica..." : syncProgress < 70 ? "Sincronizzazione Audio..." : "Rendering Sinestetico..."}
                                         </h3>
-                                        <p className="text-purple-300 text-sm animate-pulse">
-                                            L'IA sta scansionando la tua opera per generare l'esperienza visiva.
-                                        </p>
+                                        <p className="text-purple-300 text-sm animate-pulse">L'IA sta scansionando la tua opera per generare l'esperienza visiva.</p>
                                     </div>
-
                                     <div className="w-full max-w-sm space-y-2">
-                                        <div className="flex justify-between text-xs font-bold uppercase tracking-widest text-brand-accent">
-                                            <span>Avanzamento</span>
-                                            <span>{Math.round(syncProgress)}%</span>
-                                        </div>
-                                        <div className="w-full bg-black/40 rounded-full h-1 border border-white/5 overflow-hidden">
-                                            <div
-                                                className="h-full bg-brand-accent shadow-[0_0_10px_#2dd4bf] transition-all duration-300"
-                                                style={{ width: `${syncProgress}%` }}
-                                            ></div>
-                                        </div>
+                                        <div className="flex justify-between text-xs font-bold uppercase tracking-widest text-brand-accent"><span>Avanzamento</span><span>{Math.round(syncProgress)}%</span></div>
+                                        <div className="w-full bg-black/40 rounded-full h-1 border border-white/5 overflow-hidden"><div className="h-full bg-brand-accent shadow-[0_0_10px_#2dd4bf] transition-all duration-300" style={{ width: `${syncProgress}%` }}></div></div>
                                     </div>
                                 </div>
                             ) : (
                                 <form onSubmit={handleSubmit} className="space-y-6">
-                                    <h3 className="2xl font-bold text-white mb-6">Pubblica in Vetrina</h3>
+                                    <h3 className="text-2xl font-bold text-white mb-6">Pubblica in Vetrina</h3>
                                     <div className="flex flex-col sm:flex-row gap-6">
-                                        <img src={fixImage(entry.imageUrl)} className="w-full sm:w-1/3 h-48 sm:h-32 object-cover rounded-lg border border-white/10" alt="Preview" />
+                                        <div className="w-full sm:w-1/3 space-y-2">
+                                            <img src={fixImage(entry.imageUrl)} className="w-full h-48 sm:h-32 object-cover rounded-lg border border-white/10" alt="Preview" />
+                                        </div>
+
                                         <div className="w-full sm:w-2/3 space-y-4">
                                             <input required type="text" className="w-full bg-black/30 border border-white/10 p-2 rounded text-white font-bold" value={title} onChange={e => setTitle(e.target.value)} />
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 
-                                                {/* OPTION 1: STANDARD UPLOAD */}
-                                                <div className={`p-3 bg-black/20 rounded-lg border ${customFile ? 'border-brand-accent' : 'border-white/5'} hover:border-brand-accent/50 transition-colors cursor-pointer`} onClick={() => document.getElementById('file-upload-input')?.click()}>
-                                                    <label className="block text-[9px] font-bold text-gray-400 uppercase mb-2">Opzione 1: Upload Diretto</label>
-                                                    <div className="flex items-center gap-3">
-                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${customFile ? 'bg-brand-accent text-brand-primary' : 'bg-white/5 text-gray-500'}`}>
-                                                            <i className="fas fa-upload text-xs"></i>
+                                                <div className="flex flex-col gap-4">
+                                                    {/* OPTION 1: VIDEO A.R.T. MANAGEMENT CARD */}
+                                                    <div className={`p-3 bg-black/20 rounded-lg border ${activeVideoUrl ? 'border-brand-accent' : 'border-white/5'} hover:border-brand-accent/50 transition-colors relative flex flex-col justify-between overflow-hidden`}>
+
+                                                        {/* HEADER */}
+                                                        <div className="flex justify-between items-start mb-2">
+                                                            <label className="block text-[9px] font-bold text-gray-400 uppercase">Opzione 1: Video A.R.T.</label>
+                                                            {/* Delete Button (Only present if video exists) */}
+                                                            {activeVideoUrl && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => { e.stopPropagation(); handleDeleteVideo(); }}
+                                                                    className="w-5 h-5 rounded-full bg-red-500/20 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors shadow-lg"
+                                                                    title="Elimina Video"
+                                                                >
+                                                                    <i className="fas fa-trash text-[9px]"></i>
+                                                                </button>
+                                                            )}
                                                         </div>
-                                                        <div>
-                                                            <span className={`block text-xs font-bold ${customFile ? 'text-brand-accent' : 'text-gray-300'}`}>
-                                                                {customFile ? "File Selezionato" : "Carica Media"}
-                                                            </span>
-                                                            <span className="text-[9px] text-gray-500 block truncate max-w-[120px]">
-                                                                {customFile ? customFile.name : "Video o Audio custom"}
-                                                            </span>
-                                                        </div>
+
+                                                        {/* VIDEO PLAYER / GENERATION UI */}
+                                                        {activeVideoUrl ? (
+                                                            <div className="space-y-3 animate-fade-in">
+                                                                {/* Interactive Player */}
+                                                                <div className="relative w-full aspect-video bg-black rounded overflow-hidden border border-brand-accent/30 shadow-[0_0_15px_rgba(45,212,191,0.1)] group">
+                                                                    <video
+                                                                        src={getAbsoluteUrl(activeVideoUrl) || ""}
+                                                                        controls
+                                                                        className="w-full h-full object-contain"
+                                                                    />
+                                                                </div>
+
+                                                                {/* QR & SOCIALS ROW */}
+                                                                <div className="flex gap-2 bg-white/5 p-2 rounded border border-white/10">
+                                                                    {getVideoQr() && (
+                                                                        <div className="w-12 h-12 bg-white p-0.5 rounded shrink-0 cursor-pointer hover:scale-110 transition-transform" onClick={() => downloadQR(getVideoQr()!, `QR_Video_${entry.id}.png`)} title="Scarica QR Video">
+                                                                            <img src={getVideoQr()!} className="w-full h-full" alt="QR" />
+                                                                        </div>
+                                                                    )}
+                                                                    <div className="flex flex-col justify-between flex-grow">
+                                                                        <div className="flex gap-1 justify-end">
+                                                                            {[
+                                                                                { i: 'fab fa-whatsapp', c: 'bg-green-600', l: `https://wa.me/?text=${encodeURIComponent("Guarda il mio video su SonificA.R.T.! " + videoTarget)}` },
+                                                                                { i: 'fab fa-facebook-f', c: 'bg-blue-600', l: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(videoTarget || "")}` },
+                                                                                { i: 'fab fa-twitter', c: 'bg-sky-500', l: `https://twitter.com/intent/tweet?text=${encodeURIComponent("Video Generato con SonificA.R.T.! ")}&url=${encodeURIComponent(videoTarget || "")}` }
+                                                                            ].map((s, idx) => (
+                                                                                <a key={idx} href={s.l} target="_blank" rel="noopener noreferrer" className={`w-5 h-5 rounded-full ${s.c} text-white flex items-center justify-center hover:scale-110 transition-transform`}>
+                                                                                    <i className={`${s.i} text-[9px]`}></i>
+                                                                                </a>
+                                                                            ))}
+                                                                        </div>
+                                                                        <a href={getAbsoluteUrl(activeVideoUrl) || "#"} download className="text-[8px] text-right text-brand-accent hover:text-white uppercase font-bold tracking-wider mt-1">Scarica MP4</a>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* AUDIO QR (EXTRA) */}
+                                                                {entry.audioUrl && (
+                                                                    <div className="flex items-center gap-2 p-1.5 bg-black/40 rounded border border-white/5">
+                                                                        <i className="fas fa-qrcode text-gray-500 text-[10px]"></i>
+                                                                        <span className="text-[8px] text-gray-400 uppercase font-bold flex-grow">QR Solo Audio</span>
+                                                                        <button type="button" onClick={() => getAudioQr() && downloadQR(getAudioQr()!, `QR_Audio_${entry.id}.png`)} className="px-1.5 py-0.5 bg-white/10 hover:bg-white/20 rounded text-[8px] text-white">Scarica</button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            /* NO VIDEO -> GENERATION STATE */
+                                                            <div className="flex flex-col gap-3 py-2 animate-fade-in">
+                                                                <div
+                                                                    className={`w-full aspect-video rounded border-2 border-dashed ${customFile ? 'border-brand-accent bg-brand-accent/5' : 'border-white/10 bg-white/5'} flex flex-col items-center justify-center cursor-pointer hover:border-white/30 transition-all group`}
+                                                                    onClick={() => document.getElementById('file-upload-input')?.click()}
+                                                                >
+                                                                    {customFile ? (
+                                                                        <>
+                                                                            <i className="fas fa-file-audio text-2xl text-brand-accent mb-2 group-hover:scale-110 transition-transform"></i>
+                                                                            <span className="text-[9px] text-brand-accent font-bold uppercase">{customFile.name.substring(0, 15)}...</span>
+                                                                            <span className="text-[8px] text-gray-400 mt-1">Clicca per cambiare</span>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <div className="w-10 h-10 rounded-full bg-brand-accent/10 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                                                                                <i className="fas fa-magic text-brand-accent"></i>
+                                                                            </div>
+                                                                            <span className="text-[10px] text-gray-300 font-bold uppercase">Genera Video</span>
+                                                                            <span className="text-[8px] text-gray-500 text-center px-4 mt-1">Carica un audio per creare il video</span>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                                <input id="file-upload-input" type="file" accept="audio/*" className="hidden" onChange={e => { setCustomFile(e.target.files ? e.target.files[0] : null); setSyncAudioFile(null); }} />
+
+                                                                {/* Generation Button (Only if file selected) */}
+                                                                {customFile && (
+                                                                    <button
+                                                                        type="submit"
+                                                                        disabled={isSubmitting}
+                                                                        onClick={(e) => { e.stopPropagation(); /* Submit triggers generation */ }}
+                                                                        className="w-full py-2 bg-brand-accent text-brand-primary font-bold rounded text-[10px] uppercase tracking-wide hover:bg-brand-accent-light shadow-[0_0_15px_rgba(45,212,191,0.2)] animate-pulse-slow"
+                                                                    >
+                                                                        {isSubmitting ? 'Generazione...' : 'Genera Video Ora'} <i className="fas fa-wand-magic-sparkles ml-1"></i>
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                    <input id="file-upload-input" type="file" accept="video/*,audio/*" className="hidden" onChange={e => { setCustomFile(e.target.files ? e.target.files[0] : null); setSyncAudioFile(null); }} />
-                                                </div>
 
-                                                {/* OPTION 2: SYNESTHETIC GENERATION */}
-                                                <div className={`p-3 bg-purple-900/10 rounded-lg border ${syncAudioFile ? 'border-purple-500' : 'border-purple-500/20'} hover:border-purple-500/50 transition-colors relative overflow-hidden group cursor-pointer`} onClick={() => !entry.videoUrl && document.getElementById('sync-audio-input')?.click()}>
-                                                    <div className="absolute top-0 right-0 p-1 opacity-20 group-hover:opacity-100"><i className="fas fa-bolt text-purple-400 text-[10px]"></i></div>
-                                                    <label className="block text-[9px] font-bold text-purple-400/80 uppercase mb-2">Opzione 2: Generazione AI</label>
+                                                </div>      {/* OPTION 2: SYNESTHETIC GENERATION */}
+                                                <div className="flex flex-col gap-4">
+                                                    {/* OPTION 2: SYNESTHETIC GENERATION */}
+                                                    <div className={`p-3 bg-[#1a0b2e] rounded-lg border ${syncAudioFile ? 'border-purple-500' : 'border-purple-500/20'} hover:border-purple-500/50 transition-colors relative overflow-hidden group cursor-pointer flex flex-col justify-between`} onClick={() => document.getElementById('sync-audio-input')?.click()}>
+                                                        <div>
+                                                            <div className="absolute top-0 right-0 p-1 opacity-20 group-hover:opacity-100"><i className="fas fa-bolt text-purple-400 text-[10px]"></i></div>
+                                                            <label className="block text-[9px] font-bold text-purple-300 uppercase mb-2">Opzione 2: Generazione AI</label>
 
-                                                    {entry.videoUrl && !syncAudioFile ? (
-                                                        <div className="animate-fade-in text-center">
-                                                            <div className="text-[10px] font-bold text-green-400 mb-2 flex items-center justify-center gap-1">
-                                                                <i className="fas fa-check-circle"></i> VIDEO PRONTO
+                                                            {/* PERFORMANCE MODE ALWAYS ON FOR OPTION 2 */}
+                                                            <div className="absolute top-2 right-2 flex items-center gap-2 bg-black/40 px-2 py-1 rounded backdrop-blur-sm z-10" onClick={e => e.stopPropagation()}>
+                                                                <span className="text-[8px] font-bold text-pink-400 uppercase tracking-wider">PERFORMANCE ON</span>
+                                                                <div className="w-2 h-2 rounded-full bg-pink-500 animate-pulse shadow-[0_0_5px_#ec4899]"></div>
                                                             </div>
-                                                            <div className="grid grid-cols-2 gap-2">
-                                                                <button type="button" onClick={(e) => { e.stopPropagation(); window.open(entry.videoUrl || "", '_blank'); }} className="py-1 bg-purple-600/20 text-purple-300 rounded text-[9px] hover:bg-purple-600/40 border border-purple-500/20">PLAY</button>
-                                                                <label className="py-1 bg-purple-600/20 text-purple-300 rounded text-[9px] hover:bg-purple-600/40 border border-purple-500/20 cursor-pointer text-center">
-                                                                    RIGENERA
-                                                                    <input id="sync-audio-input" type="file" accept="audio/*" className="hidden" onChange={e => { setSyncAudioFile(e.target.files ? e.target.files[0] : null); setCustomFile(null); }} />
-                                                                </label>
+
+                                                            {/* EXISTING AUDIO INFO */}
+                                                            {entry.audioUrl && !syncAudioFile && (
+                                                                <div className="flex flex-col gap-2 mb-2">
+                                                                    <div
+                                                                        className="p-1.5 bg-purple-500/10 border border-purple-500/30 rounded flex items-center justify-between gap-2"
+                                                                    >
+                                                                        <div className="flex items-center gap-2">
+                                                                            <i className="fas fa-music text-purple-400 text-xs"></i>
+                                                                            <span className="text-[9px] text-purple-300">Audio Live presente</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            <div className="flex items-center gap-3 mt-2 mb-2">
+                                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${syncAudioFile ? 'bg-purple-500 text-white' : 'bg-purple-500/10 text-purple-400'}`}>
+                                                                    <i className={`fas ${useWebcam ? 'fa-eye' : 'fa-magic'} text-xs`}></i>
+                                                                </div>
+                                                                <div>
+                                                                    <span className={`block text-xs font-bold ${syncAudioFile ? 'text-purple-300' : 'text-gray-300'}`}>
+                                                                        {syncAudioFile ? "Nuovo Audio Caricato" : (entry.audioUrl ? "Rigenera Esperienza" : "Genera Video da Audio")}
+                                                                    </span>
+                                                                    <span className="text-[9px] text-gray-400 block truncate max-w-[120px]">
+                                                                        {syncAudioFile ? syncAudioFile.name : (entry.audioUrl ? "Carica per sostituire" : "Carica traccia MP3/WAV")}
+                                                                    </span>
+                                                                </div>
+                                                                <input id="sync-audio-input" type="file" accept="audio/*" className="hidden" onChange={e => { setSyncAudioFile(e.target.files ? e.target.files[0] : null); setCustomFile(null); }} />
                                                             </div>
                                                         </div>
-                                                    ) : (
-                                                        <div className="flex items-center gap-3">
-                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${syncAudioFile ? 'bg-purple-500 text-white' : 'bg-purple-500/10 text-purple-400'}`}>
-                                                                <i className="fas fa-magic text-xs"></i>
-                                                            </div>
-                                                            <div>
-                                                                <span className={`block text-xs font-bold ${syncAudioFile ? 'text-purple-400' : 'text-gray-300'}`}>
-                                                                    {syncAudioFile ? "Audio Caricato" : "Genera Video da Audio"}
-                                                                </span>
-                                                                <span className="text-[9px] text-gray-500 block truncate max-w-[120px]">
-                                                                    {syncAudioFile ? syncAudioFile.name : "Carica traccia MP3/WAV"}
-                                                                </span>
-                                                            </div>
-                                                            <input id="sync-audio-input" type="file" accept="audio/*" className="hidden" onChange={e => { setSyncAudioFile(e.target.files ? e.target.files[0] : null); setCustomFile(null); }} />
-                                                        </div>
+
+                                                        {/* PROMINENT BUTTON FOR OPTION 2 */}
+                                                        <button
+                                                            type="button"
+                                                            disabled={isSubmitting}
+                                                            onClick={(e) => { e.stopPropagation(); if (syncAudioFile) handleSubmit(e); else document.getElementById('sync-audio-input')?.click(); }}
+                                                            className={`w-full mt-2 font-bold py-2 rounded-lg text-[10px] uppercase tracking-wide transition-all shadow-lg flex items-center justify-center gap-1
+                                                            ${syncAudioFile
+                                                                    ? 'bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 text-white shadow-purple-900/30'
+                                                                    : 'bg-purple-900/20 text-purple-300/50 hover:bg-purple-900/40'}`}
+                                                        >
+                                                            {isSubmitting ? '...' : (syncAudioFile ? "GENERA & PUBBLICA" : "SELEZIONA FILE")}
+                                                            {!isSubmitting && syncAudioFile && <i className="fas fa-wand-magic-sparkles"></i>}
+                                                        </button>
+                                                    </div>
+
+                                                    {/* LINK BUTTON FOR OPTION 2 (OUTSIDE BOX) */}
+                                                    {entry.audioUrl && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => { e.stopPropagation(); window.open(`https://sonificart.com/live/${entry.id}?play=true`, '_blank'); }}
+                                                            className="w-full py-2 bg-gradient-to-r from-purple-900/40 to-black text-purple-400 text-[10px] uppercase font-bold rounded border border-purple-500/30 hover:bg-purple-900/60 hover:text-white transition-all flex items-center justify-center gap-2 shadow-lg"
+                                                        >
+                                                            <i className="fas fa-play-circle text-sm"></i>
+                                                            APRI ESPERIENZA LIVE
+                                                        </button>
                                                     )}
                                                 </div>
                                             </div>
@@ -329,11 +444,11 @@ const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPub
                                     </div>
                                     <textarea className="w-full bg-black/30 border border-white/10 p-3 rounded text-white text-sm h-24 focus:border-brand-accent outline-none transition-colors" value={description} onChange={e => setDescription(e.target.value)} placeholder="Aggiungi una descrizione per la vetrina..." />
 
-                                    {/* STATUS BAR FOR UPLOAD ONLY (Sync is handled globally above) */}
+                                    {/* STATUS BAR FOR UPLOAD ONLY */}
                                     {isSubmitting && !isGeneratingSync && (customFile || syncAudioFile) && (
                                         <div className="space-y-1 pt-2">
                                             <div className="flex justify-between text-[10px] font-bold text-brand-accent uppercase tracking-widest">
-                                                <span>Upload In Corso</span>
+                                                <span>{customFile ? "Generazione Video..." : "Upload..."}</span>
                                                 <span>{uploadProgress}%</span>
                                             </div>
                                             <div className="w-full bg-black/40 rounded-full h-1.5 border border-white/5 overflow-hidden">
@@ -342,30 +457,7 @@ const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPub
                                         </div>
                                     )}
 
-                                    <div className="pt-6 mt-2 border-t border-white/10 flex flex-col gap-3">
-                                        {syncAudioFile ? (
-                                            <button
-                                                type="button"
-                                                onClick={handleSubmit}
-                                                disabled={isSubmitting}
-                                                className="w-full bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white font-bold py-4 rounded-xl shadow-lg shadow-purple-900/30 hover:shadow-purple-900/50 transition-all flex items-center justify-center gap-2 group"
-                                            >
-                                                <i className="fas fa-wand-magic-sparkles group-hover:rotate-12 transition-transform"></i>
-                                                <span>GENERA VIDEO & PUBBLICA</span>
-                                            </button>
-                                        ) : (
-                                            <button
-                                                type="submit"
-                                                disabled={isSubmitting}
-                                                className={`w-full font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 uppercase tracking-wide
-                                                    ${isSubmitting
-                                                        ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
-                                                        : 'bg-brand-accent hover:bg-brand-accent-light text-brand-primary shadow-brand-accent/20 hover:shadow-brand-accent/40'}`}
-                                            >
-                                                {isSubmitting ? 'Pubblicazione in corso...' : customFile ? "PUBBLICA CON MEDIA CUSTOM" : "PUBBLICA ORA"}
-                                                {!isSubmitting && <i className="fas fa-arrow-right"></i>}
-                                            </button>
-                                        )}
+                                    <div className="pt-2 flex justify-end">
                                         <button type="button" onClick={onClose} disabled={isSubmitting || isGeneratingSync} className="text-gray-500 text-xs hover:text-white transition-colors py-2">Annulla e torna indietro</button>
                                     </div>
                                 </form>
@@ -373,54 +465,55 @@ const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPub
                         </>
                     ) : (
                         <div className="text-center space-y-6 animate-fade-in">
+                            {/* SUCCESS STATE - ONLY FOR LIVE OPTION HERE AS OPTION 1 IS MANAGED IN STEP 1 */}
                             <h3 className="text-2xl font-bold text-white">Pubblicazione Completata!</h3>
-                            <div className="flex justify-center my-4">
-                                {localVideoUrl ? (
-                                    <div className="relative group w-48 aspect-video rounded-lg overflow-hidden border border-purple-500/50 shadow-lg shadow-purple-500/20">
-                                        <video src={localVideoUrl} className="w-full h-full object-cover" autoPlay loop muted playsInline />
-                                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <i className="fas fa-check-circle text-brand-accent text-3xl"></i>
+                            {/* ... LIVE EXPERIENCE SUCCESS (Option 2) remains ... */}
+                            <div className="space-y-6">
+                                <div className="p-6 bg-purple-900/20 rounded-xl border border-purple-500/30 animate-scale-in">
+                                    <div className="flex items-center justify-center mb-4">
+                                        <div className="w-16 h-16 rounded-full bg-purple-600/20 flex items-center justify-center animate-pulse">
+                                            <i className="fas fa-wand-magic-sparkles text-2xl text-purple-400"></i>
                                         </div>
                                     </div>
-                                ) : (
-                                    <img src={qrUrl} alt="QR Code" className="w-32 h-32 bg-white p-2 rounded" />
-                                )}
-                            </div>
+                                    <h4 className="text-xl font-bold text-white mb-2">Esperienza Sinestetica Pronta</h4>
+                                    <p className="text-sm text-purple-300 mb-6">La tua opera è ora vivente. Usa il link qui sotto per avviare la performance 3D in tempo reale.</p>
 
-                            {localVideoUrl && (
-                                <div className="p-4 bg-purple-900/20 rounded-xl border border-purple-500/30 mb-4">
-                                    <p className="text-xs text-purple-300 mb-3">La tua opera ora è un video sinestetico completo.</p>
-                                    <a
-                                        href={localVideoUrl}
-                                        download={`${title.replace(/\s+/g, '_')}_synesthetic.mp4`}
-                                        className="inline-flex items-center gap-2 px-6 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-full text-sm font-bold transition-all shadow-lg shadow-purple-900/40"
-                                    >
-                                        <i className="fas fa-download"></i>
-                                        SCARICA IL VIDEO MP4
-                                    </a>
+                                    <div className="p-4 bg-black/40 rounded-lg border border-purple-500/20 mb-4">
+                                        <p className="text-[10px] text-purple-400 mb-2 uppercase tracking-widest font-bold">Link Performance Live</p>
+                                        <div className="flex gap-2">
+                                            <input
+                                                readOnly
+                                                value={`https://sonificart.com/live/${entry.id}?play=true`}
+                                                className="flex-grow bg-black/50 text-white text-sm p-3 rounded border border-purple-500/30 text-center font-mono focus:border-purple-500 outline-none"
+                                            />
+                                            <button
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(`https://sonificart.com/live/${entry.id}?play=true`);
+                                                    alert("Link Copiato!");
+                                                }}
+                                                className="px-4 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded transition-colors"
+                                            >
+                                                COPIA
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex justify-center">
+                                        <button
+                                            onClick={() => window.open(`https://sonificart.com/live/${entry.id}?play=true`, '_blank')}
+                                            className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-full font-bold shadow-lg shadow-purple-900/50 flex items-center gap-2"
+                                        >
+                                            <i className="fas fa-play"></i> PROVA ORA
+                                        </button>
+                                    </div>
                                 </div>
-                            )}
-
-                            <div className="flex justify-center gap-4">
-                                {!localVideoUrl && <button onClick={downloadQR} className="px-4 py-2 bg-white/10 rounded text-white text-xs font-bold">Scarica QR</button>}
-                                <button onClick={() => {
-                                    navigator.clipboard.writeText(qrTarget);
-                                    setConfirmModal({
-                                        isOpen: true,
-                                        title: "Successo",
-                                        message: "Link copiato negli appunti!",
-                                        type: 'success',
-                                        singleButton: true,
-                                        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
-                                    });
-                                }} className="px-4 py-2 bg-white/10 rounded text-white text-xs font-bold">Copia Link</button>
-                                {localVideoUrl && <button onClick={downloadQR} className="px-4 py-2 bg-white/10 rounded text-white text-xs font-bold">Scarica QR</button>}
                             </div>
-                            <button onClick={onClose} className="text-gray-500 text-sm mt-4">Chiudi</button>
+                            <button onClick={onClose} className="text-gray-500 text-sm mt-4 hover:text-white transition-colors">Chiudi</button>
                         </div>
-                    )}
-                </div>
-            </div>
+                    )
+                    }
+                </div >
+            </div >
 
             <ConfirmationModal
                 isOpen={confirmModal.isOpen}
@@ -431,11 +524,11 @@ const PublishModal: React.FC<{ entry: DashboardEntry; onClose: () => void; onPub
                 onConfirm={confirmModal.onConfirm}
                 onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
             />
-        </div>
+        </div >
     );
 };
 
-// ... (HistoryItem rimane uguale)
+// ... (HistoryItem remains same)
 const HistoryItem: React.FC<{ item: DashboardEntry; onView: () => void; onPublishClick?: () => void; onDelete?: () => void; isPro?: boolean }> = ({ item, onView, onPublishClick, onDelete, isPro }) => (
     <div className="bg-brand-secondary/40 p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center gap-4 hover:bg-brand-secondary/60 transition-all cursor-pointer" onClick={onView}>
         <div className="flex items-center gap-4 w-full">
@@ -454,7 +547,7 @@ const HistoryItem: React.FC<{ item: DashboardEntry; onView: () => void; onPublis
                 <div className="text-[10px] text-gray-500 mt-1 flex gap-2"><span className="bg-white/10 px-1.5 rounded uppercase">{item.paradigm}</span><span>{new Date(item.timestamp).toLocaleDateString()}</span></div>
             </div>
         </div>
-        <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto mt-2 sm:mt-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-white/5">
+        <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto mt-2 sm:mt-0 pt-3 sm:border-t-0 border-t border-white/5">
             <div className="flex gap-2">
                 <button onClick={(e) => { e.stopPropagation(); onView(); }} className="bg-brand-primary hover:bg-white/10 text-white text-[10px] sm:text-xs font-bold py-2 px-3 sm:px-4 rounded border border-white/10">Sonificazione</button>
                 {item.videoUrl && (
@@ -485,6 +578,8 @@ export const UserDashboard: React.FC<{ user: User, onLoadEntry: (entry: Dashboar
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [publishingEntry, setPublishingEntry] = useState<DashboardEntry | null>(null);
+    const [useWebcamOverlay, setUseWebcamOverlay] = useState(false);
+    const [performanceData, setPerformanceData] = useState<{ result: SonificationResult, audioBlob: Blob } | null>(null);
 
     // MODAL STATES
     const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean, title: string, message: string, onConfirm: () => void, type: 'info' | 'warning' | 'danger' | 'success', singleButton?: boolean }>({ isOpen: false, title: '', message: '', onConfirm: () => { }, type: 'info' });
@@ -493,14 +588,10 @@ export const UserDashboard: React.FC<{ user: User, onLoadEntry: (entry: Dashboar
         setIsLoading(true);
         setError(null);
         try {
-            // No more redundant api.checkSession() call here.
-            // We use the 'user' prop directly.
             const data = await api.getHistory();
             setHistory(Array.isArray(data) ? data : []);
         } catch (err) {
             console.error(err);
-            // Si è verificato un errore nel caricamento.
-            // Se l'errore è un 401 (identificato dal testo), mostriamo il messaggio di sessione scaduta.
             const msg = err instanceof Error ? err.message : String(err);
             if (msg.toLowerCase().includes("unauthorized") || msg.toLowerCase().includes("not found")) {
                 setError("Sessione scaduta o non valida. Effettua nuovamente il login.");
@@ -591,12 +682,29 @@ export const UserDashboard: React.FC<{ user: User, onLoadEntry: (entry: Dashboar
                     ))}
                 </div>
             )}
-            {publishingEntry && (
+            {publishingEntry && !useWebcamOverlay && (
                 <PublishModal
+                    user={user}
                     entry={publishingEntry}
                     onClose={() => setPublishingEntry(null)}
                     onPublish={(details, customMedia) => api.publishFromHistory(publishingEntry.id, details, customMedia)}
                     onSuccess={loadHistory}
+                    onLaunchPerformance={(data, audio) => {
+                        setPerformanceData({ result: data, audioBlob: audio });
+                        setUseWebcamOverlay(true);
+                    }}
+                />
+            )}
+
+            {useWebcamOverlay && performanceData && (
+                <LivePerformanceOverlay
+                    result={performanceData.result}
+                    audioBlob={performanceData.audioBlob}
+                    title={publishingEntry?.title || "OPERA SENZA TITOLO"}
+                    onClose={() => {
+                        setUseWebcamOverlay(false);
+                        setPerformanceData(null);
+                    }}
                 />
             )}
 

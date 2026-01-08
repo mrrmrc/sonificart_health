@@ -1,6 +1,6 @@
-
 import { SonificationResult, Tradition } from '../types';
 import { LOGO_SVG_STRING } from '../components/Logo';
+import WebcamService from './WebcamService';
 
 // Helper to detect supported MIME types
 function getSupportedMimeType(): string {
@@ -21,62 +21,26 @@ function getSupportedMimeType(): string {
     return ''; // Fallback will let the browser decide default
 }
 
-// --- PARTICLE SYSTEM ---
-class Particle {
-    x: number;
-    y: number;
-    vx: number;
-    vy: number;
-    life: number;
-    maxLife: number;
-    color: string;
-    size: number;
-
-    constructor(x: number, y: number, color: string, speed: number) {
-        this.x = x;
-        this.y = y;
-        const angle = Math.random() * Math.PI * 2;
-        const velocity = Math.random() * speed;
-        this.vx = Math.cos(angle) * velocity;
-        this.vy = Math.sin(angle) * velocity;
-        this.life = 1.0;
-        this.maxLife = 1.0 + Math.random() * 0.5;
-        this.color = color;
-        this.size = 2 + Math.random() * 4;
-    }
-
-    update() {
-        this.x += this.vx;
-        this.y += this.vy;
-        this.life -= 0.02; // Fade out
-        // Float upwards slightly (dreamy gravity)
-        this.vy -= 0.05;
-    }
-
-    draw(ctx: CanvasRenderingContext2D) {
-        if (this.life <= 0) return;
-        ctx.globalAlpha = this.life;
-        ctx.fillStyle = this.color;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 1.0;
-    }
-}
-
 export async function generateSonificationVideo(
     result: SonificationResult,
     onProgress: (progress: number) => void,
-    options?: { title?: string, author?: string, overrideAudioBlob?: Blob }
+    options?: { title?: string, author?: string, overrideAudioBlob?: Blob, useWebcam?: boolean }
 ): Promise<Blob> {
     const metadata = options;
     const isSyncMode = !!options?.overrideAudioBlob;
+    const useWebcam = !!options?.useWebcam;
 
     return new Promise(async (resolve, reject) => {
         let audioCtx: AudioContext | null = null;
         let recorder: MediaRecorder | null = null;
         let source: AudioBufferSourceNode | null = null;
         let animationFrameId: number | null = null;
+        let pannerNode: StereoPannerNode | null = null;
+        let filterNode: BiquadFilterNode | null = null;
+        let masterGain: GainNode | null = null;
+
+        // Temporary video element for webcam (hidden)
+        let webcamVideo: HTMLVideoElement | null = null;
 
         try {
             // 1. Detect Mime Type
@@ -94,7 +58,7 @@ export async function generateSonificationVideo(
             const ctx = canvas.getContext('2d', { alpha: false });
             if (!ctx) throw new Error("Impossibile inizializzare il contesto grafico 2D.");
 
-            // 3. Setup Audio
+            // 3. Setup Audio Content
             const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
             audioCtx = new AudioContextClass();
 
@@ -106,26 +70,41 @@ export async function generateSonificationVideo(
             source = audioCtx.createBufferSource();
             source.buffer = audioBuffer;
 
+            // --- AUDIO GRAPH SETUP (SINESTHETIC ENGINE) ---
+            // Source -> Panner (Head Yaw) -> Filter (Expression) -> Gain (Head Z) -> Analyser -> Dest
+
+            pannerNode = audioCtx.createStereoPanner();
+            filterNode = audioCtx.createBiquadFilter();
+            filterNode.type = 'lowpass';
+            filterNode.frequency.value = 20000; // Open by default
+
+            masterGain = audioCtx.createGain();
+            masterGain.gain.value = 1.0;
+
             const analyser = audioCtx.createAnalyser();
-            analyser.fftSize = 2048; // High res for smooth visuals
+            analyser.fftSize = 2048;
             const bufferLength = analyser.frequencyBinCount;
             const dataArray = new Uint8Array(bufferLength);
-            const timeDataArray = new Uint8Array(bufferLength);
 
-            // Setup Gain Node to ensure volume
-            const gainNode = audioCtx.createGain();
-            gainNode.gain.value = 1.0;
+            // Connect chain
+            source.connect(pannerNode);
+            pannerNode.connect(filterNode);
+            filterNode.connect(masterGain);
+            masterGain.connect(analyser);
 
             const dest = audioCtx.createMediaStreamDestination();
-            source.connect(analyser);
-            analyser.connect(dest);
+            analyser.connect(dest); // To Stream
 
-            // Connect to speakers via gain for monitoring
-            source.connect(gainNode);
-            // MUTED FOR GENERATION: User request "senza dover riascoltare"
-            // We set gain to 0.0 instead of disconnecting, to ensure the AudioContext clock keeps running reliably.
-            gainNode.gain.value = 0.0;
-            gainNode.connect(audioCtx.destination);
+            // To Speakers (muted loopback)
+            const monitorGain = audioCtx.createGain();
+            monitorGain.gain.value = 0.0; // Mute for recording process (unless we want user to hear?)
+            // If performance mode is ON, user MUST hear it to interact!
+            if (useWebcam) {
+                monitorGain.gain.value = 1.0;
+            }
+            analyser.connect(monitorGain);
+            monitorGain.connect(audioCtx.destination);
+
 
             // 4. Load Assets
             const loadImage = (src: string): Promise<HTMLImageElement> => {
@@ -140,10 +119,9 @@ export async function generateSonificationVideo(
 
             const img = await loadImage(result.standardizedImageUrl);
 
-            // OPTIMIZATION: Pre-render blurred background
-            // Real-time blur(60px) on 1080p is very heavy. cache it.
+            // Pre-render blurred background
             const bgCanvas = document.createElement('canvas');
-            bgCanvas.width = 512; // Lower res is fine for blur
+            bgCanvas.width = 512;
             bgCanvas.height = 512;
             const bgCtx = bgCanvas.getContext('2d');
             if (bgCtx) {
@@ -151,23 +129,27 @@ export async function generateSonificationVideo(
                 bgCtx.drawImage(img, 0, 0, 512, 512);
             }
 
-            // --- PERFORMANCE OPTIMIZATION: Pre-render Glow Sprite ---
-            const glowCanvas = document.createElement('canvas');
-            glowCanvas.width = 30;
-            glowCanvas.height = 30;
-            const gc = glowCanvas.getContext('2d');
-            if (gc) {
-                const grad = gc.createRadialGradient(15, 15, 0, 15, 15, 15);
-                grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
-                grad.addColorStop(0.3, 'rgba(255, 255, 255, 0.4)');
-                grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-                gc.fillStyle = grad;
-                gc.fillRect(0, 0, 30, 30);
-            }
-
             // Prepare Logo
             const svg64 = btoa(unescape(encodeURIComponent(LOGO_SVG_STRING)));
             const logoImg = await loadImage('data:image/svg+xml;base64,' + svg64);
+
+            // --- WEBCAM INITIALIZATION ---
+            if (useWebcam) {
+                try {
+                    webcamVideo = document.createElement('video');
+                    webcamVideo.autoplay = true;
+                    webcamVideo.playsInline = true;
+                    webcamVideo.style.display = 'none';
+                    document.body.appendChild(webcamVideo); // Needs to be in DOM for MediaPipe? Usually yes.
+
+                    await WebcamService.initialize(webcamVideo);
+                    console.log("Webcam Service Initialized");
+                } catch (wcError) {
+                    console.warn("Webcam failed to init, falling back to auto.", wcError);
+                    // continue without webcam but set flag false? For now keep true but metrics will be default
+                }
+            }
+
 
             // 5. Setup Recorder
             const canvasStream = canvas.captureStream(30);
@@ -178,7 +160,7 @@ export async function generateSonificationVideo(
 
             recorder = new MediaRecorder(combinedStream, {
                 mimeType: mimeType || undefined,
-                videoBitsPerSecond: 6000000 // 6 Mbps for high-end cinematic quality
+                videoBitsPerSecond: 6000000
             });
 
             const chunks: Blob[] = [];
@@ -186,6 +168,10 @@ export async function generateSonificationVideo(
             recorder.onstop = () => {
                 const blob = new Blob(chunks, { type: mimeType || 'video/webm' });
                 if (audioCtx && audioCtx.state !== 'closed') audioCtx.close();
+                if (webcamVideo) {
+                    WebcamService.stop();
+                    webcamVideo.remove();
+                }
                 resolve(blob);
             };
 
@@ -197,39 +183,40 @@ export async function generateSonificationVideo(
             recorder.start();
             const startTime = audioCtx.currentTime;
 
-            // --- LAYOUT CONFIGURATION ---
-            // Naximize Space usage as per user request
-            const footerHeight = 180; // Reduced to give more space
-            const margin = 20; // Minimal margins
-
-            // Image Dimensions
+            // Layout
+            const footerHeight = 180;
+            const margin = 20;
             const naturalW = img.naturalWidth || 512;
             const naturalH = img.naturalHeight || 512;
-
-            // Calculate scale to fill width or height (Contain but MAXIMIZED)
             const scaleX = (width - margin * 2) / naturalW;
             const scaleY = (height - footerHeight - margin) / naturalH;
             const baseScale = Math.min(scaleX, scaleY);
-
             const imgW = naturalW * baseScale;
             const imgH = naturalH * baseScale;
 
-            // Cursor State
+            // Cursor
             let cursorX = width / 2;
             let cursorY = height / 2;
             let targetX = cursorX;
             let targetY = cursorY;
-            const particles: any[] = []; // Changed to use sprite
+            const particles: any[] = [];
 
             const blocks = result.blockAnalysisResult.blocks;
             const gridSize = result.blockAnalysisResult.gridSize;
 
-            // OPTIMIZATION: Pre-calculate filtered events to avoid doing it every frame (60fps)
             const videoEvents = result.audioOutput.events.filter(e => !e.isAccompaniment);
-            const originalDuration = result.audioOutput.duration || 30; // Fallback
+            const maxEventTime = videoEvents.length > 0 ? Math.max(...videoEvents.map(e => e.time + e.duration)) : 30;
+            const originalDuration = result.audioOutput.duration || maxEventTime;
 
+            // DRAW LOOP
             const draw = () => {
                 try {
+                    // Safety check
+                    if (!recorder || recorder.state === 'inactive') {
+                        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+                        return;
+                    }
+
                     if (!audioCtx) return;
                     const now = audioCtx.currentTime;
                     const elapsed = now - startTime;
@@ -237,65 +224,83 @@ export async function generateSonificationVideo(
                     onProgress(progress * 100);
 
                     if (elapsed >= duration) {
-                        // Stop exactly at duration (or slightly after to prevent audio cut)
-                        if (recorder && recorder.state === 'recording') {
-                            recorder.stop();
-                            if (source) {
-                                try { source.stop(); } catch (e) { }
-                            }
-                        }
+                        if (recorder && recorder.state === 'recording') recorder.stop();
                         if (animationFrameId) cancelAnimationFrame(animationFrameId);
                         return;
                     }
 
-                    // --- AUDIO ANALYSIS ---
-                    analyser.getByteFrequencyData(dataArray);
-                    analyser.getByteTimeDomainData(timeDataArray);
-
-                    let sum = 0;
-                    let weightedSum = 0;
-                    let highSum = 0;
-                    let bassSum = 0;
-                    const usefulBins = Math.floor(bufferLength * 0.7);
-                    const midPoint = Math.floor(usefulBins * 0.5);
-
-                    // Reduced loops for analysis if possible, but 70% of bins is okay.
-                    for (let i = 0; i < usefulBins; i += 2) { // OPTIMIZATION: Skip every other bin for speed (negligible visual difference)
-                        const val = dataArray[i];
-                        sum += val;
-                        weightedSum += i * val;
-                        if (i < 20) bassSum += val;
-                        if (i > midPoint) highSum += val;
+                    // --- READ WEBCAM METRICS ---
+                    let metrics = { yaw: 0, pitch: 0, roll: 0, x: 0.5, y: 0.5, z: 0.5, mouthOpen: 0, smile: 0, gazeX: 0, gazeY: 0, isActive: false };
+                    if (useWebcam) {
+                        metrics = WebcamService.getMetrics();
                     }
 
-                    // Adjust sums because we skipped bins
-                    sum *= 2;
-                    weightedSum *= 2; // Rough approx
+                    // --- UPDATE AUDIO GRAPH (PERFORMANCE) ---
+                    if (useWebcam && metrics.isActive && pannerNode && filterNode && masterGain) {
+                        // 1. Pan follows Head Yaw (Left/Right look)
+                        // Smooth transition
+                        const targetPan = -metrics.yaw; // Invert?
+                        pannerNode.pan.value += (targetPan - pannerNode.pan.value) * 0.1;
 
-                    const avgVol = sum / usefulBins;
-                    const normalizedVol = avgVol / 255;
-                    const normalizedBass = (bassSum / 10) / 255; // Adjusted for loop skip
+                        // 2. Filter (Brightness) follows Smile + Pitch
+                        // Smile opens filter (brighter). Pitch up opens, Pitch down closes.
+                        const smileBooster = metrics.smile * 5000;
+                        const pitchMod = metrics.pitch * 3000;
+                        const targetFreq = 1000 + smileBooster + pitchMod + 500; // Base 1500
+                        // Clamped
+                        const clampedFreq = Math.max(200, Math.min(22000, targetFreq));
+                        filterNode.frequency.value += (clampedFreq - filterNode.frequency.value) * 0.1;
 
-                    // SPACE COORDINATION: Centroid maps frequency to horizontal position (0 to 1)
-                    const centroid = sum > 0 ? (weightedSum / sum) / usefulBins : 0.5;
-                    const targetX_norm = centroid;
-                    const targetL = (highSum / (usefulBins - midPoint)) / 255 * 100 * 2; // Adjusted
+                        // 3. Zoom (Volume/Reverb feel) - approximated by Gain for now
+                        // Z is approx distance. Closer (larger face) -> louder?
+                        // metrics.z is smaller when closer? usually.
+                        // Let's assume z=0 is close, z=1 is far.
+                        const targetGain = 0.5 + (1.0 - metrics.z);
+                        masterGain.gain.value += (targetGain - masterGain.gain.value) * 0.1;
+                    }
 
-                    // --- 2. RENDERING ---
-                    const camX = Math.sin(now * 0.3) * 25;
-                    const camY = Math.cos(now * 0.25) * 15;
-                    const zoomDrift = 1.0 + (Math.sin(now * 0.15) * 0.02);
+                    // --- ANALYSIS ---
+                    analyser.getByteFrequencyData(dataArray);
+                    let sum = 0, bassSum = 0;
+                    const usefulBins = Math.floor(bufferLength * 0.7);
+                    for (let i = 0; i < usefulBins; i += 2) {
+                        const val = dataArray[i];
+                        sum += val;
+                        if (i < 20) bassSum += val;
+                    }
+                    const avgVol = (sum * 2) / usefulBins / 255;
+                    const normalizedBass = (bassSum * 2 / 10) / 255;
+
+                    // --- RENDERING ---
+
+                    // Camera / Parallax
+                    let camX = 0, camY = 0, zoomDrift = 1.0;
+
+                    if (useWebcam && metrics.isActive) {
+                        // Head tracking parallax
+                        // metrics.x/y are 0-1. Center 0.5.
+                        camX = (metrics.x - 0.5) * -100; // Invert motion for window effect
+                        camY = (metrics.y - 0.5) * -80;
+
+                        // Lean in to zoom
+                        zoomDrift = 1.0 + ((1.0 - metrics.z) * 0.3); // up to 1.3x zoom
+                    } else {
+                        // Auto mode
+                        camX = Math.sin(now * 0.3) * 25;
+                        camY = Math.cos(now * 0.25) * 15;
+                        zoomDrift = 1.0 + (Math.sin(now * 0.15) * 0.02);
+                    }
 
                     ctx.save();
                     ctx.fillStyle = '#050505';
                     ctx.fillRect(0, 0, width, height);
 
-                    // Background (Parallax)
+                    // Background
                     ctx.save();
                     ctx.translate(width / 2, height / 2);
                     const bgScale = Math.max(width / 512, height / 512) * 1.5;
                     ctx.scale(bgScale, bgScale);
-                    ctx.translate(camX * 0.3, camY * 0.3);
+                    ctx.translate(camX * 0.2, camY * 0.2); // Less parallax
                     ctx.globalAlpha = 0.4;
                     ctx.drawImage(bgCanvas, -256, -256, 512, 512);
                     ctx.restore();
@@ -306,195 +311,224 @@ export async function generateSonificationVideo(
                     ctx.scale(zoomDrift, zoomDrift);
                     ctx.translate(camX, camY);
 
+                    // Expression effect: Surprise triggers shake/chromatic aberration?
+                    // Simple shake
+                    if (metrics.mouthOpen > 0.3) {
+                        const shake = (Math.random() - 0.5) * 10;
+                        ctx.translate(shake, shake);
+                    }
+
                     ctx.globalAlpha = 1.0;
                     ctx.shadowColor = 'rgba(0,0,0,0.8)';
                     ctx.shadowBlur = 40;
                     ctx.drawImage(img, -imgW / 2, -imgH / 2, imgW, imgH);
                     ctx.restore();
 
-                    // --- 3. CURSOR LOGIC ---
+                    // --- CURSOR LOGIC ---
                     const centerX = width / 2 + camX * zoomDrift;
                     const centerY = height / 2 + camY * zoomDrift;
                     const effW = imgW * zoomDrift;
                     const effH = imgH * zoomDrift;
 
-                    if (isSyncMode) {
-                        // SYNC MODE: Normalize current time to original sonification timeline
-                        // This ensures the cursor follows the original scan pattern
-                        // but stretched/compressed to fit the new audio duration.
-                        const normalizedTime = (elapsed / duration) * originalDuration;
+                    if (useWebcam && metrics.isActive) {
+                        // Gaze tracking cursor
+                        // metrics.gazeX/Y from -1 to 1.
+                        const gazeTargetX = centerX + (metrics.gazeX * (effW * 0.8)); // limit range
+                        const gazeTargetY = centerY + (metrics.gazeY * (effH * 0.8));
 
-                        // Find event using pre-calculated array
-                        // Optimization: Use binary search or assume events are sorted? They are usually sorted.
-                        // For now, simpler optimization: Since time moves forward, we could cache the last index?
-                        // But finding in a few hundred/thousand items is okay if not creating new arrays.
-                        const active = videoEvents.find(e => e.time <= normalizedTime && (e.time + e.duration) > normalizedTime);
+                        targetX = gazeTargetX;
+                        targetY = gazeTargetY;
 
-                        if (active && active.sourceBlock) {
-                            const nX = (active.sourceBlock.position.x / gridSize) - 0.5;
-                            const nY = (active.sourceBlock.position.y / gridSize) - 0.5;
-                            targetX = centerX + (nX * effW);
-                            targetY = centerY + (nY * effH);
-                        } else if (videoEvents.length > 0) {
-                            // Interpolate for fluidity
-                            const lastEvent = videoEvents[videoEvents.length - 1];
-                            if (normalizedTime >= lastEvent.time) {
-                                const b = lastEvent.sourceBlock;
-                                targetX = centerX + ((b.position.x / gridSize - 0.5) * effW);
-                                targetY = centerY + ((b.position.y / gridSize - 0.5) * effH);
+                        // Smoother interpolation for eyes
+                        cursorX += (targetX - cursorX) * 0.08;
+                        cursorY += (targetY - cursorY) * 0.08;
+                    } else {
+                        // AUTO SYNC MODE (Fallback or non-webcam)
+                        if (isSyncMode) {
+                            const normalizedTime = (elapsed / duration) * originalDuration;
+                            /* 
+                             * SYNC LOGIC FIXED:
+                             * Find close events or interpolate
+                             */
+                            let active = videoEvents.find(e => e.time <= normalizedTime && (e.time + e.duration) > normalizedTime);
+
+                            // scan back if gap
+                            if (!active && videoEvents.length > 0) {
+                                for (let k = videoEvents.length - 1; k >= 0; k--) {
+                                    if (videoEvents[k].time <= normalizedTime) {
+                                        active = videoEvents[k];
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if (active && active.sourceBlock) {
+                                const nX = (active.sourceBlock.position.x / gridSize) - 0.5;
+                                const nY = (active.sourceBlock.position.y / gridSize) - 0.5;
+                                targetX = centerX + (nX * effW);
+                                targetY = centerY + (nY * effH);
+                            } else if (videoEvents.length > 0) {
+                                const last = videoEvents[videoEvents.length - 1];
+                                if (normalizedTime >= last.time) {
+                                    const b = last.sourceBlock;
+                                    targetX = centerX + ((b.position.x / gridSize - 0.5) * effW);
+                                    targetY = centerY + ((b.position.y / gridSize - 0.5) * effH);
+                                }
+                            }
+                        } else {
+                            const active = videoEvents.find(e => e.time <= elapsed && (e.time + e.duration) > elapsed);
+                            if (active && active.sourceBlock) {
+                                targetX = centerX + ((active.sourceBlock.position.x / gridSize) - 0.5) * effW;
+                                targetY = centerY + ((active.sourceBlock.position.y / gridSize) - 0.5) * effH;
                             }
                         }
-                    } else {
-                        const active = videoEvents.find(e => e.time <= elapsed && (e.time + e.duration) > elapsed);
-                        if (active && active.sourceBlock) {
-                            const nX = (active.sourceBlock.position.x / gridSize) - 0.5;
-                            const nY = (active.sourceBlock.position.y / gridSize) - 0.5;
-                            targetX = centerX + (nX * effW);
-                            targetY = centerY + (nY * effH);
-                        }
+                        cursorX += (targetX - cursorX) * 0.15;
+                        cursorY += (targetY - cursorY) * 0.15;
                     }
 
-                    cursorX += (targetX - cursorX) * 0.15;
-                    cursorY += (targetY - cursorY) * 0.15;
-
-                    // Particles (Optimized)
-                    if (normalizedVol > 0.05 && particles.length < 50) { // Limit max particles
-                        const count = Math.min(2, Math.floor(normalizedVol * 3)); // Reduce spawn rate
+                    // --- PARTICLES ---
+                    // Boost particles on "Awe" (Mouth open) or Bass
+                    const aweFactor = useWebcam ? metrics.mouthOpen : 0;
+                    if ((normalizedBass > 0.05 || aweFactor > 0.2) && particles.length < 50) {
+                        const count = 1 + Math.floor(aweFactor * 5); // Burst if awe
                         for (let i = 0; i < count; i++) {
                             particles.push({
                                 x: cursorX, y: cursorY,
-                                vx: (Math.random() - 0.5) * (2 + normalizedBass * 8),
-                                vy: (Math.random() - 0.5) * (2 + normalizedBass * 8),
+                                vx: (Math.random() - 0.5) * (2 + normalizedBass * 8 + aweFactor * 10),
+                                vy: (Math.random() - 0.5) * (2 + normalizedBass * 8 + aweFactor * 10),
                                 life: 1.0,
-                                size: 10 + Math.random() * 20
+                                size: 10 + Math.random() * 20,
+                                color: (useWebcam && metrics.smile > 0.5) ? '#ffd700' : '#ffffff' // Gold particles if smiling
                             });
                         }
                     }
 
                     particles.forEach(p => {
                         p.x += p.vx; p.y += p.vy;
-                        p.vx *= 0.98; p.vy *= 0.98;
-                        p.life -= 0.02; // Faster fade to cleanup quicker
+                        p.life -= 0.02;
                         if (p.life > 0) {
                             ctx.globalAlpha = p.life * 0.7;
-                            const s = p.size * (0.5 + p.life * 0.5);
-                            ctx.drawImage(glowCanvas, p.x - s / 2, p.y - s / 2, s, s);
+                            ctx.fillStyle = p.color || '#fff';
+                            ctx.beginPath();
+                            ctx.arc(p.x, p.y, p.size * (0.5 + p.life * 0.5), 0, Math.PI * 2);
+                            ctx.fill();
                         }
                     });
                     while (particles.length > 0 && particles[0].life <= 0) particles.shift();
 
-                    // Cursor Drawing
+                    // Draw Cursor
                     ctx.globalAlpha = 1.0;
                     ctx.save();
                     ctx.translate(cursorX, cursorY);
-                    const cursorSize = 12 + (normalizedBass * 25);
+                    const cursorSize = 12 + (normalizedBass * 25) + (aweFactor * 20);
                     ctx.shadowColor = 'white';
-                    ctx.shadowBlur = 15 + normalizedVol * 30;
+                    ctx.shadowBlur = 15 + avgVol * 30;
                     ctx.strokeStyle = '#fff';
                     ctx.lineWidth = 2.5;
                     ctx.beginPath();
                     ctx.arc(0, 0, cursorSize, 0, Math.PI * 2);
                     ctx.stroke();
-                    ctx.fillStyle = `rgba(255,255,255, ${0.4 + normalizedVol * 0.5})`;
+                    // Inner fill
+                    ctx.fillStyle = `rgba(255,255,255, ${0.4 + avgVol * 0.5})`;
                     ctx.beginPath();
                     ctx.arc(0, 0, cursorSize * 0.3, 0, Math.PI * 2);
                     ctx.fill();
                     ctx.restore();
 
-                    // --- 6. FOOTER OVERLAY ---
-                    const title = metadata?.title || "SINFONIA VISIVA";
-                    const author = metadata?.author || "SonificA.R.T.";
-
+                    // --- FOOTER & LED BARS ---
+                    // (Keep the centered layout we fixed previously)
                     const footerY = height - 180;
                     const grd = ctx.createLinearGradient(0, footerY, 0, height);
                     grd.addColorStop(0, 'rgba(0,0,0,0)');
-                    grd.addColorStop(0.4, 'rgba(0,0,0,0.8)');
                     grd.addColorStop(1, 'rgba(0,0,0,0.95)');
                     ctx.fillStyle = grd;
                     ctx.fillRect(0, footerY, width, 180);
 
-                    // Re-calculate some audio values for the bars
-                    const lowFreq = bassSum / 10 / 255; // Adjusted
-                    const midFreq = (sum / usefulBins) / 255;
-                    const highFreq = (highSum / (usefulBins - midPoint)) / 255;
-
-                    // RGB Values from current analysis (to tint the bars)
+                    // Colors logic
                     let currentR = 255, currentG = 255, currentB = 255;
-                    // Find out what block we are currently analyzing to get the RGB
-                    if (!isSyncMode) {
-                        const active = videoEvents.find(e => e.time <= elapsed && (e.time + e.duration) > elapsed);
-                        if (active && active.sourceBlock) {
-                            currentR = active.sourceBlock.r;
-                            currentG = active.sourceBlock.g;
-                            currentB = active.sourceBlock.b;
-                        }
+                    // Just use white/gold if performance, or map from block if synced
+                    if (useWebcam) {
+                        // Map expression to color? 
+                        // Smile -> Warm, Frown -> Cool
+                        const warmth = metrics.smile;
+                        currentR = 200 + (warmth * 55);
+                        currentG = 200 + (warmth * 55);
+                        currentB = 255 - (warmth * 100);
                     } else {
-                        // Sync Mode RGB logic
-                        const normalizedTime = (elapsed / duration) * originalDuration;
-                        const active = videoEvents.find(e => e.time <= normalizedTime && (e.time + e.duration) > normalizedTime);
-                        if (active && active.sourceBlock) {
-                            currentR = active.sourceBlock.r;
-                            currentG = active.sourceBlock.g;
-                            currentB = active.sourceBlock.b;
+                        // ... (Existing RGB logic for auto mode) ...
+                        // Re-implement fast find or keep it simple
+                        if (!isSyncMode) {
+                            const active = videoEvents.find(e => e.time <= elapsed && (e.time + e.duration) > elapsed);
+                            if (active?.sourceBlock) {
+                                currentR = active.sourceBlock.r; currentG = active.sourceBlock.g; currentB = active.sourceBlock.b;
+                            }
+                        } else {
+                            const normalizedTime = (elapsed / duration) * originalDuration;
+                            const active = videoEvents.find(e => e.time <= normalizedTime && (e.time + e.duration) > normalizedTime);
+                            if (active?.sourceBlock) {
+                                currentR = active.sourceBlock.r; currentG = active.sourceBlock.g; currentB = active.sourceBlock.b;
+                            }
                         }
                     }
 
-                    // --- DRAW RGB LED BARS ---
                     const barWidth = 12;
                     const barGap = 40;
-                    const barsStartX = width - 450;
+                    const totalBarsWidth = (barWidth * 3) + (barGap * 2);
+                    const barsStartX = (width / 2) - (totalBarsWidth / 2);
                     const barsY = height - 60;
                     const maxBarH = 100;
 
                     const drawLEDBar = (x: number, val: number, r: number, g: number, b: number, label: string) => {
-                        const h = val * maxBarH;
-                        // Glow shadow
-                        ctx.shadowBlur = 15 + val * 20;
-                        ctx.shadowColor = `rgba(${r},${g},${b},0.8)`;
-
-                        // LED segments look
-                        const segments = 10;
+                        const segments = 12;
                         const segH = maxBarH / segments;
+                        ctx.shadowBlur = 30 + val * 40;
+                        ctx.shadowColor = `rgba(${r},${g},${b},0.9)`;
                         for (let i = 0; i < segments; i++) {
                             const segY = barsY - (i + 1) * segH;
                             const isActive = (i / segments) < val;
-                            ctx.fillStyle = isActive ? `rgba(${r},${g},${b},1)` : `rgba(${r},${g},${b},0.15)`;
-                            ctx.fillRect(x, segY + 1, barWidth, segH - 2);
+                            ctx.fillStyle = isActive ? `rgba(${r},${g},${b},1)` : `rgba(${r},${g},${b},0.1)`;
+                            const pulse = isActive ? (val * 2) : 0;
+                            ctx.fillRect(x - pulse / 2, segY + 2, barWidth + pulse, segH - 3);
                         }
-
                         ctx.shadowBlur = 0;
-                        ctx.font = 'bold 10px "Inter", sans-serif';
-                        ctx.fillStyle = `rgba(${r},${g},${b},0.6)`;
-                        ctx.fillText(label, x - 5, barsY + 15);
+                        ctx.font = 'bold 12px "Inter", sans-serif';
+                        ctx.fillStyle = `rgba(${r},${g},${b},0.8)`;
+                        ctx.fillText(label, x - 5, barsY + 20);
                     };
+
+                    const lowFreq = normalizedBass;
+                    const midFreq = avgVol;
+                    const highFreq = avgVol * (1 + (metrics.smile || 0)); // Smile boosts highs visual
 
                     drawLEDBar(barsStartX, lowFreq, currentR, 50, 50, 'LOW');
                     drawLEDBar(barsStartX + barGap, midFreq, 50, currentG, 50, 'MID');
                     drawLEDBar(barsStartX + barGap * 2, highFreq, 50, 50, currentB, 'HIGH');
 
-                    // Title & Author (Left aligned)
+                    // Title
                     ctx.font = '600 42px "Outfit", sans-serif';
                     ctx.fillStyle = '#fff';
-                    ctx.fillText(title.toUpperCase(), 60, height - 95);
+                    ctx.fillText((metadata?.title || "SINFONIA VISIVA").toUpperCase(), 60, height - 95);
                     ctx.font = '300 24px "Inter", sans-serif';
-                    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-                    ctx.fillText(author, 60, height - 55);
-
-                    // Progress Bar (Slimmer)
-                    ctx.fillStyle = 'rgba(255,255,255,0.05)';
-                    ctx.fillRect(60, height - 145, width - 360, 3);
-                    ctx.fillStyle = '#fff';
-                    ctx.shadowBlur = 10; ctx.shadowColor = '#fff';
-                    ctx.fillRect(60, height - 145, (width - 360) * progress, 3);
-                    ctx.shadowBlur = 0;
+                    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+                    ctx.fillText(metadata?.author || "SonificA.R.T.", 60, height - 55);
 
                     // Logo
                     ctx.drawImage(logoImg, width - 180, height - 150, 90, 90);
 
+                    // Performance Indicator
+                    if (useWebcam) {
+                        ctx.fillStyle = 'red';
+                        ctx.beginPath(); ctx.arc(width - 200, 60, 10, 0, Math.PI * 2); ctx.fill();
+                        ctx.font = 'bold 14px sans-serif'; ctx.fillStyle = '#fff';
+                        ctx.fillText('REC', width - 180, 65);
+                    }
+
+
                     ctx.restore();
                     animationFrameId = requestAnimationFrame(draw);
-                } catch (e: any) {
-                    console.error("Critical Drawing Error:", e);
+
+                } catch (e) {
+                    console.error(e);
                     if (animationFrameId) cancelAnimationFrame(animationFrameId);
                     reject(e);
                 }
@@ -503,9 +537,10 @@ export async function generateSonificationVideo(
             draw();
 
         } catch (error) {
-            if (audioCtx) audioCtx.close();
-            console.error("Video Generation Failed:", error);
+            console.error("Video Gen Failed", error);
+            if (webcamVideo) webcamVideo.remove();
             reject(error);
         }
     });
+
 }

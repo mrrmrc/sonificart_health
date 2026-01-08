@@ -1,35 +1,28 @@
 <IfModule mod_rewrite.c>
   RewriteEngine On
-  
-  # --- CONFIGURAZIONE BASE ---
-  # Se il sito è in una sottocartella, cambia '/' con '/a/'
   RewriteBase /
 
-  # --- INTERRUTTORE MANUTENZIONE ---
-  # Per attivare la manutenzione, togli il # davanti alla riga sotto
-  # DirectoryIndex maintenance.html index.html
-
-  # Per attivare l'APP, usa questa (Default):
-  DirectoryIndex index.html
-
-  # ---------------------------------------------------------
-
-  # 1. API PASS-THROUGH
-  # Non toccare le richieste verso la cartella API
+  # 1. API - Do not touch
   RewriteRule ^api/ - [L,NC]
 
-  # 2. FILE STATICI
-  # Se il file esiste (immagini, css, js), servilo direttamente
+  # 2. ASSETS - If file exists, serve it.
   RewriteCond %{REQUEST_FILENAME} -f
   RewriteRule ^ - [L]
 
-  # 3. ROUTING REACT (SPA)
-  # Se il file non esiste, manda tutto a index.html (o app.html se hai rinominato)
-  RewriteRule ^ index.html [L]
+  # 3. ASSETS - If file does NOT exist but looks like an asset (js, css, png, jpg, etc), FAIL with 404
+  # This prevents serving index.html (content-type text/html) for missing JS files
+  RewriteRule \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ - [R=404,L,NC]
 
+  # 4. SPA - Everything else goes to index.html
+  RewriteRule ^ index.html [L]
 </IfModule>
 
-# --- MIME TYPES (Anti-Errore JS) ---
+<IfModule mod_headers.c>
+    <FilesMatch "\.(js|css|xml|gz)$">
+        Header append Vary: Accept-Encoding
+    </FilesMatch>
+</IfModule>
+
 <IfModule mod_mime.c>
   AddType application/javascript .js
   AddType text/css .css

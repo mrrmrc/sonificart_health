@@ -10,6 +10,8 @@
     },
     "dependencies": {
         "@google/genai": "*",
+        "@mediapipe/camera_utils": "^0.3.1675466862",
+        "@mediapipe/face_mesh": "^0.4.1633559619",
         "file-saver": "^2.0.5",
         "jszip": "^3.10.1",
         "osc-js": "^2.4.1",

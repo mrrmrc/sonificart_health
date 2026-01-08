@@ -29,13 +29,22 @@ const handleResponse = async (response: Response) => {
 
     if (!response.ok) {
         const errorMessage = data?.error || data?.message || `Errore ${response.status}`;
-        // If we have a clean JSON error, throw only that. 
-        // Otherwise prefix with technical info for actual server crashes.
         if (data) {
             throw new Error(errorMessage);
         } else {
             throw new Error(`Errore Server (${response.status}): ${text.substring(0, 120)}...`);
         }
+    }
+
+    // New: If status is OK but data is null (parsing failed), throw valid error with text
+    if (!data) {
+        console.warn("Server responded with non-JSON:", text);
+        // If response is empty, it might be a silent success but it's risky to assume.
+        // Let's return a success object if empty, OR throw if it looks like an error.
+        if (!text.trim()) return { success: true }; // Assume empty 200 OK is success
+
+        // Otherwise throw with content
+        throw new Error(`Risposta Server Non Valida: ${text.substring(0, 100)}`);
     }
 
     return data;
@@ -49,7 +58,7 @@ export const api = {
             body: JSON.stringify({ email, password })
         });
         const data = await handleResponse(response);
-        if (data.token) {
+        if (data.token && data.token !== 'undefined' && data.token !== 'null') {
             localStorage.setItem(STORAGE_KEYS.TOKEN, data.token);
         }
         return data.user;
@@ -305,8 +314,70 @@ export const api = {
         return data.videoUrl;
     },
 
+    detachVideoFromHistory: async (entryId: string): Promise<boolean> => {
+        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        if (!token) throw new Error("Unauthorized");
+
+        const formData = new FormData();
+        formData.append('auth_token', token);
+        formData.append('entryId', entryId);
+
+        const response = await fetch(`${API_BASE_URL}/index.php?action=detach_video_from_history`, {
+            method: 'POST',
+            body: formData
+        });
+        const data = await handleResponse(response);
+        return data.success;
+    },
+
+    generateVideoServer: async (entryId: string): Promise<any> => {
+        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        if (!token) throw new Error("Unauthorized");
+
+        const formData = new FormData();
+        formData.append('auth_token', token);
+        formData.append('entryId', entryId);
+
+        const response = await fetch(`${API_BASE_URL}/index.php?action=generate_video_ffmpeg`, {
+            method: 'POST',
+            body: formData
+        });
+        const data = await handleResponse(response);
+        return data; // Returns { success: true, status: 'processing', jobId: ... }
+    },
+
+    checkGenerationStatus: async (entryId: string): Promise<{ status: string, videoUrl?: string, error?: string, message?: string }> => {
+        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const formData = new FormData();
+        formData.append('entryId', entryId);
+        if (token) formData.append('auth_token', token);
+
+        const response = await fetch(`${API_BASE_URL}/index.php?action=check_generation_status`, {
+            method: 'POST',
+            body: formData
+        });
+        return await handleResponse(response);
+    },
+
     // --- ATTACH AUDIO TO HISTORY (NEW) ---
-    attachAudioToHistory: async (entryId: string, audioBlob: Blob, fileName: string = "uploaded_audio.mp3"): Promise<string> => {
+    updateHistoryItemConfig: async (id: string, config: any): Promise<boolean> => {
+        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        if (!token) throw new Error("Unauthorized");
+
+        const formData = new FormData();
+        formData.append('auth_token', token);
+        formData.append('id', id);
+        formData.append('configUsed', JSON.stringify(config));
+
+        const response = await fetch(`${API_BASE_URL}/index.php?action=update_history_item`, {
+            method: 'POST',
+            body: formData
+        });
+        const data = await handleResponse(response);
+        return data.success;
+    },
+
+    attachAudioToHistory: async (entryId: string, audioBlob: Blob, fileName: string = "uploaded_audio.mp3", onProgress?: (p: number) => void): Promise<string> => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
         if (!token) throw new Error("Unauthorized");
 
@@ -338,6 +409,8 @@ export const api = {
                 });
                 const data = await handleResponse(response);
                 if (data.success && data.url) finalUrl = data.url;
+
+                if (onProgress) onProgress(Math.round(((i + 1) / totalChunks) * 100));
             }
         }
 

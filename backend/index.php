@@ -1,4 +1,19 @@
 <?php
+ob_start();
+
+// Shutdown Handler for Fatal Errors
+register_shutdown_function(function () {
+    $error = error_get_last();
+    if ($error && ($error['type'] === E_ERROR || $error['type'] === E_PARSE || $error['type'] === E_CORE_ERROR || $error['type'] === E_COMPILE_ERROR)) {
+        // Clean buffer
+        while (ob_get_level())
+            ob_end_clean();
+        http_response_code(500);
+        header('Content-Type: application/json');
+        echo json_encode(["error" => "Fatal Error: " . $error['message'] . " in " . $error['file'] . " line " . $error['line']]);
+    }
+});
+
 // =====================================
 // SONIFICART API v1.16 (Complete & Fixed)
 // =====================================
@@ -56,11 +71,21 @@ try {
 }
 
 // HELPERS
+// --- HELPER LAUNCH RESPONSE ---
 function sendResponse($data, $code = 200)
 {
+    // Ensure no previous output (warnings, spaces) corrupts JSON
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+
+    // Start fresh buffer just in case (optional, but clean)
+    ob_start();
+
     http_response_code($code);
+    header('Content-Type: application/json');
     echo json_encode($data);
-    exit();
+    exit;
 }
 
 function getUserIdFromToken($input)
@@ -529,6 +554,39 @@ if ($action === 'attach_audio_to_history' && $method === 'POST') {
     }
 }
 
+// --- UPDATE HISTORY ITEM CONFIG (Protetta) ---
+if ($action === 'update_history_item' && $method === 'POST') {
+    $entryId = $input['id'] ?? ($_POST['id'] ?? null);
+    $configUsed = $input['configUsed'] ?? ($_POST['configUsed'] ?? null);
+
+    if (!$entryId)
+        sendResponse(["error" => "No ID"], 400);
+
+    // Verify ownership
+    $stmt = $pdo->prepare("SELECT user_id FROM history WHERE id = ?");
+    $stmt->execute([$entryId]);
+    $ownerId = $stmt->fetchColumn();
+
+    if ($ownerId != $userId) {
+        // Allow admin override
+        $isAdmin = 0;
+        if ($userId) {
+            $stmt2 = $pdo->prepare("SELECT is_admin FROM users WHERE id = ?");
+            $stmt2->execute([$userId]);
+            $isAdmin = $stmt2->fetchColumn();
+        }
+        if (!$isAdmin)
+            sendResponse(["error" => "Unauthorized"], 403);
+    }
+
+    // Ensure it is a string
+    if (is_array($configUsed))
+        $configUsed = json_encode($configUsed);
+
+    $pdo->prepare("UPDATE history SET config_json = ? WHERE id = ?")->execute([$configUsed, $entryId]);
+    sendResponse(["success" => true]);
+}
+
 // --- PUBLISH HISTORY (Protetta) ---
 if ($action === 'publish_history' && $method === 'POST') {
     try {
@@ -650,6 +708,70 @@ if ($action === 'register' && $method === 'POST') {
     }
 }
 
+// --- HELPER EXECUTION WRAPPER ---
+function executeCommand($command, &$output = [], &$returnVar = 0)
+{
+    // 1. Try exec()
+    if (function_exists('exec')) {
+        exec($command, $output, $returnVar);
+        return;
+    }
+
+    // 2. Try passthru() - outputs directly, so capturing is harder 
+    // but we can capture output buffering if needed, or just run it.
+    // For FFmpeg log redirection (> file), we don't need to capture stdout/stderr here usually.
+    if (function_exists('passthru')) {
+        // passthru returns void, status is in $returnVar
+        ob_start();
+        passthru($command, $returnVar);
+        $raw = ob_get_clean();
+        $output = explode("\n", $raw);
+        return;
+    }
+
+    // 3. Try system()
+    if (function_exists('system')) {
+        ob_start();
+        system($command, $returnVar);
+        $raw = ob_get_clean();
+        $output = explode("\n", $raw);
+        return;
+    }
+
+    // 4. Try shell_exec() - only returns output, no returnVar directly (checking output for null usually)
+    // This is weaker for error checking but better than nothing.
+    if (function_exists('shell_exec')) {
+        $out = shell_exec($command . " 2>&1; echo $?");
+        // We can append "; echo $?" on Linux to get exit code, but on Windows it is "& echo %errorlevel%"
+        // Given cross-platform complexity, let's just run it.
+        // For our usage (ffmpeg > log), shell_exec($cmd) is fine.
+        // But we need $returnVar. 
+        // Let's assume strict failure if we are here.
+    }
+
+    // 5. Try proc_open()
+    if (function_exists('proc_open')) {
+        $descriptors = [
+            0 => ["pipe", "r"], // stdin
+            1 => ["pipe", "w"], // stdout
+            2 => ["pipe", "w"]  // stderr
+        ];
+        $process = proc_open($command, $descriptors, $pipes);
+        if (is_resource($process)) {
+            $stdout = stream_get_contents($pipes[1]);
+            $stderr = stream_get_contents($pipes[2]);
+            fclose($pipes[0]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            $returnVar = proc_close($process);
+            $output = explode("\n", $stdout . "\n" . $stderr);
+            return;
+        }
+    }
+
+    throw new Exception("Nessuna funzione di esecuzione comandi abilitata (exec, passthru, system, proc_open). Contatta l'hosting per abilitare 'exec()'.");
+}
+
 // --- UPLOAD CHUNK (Pubblica/Protetta?) ---
 if ($action === 'upload_chunk' && $method === 'POST') {
     $tempDir = __DIR__ . '/../media/temp_chunks/';
@@ -704,6 +826,57 @@ if ($action === 'upload_media' && $method === 'POST') {
     } else {
         sendResponse(["error" => "Errore scrittura file"], 500);
     }
+}
+
+// --- GENERATE VIDEO SERVER-SIDE (FFMPEG) ---
+if ($action === 'generate_video_ffmpeg' && $method === 'POST') {
+    // --- VIDEO GENERATION (FFMPEG) - DEPRECATED / DISABLED ---
+    // Moved to Client-Side (VideoGenService) due to server restrictions on exec().
+    sendResponse(["error" => "Server-side generation is disabled. Please use client-side generation."], 501);
+}
+
+// --- CHECK GENERATION STATUS ---
+if ($action === 'check_generation_status' && $method === 'POST') {
+    $entryId = $input['entryId'] ?? $_POST['entryId'] ?? null;
+    if (!$entryId)
+        sendResponse(["error" => "ID mancante"], 400);
+
+    $baseDir = __DIR__ . '/../';
+    $statusFile = $baseDir . 'media/temp_chunks/gen_status_' . $entryId . '.json';
+
+    // Check existence
+    if (!file_exists($statusFile)) {
+        // Fallback: check DB
+        $stmt = $pdo->prepare("SELECT video_url FROM history WHERE id = ?");
+        $stmt->execute([$entryId]);
+        $row = $stmt->fetch();
+        if ($row && $row['video_url']) {
+            sendResponse(["status" => "done", "videoUrl" => $row['video_url']]);
+        }
+        // If file not found and not in DB, assume still initializing or unknown (retry)
+        // Returning 'processing' or 'unknown' is safe for client polling
+        sendResponse(["status" => "processing", "details" => "waiting_for_start"]);
+    }
+
+    // Robust Read
+    $content = @file_get_contents($statusFile);
+    if (!$content) {
+        // Read failed or empty, assume busy writing
+        sendResponse(["status" => "processing", "details" => "read_retry"]);
+    }
+
+    $data = json_decode($content, true);
+    if (!$data) {
+        // JSON parse failed (incomplete write?), retry
+        sendResponse(["status" => "processing", "details" => "json_retry"]);
+    }
+
+    // If done, update DB here (lazy update) to ensure consistency
+    if (($data['status'] ?? '') === 'done' && isset($data['videoUrl'])) {
+        $pdo->prepare("UPDATE history SET video_url = ? WHERE id = ?")->execute([$data['videoUrl'], $entryId]);
+    }
+
+    sendResponse($data);
 }
 
 // --- CHECK SESSION ---

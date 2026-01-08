@@ -8,6 +8,7 @@ import { AdminPage } from "./pages/AdminPage";
 import { LandingPageWrapper } from "./pages/LandingPageWrapper";
 import { ProfilePage } from "./pages/ProfilePage";
 import { MuseumPage } from "./pages/MuseumPage";
+import { PerformancePage } from "./pages/PerformancePage";
 import { ErrorPage } from "./components/ErrorPage";
 import { ComparePage } from "./pages/ComparePage";
 
@@ -26,6 +27,7 @@ export const router = createBrowserRouter([
             { path: "profile", element: <ProfilePage /> },
             { path: "admin", element: <AdminPage /> },
             { path: "museum", element: <MuseumPage /> },
+            { path: "live/:id", element: <PerformancePage /> },
         ],
     },
 ]);
