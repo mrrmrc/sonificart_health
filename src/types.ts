@@ -273,6 +273,8 @@ export interface DashboardEntry {
     imageHash?: string;
     videoUrl?: string | null;
     title?: string | null;
+    subtitle?: string | null;
+    description?: string | null;
 }
 
 export interface MusicGenResponse {

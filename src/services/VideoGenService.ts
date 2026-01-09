@@ -1,274 +1,471 @@
+import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
+import { LOGO_SVG_STRING } from '../components/Logo';
 
-import { SonificationResult } from '../types';
-
-interface VideoGenOptions {
-    imageUrl: string;
-    audioBlob: Blob;
-    duration?: number; // in seconds (optional, defaults to audio length)
+export interface VideoGenOptions {
+    audioUrl: string | Blob;
+    imageUrl: string | Blob;
     title?: string;
+    subtitle?: string;
+    date?: string;
     author?: string;
-    onProgress?: (progress: number) => void;
+    duration?: number; // Optional override
+    onProgress: (percent: number) => void;
+}
+
+// --- HELPER: Visual State ---
+interface VisualState {
+    imageData: ImageData | null;
+}
+
+// --- HELPER: SVG to Bitmap ---
+// --- HELPER: SVG to Bitmap ---
+async function svgToBitmap(svgString: string, size: number = 100): Promise<ImageBitmap> {
+    const svg64 = btoa(svgString);
+    const b64Start = 'data:image/svg+xml;base64,';
+    const image64 = b64Start + svg64;
+
+    const img = new Image();
+    img.src = image64;
+    await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = (e) => reject(new Error("SVG Load Error"));
+    });
+
+    // Fix: Explicitly resize to handle SVGs without natural dimensions
+    return createImageBitmap(img, {
+        resizeWidth: size,
+        resizeHeight: size,
+        resizeQuality: 'high'
+    });
+}
+
+// --- HELPER: Draw Frame (Shared Logic) ---
+function drawFrame(
+    ctx: CanvasRenderingContext2D,
+    img: ImageBitmap,
+    logo: ImageBitmap | null,
+    pixelData: Uint8ClampedArray | null,
+    freqData: Uint8Array,
+    time: number,
+    duration: number,
+    W: number, H: number,
+    VideoH: number, FooterH: number, SafeArea: number,
+    title?: string, author?: string,
+    subtitle?: string, date?: string
+) {
+    // 1. Draw Image (Contain Mode with subtle zoom)
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, W, VideoH);
+
+    const imgRatio = img.width / img.height;
+    const canvasRatio = W / VideoH;
+    let dw = W;
+    let dh = VideoH;
+    let dx = 0;
+    let dy = 0;
+
+    if (imgRatio > canvasRatio) {
+        dh = W / imgRatio;
+        dy = (VideoH - dh) / 2;
+    } else {
+        dw = VideoH * imgRatio;
+        dx = (W - dw) / 2;
+    }
+
+    // A. Dynamic Zoom (Subtle)
+    const zoom = 1 + (time / duration) * 0.10; // 10% zoom
+    const zDw = dw * zoom;
+    const zDh = dh * zoom;
+    const zDx = dx - (zDw - dw) / 2;
+    const zDy = dy - (zDh - dh) / 2;
+
+    ctx.drawImage(img, zDx, zDy, zDw, zDh);
+
+    // 2. Synced Scanning Effect & Pixel Sonification
+    // Scanline moves strictly within the IMAGE BOUNDS (zDx to zDx + zDw)
+    // progress 0 -> zDx (Left edge of image)
+    // progress 1 -> zDx + zDw (Right edge of image)
+    const progress = Math.min(1, Math.max(0, time / duration));
+
+    // Bounds check to ensure we don't scan black bars
+    const scanStart = zDx;
+    const scanWidth = zDw;
+    const scanX = Math.floor(scanStart + (progress * scanWidth));
+
+    // A. Draw Scanline
+    // Clip to image area to avoid drawing on margins
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(zDx, zDy, zDw, zDh);
+    ctx.clip();
+
+    const grad = ctx.createLinearGradient(0, 0, 0, VideoH);
+    grad.addColorStop(0, 'rgba(0, 255, 255, 0)');
+    grad.addColorStop(0.5, 'rgba(0, 255, 255, 0.6)'); // Increased opacity
+    grad.addColorStop(1, 'rgba(0, 255, 255, 0)');
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(scanX - 1, zDy, 3, zDh); // Scanline restricted to Image Height
+
+    // B. Pixel Viz (Sonification Curve) attached to Scanline
+    if (pixelData) {
+        const sampleStep = 15;
+        const vizWidth = 80; // Wider curve
+
+        ctx.lineWidth = 3; // Thicker line
+
+        for (let y = zDy; y < zDy + zDh; y += sampleStep) {
+            const sy = Math.floor(y);
+            if (sy < 0 || sy >= VideoH) continue;
+
+            // ScanX is already within image, just clamp to width
+            const sx = Math.max(0, Math.min(W - 1, scanX));
+
+            const idx = (sy * W + sx) * 4;
+            if (idx < 0 || idx >= pixelData.length - 4) continue;
+
+            const r = pixelData[idx];
+            const g = pixelData[idx + 1];
+            const b = pixelData[idx + 2];
+            const brightness = (r + g + b) / 3;
+
+            if (brightness > 30) {
+                const fIdx = Math.floor(((y - zDy) / zDh) * (freqData.length / 2));
+                const amp = freqData[fIdx] || 0;
+
+                if (amp > 20) {
+                    const size = (amp / 255) * vizWidth * (brightness / 255);
+
+                    ctx.strokeStyle = `rgba(${r},${g},${b}, ${amp / 200})`; // Brighter
+                    ctx.beginPath();
+                    ctx.moveTo(scanX - size, y);
+                    ctx.quadraticCurveTo(scanX, y - size / 2, scanX + size, y);
+                    ctx.stroke();
+                }
+            }
+        }
+    }
+    ctx.restore();
+
+    // 3. Footer
+    const footerY = VideoH;
+
+    // Solid Background so it's visible against any player UI
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, footerY, W, FooterH);
+
+    // Separator
+    const sepGrad = ctx.createLinearGradient(0, footerY, W, footerY);
+    sepGrad.addColorStop(0, '#00ffff');
+    sepGrad.addColorStop(1, '#a855f7');
+    ctx.fillStyle = sepGrad;
+    ctx.fillRect(0, footerY, W, 4); // Thicker separator
+
+    // A. Left: Logo & Meta
+    const leftMargin = 40;
+    const contentY = footerY + 30; // Start content lower
+
+    // Logo (SVG Bitmap) - Increased Size
+    if (logo) {
+        ctx.drawImage(logo, leftMargin, contentY, 100, 100);
+    }
+
+    // Text Group
+    const textX = leftMargin + 120;
+    const textBaseY = contentY + 10;
+
+    ctx.textAlign = 'left';
+
+    // Title
+    ctx.font = 'bold 36px Arial';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText((title || "Opera Senza Nome").toUpperCase(), textX, textBaseY + 30);
+
+    // Subtitle & Date
+    ctx.font = '20px Arial';
+    ctx.fillStyle = '#dddddd';
+    const dateText = date || new Date().toLocaleDateString('it-IT');
+    const subText = subtitle ? `${subtitle} • ${dateText}` : dateText;
+    ctx.fillText(subText, textX, textBaseY + 65);
+
+    // B. Center/Right: LED Bar Visualizer (Much Prominent)
+    const vizX = W * 0.50;
+    const vizW = W * 0.45;
+    const vizH = 120; // Taller bars
+    const vizBaseY = footerY + (FooterH - 20); // Bottom aligned at Footer Bottom - padding
+
+    const bars = 32;
+    const gap = 8;
+    const barW = (vizW / bars) - gap;
+
+    const step = Math.floor(freqData.length / bars);
+
+    for (let i = 0; i < bars; i++) {
+        let sum = 0;
+        for (let j = 0; j < step; j++) sum += freqData[i * step + j];
+        const val = sum / step;
+
+        // Non-linear height for better visual
+        const boost = val > 10 ? val * 1.5 : val;
+        const h = Math.min(vizH, (boost / 255) * vizH);
+
+        const x = vizX + i * (barW + gap);
+        const y = vizBaseY - h;
+
+        // Neon Gradient
+        const lg = ctx.createLinearGradient(0, y, 0, y + h);
+        lg.addColorStop(0, '#00ffff');   // Cyan Top
+        lg.addColorStop(0.5, '#2dd4bf'); // Teal Mid
+        lg.addColorStop(1, '#0000ff');   // Blue Base
+
+        ctx.fillStyle = lg;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#00ffff';
+        ctx.fillRect(x, y, barW, h);
+        ctx.shadowBlur = 0;
+
+        // Peak Cap
+        if (h > 5) {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(x, y - 6, barW, 4);
+        }
+    }
+}
+
+// Helper: Decode Audio
+function decodeAudio(blob: Blob): Promise<AudioBuffer> {
+    return new Promise((resolve, reject) => {
+        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const arrayBuffer = e.target?.result as ArrayBuffer;
+                const buffer = await audioCtx.decodeAudioData(arrayBuffer);
+                resolve(buffer);
+            } catch (err) {
+                reject(err);
+            }
+        };
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(blob);
+    });
 }
 
 export const VideoGenService = {
-    generateVideo: async ({ imageUrl, audioBlob, duration, title, author, onProgress }: VideoGenOptions): Promise<Blob> => {
+    generateVideo: async (options: VideoGenOptions): Promise<Blob> => {
+        const { audioUrl, imageUrl, title, author, subtitle, date, onProgress } = options;
+        console.log("🚀 Starting Turbo Video Generation (Logo + New Viz)...");
 
-        // 1. Layout Config
+        // 1. Load Resources
+        console.log("Reading Blobs...");
+        const audioBlob = audioUrl instanceof Blob ? audioUrl : await fetch(audioUrl).then(r => r.blob());
+        const imageBlob = imageUrl instanceof Blob ? imageUrl : await fetch(imageUrl).then(r => r.blob());
+
+        let audioBuffer: AudioBuffer;
+        try {
+            audioBuffer = await decodeAudio(audioBlob);
+        } catch (e) {
+            console.error("Decode Audio Failed:", e);
+            throw new Error(`Non riesco a decodificare l'audio. (${e})`);
+        }
+
+        const imageBitmap = await createImageBitmap(imageBlob);
+
+        // Load Logo
+        const logoBitmap = await svgToBitmap(LOGO_SVG_STRING, 128);
+
+        const duration = options.duration || audioBuffer.duration;
+
+        // 2. Constants
+        const FPS = 24;
+        const TOTAL_FRAMES = Math.floor(duration * FPS);
+        const WIDTH = 1280;
+        const HEIGHT = 720 + 200; // Increased Footer based on user feedback
         const VIDEO_W = 1280;
         const VIDEO_H = 720;
-        const FOOTER_H = 180;
-        const TOTAL_H = VIDEO_H + FOOTER_H;
+        const FOOTER_H = 200;
+        const TOP_SAFE_AREA = 120;
 
-        // 2. Setup Canvas
+        // 3. Muxer Setup
+        const muxer = new Muxer({
+            target: new ArrayBufferTarget(),
+            video: {
+                codec: 'avc',
+                width: WIDTH,
+                height: HEIGHT
+            },
+            audio: {
+                codec: 'aac',
+                sampleRate: audioBuffer.sampleRate,
+                numberOfChannels: audioBuffer.numberOfChannels
+            },
+            fastStart: 'in-memory',
+            firstTimestampBehavior: 'offset'
+        });
+
+        // 4. Setup Canvas & Pixel Data
         const canvas = document.createElement('canvas');
-        canvas.width = VIDEO_W;
-        canvas.height = TOTAL_H;
-        const ctx = canvas.getContext('2d', { alpha: false });
-        if (!ctx) throw new Error("Could not create canvas context");
+        canvas.width = WIDTH;
+        canvas.height = HEIGHT;
+        const ctx = canvas.getContext('2d', { alpha: false, deserialized: true } as any) as CanvasRenderingContext2D | null;
+        if (!ctx) throw new Error("Canvas Context Failed");
 
-        // 3. Load Resources
-        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-            const i = new Image();
-            i.crossOrigin = "anonymous";
-            i.onload = () => resolve(i);
-            i.onerror = (e) => reject(new Error("Failed to load image"));
-            i.src = imageUrl;
-        });
+        // Pre-draw image to get pixel data for sonification viz
+        // Use exact logic as drawFrame for scaling
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, WIDTH, VIDEO_H);
+        const calcRatio = () => {
+            const imgRatio = imageBitmap.width / imageBitmap.height;
+            const canvasRatio = WIDTH / VIDEO_H;
+            if (imgRatio > canvasRatio) {
+                const dh = WIDTH / imgRatio;
+                const dy = (VIDEO_H - dh) / 2;
+                return { dx: 0, dy, dw: WIDTH, dh };
+            } else {
+                const dw = VIDEO_H * imgRatio;
+                const dx = (WIDTH - dw) / 2;
+                return { dx, dy: 0, dw, dh: VIDEO_H };
+            }
+        }
+        const { dx, dy, dw, dh } = calcRatio();
+        ctx.drawImage(imageBitmap, dx, dy, dw, dh);
 
-        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-        const arrayBuffer = await audioBlob.arrayBuffer();
-        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        // Grab pixel data (Warning: this can be large, but it's once per video)
+        // WIDTH * VIDEO_H * 4 = 1280 * 720 * 4 ~= 3.6MB. Trivial.
+        let pixelData: Uint8ClampedArray | null = null;
+        try {
+            const imageData = ctx.getImageData(0, 0, WIDTH, VIDEO_H);
+            pixelData = imageData.data;
+        } catch (e) {
+            console.warn("Could not get pixel data (tainted canvas?)", e);
+        }
 
-        const finalDuration = (duration && duration > 0 && duration < Infinity)
-            ? duration
-            : audioBuffer.duration;
-
-        console.log(`[VideoGen] Starting. Detected Duration: ${finalDuration}s`);
-
-        // Destinations
-        const dest = audioCtx.createMediaStreamDestination();
-        const source = audioCtx.createBufferSource();
-        source.buffer = audioBuffer;
-
-        const analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 2048;
-        source.connect(analyser);
-        analyser.connect(dest);
-
-        // 3. MediaRecorder
-        const canvasStream = canvas.captureStream(30); // 30 FPS
-        const combinedStream = new MediaStream([
-            ...canvasStream.getVideoTracks(),
-            ...dest.stream.getAudioTracks()
-        ]);
-
-        const mimeType = MediaRecorder.isTypeSupported('video/webm; codecs=vp9')
-            ? 'video/webm; codecs=vp9'
-            : 'video/webm';
-
-        const recorder = new MediaRecorder(combinedStream, {
-            mimeType: mimeType,
-            videoBitsPerSecond: 3000000 // 3 Mbps
-        });
-
-        const chunks: Blob[] = [];
-        recorder.ondataavailable = (e) => {
-            if (e.data.size > 0) chunks.push(e.data);
+        // 5. Video Encoder Setup
+        const videoConfig: VideoEncoderConfig = {
+            codec: 'avc1.4d002a',
+            width: WIDTH,
+            height: HEIGHT,
+            bitrate: 5_000_000,
+            framerate: FPS,
         };
 
-        return new Promise((resolve, reject) => {
-            let isStopped = false;
-            let animationFrameId: number;
-
-            // Cleanup function
-            const cleanup = () => {
-                if (isStopped) return;
-                isStopped = true;
-
-                if (recorder.state !== 'inactive') recorder.stop();
-                if (animationFrameId) cancelAnimationFrame(animationFrameId);
-
-                try {
-                    source.stop();
-                    source.disconnect();
-                    analyser.disconnect();
-                    audioCtx.close();
-                } catch (e) { /* ignore */ }
-            };
-
-            recorder.onstop = () => {
-                const blob = new Blob(chunks, { type: 'video/mp4' });
-                resolve(blob);
-            };
-
-            recorder.onerror = (e) => {
-                cleanup();
-                reject(new Error("Recorder Error: " + e));
-            };
-
-            // STRICT STOP TRIGGER
-            source.onended = () => {
-                console.log("[VideoGen] Audio source ended. Stopping.");
-                cleanup();
-            };
-
-            // Fallback timeout
-            setTimeout(() => {
-                if (!isStopped) cleanup();
-            }, (finalDuration + 3) * 1000); // 3s extra tolerance
-
-            // START
-            recorder.start();
-            source.start();
-            const startTime = audioCtx.currentTime;
-
-            // 4. Render Loop
-            const draw = () => {
-                if (isStopped) return;
-
-                const now = audioCtx.currentTime - startTime;
-
-                // Progress
-                const progress = finalDuration > 0 ? Math.min((now / finalDuration), 1.0) : 0;
-                if (onProgress) onProgress(progress * 100);
-
-                try {
-                    // --- LAYOUT RENDERING ---
-
-                    // A. Top Area: Image (VIDEO_W x VIDEO_H)
-                    ctx.fillStyle = '#000';
-                    ctx.fillRect(0, 0, VIDEO_W, TOTAL_H);
-
-                    // Draw Image Cleanly (Cover)
-                    const imgAspect = img.naturalWidth / img.naturalHeight;
-                    const canvasAspect = VIDEO_W / VIDEO_H;
-                    let dw, dh, dx, dy;
-
-                    if (canvasAspect > imgAspect) {
-                        dw = VIDEO_W; dh = VIDEO_W / imgAspect;
-                        dx = 0; dy = (VIDEO_H - dh) / 2;
-                    } else {
-                        dh = VIDEO_H; dw = VIDEO_H * imgAspect;
-                        dy = 0; dx = (VIDEO_W - dw) / 2;
-                    }
-
-                    // Save Clip for Image Area
-                    ctx.save();
-                    ctx.beginPath();
-                    ctx.rect(0, 0, VIDEO_W, VIDEO_H);
-                    ctx.clip();
-
-                    ctx.drawImage(img, dx, dy, dw, dh);
-
-                    // --- B. Image Cursor (Grid Scanning) ---
-                    // No dimming, just a highlight/cursor
-
-                    const cols = 16;
-                    const rows = 9;
-                    const totalBlocks = cols * rows;
-
-                    const currentBlockTotalIndex = Math.floor(progress * totalBlocks);
-                    const currentBlockIndex = Math.min(currentBlockTotalIndex, totalBlocks - 1);
-
-                    const blockW = VIDEO_W / cols;
-                    const blockH = VIDEO_H / rows;
-
-                    const col = currentBlockIndex % cols;
-                    const row = Math.floor(currentBlockIndex / cols);
-
-                    const bx = col * blockW;
-                    const by = row * blockH;
-
-                    // Audio Reactivity
-                    const bufferLength = analyser.frequencyBinCount;
-                    const dataArray = new Uint8Array(bufferLength);
-                    analyser.getByteTimeDomainData(dataArray);
-
-                    let sum = 0;
-                    for (let i = 0; i < bufferLength; i++) {
-                        const v = (dataArray[i] - 128) / 128.0;
-                        sum += v * v;
-                    }
-                    const rms = Math.sqrt(sum / bufferLength);
-                    const volume = Math.min(rms * 5, 1);
-
-                    // Draw Cursor Border
-                    ctx.strokeStyle = `rgba(45, 212, 191, ${0.6 + (volume * 0.4)})`; // Cyan
-                    ctx.lineWidth = 3 + (volume * 2);
-                    ctx.shadowColor = '#2dd4bf'; // Cyan Glow
-                    ctx.shadowBlur = 10 + (volume * 10);
-
-                    ctx.strokeRect(bx, by, blockW, blockH);
-
-                    // Subtle glass highlight inside cursor
-                    ctx.fillStyle = `rgba(255, 255, 255, ${0.1 + (volume * 0.1)})`;
-                    ctx.fillRect(bx, by, blockW, blockH);
-
-                    ctx.restore(); // End Image Clip
-
-
-                    // --- C. Footer Area (VIDEO_W x FOOTER_H) ---
-                    const footerY = VIDEO_H;
-
-                    // Background Footer
-                    ctx.fillStyle = '#111';
-                    ctx.fillRect(0, footerY, VIDEO_W, FOOTER_H);
-
-                    // Separator Line
-                    ctx.strokeStyle = '#333';
-                    ctx.lineWidth = 1;
-                    ctx.beginPath();
-                    ctx.moveTo(0, footerY);
-                    ctx.lineTo(VIDEO_W, footerY);
-                    ctx.stroke();
-
-                    // Text Info
-                    ctx.shadowBlur = 0;
-                    if (title) {
-                        ctx.font = 'bold 32px Arial';
-                        ctx.textAlign = 'left';
-                        ctx.fillStyle = '#fff';
-                        ctx.fillText(title.toUpperCase(), 40, footerY + 60);
-
-                        if (author) {
-                            ctx.font = '24px Arial';
-                            ctx.fillStyle = '#aaa';
-                            ctx.fillText(author, 40, footerY + 100);
-                        }
-                    }
-
-                    // Waveform/Spectrum in Footer (Right side)
-                    const waveX = VIDEO_W / 2;
-                    const waveW = VIDEO_W / 2 - 40;
-                    const waveH = FOOTER_H - 40;
-                    const waveY = footerY + 20;
-                    const waveCenterY = waveY + (waveH / 2);
-
-                    ctx.lineWidth = 2;
-                    ctx.strokeStyle = '#2dd4bf'; // Cyan
-                    ctx.beginPath();
-
-                    const sliceW = waveW / bufferLength;
-                    let wx = waveX;
-
-                    for (let i = 0; i < bufferLength; i += 4) { // Ship every 4 for simpler line
-                        const v = dataArray[i] / 128.0;
-                        const wy = waveCenterY + ((v - 1) * (waveH / 2));
-
-                        if (i === 0) ctx.moveTo(wx, wy);
-                        else ctx.lineTo(wx, wy);
-
-                        wx += sliceW * 4;
-                    }
-                    ctx.stroke();
-
-                    animationFrameId = window.setTimeout(draw, 1000 / 30); // Target 30 FPS exactly
-                } catch (drawErr) {
-                    cleanup();
-                }
-            };
-
-            draw();
+        const videoEncoder = new VideoEncoder({
+            output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+            error: (e) => console.error("Video Encoder Error", e)
         });
+        videoEncoder.configure(videoConfig);
+
+        // 6. Audio Encoder Setup
+        const audioConfig: AudioEncoderConfig = {
+            codec: 'mp4a.40.2',
+            sampleRate: audioBuffer.sampleRate,
+            numberOfChannels: audioBuffer.numberOfChannels,
+            bitrate: 128_000,
+        };
+
+        const audioEncoder = new AudioEncoder({
+            output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
+            error: (e) => console.error("Audio Encoder Error", e)
+        });
+        audioEncoder.configure(audioConfig);
+
+        // 7. Offline Processing
+        const offlineCtx = new OfflineAudioContext(audioBuffer.numberOfChannels, audioBuffer.duration * audioBuffer.sampleRate, audioBuffer.sampleRate);
+        const source = offlineCtx.createBufferSource();
+        source.buffer = audioBuffer;
+        const analyser = offlineCtx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        analyser.connect(offlineCtx.destination);
+        source.start(0);
+
+        const freqData = new Uint8Array(analyser.frequencyBinCount);
+
+        let frameIndex = 0;
+        const timeStep = 1 / FPS;
+
+        const processFrame = async () => {
+            const time = frameIndex * timeStep;
+            analyser.getByteFrequencyData(freqData);
+
+            drawFrame(
+                ctx!, imageBitmap, logoBitmap, pixelData, freqData, time, duration,
+                WIDTH, HEIGHT, VIDEO_H, FOOTER_H, TOP_SAFE_AREA,
+                title, author, subtitle, date
+            );
+
+            const frameBitmap = await createImageBitmap(canvas);
+            const videoFrame = new VideoFrame(frameBitmap, { timestamp: time * 1_000_000, duration: timeStep * 1_000_000 });
+
+            if (videoEncoder.encodeQueueSize > 20) await videoEncoder.flush();
+            videoEncoder.encode(videoFrame, { keyFrame: frameIndex % (FPS * 2) === 0 });
+            videoFrame.close();
+            frameBitmap.close();
+            onProgress(Math.floor((frameIndex / TOTAL_FRAMES) * 80));
+        };
+
+        const processLoop = new Promise<void>((resolve, reject) => {
+            offlineCtx.oncomplete = () => resolve();
+            const tick = (scheduledTime: number) => {
+                if (frameIndex >= TOTAL_FRAMES) {
+                    offlineCtx.resume();
+                    return;
+                }
+                offlineCtx.suspend(scheduledTime).then(async () => {
+                    try { await processFrame(); }
+                    catch (err) { reject(err); return; }
+
+                    const nextTime = (frameIndex + 1) * timeStep;
+                    frameIndex++;
+                    if (nextTime < duration) {
+                        tick(nextTime);
+                        offlineCtx.resume();
+                    } else {
+                        offlineCtx.resume();
+                    }
+                }).catch(reject);
+            };
+            tick(0);
+            offlineCtx.startRendering(); // Start!
+        });
+
+        // Feed Audio (Standard Planar)
+        const feedAudio = async () => {
+            const chunkSize = audioBuffer.sampleRate;
+            let offset = 0;
+            while (offset < audioBuffer.length) {
+                const len = Math.min(chunkSize, audioBuffer.length - offset);
+                const rawBuffer = new Float32Array(len * audioBuffer.numberOfChannels);
+                for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
+                    const channel = audioBuffer.getChannelData(ch);
+                    rawBuffer.set(channel.subarray(offset, offset + len), ch * len);
+                }
+                const audioData = new AudioData({
+                    format: 'f32-planar',
+                    sampleRate: audioBuffer.sampleRate,
+                    numberOfFrames: len,
+                    numberOfChannels: audioBuffer.numberOfChannels,
+                    timestamp: (offset / audioBuffer.sampleRate) * 1_000_000,
+                    data: rawBuffer
+                });
+                audioEncoder.encode(audioData);
+                audioData.close();
+                offset += len;
+                await new Promise(r => setTimeout(r, 0));
+            }
+        };
+
+        await Promise.all([processLoop, feedAudio()]);
+
+        console.log("Encoding Finished. Flushing...");
+        onProgress(90);
+        await videoEncoder.flush();
+        await audioEncoder.flush();
+
+        console.log("Finalizing Muxer...");
+        muxer.finalize();
+
+        const buffer = muxer.target.buffer;
+        return new Blob([buffer], { type: 'video/mp4' });
     }
 };

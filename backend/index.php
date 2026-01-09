@@ -60,14 +60,15 @@ try {
     $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS tier VARCHAR(20) DEFAULT 'free'");
     $pdo->exec("ALTER TABLE history ADD COLUMN IF NOT EXISTS video_url VARCHAR(255) DEFAULT NULL");
     try {
-        // Force add title if not exists (handling older mysql versions gracefully if possible)
+        // Force add title/subtitle/description if not exists
         $pdo->exec("ALTER TABLE history ADD COLUMN IF NOT EXISTS title VARCHAR(255) DEFAULT NULL");
+        $pdo->exec("ALTER TABLE history ADD COLUMN IF NOT EXISTS subtitle VARCHAR(255) DEFAULT NULL");
+        $pdo->exec("ALTER TABLE history ADD COLUMN IF NOT EXISTS description TEXT DEFAULT NULL");
     } catch (Exception $e) {
-        // Fallback for very old MySql where IF NOT EXISTS might fail in specific syntax? 
-        // Or column already exists.
+        // Fallback
     }
 } catch (Exception $e) {
-    // Ignore if column already exists or other minor issues
+    // Ignore
 }
 
 // HELPERS
@@ -375,6 +376,8 @@ if ($action === 'get_history' && $method === 'POST') {
             "paradigm" => $h['paradigm'],
             "traditionName" => $h['tradition_name'],
             "title" => $h['title'] ?? null,
+            "subtitle" => $h['subtitle'] ?? null,
+            "description" => $h['description'] ?? null,
             "musicGenerationPrompt" => isset($h['music_generation_prompt']) ? json_decode($h['music_generation_prompt'], true) : null,
             "generatedAiTrackUrl" => $h['generated_ai_track_url'] ? ((strpos($h['generated_ai_track_url'], 'http') === 0) ? $h['generated_ai_track_url'] : $baseUrl . (strpos($h['generated_ai_track_url'], '/') === 0 ? '' : '/') . $h['generated_ai_track_url']) : null,
             "configUsed" => isset($h['config_json']) ? json_decode($h['config_json'], true) : null,
@@ -448,6 +451,73 @@ if ($action === 'delete_history_item' && $method === 'POST') {
     }
 }
 
+// --- UPLOAD CHUNK (Protetta) ---
+if ($action === 'upload_chunk' && $method === 'POST') {
+    $uploadId = $_POST['upload_session_id'] ?? null;
+    $chunkIndex = (int) ($_POST['chunk_index'] ?? 0);
+    $totalChunks = (int) ($_POST['total_chunks'] ?? 0);
+    $fileExt = $_POST['file_ext'] ?? 'bin';
+
+    if (!$uploadId)
+        sendResponse(["error" => "Generazione interrotta: ID mancante"], 400);
+
+    // Temp Directory for chunks
+    $tempDir = __DIR__ . '/../media/temp_chunks/' . $uploadId . '/';
+    if (!file_exists($tempDir))
+        mkdir($tempDir, 0755, true);
+
+    $chunkFile = $tempDir . "part_" . $chunkIndex;
+
+    if (isset($_FILES['chunk_data']) && $_FILES['chunk_data']['error'] === UPLOAD_ERR_OK) {
+        move_uploaded_file($_FILES['chunk_data']['tmp_name'], $chunkFile);
+    } else {
+        error_log("Chunk upload failed: " . json_encode($_FILES));
+        sendResponse(["error" => "Errore caricamento frammento"], 500);
+    }
+
+    // Check if all chunks are present
+    $allPresent = true;
+    for ($i = 0; $i < $totalChunks; $i++) {
+        if (!file_exists($tempDir . "part_" . $i)) {
+            $allPresent = false;
+            break;
+        }
+    }
+
+    if ($allPresent) {
+        // Reassemble
+        $finalName = $uploadId . "." . $fileExt;
+        $finalDir = __DIR__ . '/../media/custom/';
+        if (!file_exists($finalDir))
+            mkdir($finalDir, 0755, true);
+
+        $finalPath = $finalDir . $finalName;
+        $out = fopen($finalPath, "wb");
+
+        if ($out) {
+            for ($i = 0; $i < $totalChunks; $i++) {
+                $partPath = $tempDir . "part_" . $i;
+                $in = fopen($partPath, "rb");
+                if ($in) {
+                    while ($buff = fread($in, 4096))
+                        fwrite($out, $buff);
+                    fclose($in);
+                }
+                unlink($partPath); // Delete chunk
+            }
+            fclose($out);
+            rmdir($tempDir); // Remove temp dir
+
+            $publicUrl = "/media/custom/" . $finalName;
+            sendResponse(["success" => true, "fileUrl" => $publicUrl]);
+        } else {
+            sendResponse(["error" => "Errore riassemblaggio file"], 500);
+        }
+    } else {
+        sendResponse(["success" => true, "status" => "partial"]);
+    }
+}
+
 // --- ATTACH VIDEO TO HISTORY (Protetta) ---
 if ($action === 'attach_video_to_history' && $method === 'POST') {
     $entryId = $_POST['entryId'] ?? null;
@@ -498,6 +568,31 @@ if ($action === 'attach_video_to_history' && $method === 'POST') {
         $pdo->prepare("UPDATE history SET video_url = ? WHERE id = ?")->execute([$finalVideoUrl, $entryId]);
         sendResponse(["success" => true, "videoUrl" => $finalVideoUrl]);
     }
+}
+
+// --- DETACH VIDEO FROM HISTORY (Protetta) ---
+if ($action === 'detach_video_from_history' && $method === 'POST') {
+    $entryId = $input['id'] ?? ($_POST['id'] ?? null);
+    if (!$entryId)
+        sendResponse(["error" => "No ID"], 400);
+
+    // Verify ownership
+    $stmt = $pdo->prepare("SELECT user_id, video_url FROM history WHERE id = ?");
+    $stmt->execute([$entryId]);
+    $item = $stmt->fetch();
+
+    if (!$item)
+        sendResponse(["error" => "Not found"], 404);
+    if ($item['user_id'] != $userId)
+        sendResponse(["error" => "Unauthorized"], 403);
+
+    // Optional: Delete file if physical (cleanup)
+    if (!empty($item['video_url']) && strpos($item['video_url'], '/media') !== false) {
+        @unlink(__DIR__ . '/../' . $item['video_url']);
+    }
+
+    $pdo->prepare("UPDATE history SET video_url = NULL WHERE id = ?")->execute([$entryId]);
+    sendResponse(["success" => true]);
 }
 
 // --- ATTACH AUDIO TO HISTORY (Protetta) ---
@@ -584,6 +679,30 @@ if ($action === 'update_history_item' && $method === 'POST') {
         $configUsed = json_encode($configUsed);
 
     $pdo->prepare("UPDATE history SET config_json = ? WHERE id = ?")->execute([$configUsed, $entryId]);
+    sendResponse(["success" => true]);
+}
+
+// --- UPDATE METADATA (Protetta) ---
+if ($action === 'update_metadata' && $method === 'POST') {
+    $entryId = $input['id'] ?? ($_POST['id'] ?? null);
+    $title = $input['title'] ?? ($_POST['title'] ?? null);
+    $subtitle = $input['subtitle'] ?? ($_POST['subtitle'] ?? null);
+    $description = $input['description'] ?? ($_POST['description'] ?? null);
+
+    if (!$entryId)
+        sendResponse(["error" => "No ID"], 400);
+
+    // Verify ownership
+    $stmt = $pdo->prepare("SELECT user_id FROM history WHERE id = ?");
+    $stmt->execute([$entryId]);
+    $ownerId = $stmt->fetchColumn();
+
+    if ($ownerId != $userId)
+        sendResponse(["error" => "Unauthorized"], 403);
+
+    $pdo->prepare("UPDATE history SET title = ?, subtitle = ?, description = ? WHERE id = ?")
+        ->execute([$title, $subtitle, $description, $entryId]);
+
     sendResponse(["success" => true]);
 }
 
@@ -793,14 +912,31 @@ if ($action === 'upload_chunk' && $method === 'POST') {
         if (!file_exists($finalDir))
             mkdir($finalDir, 0755, true);
 
+        // Disable time limit for reassembly
+        set_time_limit(0);
+        ini_set('memory_limit', '-1');
+
         $finalFilename = uniqid('pub_', true) . '.' . $ext;
         $finalPath = $finalDir . $finalFilename;
         $finalFile = fopen($finalPath, 'ab');
+
+        if (!$finalFile) {
+            sendResponse(["error" => "Impossibile creare file finale"], 500);
+        }
+
         for ($i = 0; $i < $totalChunks; $i++) {
             $chunkToRead = $tempDir . $uploadId . '_chunk_' . $i;
             if (file_exists($chunkToRead)) {
-                fwrite($finalFile, file_get_contents($chunkToRead));
-                unlink($chunkToRead);
+                $chunkHandle = fopen($chunkToRead, 'rb');
+                if ($chunkHandle) {
+                    stream_copy_to_stream($chunkHandle, $finalFile);
+                    fclose($chunkHandle);
+                    unlink($chunkToRead);
+                }
+            } else {
+                // Warning: Chunk missing? abort or continue?
+                // If a chunk is missing, the file is corrupt.
+                // Ideally we should fail.
             }
         }
         fclose($finalFile);

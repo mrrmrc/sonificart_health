@@ -254,7 +254,7 @@ export const api = {
         return handleResponse(response);
     },
 
-    attachVideoToHistory: async (entryId: string, videoBlob: Blob, fileName: string = "generated_video.mp4"): Promise<string> => {
+    attachVideoToHistory: async (entryId: string, videoBlob: Blob, fileName: string = "generated_video.mp4", onProgress?: (p: number) => void): Promise<string> => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
         if (!token) throw new Error("Unauthorized");
 
@@ -275,11 +275,11 @@ export const api = {
                 const chunk = file.slice(start, end);
 
                 const formData = new FormData();
-                formData.append('fileChunk', chunk, fileName);
-                formData.append('uploadId', uploadId);
-                formData.append('chunkIndex', String(i));
-                formData.append('totalChunks', String(totalChunks));
-                formData.append('originalFilename', fileName);
+                formData.append('chunk_data', chunk, fileName);
+                formData.append('upload_session_id', uploadId);
+                formData.append('chunk_index', String(i));
+                formData.append('total_chunks', String(totalChunks));
+                formData.append('file_ext', fileName.split('.').pop() || 'mp4');
                 if (token) formData.append('auth_token', token);
 
                 // Manual fetch to upload_chunk endpoint
@@ -290,6 +290,11 @@ export const api = {
                 const data = await handleResponse(response);
                 if (data.success && data.url) {
                     finalUrl = data.url; // Last chunk returns URL
+                }
+
+                if (onProgress) {
+                    const percent = Math.round(((i + 1) / totalChunks) * 100);
+                    onProgress(percent);
                 }
             }
         }
@@ -320,7 +325,7 @@ export const api = {
 
         const formData = new FormData();
         formData.append('auth_token', token);
-        formData.append('entryId', entryId);
+        formData.append('id', entryId);
 
         const response = await fetch(`${API_BASE_URL}/index.php?action=detach_video_from_history`, {
             method: 'POST',
@@ -396,11 +401,11 @@ export const api = {
                 const chunk = file.slice(start, end);
 
                 const formData = new FormData();
-                formData.append('fileChunk', chunk, fileName);
-                formData.append('uploadId', uploadId);
-                formData.append('chunkIndex', String(i));
-                formData.append('totalChunks', String(totalChunks));
-                formData.append('originalFilename', fileName);
+                formData.append('chunk_data', chunk, fileName);
+                formData.append('upload_session_id', uploadId);
+                formData.append('chunk_index', String(i));
+                formData.append('total_chunks', String(totalChunks));
+                formData.append('file_ext', fileName.split('.').pop() || 'mp3');
                 if (token) formData.append('auth_token', token);
 
                 const response = await fetch(`${API_BASE_URL}/index.php?action=upload_chunk`, {
@@ -505,6 +510,8 @@ export const api = {
         await handleResponse(response);
     },
 
+
+
     getShowcase: async (includeAll: boolean = false) => {
         const response = await fetch(`${API_BASE_URL}/index.php?action=get_showcase${includeAll ? '&all=1' : ''}&t=${new Date().getTime()}`);
         return await handleResponse(response);
@@ -587,6 +594,24 @@ export const api = {
             body: params
         });
         return handleResponse(response);
+    },
+
+    updateMetadata: async (id: string, title: string, subtitle: string, description: string): Promise<void> => {
+        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        if (!token) throw new Error("Non autenticato");
+
+        const data = new FormData();
+        data.append('auth_token', token);
+        data.append('id', id);
+        data.append('title', title);
+        data.append('subtitle', subtitle);
+        data.append('description', description);
+
+        const response = await fetch(`${API_BASE_URL}/index.php?action=update_metadata`, {
+            method: 'POST',
+            body: data
+        });
+        await handleResponse(response);
     },
 
     getSystemStats: async (): Promise<SystemStats> => {
