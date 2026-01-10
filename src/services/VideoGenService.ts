@@ -147,6 +147,14 @@ function drawFrame(
     }
     ctx.restore();
 
+    // BRANDING WATERMARK (Top-Left)
+    if (logo) {
+        ctx.save();
+        ctx.globalAlpha = 0.8;
+        ctx.drawImage(logo, 30, 30, 80, 80);
+        ctx.restore();
+    }
+
     // 3. Footer
     const footerY = VideoH;
 

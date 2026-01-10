@@ -21,8 +21,10 @@ const PublishModal: React.FC<{ entry: DashboardEntry, onClose: () => void, user?
     const [description, setDescription] = useState(entry.description || "");
 
     // STATE: Audio
-    const [unifiedAudioFile, setUnifiedAudioFile] = useState<File | null>(null);
-    const [hasAudioChanged, setHasAudioChanged] = useState(false);
+    const [isUploadingAudio, setIsUploadingAudio] = useState(false);
+
+    // REFS
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
 
     // STATE: Video
     const [activeVideoUrl, setActiveVideoUrl] = useState<string | null>(entry.videoUrl || null);
@@ -53,49 +55,59 @@ const PublishModal: React.FC<{ entry: DashboardEntry, onClose: () => void, user?
         }
     };
 
-    // ACTION: Change Audio
-    const handleAudioChange = async (file: File) => {
-        setUnifiedAudioFile(file);
-        setHasAudioChanged(true);
+    // ACTION: Change Audio (Immediate Upload)
+    const handleAudioFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
 
         // Auto-delete video logic
         if (activeVideoUrl) {
-            if (confirm("Attenzione: Modificando l'audio, il video generato attuale non sarà più sincronizzato e verrà eliminato. Vuoi procedere?")) {
-                setIsSubmitting(true);
-                try {
-                    await api.detachVideoFromHistory(entry.id);
-                    setActiveVideoUrl(null);
-                    entry.videoUrl = null;
-                } catch (e) {
-                    console.error("Errore rimozione video obsoleto", e);
-                    alert("Impossibile rimuovere il video precedente: " + e);
-                } finally {
-                    setIsSubmitting(false);
-                }
-            } else {
-                // Cancel change
-                setUnifiedAudioFile(null);
-                setHasAudioChanged(false);
+            if (!confirm("Attenzione: Modificando l'audio, il video generato attuale non sarà più sincronizzato e verrà eliminato. Vuoi procedere?")) {
+                if (fileInputRef.current) fileInputRef.current.value = ''; // Reset input
                 return;
             }
         }
+
+        setIsUploadingAudio(true);
+        try {
+            // Delete old video if needed
+            if (activeVideoUrl) {
+                await api.detachVideoFromHistory(entry.id);
+                setActiveVideoUrl(null);
+                entry.videoUrl = null;
+            }
+
+            // Upload Audio
+            const newUrl = await api.uploadHistoryAudio(entry.id, file);
+
+            // Validate new URL (ensure it's not empty)
+            if (!newUrl) throw new Error("URL audio non valido dal server");
+
+            // Update Entry Ref & UI
+            entry.audioUrl = newUrl;
+
+            // Force re-render of audio player via key or just state update?
+            // Since we don't have local state for audioUrl, we rely on 'entry' mutation which doesn't trigger re-render.
+            // We need a local state to force update or just use the ref.
+            // Let's force an update by toggling a dummy state or similar, OR better: use local state for audioUrl.
+            // But we can just use the key trick with timestamp on the player.
+
+            alert("Audio caricato e aggiornato con successo!");
+
+        } catch (e) {
+            console.error("Errore upload audio", e);
+            alert("Errore durante l'upload dell'audio: " + e);
+        } finally {
+            setIsUploadingAudio(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
     };
 
-    // ACTION: Upload Audio (Pre-requisite for Live/Video)
+    // ACTION: Ensure Audio (Now just checks if audioUrl exists, redundant but kept for interface compatibility)
     const ensureAudioUploaded = async (): Promise<boolean> => {
-        if (unifiedAudioFile && hasAudioChanged) {
-            setIsSubmitting(true);
-            try {
-                const newUrl = await api.attachAudioToHistory(entry.id, unifiedAudioFile, unifiedAudioFile.name);
-                entry.audioUrl = (newUrl as any).audioUrl; // Update ref
-                setHasAudioChanged(false); // Reset flag
-                return true;
-            } catch (e) {
-                alert("Errore caricamento audio: " + e);
-                return false;
-            } finally {
-                setIsSubmitting(false);
-            }
+        if (!entry.audioUrl) {
+            alert("Nessun audio presente. Carica un file audio prima di procedere.");
+            return false;
         }
         return true;
     };
@@ -108,10 +120,8 @@ const PublishModal: React.FC<{ entry: DashboardEntry, onClose: () => void, user?
         setUploadProgress(0);
         try {
             let audioBlob: Blob;
-            if (unifiedAudioFile) {
-                audioBlob = unifiedAudioFile;
-            } else if (entry.audioUrl) {
-                const r = await fetch(entry.audioUrl);
+            if (entry.audioUrl) {
+                const r = await fetch(getAbsoluteUrl(entry.audioUrl)!);
                 audioBlob = await r.blob();
             } else {
                 throw new Error("Impossibile recuperare il file audio per la generazione video.");
@@ -160,13 +170,15 @@ const PublishModal: React.FC<{ entry: DashboardEntry, onClose: () => void, user?
         }
     };
 
-    // ACTION: Publish to Showcase (Optional final step)
+    // STATE: Visibility
+    const [isPublic, setIsPublic] = useState(true);
+
     const handlePublish = async () => {
-        if (!confirm("Vuoi pubblicare questa opera nella vetrina pubblica?")) return;
+        if (!confirm(isPublic ? "Vuoi pubblicare questa opera nella vetrina pubblica?" : "Vuoi salvare questa opera (Privata)?")) return;
         setIsSubmitting(true);
         try {
-            await api.publishFromHistory(entry.id, { description }, activeVideoUrl ? { url: activeVideoUrl, type: 'video' } : null);
-            alert("Opera pubblicata in vetrina!");
+            await api.publishFromHistory(entry.id, { description, isPublic }, activeVideoUrl ? { url: activeVideoUrl, type: 'video' } : null);
+            alert(isPublic ? "Opera pubblicata in vetrina!" : "Opera salvata privatamente!");
         } catch (e) {
             alert("Errore : " + e);
         } finally { setIsSubmitting(false); }
@@ -182,7 +194,7 @@ const PublishModal: React.FC<{ entry: DashboardEntry, onClose: () => void, user?
         document.body.removeChild(link);
     };
 
-    // --- SHARE LOGIC ---
+    // State for QR Modal
     const [qrUrl, setQrUrl] = useState<string | null>(null);
     const [qrTitle, setQrTitle] = useState<string>("");
 
@@ -250,213 +262,181 @@ const PublishModal: React.FC<{ entry: DashboardEntry, onClose: () => void, user?
     };
 
     return (
-        <div className="fixed inset-0 z-[60] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
-            <div className="bg-[#0f172a] w-full max-w-[90vw] rounded-2xl border border-white/10 shadow-2xl flex flex-col overflow-hidden max-h-[95vh]">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 animate-fade-in p-4 backdrop-blur-md" onClick={onClose}>
+            <div className="bg-[#1e1e2e] w-full max-w-7xl h-[90vh] rounded-2xl overflow-hidden shadow-2xl flex flex-col border border-white/10 relative" onClick={e => e.stopPropagation()}>
 
-                {/* HEADER */}
-                <div className="p-3 border-b border-white/10 flex justify-between items-center bg-black/40 flex-shrink-0">
-                    <h3 className="text-white font-bold text-lg flex items-center gap-2">
-                        <i className="fas fa-sliders-h text-brand-accent"></i> Studio Multimediale
-                    </h3>
-                    <div className="flex items-center gap-3">
-                        <button onClick={handlePublish} className="px-4 py-1.5 bg-brand-primary/20 hover:bg-brand-primary/40 text-brand-accent border border-brand-accent/30 hover:border-brand-accent/50 text-xs font-bold uppercase rounded transition-all">
-                            <i className="fas fa-globe mr-2"></i> Pubblica
-                        </button>
-                        <div className="w-px h-6 bg-white/10"></div>
-                        <button onClick={onClose} className="text-gray-400 hover:text-white"><i className="fas fa-times text-xl"></i></button>
+                <button onClick={onClose} className="absolute top-4 right-4 z-50 text-white/50 hover:text-white bg-black/40 rounded-full w-8 h-8 flex items-center justify-center"><i className="fas fa-times"></i></button>
+
+                <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-[#15151b] shrink-0">
+                    <div className="flex items-center gap-4">
+                        <div className="w-1.5 h-8 bg-gradient-to-b from-brand-accent to-brand-primary rounded-full"></div>
+                        <div>
+                            <h2 className="text-xl font-bold text-white tracking-tight">STUDIO MULTIMEDIALE</h2>
+                            <p className="text-[10px] text-gray-400 uppercase tracking-widest font-medium">Editing & Pubblicazione</p>
+                        </div>
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-hidden p-4 bg-gradient-to-br from-[#050505] to-[#101010]">
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-full">
+                {/* Hidden Input */}
+                <input type="file" ref={fileInputRef} hidden accept="audio/*" onChange={handleAudioFileSelect} />
 
-                        {/* COL 1: DATI OPERA */}
-                        <div className="lg:col-span-1 flex flex-col gap-4 h-full overflow-hidden">
-                            {/* Preview Image - Fixed Height Ratio */}
-                            <div className="relative h-[35%] w-full rounded-xl overflow-hidden border border-white/10 shadow-lg flex-shrink-0 bg-black">
-                                <img src={fixImage(entry.imageUrl)} className="w-full h-full object-contain" />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none"></div>
-                                <div className="absolute bottom-3 left-3 right-3">
-                                    <h2 className="text-white font-bold text-lg leading-tight shadow-black drop-shadow-md truncate">{title}</h2>
+                <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 bg-[#0B0C10] custom-scrollbar">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
+
+                        {/* COL 1: METADATA & PREVIEW (Left, span 3/12 ~ 25%) */}
+                        <div className="lg:col-span-3 flex flex-col gap-4 h-full">
+                            {/* Preview */}
+                            <div className="relative aspect-square rounded-xl overflow-hidden border border-white/10 group shadow-lg shrink-0">
+                                <img src={fixImage(entry.imageUrl)} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt="Preview" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent p-4 flex flex-col justify-end">
+                                    <h3 className="text-white font-bold text-lg leading-tight uppercase font-display">{title}</h3>
                                 </div>
                             </div>
 
-                            {/* Form - Scrollable */}
-                            <div className="flex-1 bg-white/5 p-3 rounded-xl border border-white/5 flex flex-col gap-3 overflow-y-auto custom-scrollbar">
-                                <h4 className="text-brand-accent text-[10px] font-bold uppercase tracking-widest flex-shrink-0"><i className="fas fa-pen-nib mr-2"></i> Metadata</h4>
+                            {/* Metadata Form */}
+                            <div className="bg-[#15151b] border border-white/5 rounded-xl p-5 flex-1 flex flex-col gap-4 shadow-lg h-full">
+                                <h4 className="flex items-center gap-2 text-[#2dd4bf] text-xs font-bold uppercase tracking-wider border-b border-white/5 pb-2">
+                                    <i className="fas fa-pen"></i> Metadata
+                                </h4>
                                 <div>
-                                    <label className="text-[9px] text-gray-500 uppercase font-bold block mb-1">Titolo</label>
-                                    <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:border-brand-accent outline-none" />
+                                    <label className="block text-[10px] font-bold text-gray-500 mb-1 uppercase">Titolo</label>
+                                    <input value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-brand-accent outline-none transition-colors" />
                                 </div>
-                                <div>
-                                    <label className="text-[9px] text-gray-500 uppercase font-bold block mb-1">Sottotitolo</label>
-                                    <input type="text" value={subtitle} onChange={e => setSubtitle(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:border-brand-accent outline-none" />
+                                <div className="flex-1">
+                                    <label className="block text-[10px] font-bold text-gray-500 mb-1 uppercase">Descrizione</label>
+                                    <textarea value={description} onChange={e => setDescription(e.target.value)} className="w-full h-full min-h-[100px] bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-brand-accent outline-none resize-none transition-colors" />
                                 </div>
-                                <div className="flex-1 min-h-0 flex flex-col">
-                                    <label className="text-[9px] text-gray-500 uppercase font-bold block mb-1">Descrizione</label>
-                                    <textarea value={description} onChange={e => setDescription(e.target.value)} className="w-full h-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-white text-xs resize-none focus:border-brand-accent outline-none min-h-[60px]" />
+
+                                {/* VISIBILITY TOGGLE INTEGRATION */}
+                                <div className="bg-white/5 p-3 rounded-lg border border-white/5 flex items-center justify-between shrink-0">
+                                    <span className={`text-[10px] font-bold ${isPublic ? 'text-green-400' : 'text-gray-400'}`}>{isPublic ? 'PUBBLICA' : 'PRIVATA'}</span>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" className="sr-only peer" checked={isPublic} onChange={e => setIsPublic(e.target.checked)} />
+                                        <div className="w-8 h-4 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-brand-accent"></div>
+                                    </label>
                                 </div>
-                                <button onClick={handleSaveMetadata} disabled={isSubmitting} className="w-full py-2 bg-white/10 hover:bg-white/20 text-white rounded text-[10px] font-bold uppercase transition-colors flex-shrink-0">
-                                    <i className="fas fa-save mr-1"></i> Salva
+
+                                <button onClick={handlePublish} disabled={isSubmitting} className="w-full py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-lg border border-white/10 transition-all flex items-center justify-center gap-2 uppercase text-xs tracking-wider shrink-0">
+                                    {isSubmitting ? <i className="fas fa-circle-notch fa-spin"></i> : <><i className="fas fa-save"></i> Salva & Aggiorna</>}
                                 </button>
                             </div>
                         </div>
 
-                        {/* COL 2 & 3: MULTIMEDIA - FULL RESTORED DIMENSIONS */}
-                        <div className="lg:col-span-3 flex flex-col gap-4 h-full overflow-hidden">
+                        {/* COL 2: MEDIA (Right, span 9/12) */}
+                        <div className="lg:col-span-9 flex flex-col gap-6">
 
-                            {/* BLOCK: SORGENTE AUDIO - CARD LAYOUT */}
-                            <div className="bg-white/5 rounded-xl p-5 border border-white/10 flex-shrink-0">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h4 className="text-white font-bold text-sm uppercase tracking-wider flex items-center gap-2">
-                                        <span className="w-6 h-6 rounded-full bg-brand-accent text-black flex items-center justify-center text-xs">A</span>
-                                        Sorgente Audio
+                            {/* TOP: AUDIO SOURCE */}
+                            <div className="bg-[#15151b] border border-white/5 rounded-xl p-6 relative overflow-hidden shadow-lg shrink-0">
+                                <div className="flex justify-between items-start mb-6">
+                                    <h4 className="flex items-center gap-2 text-[#2dd4bf] text-xs font-bold uppercase tracking-wider">
+                                        <i className="fas fa-music"></i> Sorgente Audio
                                     </h4>
-                                    <div className="flex gap-2">
-                                        <button onClick={() => document.getElementById('audio-upload')?.click()} className="text-xs bg-brand-accent text-brand-primary hover:bg-white px-4 py-1.5 rounded font-bold uppercase transition-colors">
-                                            <i className="fas fa-upload mr-1"></i> {unifiedAudioFile ? "Cambia File" : "Carica/Cambia"}
-                                        </button>
-                                        <input id="audio-upload" type="file" accept="audio/*" className="hidden" onChange={e => {
-                                            if (e.target.files?.[0]) handleAudioChange(e.target.files[0]);
-                                            e.target.value = '';
-                                        }} />
-                                    </div>
+                                    <button onClick={() => fileInputRef.current?.click()} disabled={isUploadingAudio} className="text-[10px] bg-[#2dd4bf]/10 text-[#2dd4bf] px-3 py-1 rounded-full font-bold hover:bg-[#2dd4bf]/20 transition-colors uppercase border border-[#2dd4bf]/20 cursor-pointer disabled:opacity-50">
+                                        {isUploadingAudio ? <i className="fas fa-spinner fa-spin mr-1"></i> : <i className="fas fa-upload mr-1"></i>} Cambia Audio
+                                    </button>
                                 </div>
-                                <div className="bg-black/40 rounded-lg p-4 flex items-center gap-4 border border-white/5">
-                                    <div className="w-10 h-10 bg-brand-secondary rounded-full flex items-center justify-center text-brand-accent">
+
+                                <div className="bg-black/30 rounded-lg p-4 border border-white/5 flex items-center gap-4 mb-4">
+                                    <div className="w-10 h-10 rounded-full bg-[#2dd4bf]/10 flex items-center justify-center text-[#2dd4bf]">
                                         <i className="fas fa-music"></i>
                                     </div>
-                                    <div className="flex-1">
-                                        <div className="text-white font-bold text-sm">
-                                            {unifiedAudioFile ? unifiedAudioFile.name : (entry.audioUrl ? "Audio Originale.wav" : "Nessun Audio")}
-                                        </div>
-                                        {hasAudioChanged && <div className="text-yellow-500 text-[10px] mt-1"><i className="fas fa-exclamation-circle"></i> Modifiche non salvate</div>}
+                                    <div className="flex-1 overflow-hidden">
+                                        <div className="text-white font-bold text-sm truncate">{entry.traditionName || "Audio Originale.wav"}</div>
+                                        <div className="text-xs text-gray-500 uppercase tracking-wider">{entry.paradigm || "Scientifico"}</div>
                                     </div>
+                                    <audio key={entry.audioUrl + Date.now()} controls src={getAbsoluteUrl(entry.audioUrl) || undefined} className="h-8 max-w-[200px]" />
                                 </div>
 
-                                {/* Audio Actions Bar (Inside Card) */}
-                                {(unifiedAudioFile || entry.audioUrl) && (
-                                    <div className="mt-3">
-                                        <ActionToolbar
-                                            url={unifiedAudioFile ? null : (entry.audioUrl || "")}
-                                            type="audio"
-                                            filename="audio_originale.wav"
-                                            title={`Audio: ${title}`}
-                                        />
-                                    </div>
-                                )}
+                                <ActionToolbar url={entry.audioUrl || ""} type="audio" filename={`audio_${entry.id}.wav`} title={title} />
                             </div>
 
-                            {/* GRID: VIDEO & LIVE - MINIMUM HEIGHTS ENFORCED */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full pb-4">
+                            {/* BOTTOM: GRID 2 */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1">
 
-                                {/* VIDEO BLOCK */}
-                                <div className="bg-black/20 rounded-xl p-5 border border-white/10 flex flex-col h-full min-h-[400px] overflow-hidden relative group">
-                                    <div className="flex justify-between items-center mb-4 flex-shrink-0">
-                                        <h4 className="text-brand-accent font-bold text-sm uppercase tracking-wider flex items-center gap-2">
-                                            <i className="fas fa-film"></i> Video Generativo
-                                        </h4>
-                                    </div>
-
-                                    <div className="flex-1 bg-black rounded-lg overflow-hidden border border-white/5 relative flex items-center justify-center min-h-0">
-                                        {activeVideoUrl ? (
-                                            <video src={getAbsoluteUrl(activeVideoUrl)!} className="w-full h-full object-contain" controls playsInline />
-                                        ) : (
-                                            <div className="text-center opacity-40">
-                                                <i className="fas fa-video-slash text-2xl mb-2 text-gray-500"></i>
-                                                <p className="text-[9px] text-gray-500 uppercase">Nessun video</p>
-                                            </div>
-                                        )}
-                                        {isSubmitting && uploadProgress <= 100 && (
-                                            <div className="absolute inset-0 bg-black/80 z-20 flex flex-col items-center justify-center text-brand-accent backdrop-blur-sm">
-                                                <div className="w-6 h-6 rounded-full border-2 border-current border-t-transparent animate-spin mb-2"></div>
-                                                <span className="text-[9px] uppercase font-bold tracking-widest">
-                                                    {isSubmitting && uploadProgress < 100 ? `${uploadProgress}%` : "Processing..."}
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div className="mt-2 flex-shrink-0">
-                                        {!activeVideoUrl ? (
-                                            <button onClick={handleGenerateVideo} disabled={isSubmitting} className="w-full py-2 bg-brand-primary hover:bg-brand-secondary text-white font-bold uppercase text-[10px] rounded border border-white/10 transition-colors">
-                                                Genera Video
-                                            </button>
-                                        ) : (
-                                            <div className="flex justify-between items-center gap-2">
-                                                <div className="flex gap-1">
-                                                    <button onClick={() => activeVideoUrl && downloadFile(activeVideoUrl, `video.mp4`)} className="bg-white/10 hover:bg-white/20 text-white p-1.5 rounded text-[10px]"><i className="fas fa-download"></i></button>
-                                                    <button onClick={async () => { if (confirm("Eliminare il video?")) { await api.detachVideoFromHistory(entry.id); setActiveVideoUrl(null); entry.videoUrl = null; } }} className="bg-red-500/20 hover:bg-red-500/40 text-red-300 p-1.5 rounded text-[10px]"><i className="fas fa-trash"></i></button>
-                                                </div>
-                                                <div className="scale-90 origin-right">
-                                                    <ActionToolbar url={activeVideoUrl} type="video" filename={`video.mp4`} title={`Video`} />
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* LIVE BLOCK */}
-                                <div className="bg-gradient-to-br from-purple-900/10 to-black rounded-xl p-5 border border-purple-500/20 flex flex-col h-full min-h-[400px] overflow-hidden">
-                                    <h4 className="text-purple-400 font-bold text-sm uppercase tracking-wider mb-4 flex items-center gap-2 flex-shrink-0">
-                                        <i className="fas fa-bolt"></i> Live Performance
+                                {/* VIDEO GENERATIVO */}
+                                <div className="bg-[#15151b] border border-white/5 rounded-xl p-6 flex flex-col shadow-lg">
+                                    <h4 className="flex items-center gap-2 text-[#2dd4bf] text-xs font-bold uppercase tracking-wider mb-4">
+                                        <i className="fas fa-video"></i> Video Generativo
                                     </h4>
 
-                                    <div className="flex-1 flex flex-col gap-2 min-h-0 overflow-y-auto custom-scrollbar px-1">
-                                        <p className="text-[10px] text-gray-400 leading-snug">
-                                            Interactive environment driven by facial expression tracking.
-                                        </p>
-                                        <div className="bg-purple-500/5 p-2 rounded border border-purple-500/10 text-[9px] text-purple-200/80">
-                                            <div className="flex justify-between items-center mb-1">
-                                                <span className="font-bold">System Status:</span>
-                                                <button onClick={checkWebcam} className="text-purple-300 hover:text-white underline decoration-dashed cursor-pointer">Test Cam</button>
+                                    <div className="flex-1 bg-black rounded-lg border border-white/10 overflow-hidden relative group min-h-[250px] flex items-center justify-center">
+                                        {activeVideoUrl ? (
+                                            <video src={getAbsoluteUrl(activeVideoUrl)!} className="w-full h-full object-contain" controls />
+                                        ) : (
+                                            <div className="text-center">
+                                                <i className="fas fa-film text-4xl text-gray-700 mb-3 block"></i>
+                                                <button onClick={handleGenerateVideo} className="px-5 py-2 bg-[#2dd4bf] text-black font-bold rounded-full shadow-lg hover:scale-105 transition-transform text-xs uppercase tracking-wide">
+                                                    Genera Video
+                                                </button>
                                             </div>
-                                            <div className="grid grid-cols-2 gap-1">
-                                                <div className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-green-500"></div> Audio</div>
-                                                <div className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-gray-500"></div> Webcam</div>
-                                            </div>
+                                        )}
+                                    </div>
+                                    {activeVideoUrl && (
+                                        <div className="mt-4">
+                                            <ActionToolbar url={activeVideoUrl} type="video" filename={`video_${entry.id}.mp4`} title={title} />
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* LIVE PERFORMANCE */}
+                                <div className="bg-[#15151b] border border-white/5 rounded-xl p-6 flex flex-col shadow-lg relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-4 opacity-20"><i className="fas fa-bolt text-6xl text-purple-500"></i></div>
+                                    <h4 className="flex items-center gap-2 text-purple-400 text-xs font-bold uppercase tracking-wider mb-4">
+                                        <i className="fas fa-bolt"></i> Live Performance
+                                    </h4>
+                                    <p className="text-gray-400 text-xs mb-6 leading-relaxed">
+                                        Ambiente interattivo guidato da Face-Tracker e Motion-Tracking.
+                                    </p>
+
+                                    <div className="bg-black/30 border border-white/5 p-4 rounded-lg mb-6">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="text-xs text-gray-300">System Status</span>
+                                            <span className="text-[10px] font-mono text-green-400">READY</span>
+                                        </div>
+                                        <div className="flex gap-4">
+                                            <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-500"></div><span className="text-[10px] text-gray-400 uppercase">Audio</span></div>
+                                            <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-500"></div><span className="text-[10px] text-gray-400 uppercase">Webcam</span></div>
                                         </div>
                                     </div>
 
-                                    <div className="mt-2 flex-shrink-0">
-                                        <button onClick={handleOpenLive} className="w-full py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold uppercase text-[10px] rounded shadow-lg shadow-purple-900/20 transition-all transform hover:scale-[1.01] mb-1">
+                                    <div className="mt-auto">
+                                        <button onClick={handleOpenLive} className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold rounded-lg shadow-lg hover:shadow-purple-500/20 transition-all text-xs uppercase tracking-widest">
                                             Open Console
                                         </button>
-                                        <div className="flex justify-center scale-90">
-                                            <ActionToolbar url={`https://sonificart.com/performance/${entry.id}`} type="live" title={`Live`} />
+                                        <div className="mt-4 flex justify-center">
+                                            <ActionToolbar url={`https://sonificart.com/live/${entry.id}`} type="live" title={title} />
                                         </div>
                                     </div>
                                 </div>
-
                             </div>
+
                         </div>
-
-
 
                     </div>
                 </div>
             </div>
-
             {/* QR MODAL */}
-            {qrUrl && (
-                <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setQrUrl(null)}>
-                    <div className="bg-[#1a1a1a] p-6 rounded-2xl border border-white/10 max-w-sm w-full text-center shadow-2xl transform scale-100 transition-all" onClick={e => e.stopPropagation()}>
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-lg font-bold text-white">{qrTitle}</h3>
-                            <button onClick={() => setQrUrl(null)} className="text-gray-400 hover:text-white"><i className="fas fa-times"></i></button>
+            {
+                qrUrl && (
+                    <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setQrUrl(null)}>
+                        <div className="bg-[#1a1a1a] p-6 rounded-2xl border border-white/10 max-w-sm w-full text-center shadow-2xl transform scale-100 transition-all" onClick={e => e.stopPropagation()}>
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-lg font-bold text-white">{qrTitle}</h3>
+                                <button onClick={() => setQrUrl(null)} className="text-gray-400 hover:text-white"><i className="fas fa-times"></i></button>
+                            </div>
+                            <div className="bg-white p-4 rounded-xl inline-block mb-4">
+                                <img src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrUrl)}`} alt="QR Code" className="w-full h-full" />
+                            </div>
+                            <p className="text-xs text-gray-400 break-all bg-black/30 p-2 rounded border border-white/5">{qrUrl}</p>
+                            <button onClick={() => copyLink(qrUrl)} className="text-brand-accent text-xs mt-3 hover:underline">Copia Link</button>
                         </div>
-                        <div className="bg-white p-4 rounded-xl inline-block mb-4">
-                            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrUrl)}`} alt="QR Code" className="w-full h-full" />
-                        </div>
-                        <p className="text-xs text-gray-400 break-all bg-black/30 p-2 rounded border border-white/5">{qrUrl}</p>
-                        <button onClick={() => copyLink(qrUrl)} className="text-brand-accent text-xs mt-3 hover:underline">Copia Link</button>
                     </div>
-                </div>
-            )}
-        </div>
-
+                )
+            }
+        </div >
     );
 };
+
 
 // ... (HistoryItem remains same)
 const HistoryItem: React.FC<{ item: DashboardEntry; onView: () => void; onPublishClick?: () => void; onDelete?: () => void; isPro?: boolean }> = ({ item, onView, onPublishClick, onDelete, isPro }) => (

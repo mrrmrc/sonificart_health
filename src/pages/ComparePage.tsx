@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { jsPDF } from "jspdf";
 import { useOutletContext } from 'react-router-dom';
 import { api } from '../services/api';
 import { User, DashboardEntry } from '../types';
@@ -18,6 +19,8 @@ export const ComparePage: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [idA, setIdA] = useState<string>('');
     const [idB, setIdB] = useState<string>('');
+    const [customEntryA, setCustomEntryA] = useState<Partial<DashboardEntry> | null>(null);
+    const [customEntryB, setCustomEntryB] = useState<Partial<DashboardEntry> | null>(null);
 
     // Audio Sync State
     const [isPlaying, setIsPlaying] = useState(false);
@@ -31,6 +34,10 @@ export const ComparePage: React.FC = () => {
 
     // Zoom Modal State
     const [isZoomModalOpen, setIsZoomModalOpen] = useState(false);
+
+    // Report Modal State
+    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [reportContent, setReportContent] = useState('');
 
     // Audio & Refs
     const audioRefA = useRef<HTMLAudioElement>(null);
@@ -64,8 +71,106 @@ export const ComparePage: React.FC = () => {
     }, [user]);
 
     // Derived Selection
-    const itemA = useMemo(() => history.find(h => h.id === idA), [history, idA]);
-    const itemB = useMemo(() => history.find(h => h.id === idB), [history, idB]);
+    const itemA = useMemo(() => idA === 'custom' ? customEntryA : history.find(h => h.id === idA), [history, idA, customEntryA]);
+    const itemB = useMemo(() => idB === 'custom' ? customEntryB : history.find(h => h.id === idB), [history, idB, customEntryB]);
+
+    // Handle File Upload
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, slot: 'A' | 'B') => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const url = URL.createObjectURL(file);
+        const entry: Partial<DashboardEntry> = {
+            id: 'custom_' + slot + '_' + Date.now(),
+            title: file.name,
+            audioUrl: url,
+            imageUrl: 'https://placehold.co/100x100/2dd4bf/black?text=Audio', // Placeholder
+            events: [] // No event data for raw audio upload unless we parse standard MIDI/JSON later
+        };
+        if (slot === 'A') setCustomEntryA(entry as DashboardEntry);
+        else setCustomEntryB(entry as DashboardEntry);
+    };
+
+    // Generate Report Content Helper
+    const generateReportContent = () => {
+        if (!itemA || !itemB || !statsA || !statsB) return '';
+        const timestamp = new Date().toLocaleString();
+
+        // Helper to get author safely
+        const getAuthor = (item: any) => item.author || item.ownerId || 'Unknown/Custom';
+
+        return `SONIFICART - COMPARISON REPORT
+Generated: ${timestamp}
+
+--------------------------------------------------
+OPERA A
+Title: ${itemA.title}
+Author: ${getAuthor(itemA)}
+Events Count: ${statsA.events.length}
+Avg Pitch: ${statsA.avgPitch.toFixed(2)}
+Avg Velocity: ${statsA.avgVel.toFixed(2)}
+
+--------------------------------------------------
+OPERA B
+Title: ${itemB.title}
+Author: ${getAuthor(itemB)}
+Events Count: ${statsB.events.length}
+Avg Pitch: ${statsB.avgPitch.toFixed(2)}
+Avg Velocity: ${statsB.avgVel.toFixed(2)}
+
+--------------------------------------------------
+COMPARISON RESULTS
+Similarity Score: ${similarityScore}%
+Duration: ${duration.toFixed(2)}s
+
+--------------------------------------------------
+SonificART Framework - v1.16
+`;
+    };
+
+
+
+    // Download Report (PDF)
+    const downloadPdf = () => {
+        const content = generateReportContent();
+        if (!content) return;
+
+        const doc = new jsPDF();
+        doc.setFont("courier", "normal");
+        doc.setFontSize(10);
+
+        const lines = content.split('\n');
+        let y = 15;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 15;
+
+        lines.forEach(line => {
+            if (y > pageHeight - margin) {
+                doc.addPage();
+                y = margin;
+            }
+            doc.text(line, margin, y);
+            y += 5;
+        });
+
+        // Ensure Footer is distinctly visible if not already
+        const footerText = "SonificART Framework - v1.16";
+        if (y > pageHeight - 10) doc.addPage();
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.text(footerText, margin, pageHeight - 10);
+
+        doc.save(`sonificart_report_${Date.now()}.pdf`);
+    };
+
+
+
+    // View Report
+    const viewReport = () => {
+        const content = generateReportContent();
+        if (!content) return;
+        setReportContent(content);
+        setIsReportModalOpen(true);
+    };
 
     // Initialize Audio Context
     useEffect(() => {
@@ -121,7 +226,6 @@ export const ComparePage: React.FC = () => {
 
         analyzeAudio();
     }, [itemA, itemB]);
-
 
     // Volume Control & Sync Logic
     useEffect(() => {
@@ -187,7 +291,6 @@ export const ComparePage: React.FC = () => {
         osc.stop(ctx.currentTime + 0.3);
     };
 
-
     // Stats Processing
     const getEvents = (item: DashboardEntry | undefined) => {
         const backendItem = item as any;
@@ -216,13 +319,15 @@ export const ComparePage: React.FC = () => {
     };
 
     const statsA = useMemo(() => {
-        const events = getEvents(itemA).map(normalizeEvent);
+        if (!itemA) return null;
+        const events = getEvents(itemA as DashboardEntry).map(normalizeEvent);
         if (!events.length) return null;
         return { events, avgPitch: events.reduce((a: number, b: any) => a + b.midi, 0) / events.length, avgVel: events.reduce((a: number, b: any) => a + b.velocity, 0) / events.length };
     }, [itemA]);
 
     const statsB = useMemo(() => {
-        const events = getEvents(itemB).map(normalizeEvent);
+        if (!itemB) return null;
+        const events = getEvents(itemB as DashboardEntry).map(normalizeEvent);
         if (!events.length) return null;
         return { events, avgPitch: events.reduce((a: number, b: any) => a + b.midi, 0) / events.length, avgVel: events.reduce((a: number, b: any) => a + b.velocity, 0) / events.length };
     }, [itemB]);
@@ -247,27 +352,49 @@ export const ComparePage: React.FC = () => {
 
     return (
         <div className="max-w-7xl mx-auto pb-20">
-            <div className="mb-10 text-center">
+            <div className="mb-10 text-center relative">
                 <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-brand-accent to-purple-500 mb-2">
                     Studio Comparativo
                 </h2>
+                {itemA && itemB && (
+                    <div className="absolute right-0 top-0 flex gap-2">
+                        <button onClick={viewReport} className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all">
+                            <i className="fas fa-eye"></i> Visualizza
+                        </button>
+                        <button onClick={downloadPdf} className="bg-brand-accent/20 hover:bg-brand-accent/30 text-brand-accent px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all">
+                            <i className="fas fa-file-pdf"></i> Scarica PDF
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Selection */}
             <div className="grid grid-cols-2 gap-8 mb-8 bg-white/5 p-6 rounded-2xl border border-white/10">
                 <div>
                     <select value={idA} onChange={(e) => setIdA(e.target.value)} className="w-full bg-black/40 border-2 border-brand-accent/30 text-white rounded-xl p-3 mb-4">
-                        <option value="">Opera A (Cyan)</option>
+                        <option value="">Seleziona Opera A (Cyan)</option>
+                        <option value="custom">+ Carica Audio Esterno...</option>
                         {history.map(h => <option key={h.id} value={h.id}>{h.title || h.traditionName}</option>)}
                     </select>
+                    {idA === 'custom' && (
+                        <div className="mb-4">
+                            <input type="file" accept="audio/*" onChange={(e) => handleFileUpload(e, 'A')} className="w-full text-xs text-brand-accent file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-brand-accent file:text-black hover:file:bg-brand-accent-light" />
+                        </div>
+                    )}
                     {itemA && <div className="flex items-center gap-4"><img src={itemA.imageUrl} className="w-12 h-12 rounded border border-brand-accent" /><span className="text-brand-accent font-bold">{itemA.title}</span></div>}
                     {itemA?.audioUrl && <audio ref={audioRefA} src={itemA.audioUrl} preload="auto" />}
                 </div>
                 <div>
                     <select value={idB} onChange={(e) => setIdB(e.target.value)} className="w-full bg-black/40 border-2 border-purple-500/30 text-white rounded-xl p-3 mb-4">
-                        <option value="">Opera B (Purple)</option>
+                        <option value="">Seleziona Opera B (Purple)</option>
+                        <option value="custom">+ Carica Audio Esterno...</option>
                         {history.map(h => <option key={h.id} value={h.id}>{h.title || h.traditionName}</option>)}
                     </select>
+                    {idB === 'custom' && (
+                        <div className="mb-4">
+                            <input type="file" accept="audio/*" onChange={(e) => handleFileUpload(e, 'B')} className="w-full text-xs text-purple-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-purple-500/20 file:text-purple-400 hover:file:bg-purple-500/30" />
+                        </div>
+                    )}
                     {itemB && <div className="flex items-center gap-4"><img src={itemB.imageUrl} className="w-12 h-12 rounded border border-purple-500" /><span className="text-purple-500 font-bold">{itemB.title}</span></div>}
                     {itemB?.audioUrl && <audio ref={audioRefB} src={itemB.audioUrl} preload="auto" />}
                 </div>
@@ -387,6 +514,29 @@ export const ComparePage: React.FC = () => {
                                         <Scatter name="Opera B" data={scatterData.B} fill="#a855f7" shape="square" onMouseEnter={(data: any) => playNote(data.y)} />
                                     </ScatterChart>
                                 </ResponsiveContainer>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Report Modal */}
+                    {isReportModalOpen && (
+                        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col p-8 animate-zoom-in items-center justify-center">
+                            <div className="bg-[#1e1e2e] rounded-2xl p-8 border border-white/10 max-w-2xl w-full max-h-[90vh] flex flex-col relative">
+                                <button onClick={() => setIsReportModalOpen(false)} className="absolute top-4 right-4 text-white/50 hover:text-white transition">
+                                    <i className="fas fa-times text-xl"></i>
+                                </button>
+                                <h3 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+                                    <i className="fas fa-file-alt text-brand-accent"></i> Report Comparativo
+                                </h3>
+                                <pre className="bg-black/40 p-6 rounded-xl text-white/80 font-mono text-sm overflow-auto flex-1 whitespace-pre-wrap border border-white/5 shadow-inner">
+                                    {reportContent}
+                                </pre>
+                                <div className="mt-6 flex justify-end gap-4">
+                                    <button onClick={() => setIsReportModalOpen(false)} className="px-4 py-2 text-white/60 hover:text-white transition">Chiudi</button>
+                                    <button onClick={downloadPdf} className="px-6 py-2 bg-brand-accent text-black font-bold rounded-lg hover:bg-brand-accent-light transition shadow-lg shadow-brand-accent/20">
+                                        SCARICA PDF
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}

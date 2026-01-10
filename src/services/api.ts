@@ -510,6 +510,21 @@ export const api = {
         await handleResponse(response);
     },
 
+    uploadHistoryAudio: async (id: string, file: File): Promise<string> => {
+        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const formData = new FormData();
+        formData.append('entryId', id);
+        formData.append('audioFile', file);
+        if (token) formData.append('auth_token', token);
+
+        const response = await fetch(`${API_BASE_URL}/index.php?action=attach_audio_to_history`, {
+            method: 'POST',
+            body: formData
+        });
+        const data = await handleResponse(response);
+        return data.audioUrl;
+    },
+
 
 
     getShowcase: async (includeAll: boolean = false) => {
@@ -631,6 +646,31 @@ export const api = {
         const params = new URLSearchParams();
         if (token) params.append('auth_token', token);
         const response = await fetch(`${API_BASE_URL}/index.php?action=get_logs`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+        });
+        return await handleResponse(response);
+    },
+
+    getDbTables: async (): Promise<string[]> => {
+        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const params = new URLSearchParams();
+        if (token) params.append('auth_token', token);
+        const response = await fetch(`${API_BASE_URL}/index.php?action=get_db_tables`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+        });
+        return await handleResponse(response);
+    },
+
+    getDbTableContent: async (table: string): Promise<{ columns: string[], rows: any[] }> => {
+        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const params = new URLSearchParams();
+        params.append('table', table);
+        if (token) params.append('auth_token', token);
+        const response = await fetch(`${API_BASE_URL}/index.php?action=get_table_content`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: params

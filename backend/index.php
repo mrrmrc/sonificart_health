@@ -58,6 +58,7 @@ try {
 try {
     $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_expires_at DATETIME DEFAULT NULL");
     $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS tier VARCHAR(20) DEFAULT 'free'");
+    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_logo_url VARCHAR(255) DEFAULT NULL");
     $pdo->exec("ALTER TABLE history ADD COLUMN IF NOT EXISTS video_url VARCHAR(255) DEFAULT NULL");
     try {
         // Force add title/subtitle/description if not exists
@@ -217,14 +218,27 @@ function sendHtmlEmail($to, $subject, $title, $bodyContent)
     $headers .= "Content-type:text/html;charset=UTF-8\r\n";
     $headers .= "From: SonificA.R.T. <mail@sonificart.com>\r\n";
     $headers .= "Reply-To: mail@sonificart.com\r\n";
+    $headers .= "Return-Path: mail@sonificart.com\r\n";
+    $headers .= "Organization: SonificA.R.T. Framework\r\n";
     $headers .= "X-Mailer: PHP/" . phpversion();
 
     $emailStyle = "font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; line-height: 1.6; color: #333;";
     $headerStyle = "background-color: #0f172a; padding: 25px; text-align: center;";
-    $logoText = "color: #2dd4bf; font-size: 24px; font-weight: bold; text-decoration: none; letter-spacing: 1px;";
     $bodyStyle = "padding: 30px; background-color: #f8fafc;";
-    $containerStyle = "max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);";
-    $footerStyle = "background-color: #f1f5f9; padding: 20px; text-align: center; font-size: 12px; color: #64748b;";
+    $containerStyle = "max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;";
+    $footerStyle = "background-color: #f1f5f9; padding: 20px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0;";
+
+    // Simplified SVG Logo for Email Compatibility (No filters/complex defs)
+    $logoSvg = '
+    <svg width="60" height="60" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle;">
+      <circle cx="50" cy="50" r="42" stroke="#2dd4bf" stroke-width="3" fill="none" />
+      <path d="M 20 50 Q 50 15 80 50 Q 50 85 20 50 Z" stroke="white" stroke-width="1.5" fill="#a855f7" fill-opacity="0.1" />
+      <circle cx="50" cy="50" r="6" fill="white" />
+      <rect x="48" y="5" width="4" height="8" rx="2" fill="#2dd4bf" />
+      <rect x="48" y="87" width="4" height="8" rx="2" fill="#a855f7" />
+      <rect x="5" y="48" width="8" height="4" rx="2" fill="#2dd4bf" />
+      <rect x="87" y="48" width="8" height="4" rx="2" fill="#a855f7" />
+    </svg>';
 
     $template = "
     <!DOCTYPE html>
@@ -236,7 +250,11 @@ function sendHtmlEmail($to, $subject, $title, $bodyContent)
     <body style='margin:0; padding:20px; background-color: #f1f5f9; $emailStyle'>
         <div style='$containerStyle'>
             <div style='$headerStyle'>
-                <a href='https://sonificart.com' style='$logoText'>SonificA.R.T.</a>
+                <!-- Logo Container -->
+                <a href='https://sonificart.com' style='text-decoration:none; display:inline-block;'>
+                    $logoSvg
+                    <div style='color: #fff; font-size: 20px; font-weight: bold; margin-top: 10px; letter-spacing: 2px;'>SonificA.R.T.</div>
+                </a>
             </div>
             <div style='$bodyStyle'>
                 <h2 style='color: #0f172a; margin-top:0; font-size: 20px; border-bottom: 2px solid #2dd4bf; padding-bottom: 10px; display: inline-block;'>$title</h2>
@@ -250,9 +268,10 @@ function sendHtmlEmail($to, $subject, $title, $bodyContent)
             </div>
         </div>
     </body>
-    </html>";
+    </html>
+    ";
 
-    return @mail($to, $subject, $template, $headers);
+    return mail($to, $subject, $template, $headers);
 }
 
 function generatePassword($length = 10)
@@ -392,7 +411,20 @@ if ($action === 'get_history' && $method === 'POST') {
 // --- GET SHOWCASE (Pubblica + Admin) ---
 if ($action === 'get_showcase' && $method === 'GET') {
     try {
-        $includeAll = isset($_GET['all']) && $_GET['all'] == '1';
+        $includeAll = false;
+
+        // Check if admin to allow seeing hidden items
+        if (isset($_GET['all']) && $_GET['all'] == '1') {
+            $checkId = getUserIdFromToken($_GET);
+            if ($checkId) {
+                $stmt = $pdo->prepare("SELECT is_admin FROM users WHERE id = ?");
+                $stmt->execute([$checkId]);
+                if ($stmt->fetchColumn()) {
+                    $includeAll = true;
+                }
+            }
+        }
+
         $where = $includeAll ? "1=1" : "is_public = 1";
         $stmt = $pdo->query("SELECT * FROM showcase WHERE $where ORDER BY priority DESC, created_at DESC");
         $projects = $stmt->fetchAll();
@@ -623,7 +655,7 @@ if ($action === 'attach_audio_to_history' && $method === 'POST') {
         if (!in_array($ext, $allowed))
             $ext = 'mp3';
 
-        $targetDir = __DIR__ . '/../media/custom/';
+        $targetDir = __DIR__ . '/../public/media/custom/';
         if (!file_exists($targetDir))
             mkdir($targetDir, 0755, true);
 
@@ -735,6 +767,7 @@ if ($action === 'publish_history' && $method === 'POST') {
 
             $metadata = is_string($input['metadata'] ?? null) ? json_decode($input['metadata'], true) : ($input['metadata'] ?? []);
             $tags = isset($metadata['tags']) ? (is_array($metadata['tags']) ? implode(',', $metadata['tags']) : $metadata['tags']) : '';
+            $isPublic = isset($metadata['isPublic']) ? ($metadata['isPublic'] ? 1 : 0) : 1; // Default true, but respectable
 
             $priority = (int) ($metadata['priority'] ?? 0);
             $customMediaUrl = $input['customMediaUrl'] ?? null;
@@ -746,9 +779,44 @@ if ($action === 'publish_history' && $method === 'POST') {
             $finalVideo = ($customMediaType === 'video') ? $customMediaUrl : ($e['video_url'] ?? null);
             $finalTitle = $metadata['title'] ?? ($e['title'] ?? 'Senza Titolo');
 
-            $stmt = $pdo->prepare("INSERT INTO showcase (title, author_name, description, image_url, audio_url, video_url, paradigm, tradition, tags, duration, notes_count, created_at, owner_id, is_public, priority, history_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '3m', 1024, NOW(), ?, 1, ?, ?)");
-            $stmt->execute([$finalTitle, $author, $metadata['description'] ?? '', $e['image_url'], $finalAudio, $finalVideo, $e['paradigm'], $e['tradition_name'], $tags, $userId, $priority, $e['id']]);
-            $newId = $pdo->lastInsertId();
+            // 1. Check if already published
+            $existing = $pdo->prepare("SELECT id, owner_id FROM showcase WHERE history_id = ?");
+            $existing->execute([$e['id']]);
+            $prev = $existing->fetch();
+
+            if ($prev) {
+                // UPDATE
+                if ($prev['owner_id'] != $userId) {
+                    // Security Check Failed (mismatch owner of history vs owner of showcase)
+                    error_log("Publish Update Security Warning: User $userId trying to update Showcase " . $prev['id'] . " owned by " . $prev['owner_id']);
+                    sendResponse(["error" => "Non autorizzato ad aggiornare questa vetrina"], 403);
+                }
+
+                $stmt = $pdo->prepare("UPDATE showcase SET title=?, description=?, is_public=?, priority=?, tags=?, paradigm=?, tradition=?, image_url=?, audio_url=?, video_url=? WHERE id=?");
+                $stmt->execute([$finalTitle, $metadata['description'] ?? '', $isPublic, $priority, $tags, $e['paradigm'], $e['tradition_name'], $e['image_url'], $finalAudio, $finalVideo, $prev['id']]);
+
+                // Update History Video URL sync
+                if ($finalVideo) {
+                    $pdo->prepare("UPDATE history SET video_url = ? WHERE id = ?")->execute([$finalVideo, $e['id']]);
+                }
+
+                error_log("Publish Update Success: Showcase ID " . $prev['id']);
+                sendResponse(["success" => true, "id" => $prev['id'], "action" => "updated"]);
+
+            } else {
+                // INSERT NEW
+                $stmt = $pdo->prepare("INSERT INTO showcase (title, author_name, description, image_url, audio_url, video_url, paradigm, tradition, tags, duration, notes_count, created_at, owner_id, is_public, priority, history_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '3m', 1024, NOW(), ?, ?, ?, ?)");
+                $stmt->execute([$finalTitle, $author, $metadata['description'] ?? '', $e['image_url'], $finalAudio, $finalVideo, $e['paradigm'], $e['tradition_name'], $tags, $userId, $isPublic, $priority, $e['id']]);
+                $newId = $pdo->lastInsertId();
+
+                // Sincronizziamo il videoUrl anche nella tabella history per visione futura
+                if ($finalVideo) {
+                    $pdo->prepare("UPDATE history SET video_url = ? WHERE id = ?")->execute([$finalVideo, $e['id']]);
+                }
+
+                error_log("Publish History Success: New Showcase ID $newId");
+                sendResponse(["success" => true, "id" => $newId, "action" => "created"]);
+            }
 
             // Sincronizziamo il videoUrl anche nella tabella history per visione futura
             if ($finalVideo) {
@@ -1153,7 +1221,7 @@ if ($action === 'request_access' && $method === 'POST') {
     // Send Confirmation to User
     $userBody = "<p>Gentile <strong>$name</strong>,</p>";
     $userBody .= "<p>Grazie per aver scelto <strong>SonificA.R.T.</strong> Abbiamo ricevuto correttamente la tua richiesta per il piano <strong>" . ($input['plan'] ?? 'PRO') . "</strong>.</p>";
-    $userBody .= "<p style='background:#f0fdf4; border-left:4px solid #2dd4bf; padding:15px; margin:15px 0; color:#064e3b;'>La tua richiesta è in fase di elaborazione. Riceverai a breve una email contenente la fattura pro-forma e le coordinate bancarie per finalizzare l'attivazione del servizio.</p>";
+    $userBody .= "<p style='background:#f0fdf4; border-left:4px solid #2dd4bf; padding:15px; margin:15px 0; color:#064e3b;'>La tua richiesta è in fase di elaborazione. Riceverai a breve una email contenente la fattura pro-forma per finalizzare l'attivazione del servizio.</p>";
     $userBody .= "<p>Se hai domande, puoi rispondere direttamente a questa email.</p>";
     $userBody .= "<p style='margin-top:30px;'>Cordiali saluti,<br><em>Il Team SonificA.R.T.</em></p>";
 
@@ -1233,23 +1301,54 @@ if ($userId) {
             sendResponse(["success" => true]);
         }
         if ($action === 'get_users') {
-            $rawUsers = $pdo->query("SELECT id, name, email, is_pro, is_admin, credits, avatar_url, custom_logo_url, tier, created_at FROM users ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+            try {
+                $rawUsers = $pdo->query("SELECT id, name, email, is_pro, is_admin, credits, avatar_url, custom_logo_url, tier, created_at FROM users ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+            } catch (Exception $e) {
+                // ULTRA ROBUST FALLBACK: Select all, no ordering, no specific columns
+                $rawUsers = $pdo->query("SELECT * FROM users LIMIT 100")->fetchAll(PDO::FETCH_ASSOC);
+            }
+
             $users = [];
             foreach ($rawUsers as $u) {
                 $users[] = [
                     "id" => (string) $u['id'],
                     "name" => $u['name'],
                     "email" => $u['email'],
-                    "isPro" => (bool) $u['is_pro'],
-                    "isAdmin" => (bool) $u['is_admin'],
-                    "credits" => (int) $u['credits'],
-                    "avatarUrl" => $u['avatar_url'],
+                    "isPro" => (bool) ($u['is_pro'] ?? 0),
+                    "isAdmin" => (bool) ($u['is_admin'] ?? 0),
+                    "credits" => (int) ($u['credits'] ?? 0),
+                    "avatarUrl" => $u['avatar_url'] ?? '',
                     "customLogoUrl" => $u['custom_logo_url'] ?? null,
                     "tier" => $u['tier'] ?? 'free',
-                    "registeredAt" => $u['created_at']
+                    "registeredAt" => $u['created_at'] ?? $u['registered_at'] ?? null // Try alternatives
                 ];
             }
             sendResponse($users);
+        }
+
+        // --- NEW: DB INSPECTOR ---
+        if ($action === 'get_db_tables') {
+            $tables = $pdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
+            sendResponse($tables);
+        }
+        if ($action === 'get_table_content') {
+            $table = preg_replace('/[^a-zA-Z0-9_]/', '', $input['table']); // Sanitize
+            if (!$table)
+                sendResponse(["error" => "Invalid table"], 400);
+
+            try {
+                $rows = $pdo->query("SELECT * FROM $table ORDER BY 1 DESC LIMIT 100")->fetchAll(PDO::FETCH_ASSOC);
+                $columns = [];
+                if (!empty($rows)) {
+                    $columns = array_keys($rows[0]);
+                } else {
+                    $colStmt = $pdo->query("SHOW COLUMNS FROM $table");
+                    $columns = $colStmt->fetchAll(PDO::FETCH_COLUMN);
+                }
+                sendResponse(["columns" => $columns, "rows" => $rows]);
+            } catch (Exception $e) {
+                sendResponse(["error" => $e->getMessage()], 500);
+            }
         }
         if ($action === 'admin_approve_request') {
             $reqId = $input['id'];
@@ -1335,9 +1434,12 @@ if ($userId) {
             $id = $input['id'];
             $title = $input['title'] ?? null;
             $description = $input['description'] ?? null;
-            $isPublic = isset($input['isPublic']) ? ($input['isPublic'] ? 1 : 0) : null;
+
+            // Fix boolean parsing from string (e.g. "false" string is true in PHP)
+            $isPublic = isset($input['isPublic']) ? (filter_var($input['isPublic'], FILTER_VALIDATE_BOOLEAN) ? 1 : 0) : null;
+            $isFeatured = isset($input['isFeatured']) ? (filter_var($input['isFeatured'], FILTER_VALIDATE_BOOLEAN) ? 1 : 0) : null;
+
             $priority = isset($input['priority']) ? (int) $input['priority'] : null;
-            $isFeatured = isset($input['isFeatured']) ? ($input['isFeatured'] ? 1 : 0) : null;
 
             $parts = [];
             $params = [];

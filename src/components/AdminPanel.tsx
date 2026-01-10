@@ -33,7 +33,7 @@ const emptyProject: Omit<ShowcaseProject, 'id'> = {
     videoUrl: ''
 };
 
-type AdminTab = 'overview' | 'requests' | 'users' | 'showcase' | 'logs';
+type AdminTab = 'overview' | 'requests' | 'users' | 'showcase' | 'logs' | 'database';
 
 const StatCard: React.FC<{ title: string; value: string | number; subtext: string; icon: string; color: string }> = ({ title, value, subtext, icon, color }) => (
     <div className="bg-brand-secondary/40 p-6 rounded-xl border border-brand-secondary flex items-center gap-4 hover:bg-brand-secondary/60 transition-colors">
@@ -167,6 +167,9 @@ export const AdminPanel: React.FC = () => {
     const [projects, setProjects] = useState<ShowcaseProject[]>([]);
     const [logs, setLogs] = useState<SystemLog[]>([]);
     const [requests, setRequests] = useState<AccessRequest[]>([]);
+    const [dbTables, setDbTables] = useState<string[]>([]);
+    const [selectedTable, setSelectedTable] = useState<string>('');
+    const [tableData, setTableData] = useState<{ columns: string[], rows: any[] } | null>(null);
     const [isLoading, setIsLoading] = useState(false);
 
     // Edit States
@@ -183,11 +186,18 @@ export const AdminPanel: React.FC = () => {
             if (activeTab === 'overview') {
                 setStats(await api.getSystemStats());
                 setRequests(api.getAccessRequests ? await api.getAccessRequests() : []);
+                setUsers(await api.getAllUsers());
             }
             if (activeTab === 'users') setUsers(await api.getAllUsers());
             if (activeTab === 'showcase') setProjects(await api.getShowcase(true));
             if (activeTab === 'logs') setLogs(await api.getSystemLogs());
             if (activeTab === 'requests') setRequests(await api.getAccessRequests());
+            if (activeTab === 'database') {
+                setDbTables(await api.getDbTables());
+                if (selectedTable) {
+                    setTableData(await api.getDbTableContent(selectedTable));
+                }
+            }
         } catch (e) { console.error(e); }
         finally { setIsLoading(false); }
     }, [activeTab]);
@@ -335,7 +345,7 @@ export const AdminPanel: React.FC = () => {
             <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
                 <h2 className="text-3xl font-bold text-white flex items-center gap-3"><i className="fas fa-user-shield text-brand-accent"></i> Admin Dashboard</h2>
                 <div className="bg-brand-secondary/50 p-1 rounded-lg flex overflow-x-auto">
-                    {['overview', 'requests', 'users', 'showcase', 'logs'].map(tab => (
+                    {['overview', 'requests', 'users', 'showcase', 'logs', 'database'].map(tab => (
                         <button key={tab} onClick={() => setActiveTab(tab as AdminTab)} className={`px-4 py-2 rounded text-sm font-bold capitalize whitespace-nowrap ${activeTab === tab ? 'bg-brand-accent text-black' : 'text-white hover:bg-white/10'}`}>
                             {tab} {tab === 'requests' && requests.length > 0 && `(${requests.length})`}
                         </button>
@@ -545,6 +555,58 @@ export const AdminPanel: React.FC = () => {
             {activeTab === 'logs' && (
                 <div className="bg-black/30 p-4 rounded-xl border border-white/10 font-mono text-xs text-gray-400 h-96 overflow-y-auto">
                     {logs.length > 0 ? logs.map((l, i) => <div key={i} className="border-b border-white/5 py-1">{l.timestamp} - {l.action}: {l.details} <span className="text-[10px] opacity-70">[{l.level}]</span></div>) : "Nessun log disponibile o funzionalità log non attiva."}
+                </div>
+            )}
+
+            {activeTab === 'database' && (
+                <div className="bg-[#1e1e2e] rounded-xl border border-white/10 p-6">
+                    <div className="flex flex-col md:flex-row gap-4 mb-6">
+                        <div className="w-full md:w-1/4">
+                            <h3 className="font-bold text-white mb-2">Tabelle Database</h3>
+                            <div className="bg-black/30 rounded-lg border border-white/10 overflow-hidden">
+                                {dbTables.map(t => (
+                                    <button
+                                        key={t}
+                                        onClick={() => { setSelectedTable(t); setIsLoading(true); api.getDbTableContent(t).then(setTableData).finally(() => setIsLoading(false)); }}
+                                        className={`w-full text-left px-4 py-2 text-xs font-mono transition-colors border-b border-white/5 last:border-0 ${selectedTable === t ? 'bg-brand-accent text-brand-primary font-bold' : 'text-gray-400 hover:bg-white/5'}`}
+                                    >
+                                        {t}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="w-full md:w-3/4">
+                            <h3 className="font-bold text-white mb-2 flex justify-between items-center">
+                                <span>Contenuto: <span className="text-brand-accent font-mono">{selectedTable || 'Seleziona tabella'}</span></span>
+                                {tableData && <span className="text-xs text-gray-500 font-mono">{tableData.rows.length} righe (limit 100)</span>}
+                            </h3>
+                            <div className="bg-black/30 rounded-lg border border-white/10 overflow-x-auto min-h-[300px]">
+                                {tableData ? (
+                                    <table className="w-full text-left text-xs font-mono whitespace-nowrap">
+                                        <thead className="bg-white/5 text-brand-accent">
+                                            <tr>
+                                                {tableData.columns.map(c => <th key={c} className="p-2 border-b border-white/10">{c}</th>)}
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-white/5 text-gray-300">
+                                            {tableData.rows.map((row, i) => (
+                                                <tr key={i} className="hover:bg-white/5">
+                                                    {tableData.columns.map(c => (
+                                                        <td key={c} className="p-2 border-r border-white/5 last:border-0 max-w-[200px] truncate" title={String(row[c])}>
+                                                            {row[c] === null ? <span className="text-gray-600">NULL</span> : (typeof row[c] === 'boolean' ? (row[c] ? '1' : '0') : String(row[c]))}
+                                                        </td>
+                                                    ))}
+                                                </tr>
+                                            ))}
+                                            {tableData.rows.length === 0 && <tr><td colSpan={tableData.columns.length} className="p-8 text-center text-gray-500">Tabella vuota</td></tr>}
+                                        </tbody>
+                                    </table>
+                                ) : (
+                                    <div className="flex items-center justify-center h-[300px] text-gray-500 italic">Seleziona una tabella per vederne il contenuto.</div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
 
