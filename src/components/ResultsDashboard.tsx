@@ -1088,7 +1088,13 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                 <InfoCard title={t('results.forensic_certificate')} icon="fa-fingerprint">
                     <div className="grid grid-cols-1 gap-1">
                         <DataRow label={t('results.image_hash')} value={safeHash.substring(0, 16) + '...'} />
-                        <DataRow label={t('results.audio_hash')} value={(correctedResult.audioHash || (correctedResult.audioOutput as any)?.audioHash || "---").substring(0, 16) + '...'} />
+                        <DataRow label={t('results.audio_hash')} value={
+                            (correctedResult.audioHash && correctedResult.audioHash !== '---')
+                                ? correctedResult.audioHash.substring(0, 16) + '...'
+                                : ((correctedResult.audioOutput as any)?.audioHash
+                                    ? (correctedResult.audioOutput as any).audioHash.substring(0, 16) + '...'
+                                    : "---")
+                        } />
                         <DataRow label={t('results.framework_ver') || "Framework Ver."} value="1.0" />
                     </div>
                 </InfoCard>
@@ -1105,12 +1111,17 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                 </span>
                             }
                         />
-                        {correctedResult.acquisitionMetadata?.offsets && (
+                        {correctedResult.acquisitionMetadata?.offsets ? (
                             <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 bg-black/20 p-2 rounded border border-brand-accent/10">
                                 <DataRow label="EXP" value={(correctedResult.acquisitionMetadata.offsets.exposure >= 0 ? '+' : '') + correctedResult.acquisitionMetadata.offsets.exposure.toFixed(1)} />
                                 <DataRow label="WB" value={(correctedResult.acquisitionMetadata.offsets.whiteBalance >= 0 ? '+' : '') + correctedResult.acquisitionMetadata.offsets.whiteBalance.toFixed(0)} />
                                 <DataRow label="CONT" value={(correctedResult.acquisitionMetadata.offsets.contrast >= 0 ? '+' : '') + correctedResult.acquisitionMetadata.offsets.contrast.toFixed(0)} />
                                 <DataRow label="STAB" value={(correctedResult.acquisitionMetadata.offsets.stability >= 0 ? '+' : '') + correctedResult.acquisitionMetadata.offsets.stability.toFixed(0)} />
+                            </div>
+                        ) : (
+                            // Fallback for restored items WITHOUT metadata
+                            <div className="text-xs text-gray-500 italic mt-2">
+                                Dati originali non disponibili per questa voce storica.
                             </div>
                         )}
                     </div>

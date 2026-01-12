@@ -275,6 +275,7 @@ export interface DashboardEntry {
     title?: string | null;
     subtitle?: string | null;
     description?: string | null;
+    acquisitionMetadata?: AcquisitionMetadata;
 }
 
 export interface MusicGenResponse {
@@ -341,6 +342,8 @@ export interface ShowcaseProject {
     historyId?: string;
     priority?: number;
     isFeatured?: boolean;
+    imageHash?: string;
+    blockData?: BlockAnalysisResult;
 }
 
 // --- DEFINIZIONE SPOSTATA QUI PER EVITARE DIPENDENZE CIRCOLARI ---

@@ -85,6 +85,7 @@ const PublishModal: React.FC<{ entry: DashboardEntry, onClose: () => void, user?
 
             // Update Entry Ref & UI
             entry.audioUrl = newUrl;
+            entry.traditionName = file.name;
 
             // Force re-render of audio player via key or just state update?
             // Since we don't have local state for audioUrl, we rely on 'entry' mutation which doesn't trigger re-render.
@@ -122,7 +123,11 @@ const PublishModal: React.FC<{ entry: DashboardEntry, onClose: () => void, user?
             let audioBlob: Blob;
             if (entry.audioUrl) {
                 const r = await fetch(getAbsoluteUrl(entry.audioUrl)!);
+                if (!r.ok) throw new Error(`File audio non disponibile (Errore ${r.status}). Verifica che il file sia stato caricato correttamente sul server.`);
                 audioBlob = await r.blob();
+                if (audioBlob.type.includes('text') || audioBlob.type.includes('html')) {
+                    throw new Error("Il file audio sembra corrotto o non valido (formato HTML/Text ricevuto).");
+                }
             } else {
                 throw new Error("Impossibile recuperare il file audio per la generazione video.");
             }
@@ -344,7 +349,7 @@ const PublishModal: React.FC<{ entry: DashboardEntry, onClose: () => void, user?
                                         <div className="text-white font-bold text-sm truncate">{entry.traditionName || "Audio Originale.wav"}</div>
                                         <div className="text-xs text-gray-500 uppercase tracking-wider">{entry.paradigm || "Scientifico"}</div>
                                     </div>
-                                    <audio key={entry.audioUrl + Date.now()} controls src={getAbsoluteUrl(entry.audioUrl) || undefined} className="h-8 max-w-[200px]" />
+                                    <audio key={(entry.audioUrl || "audio") + Date.now()} controls src={getAbsoluteUrl(entry.audioUrl) || undefined} className="h-8 max-w-[200px]" />
                                 </div>
 
                                 <ActionToolbar url={entry.audioUrl || ""} type="audio" filename={`audio_${entry.id}.wav`} title={title} />
@@ -363,11 +368,28 @@ const PublishModal: React.FC<{ entry: DashboardEntry, onClose: () => void, user?
                                         {activeVideoUrl ? (
                                             <video src={getAbsoluteUrl(activeVideoUrl)!} className="w-full h-full object-contain" controls />
                                         ) : (
-                                            <div className="text-center">
-                                                <i className="fas fa-film text-4xl text-gray-700 mb-3 block"></i>
-                                                <button onClick={handleGenerateVideo} className="px-5 py-2 bg-[#2dd4bf] text-black font-bold rounded-full shadow-lg hover:scale-105 transition-transform text-xs uppercase tracking-wide">
-                                                    Genera Video
-                                                </button>
+                                            <div className="text-center w-full px-4">
+                                                {isSubmitting ? (
+                                                    <div className="w-full max-w-xs mx-auto">
+                                                        <div className="flex justify-between text-xs text-[#2dd4bf] mb-2 font-bold uppercase tracking-wider">
+                                                            <span>Generazione in corso...</span>
+                                                            <span>{uploadProgress}%</span>
+                                                        </div>
+                                                        <div className="h-2 bg-gray-800 rounded-full overflow-hidden border border-white/10">
+                                                            <div
+                                                                className="h-full bg-[#2dd4bf] transition-all duration-300 ease-out shadow-[0_0_10px_rgba(45,212,191,0.5)]"
+                                                                style={{ width: `${uploadProgress}%` }}
+                                                            ></div>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <i className="fas fa-film text-4xl text-gray-700 mb-3 block"></i>
+                                                        <button onClick={handleGenerateVideo} className="px-5 py-2 bg-[#2dd4bf] text-black font-bold rounded-full shadow-lg hover:scale-105 transition-transform text-xs uppercase tracking-wide">
+                                                            Genera Video
+                                                        </button>
+                                                    </>
+                                                )}
                                             </div>
                                         )}
                                     </div>

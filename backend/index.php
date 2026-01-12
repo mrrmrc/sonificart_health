@@ -65,6 +65,11 @@ try {
         $pdo->exec("ALTER TABLE history ADD COLUMN IF NOT EXISTS title VARCHAR(255) DEFAULT NULL");
         $pdo->exec("ALTER TABLE history ADD COLUMN IF NOT EXISTS subtitle VARCHAR(255) DEFAULT NULL");
         $pdo->exec("ALTER TABLE history ADD COLUMN IF NOT EXISTS description TEXT DEFAULT NULL");
+
+        // NEW COLUMNS FOR FORENSIC DATA
+        $pdo->exec("ALTER TABLE history ADD COLUMN IF NOT EXISTS audio_hash VARCHAR(255) DEFAULT NULL");
+        $pdo->exec("ALTER TABLE history ADD COLUMN IF NOT EXISTS acquisition_metadata TEXT DEFAULT NULL");
+        $pdo->exec("ALTER TABLE history ADD COLUMN IF NOT EXISTS validation_hashes TEXT DEFAULT NULL");
     } catch (Exception $e) {
         // Fallback
     }
@@ -349,10 +354,15 @@ if ($action === 'save_sonification' && $method === 'POST') {
         $blockData = $_POST['blockData'] ?? $input['blockData'] ?? null;
         $eventData = $_POST['events'] ?? $input['events'] ?? null;
 
+        // NEW FIELDS
+        $audioHash = $_POST['audioHash'] ?? $input['audioHash'] ?? null;
+        $acquisitionMetadata = $_POST['acquisitionMetadata'] ?? $input['acquisitionMetadata'] ?? null;
+        $validationHashes = $_POST['validationHashes'] ?? $input['validationHashes'] ?? null;
+
         $generatedAiTrackUrl = $_POST['generatedAiTrackUrl'] ?? $input['generatedAiTrackUrl'] ?? null;
 
-        $stmt = $pdo->prepare("INSERT INTO history (user_id, image_hash, paradigm, tradition_name, image_url, audio_url, music_generation_prompt, generated_ai_track_url, config_json, event_data, block_data, title) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$userId, $hash, $input['paradigm'] ?? 'scientific', $input['traditionName'] ?? 'Standard', $imgUrl, $audioUrl, $musicPrompt, $generatedAiTrackUrl, $configJson, $eventData, $blockData, $finalTitle]);
+        $stmt = $pdo->prepare("INSERT INTO history (user_id, image_hash, paradigm, tradition_name, image_url, audio_url, music_generation_prompt, generated_ai_track_url, config_json, event_data, block_data, title, audio_hash, acquisition_metadata, validation_hashes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$userId, $hash, $input['paradigm'] ?? 'scientific', $input['traditionName'] ?? 'Standard', $imgUrl, $audioUrl, $musicPrompt, $generatedAiTrackUrl, $configJson, $eventData, $blockData, $finalTitle, $audioHash, $acquisitionMetadata, $validationHashes]);
 
         sendResponse(["success" => true]);
     } catch (Exception $e) {
@@ -402,7 +412,11 @@ if ($action === 'get_history' && $method === 'POST') {
             "configUsed" => isset($h['config_json']) ? json_decode($h['config_json'], true) : null,
             "events" => isset($h['event_data']) ? json_decode($h['event_data'], true) : null,
             "blockData" => isset($h['block_data']) ? json_decode($h['block_data'], true) : null,
-            "videoUrl" => $h['video_url'] ? ((strpos($h['video_url'], 'http') === 0) ? $h['video_url'] : $baseUrl . (strpos($h['video_url'], '/') === 0 ? '' : '/') . $h['video_url']) : null
+            "videoUrl" => $h['video_url'] ? ((strpos($h['video_url'], 'http') === 0) ? $h['video_url'] : $baseUrl . (strpos($h['video_url'], '/') === 0 ? '' : '/') . $h['video_url']) : null,
+            // NEW FIELDS MAPPING
+            "audioHash" => $h['audio_hash'] ?? null,
+            "acquisitionMetadata" => isset($h['acquisition_metadata']) ? json_decode($h['acquisition_metadata'], true) : null,
+            "validationHashes" => isset($h['validation_hashes']) ? json_decode($h['validation_hashes'], true) : null
         ];
     }, $history);
     sendResponse($mapped);
@@ -425,13 +439,15 @@ if ($action === 'get_showcase' && $method === 'GET') {
             }
         }
 
-        $where = $includeAll ? "1=1" : "is_public = 1";
-        $stmt = $pdo->query("SELECT * FROM showcase WHERE $where ORDER BY priority DESC, created_at DESC");
+        $where = $includeAll ? "1=1" : "s.is_public = 1";
+        // JOIN with history to get forensic and cultural data
+        $stmt = $pdo->query("SELECT s.*, h.image_hash, h.block_data FROM showcase s LEFT JOIN history h ON s.history_id = h.id WHERE $where ORDER BY s.priority DESC, s.created_at DESC");
         $projects = $stmt->fetchAll();
         $mapped = array_map(function ($p) use ($baseUrl) {
             $audio = $p['audio_url'] ? ((strpos($p['audio_url'], '/') === 0) ? $baseUrl . $p['audio_url'] : $p['audio_url']) : null;
             $video = $p['video_url'] ? ((strpos($p['video_url'], '/') === 0) ? $baseUrl . $p['video_url'] : $p['video_url']) : null;
             $img = (strpos($p['image_url'], '/') === 0) ? $baseUrl . $p['image_url'] : $p['image_url'];
+
             return [
                 "id" => (string) $p['id'],
                 "historyId" => (string) ($p['history_id'] ?? ''),
@@ -449,7 +465,10 @@ if ($action === 'get_showcase' && $method === 'GET') {
                 "stats" => ["duration" => $p['duration'], "notes" => (int) $p['notes_count']],
                 "priority" => (int) $p['priority'],
                 "isPublic" => (bool) $p['is_public'],
-                "isFeatured" => (bool) ($p['is_featured'] ?? 0)
+                "isFeatured" => (bool) ($p['is_featured'] ?? 0),
+                // New Fields for Forensic & Cultural
+                "imageHash" => $p['image_hash'] ?? null,
+                "blockData" => isset($p['block_data']) ? json_decode($p['block_data'], true) : null
             ];
         }, $projects);
         sendResponse($mapped);
@@ -598,6 +617,8 @@ if ($action === 'attach_video_to_history' && $method === 'POST') {
 
     if ($finalVideoUrl) {
         $pdo->prepare("UPDATE history SET video_url = ? WHERE id = ?")->execute([$finalVideoUrl, $entryId]);
+        // Sync Showcase
+        $pdo->prepare("UPDATE showcase SET video_url = ? WHERE history_id = ?")->execute([$finalVideoUrl, $entryId]);
         sendResponse(["success" => true, "videoUrl" => $finalVideoUrl]);
     }
 }
@@ -624,6 +645,8 @@ if ($action === 'detach_video_from_history' && $method === 'POST') {
     }
 
     $pdo->prepare("UPDATE history SET video_url = NULL WHERE id = ?")->execute([$entryId]);
+    // Sync Showcase
+    $pdo->prepare("UPDATE showcase SET video_url = NULL WHERE history_id = ?")->execute([$entryId]);
     sendResponse(["success" => true]);
 }
 
@@ -655,7 +678,8 @@ if ($action === 'attach_audio_to_history' && $method === 'POST') {
         if (!in_array($ext, $allowed))
             $ext = 'mp3';
 
-        $targetDir = __DIR__ . '/../public/media/custom/';
+        // Use local media folder relative to script (inside API folder or logic root)
+        $targetDir = __DIR__ . '/media/custom/';
         if (!file_exists($targetDir))
             mkdir($targetDir, 0755, true);
 
@@ -663,7 +687,10 @@ if ($action === 'attach_audio_to_history' && $method === 'POST') {
         $targetPath = $targetDir . $newFileName;
 
         if (move_uploaded_file($file['tmp_name'], $targetPath)) {
-            $finalAudioUrl = "/media/custom/" . $newFileName;
+            // URL derived from script location
+            $scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME']));
+            $scriptDir = ($scriptDir === '/' || $scriptDir === '\\') ? '' : rtrim($scriptDir, '/');
+            $finalAudioUrl = $scriptDir . "/media/custom/" . $newFileName;
         } else {
             sendResponse(["error" => "Errore upload audio"], 500);
         }
@@ -672,7 +699,9 @@ if ($action === 'attach_audio_to_history' && $method === 'POST') {
     }
 
     if ($finalAudioUrl) {
-        $pdo->prepare("UPDATE history SET audio_url = ? WHERE id = ?")->execute([$finalAudioUrl, $entryId]);
+        // Update audio_url AND tradition_name (using original filename if available)
+        $fileName = isset($_FILES['audioFile']['name']) ? $_FILES['audioFile']['name'] : 'Audio Uploaded';
+        $pdo->prepare("UPDATE history SET audio_url = ?, tradition_name = ? WHERE id = ?")->execute([$finalAudioUrl, $fileName, $entryId]);
         // Also update showcase if present? Ideally yes, but showcase links to history item via ID usually?
         // Wait, showcase table copies URLs. We should update showcase too if it exists.
         $pdo->prepare("UPDATE showcase SET audio_url = ? WHERE image_url = (SELECT image_url FROM history WHERE id = ?)")->execute([$finalAudioUrl, $entryId]);
@@ -1078,6 +1107,8 @@ if ($action === 'check_generation_status' && $method === 'POST') {
     // If done, update DB here (lazy update) to ensure consistency
     if (($data['status'] ?? '') === 'done' && isset($data['videoUrl'])) {
         $pdo->prepare("UPDATE history SET video_url = ? WHERE id = ?")->execute([$data['videoUrl'], $entryId]);
+        // Sync Showcase
+        $pdo->prepare("UPDATE showcase SET video_url = ? WHERE history_id = ?")->execute([$data['videoUrl'], $entryId]);
     }
 
     sendResponse($data);

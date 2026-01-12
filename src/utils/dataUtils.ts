@@ -199,7 +199,8 @@ export const reconstructResultFromPartialData = (
         configUsed: safeConfig,
         validationResult: { determinism: { passed: true, message: "OK" }, coverage: { passed: true, message: "OK" }, robustness: { passed: true, message: "OK" }, grid: { passed: true, message: "OK" } },
         performanceMetrics: { totalProcessingTime: 0 },
-        validationHashes: { imageBlobHash: "", audioBlobHash: "", midiBlobHash: "" },
+        validationHashes: partialData.validationHashes || { imageBlobHash: "", audioBlobHash: "", midiBlobHash: "" },
+        acquisitionMetadata: partialData.acquisitionMetadata || undefined,
 
         // Recupero prompt se presente (supporto camelCase e snake_case)
         musicGenerationPrompt: partialData.musicGenerationPrompt || partialData.music_generation_prompt || meta.music_generation_prompt || null

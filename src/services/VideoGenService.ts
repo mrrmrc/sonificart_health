@@ -18,7 +18,6 @@ interface VisualState {
 }
 
 // --- HELPER: SVG to Bitmap ---
-// --- HELPER: SVG to Bitmap ---
 async function svgToBitmap(svgString: string, size: number = 100): Promise<ImageBitmap> {
     const svg64 = btoa(svgString);
     const b64Start = 'data:image/svg+xml;base64,';
@@ -39,6 +38,30 @@ async function svgToBitmap(svgString: string, size: number = 100): Promise<Image
     });
 }
 
+// --- HELPER: Get Visible Bounds (Trim Transparency/Black) ---
+const getVisibleBounds = (pixelData: Uint8ClampedArray, width: number, height: number, minBrightness = 10) => {
+    let minX = width;
+    let maxX = 0;
+
+    for (let y = 0; y < height; y += 4) { // Scan every 4th line for speed
+        for (let x = 0; x < width; x++) {
+            const idx = (y * width + x) * 4;
+            const r = pixelData[idx];
+            const g = pixelData[idx + 1];
+            const b = pixelData[idx + 2];
+            const a = pixelData[idx + 3];
+
+            if (a > 20 && (r + g + b) > minBrightness) { // Ignore fully transparent or pitch black
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+            }
+        }
+    }
+    // Safety fallback
+    if (minX > maxX) return { minX: 0, maxX: width, width };
+    return { minX, maxX, width: maxX - minX };
+};
+
 // --- HELPER: Draw Frame (Shared Logic) ---
 function drawFrame(
     ctx: CanvasRenderingContext2D,
@@ -50,6 +73,7 @@ function drawFrame(
     duration: number,
     W: number, H: number,
     VideoH: number, FooterH: number, SafeArea: number,
+    visualBounds: { minX: number, maxX: number, width: number },
     title?: string, author?: string,
     subtitle?: string, date?: string
 ) {
@@ -72,8 +96,8 @@ function drawFrame(
         dx = (W - dw) / 2;
     }
 
-    // A. Dynamic Zoom (Subtle)
-    const zoom = 1 + (time / duration) * 0.10; // 10% zoom
+    // A. Zoom (Fixed 1.0 for Precision Alignment)
+    const zoom = 1;
     const zDw = dw * zoom;
     const zDh = dh * zoom;
     const zDx = dx - (zDw - dw) / 2;
@@ -82,21 +106,18 @@ function drawFrame(
     ctx.drawImage(img, zDx, zDy, zDw, zDh);
 
     // 2. Synced Scanning Effect & Pixel Sonification
-    // Scanline moves strictly within the IMAGE BOUNDS (zDx to zDx + zDw)
-    // progress 0 -> zDx (Left edge of image)
-    // progress 1 -> zDx + zDw (Right edge of image)
+    // Use Visual Bounds for Scanline
     const progress = Math.min(1, Math.max(0, time / duration));
-
-    // Bounds check to ensure we don't scan black bars
-    const scanStart = zDx;
-    const scanWidth = zDw;
+    const scanStart = visualBounds.minX;
+    const scanWidth = visualBounds.width;
     const scanX = Math.floor(scanStart + (progress * scanWidth));
 
     // A. Draw Scanline
     // Clip to image area to avoid drawing on margins
     ctx.save();
     ctx.beginPath();
-    ctx.rect(zDx, zDy, zDw, zDh);
+    // Clip to visual bounds instead of geometry bounds
+    ctx.rect(visualBounds.minX, zDy, visualBounds.width, zDh);
     ctx.clip();
 
     const grad = ctx.createLinearGradient(0, 0, 0, VideoH);
@@ -118,10 +139,7 @@ function drawFrame(
             const sy = Math.floor(y);
             if (sy < 0 || sy >= VideoH) continue;
 
-            // ScanX is already within image, just clamp to width
-            const sx = Math.max(0, Math.min(W - 1, scanX));
-
-            const idx = (sy * W + sx) * 4;
+            const idx = (sy * W + scanX) * 4; // Sample from scanX
             if (idx < 0 || idx >= pixelData.length - 4) continue;
 
             const r = pixelData[idx];
@@ -136,7 +154,7 @@ function drawFrame(
                 if (amp > 20) {
                     const size = (amp / 255) * vizWidth * (brightness / 255);
 
-                    ctx.strokeStyle = `rgba(${r},${g},${b}, ${amp / 200})`; // Brighter
+                    ctx.strokeStyle = `rgba(${r},${g},${b}, ${amp / 200})`;
                     ctx.beginPath();
                     ctx.moveTo(scanX - size, y);
                     ctx.quadraticCurveTo(scanX, y - size / 2, scanX + size, y);
@@ -158,22 +176,22 @@ function drawFrame(
     // 3. Footer
     const footerY = VideoH;
 
-    // Solid Background so it's visible against any player UI
+    // Solid Background
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, footerY, W, FooterH);
 
-    // Separator
-    const sepGrad = ctx.createLinearGradient(0, footerY, W, footerY);
+    // Separator (Align with Visual Bounds)
+    const sepGrad = ctx.createLinearGradient(visualBounds.minX, footerY, visualBounds.maxX, footerY);
     sepGrad.addColorStop(0, '#00ffff');
     sepGrad.addColorStop(1, '#a855f7');
     ctx.fillStyle = sepGrad;
-    ctx.fillRect(0, footerY, W, 4); // Thicker separator
+    ctx.fillRect(visualBounds.minX, footerY, visualBounds.width, 4);
 
     // A. Left: Logo & Meta
     const leftMargin = 40;
     const contentY = footerY + 30; // Start content lower
 
-    // Logo (SVG Bitmap) - Increased Size
+    // Logo (SVG Bitmap)
     if (logo) {
         ctx.drawImage(logo, leftMargin, contentY, 100, 100);
     }
@@ -196,11 +214,11 @@ function drawFrame(
     const subText = subtitle ? `${subtitle} • ${dateText}` : dateText;
     ctx.fillText(subText, textX, textBaseY + 65);
 
-    // B. Center/Right: LED Bar Visualizer (Much Prominent)
+    // B. Center/Right: LED Bar Visualizer
     const vizX = W * 0.50;
     const vizW = W * 0.45;
     const vizH = 120; // Taller bars
-    const vizBaseY = footerY + (FooterH - 20); // Bottom aligned at Footer Bottom - padding
+    const vizBaseY = footerY + (FooterH - 20);
 
     const bars = 32;
     const gap = 8;
@@ -213,14 +231,12 @@ function drawFrame(
         for (let j = 0; j < step; j++) sum += freqData[i * step + j];
         const val = sum / step;
 
-        // Non-linear height for better visual
         const boost = val > 10 ? val * 1.5 : val;
         const h = Math.min(vizH, (boost / 255) * vizH);
 
         const x = vizX + i * (barW + gap);
         const y = vizBaseY - h;
 
-        // Neon Gradient
         const lg = ctx.createLinearGradient(0, y, 0, y + h);
         lg.addColorStop(0, '#00ffff');   // Cyan Top
         lg.addColorStop(0.5, '#2dd4bf'); // Teal Mid
@@ -232,7 +248,6 @@ function drawFrame(
         ctx.fillRect(x, y, barW, h);
         ctx.shadowBlur = 0;
 
-        // Peak Cap
         if (h > 5) {
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(x, y - 6, barW, 4);
@@ -338,8 +353,7 @@ export const VideoGenService = {
         const { dx, dy, dw, dh } = calcRatio();
         ctx.drawImage(imageBitmap, dx, dy, dw, dh);
 
-        // Grab pixel data (Warning: this can be large, but it's once per video)
-        // WIDTH * VIDEO_H * 4 = 1280 * 720 * 4 ~= 3.6MB. Trivial.
+        // Grab pixel data 
         let pixelData: Uint8ClampedArray | null = null;
         try {
             const imageData = ctx.getImageData(0, 0, WIDTH, VIDEO_H);
@@ -347,6 +361,9 @@ export const VideoGenService = {
         } catch (e) {
             console.warn("Could not get pixel data (tainted canvas?)", e);
         }
+
+        // 4b. Calc Visual Bounds
+        const visualBounds = pixelData ? getVisibleBounds(pixelData, WIDTH, VIDEO_H) : { minX: dx, maxX: dx + dw, width: dw };
 
         // 5. Video Encoder Setup
         const videoConfig: VideoEncoderConfig = {
@@ -399,6 +416,7 @@ export const VideoGenService = {
             drawFrame(
                 ctx!, imageBitmap, logoBitmap, pixelData, freqData, time, duration,
                 WIDTH, HEIGHT, VIDEO_H, FOOTER_H, TOP_SAFE_AREA,
+                visualBounds,
                 title, author, subtitle, date
             );
 
