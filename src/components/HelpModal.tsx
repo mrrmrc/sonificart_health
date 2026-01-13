@@ -7,10 +7,10 @@ interface HelpModalProps {
     initialSection?: string;
 }
 
-type HelpTab = 'guide' | 'interface' | 'faq' | 'scientific';
+type HelpTab = 'platform' | 'guide' | 'interface' | 'faq' | 'scientific';
 
 export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSection }) => {
-    const [activeTab, setActiveTab] = useState<HelpTab>('guide');
+    const [activeTab, setActiveTab] = useState<HelpTab>('platform');
     const { t } = useLanguage();
 
     useEffect(() => {
@@ -35,6 +35,9 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
                         if (details) details.open = true;
                     }
                 }, 100);
+            } else {
+                // Default fallback if not a scientific section
+                setActiveTab('platform');
             }
         }
     }, [isOpen, initialSection]);
@@ -43,6 +46,96 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
 
     const renderContent = () => {
         switch (activeTab) {
+            case 'platform':
+                return (
+                    <div className="space-y-8 animate-fade-in pb-10">
+                        {/* HERO SECTION */}
+                        <div className="bg-gradient-to-r from-brand-secondary to-brand-primary p-8 rounded-2xl border border-brand-accent/20 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 p-4 opacity-10">
+                                <i className="fas fa-wave-square text-9xl text-brand-accent"></i>
+                            </div>
+                            <h2 className="text-3xl font-display font-bold text-white mb-4 relative z-10">
+                                SonificA.R.T. <span className="text-brand-accent">Framework</span>
+                            </h2>
+                            <p className="text-lg text-brand-text-secondary max-w-2xl leading-relaxed relative z-10">
+                                La prima piattaforma professionale per la <strong>Sonificazione Culturale Deterministica</strong>.
+                                Trasforma immagini, opere d'arte e dati visivi in composizioni musicali scientificamente accurate,
+                                culturalmente coerenti e legalmente certificabili.
+                            </p>
+                        </div>
+
+                        {/* VALUE PROPOSITION GRID */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="bg-white/5 p-6 rounded-xl border border-white/5 hover:border-brand-accent/30 transition-colors">
+                                <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 text-2xl mb-4">
+                                    <i className="fas fa-universal-access"></i>
+                                </div>
+                                <h3 className="text-xl font-bold text-white mb-2">Accessibilità Museale 2.0</h3>
+                                <p className="text-sm text-gray-400 leading-relaxed">
+                                    Rende l'arte visibile accessibile a non vedenti e ipovedenti. Non una semplice descrizione vocale,
+                                    ma una <strong>traduzione sensoriale diretta</strong>: la luce diventa volume, il colore diventa timbro,
+                                    la composizione diventa ritmo. Permette a chiunque di "ascoltare" un quadro.
+                                </p>
+                            </div>
+
+                            <div className="bg-white/5 p-6 rounded-xl border border-white/5 hover:border-purple-500/30 transition-colors">
+                                <div className="w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 text-2xl mb-4">
+                                    <i className="fas fa-fingerprint"></i>
+                                </div>
+                                <h3 className="text-xl font-bold text-white mb-2">Certificazione Forense (SAC)</h3>
+                                <p className="text-sm text-gray-400 leading-relaxed">
+                                    Ogni opera generata è un asset digitale unico. Il formato proprietario <strong>.SAC (Sonified Art Container)</strong>
+                                    include una prova crittografica che lega indissolubilmente i pixel dell'immagine alle note generate,
+                                    garantendo l'autenticità e l'unicità dell'opera derivata per il mercato dell'arte digitale.
+                                </p>
+                            </div>
+
+                            <div className="bg-white/5 p-6 rounded-xl border border-white/5 hover:border-green-500/30 transition-colors">
+                                <div className="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center text-green-400 text-2xl mb-4">
+                                    <i className="fas fa-globe-americas"></i>
+                                </div>
+                                <h3 className="text-xl font-bold text-white mb-2">Consapevolezza Culturale</h3>
+                                <p className="text-sm text-gray-400 leading-relaxed">
+                                    L'unico sistema al mondo con un database di <strong>48 tradizioni musicali globali</strong>.
+                                    SonificART non impone la musica occidentale: rispetta l'origine geografica e storica dell'opera,
+                                    usando scale, strumenti e microtoni appropriati (es. Maqam arabo per un mosaico andaluso).
+                                </p>
+                            </div>
+
+                            <div className="bg-white/5 p-6 rounded-xl border border-white/5 hover:border-yellow-500/30 transition-colors">
+                                <div className="w-12 h-12 rounded-full bg-yellow-500/20 flex items-center justify-center text-yellow-400 text-2xl mb-4">
+                                    <i className="fas fa-theater-masks"></i>
+                                </div>
+                                <h3 className="text-xl font-bold text-white mb-2">Nuovi Linguaggi Creativi</h3>
+                                <p className="text-sm text-gray-400 leading-relaxed">
+                                    Uno strumento potente per artisti digitali, musicisti e performer.
+                                    Usa la modalità "Ibrida" per collaborare con l'IA, oppure la "Live Performance"
+                                    per trasformare il tuo corpo e la tua webcam in un controller musicale che suona l'opera in tempo reale.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* TARGET AUDIENCE */}
+                        <div className="border-t border-white/10 pt-8">
+                            <h3 className="text-2xl font-bold text-white mb-6 text-center">A chi si rivolge?</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                                <div className="p-4 rounded-lg bg-black/20">
+                                    <h4 className="font-bold text-white mb-1">🏛️ Istituzioni Culturali</h4>
+                                    <p className="text-xs text-gray-400">Musei, Gallerie, Fondazioni che vogliono innovare l'esperienza dei visitatori.</p>
+                                </div>
+                                <div className="p-4 rounded-lg bg-black/20">
+                                    <h4 className="font-bold text-white mb-1">🎨 Digital Artists</h4>
+                                    <p className="text-xs text-gray-400">Creativi che cercano nuovi medium espressivi cross-modali.</p>
+                                </div>
+                                <div className="p-4 rounded-lg bg-black/20">
+                                    <h4 className="font-bold text-white mb-1">🔬 Ricercatori & Edu</h4>
+                                    <p className="text-xs text-gray-400">Scuole e università per lo studio della sinestesia e percezione.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+
             case 'guide':
                 return (
                     <div className="space-y-8 animate-fade-in">
@@ -377,6 +470,12 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
                 </div>
 
                 <div className="flex border-b border-white/10 bg-white/5 px-6 overflow-x-auto">
+                    <button
+                        onClick={() => setActiveTab('platform')}
+                        className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'platform' ? 'border-brand-accent text-white' : 'border-transparent text-brand-text-secondary hover:text-white'}`}
+                    >
+                        Piattaforma
+                    </button>
                     <button
                         onClick={() => setActiveTab('guide')}
                         className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'guide' ? 'border-brand-accent text-white' : 'border-transparent text-brand-text-secondary hover:text-white'}`}

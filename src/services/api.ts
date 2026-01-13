@@ -635,6 +635,21 @@ export const api = {
         await handleResponse(response);
     },
 
+    logEvent: async (action: string, details?: string) => {
+        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const params = new URLSearchParams();
+        params.append('evt_action', action);
+        if (details) params.append('evt_details', details);
+        if (token) params.append('auth_token', token);
+
+        // Fire and forget - no await on handleResponse
+        fetch(`${API_BASE_URL}/index.php?action=log_event`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+        }).catch(err => console.error("Log error", err));
+    },
+
     getSystemStats: async (): Promise<SystemStats> => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
         const params = new URLSearchParams();
@@ -682,6 +697,23 @@ export const api = {
             body: params
         });
         return await handleResponse(response);
+    },
+
+    adminUpdateCell: async (table: string, id: string, column: string, value: any): Promise<void> => {
+        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const params = new URLSearchParams();
+        params.append('table', table);
+        params.append('id', id);
+        params.append('column', column);
+        params.append('value', value === null ? 'NULL' : String(value));
+        if (token) params.append('auth_token', token);
+
+        const response = await fetch(`${API_BASE_URL}/index.php?action=admin_update_table_row`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+        });
+        await handleResponse(response);
     },
 
     getUserInfo: async (id: string): Promise<Partial<User>> => {

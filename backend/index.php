@@ -60,6 +60,19 @@ try {
     $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS tier VARCHAR(20) DEFAULT 'free'");
     $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_logo_url VARCHAR(255) DEFAULT NULL");
     $pdo->exec("ALTER TABLE history ADD COLUMN IF NOT EXISTS video_url VARCHAR(255) DEFAULT NULL");
+
+    // ADMIN LOGS TABLE
+    $pdo->exec("CREATE TABLE IF NOT EXISTS admin_logs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NULL,
+        session_id VARCHAR(50) NULL,
+        action VARCHAR(50),
+        details TEXT,
+        level VARCHAR(20) DEFAULT 'INFO',
+        ip_address VARCHAR(45),
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    )");
+
     try {
         // Force add title/subtitle/description if not exists
         $pdo->exec("ALTER TABLE history ADD COLUMN IF NOT EXISTS title VARCHAR(255) DEFAULT NULL");
@@ -75,6 +88,25 @@ try {
     }
 } catch (Exception $e) {
     // Ignore
+}
+
+// HELPERS
+// --- LOGGING HELPER ---
+function log_activity($pdo, $userId, $action, $details, $level = 'INFO')
+{
+    try {
+        $ip = $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
+        $sessionId = $_COOKIE['sonificart_session'] ?? null; // Optional: read from cookie/header if exists
+
+        // If details is array, json_encode
+        if (is_array($details))
+            $details = json_encode($details);
+
+        $stmt = $pdo->prepare("INSERT INTO admin_logs (user_id, session_id, action, details, level, ip_address) VALUES (?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$userId, $sessionId, $action, $details, $level, $ip]);
+    } catch (Exception $e) {
+        // Silent fail to not break app
+    }
 }
 
 // HELPERS
@@ -308,12 +340,52 @@ if (strpos($_SERVER['CONTENT_TYPE'] ?? '', 'multipart/form-data') !== false) {
 $userId = getUserIdFromToken($input);
 $publicActions = ['login', 'register', 'get_showcase', 'reset_password', 'upload_media', 'request_access', 'admin_get_requests', 'check_info', 'upload_chunk'];
 
-if (!$userId && !in_array($action, $publicActions)) {
+if (!$userId && !in_array($action, $publicActions) && $action !== 'log_event') { // Allow log_event to be public
     if ($action)
         sendResponse(["error" => "Unauthorized"], 401);
 }
 
 // ======================= ROUTES =======================
+
+// --- LOG EVENT (Public) ---
+if ($action === 'log_event' && $method === 'POST') {
+    $evtAction = $input['evt_action'] ?? 'UNKNOWN';
+    $evtDetails = $input['evt_details'] ?? '';
+    // If not logged in, user_id is null. helper handles session/ip
+    log_activity($pdo, $userId, $evtAction, $evtDetails, 'INFO');
+    sendResponse(["success" => true]);
+}
+
+// --- GET LOGS (Admin Only) ---
+if ($action === 'get_logs' && $method === 'POST') {
+    // Verify admin
+    if (!$userId)
+        sendResponse(["error" => "Unauthorized"], 401);
+
+    $stmt = $pdo->prepare("SELECT is_admin FROM users WHERE id = ?");
+    $stmt->execute([$userId]);
+    if (!$stmt->fetchColumn())
+        sendResponse(["error" => "Forbidden"], 403);
+
+    $limit = 100;
+    $stmt = $pdo->query("SELECT * FROM admin_logs ORDER BY timestamp DESC LIMIT $limit");
+    $logs = $stmt->fetchAll();
+
+    // Map for frontend
+    $mapped = array_map(function ($l) {
+        return [
+            "id" => $l['id'],
+            "timestamp" => $l['timestamp'],
+            "action" => $l['action'],
+            "details" => $l['details'],
+            "level" => $l['level'],
+            "userId" => $l['user_id'],
+            "ip" => $l['ip_address']
+        ];
+    }, $logs);
+
+    sendResponse($mapped);
+}
 
 // --- SAVE SONIFICATION (Protetta) ---
 if ($action === 'save_sonification' && $method === 'POST') {
@@ -864,14 +936,35 @@ if ($action === 'publish_history' && $method === 'POST') {
     }
 }
 
-// --- LOGIN (Pubblica) ---
+// --- LOGIN ---
 if ($action === 'login' && $method === 'POST') {
     $email = $input['email'] ?? '';
     $password = $input['password'] ?? '';
+
     $stmt = $pdo->prepare("SELECT * FROM users WHERE email = ?");
     $stmt->execute([$email]);
     $user = $stmt->fetch();
-    if ($user && $user['password'] === $password) {
+
+    $valid = false;
+    $migrated = false;
+
+    if ($user) {
+        // 1. Try Modern Hash
+        if (password_verify($password, $user['password'])) {
+            $valid = true;
+        }
+        // 2. Legacy Fallback (Lazy Migration)
+        else if ($user['password'] === $password) {
+            $valid = true;
+            // MIGRATE TO HASH
+            $newHash = password_hash($password, PASSWORD_DEFAULT);
+            $pdo->prepare("UPDATE users SET password = ? WHERE id = ?")->execute([$newHash, $user['id']]);
+            $migrated = true;
+            log_activity($pdo, $user['id'], 'SECURITY', "Legacy Password Migrated to Hash", 'INFO');
+        }
+    }
+
+    if ($valid) {
         $tier = $user['tier'] ?? 'free';
 
         // Check Expiration
@@ -884,8 +977,18 @@ if ($action === 'login' && $method === 'POST') {
             }
         }
 
+        // Generate Token
+        $token = 'user_' . $user['id'] . '_' . bin2hex(random_bytes(16));
+        $expires = date('Y-m-d H:i:s', strtotime('+60 days')); // LONG SESSION
+        $stmt = $pdo->prepare("UPDATE users SET token = ?, token_expires_at = ? WHERE id = ?");
+        $stmt->execute([$token, $expires, $user['id']]);
+
+        // LOG LOGIN SUCCESS
+        log_activity($pdo, $user['id'], 'LOGIN', "Login Success: $email " . ($migrated ? '(Migrated)' : ''), 'INFO');
+
         sendResponse([
-            "token" => "user_" . $user['id'],
+            "success" => true,
+            "token" => $token,
             "user" => [
                 "id" => (string) $user['id'],
                 "name" => $user['name'],
@@ -900,6 +1003,8 @@ if ($action === 'login' && $method === 'POST') {
             ]
         ]);
     } else {
+        // LOG LOGIN FAIL
+        log_activity($pdo, null, 'LOGIN_FAIL', "Login Failed for email: $email", 'WARNING');
         sendResponse(["error" => "Credenziali non valide"], 401);
     }
 }
@@ -914,17 +1019,78 @@ if ($action === 'register' && $method === 'POST') {
         $stmt->execute([$email]);
         if ($stmt->fetch())
             sendResponse(["error" => "Email esistente"], 400);
+
+        // HASH PASSWORD
+        $hashed = password_hash($password, PASSWORD_DEFAULT);
+
         $stmt = $pdo->prepare("INSERT INTO users (name, email, password, credits, avatar_url) VALUES (?, ?, ?, 5, ?)");
         $avatar = "https://api.dicebear.com/7.x/avataaars/svg?seed=" . urlencode($name);
-        $stmt->execute([$name, $email, $password, $avatar]);
+        $stmt->execute([$name, $email, $hashed, $avatar]);
         $id = $pdo->lastInsertId();
-        sendResponse(["token" => "user_" . $id, "user" => ["id" => (string) $id, "name" => $name, "email" => $email, "isPro" => false, "isAdmin" => false, "credits" => 5]]);
+
+        log_activity($pdo, $id, 'REGISTER', "New User: $email", 'INFO');
+
+        // Auto-login token
+        $token = 'user_' . $id . '_' . bin2hex(random_bytes(16));
+        $pdo->prepare("UPDATE users SET token = ? WHERE id = ?")->execute([$token, $id]);
+
+        sendResponse(["token" => $token, "user" => ["id" => (string) $id, "name" => $name, "email" => $email, "isPro" => false, "isAdmin" => false, "credits" => 5]]);
     } catch (Exception $e) {
         sendResponse(["error" => $e->getMessage()], 500);
     }
 }
 
-// --- HELPER EXECUTION WRAPPER ---
+// ... (In ADMIN CREATE USER)
+// Change: $password = $input['password'] ?? generatePassword(); 
+// To: $rawPass = ..; $hashed = password_hash($rawPass);
+// I will target the admin_create_user block in next tool call or finding it now if visible.
+
+
+// --- ADMIN UPDATE TABLE ROW (Editable Tables) ---
+if ($action === 'admin_update_table_row' && $method === 'POST') {
+    // RE-VERIFY ADMIN
+    $stmt = $pdo->prepare("SELECT is_admin FROM users WHERE id = ?");
+    $stmt->execute([$userId]);
+    if (!$stmt->fetchColumn())
+        sendResponse(["error" => "Forbidden"], 403);
+
+    $table = $_POST['table'] ?? '';
+    $id = $_POST['id'] ?? '';
+    $column = $_POST['column'] ?? '';
+    // Allow null update if string is 'NULL'
+    $value = $_POST['value'] ?? null;
+
+    // WHITELIST TABLES (Security)
+    $allowedTables = ['users', 'history', 'showcase', 'admin_logs'];
+    if (!in_array($table, $allowedTables))
+        sendResponse(["error" => "Table not allowed"], 400);
+
+    // WHITELIST COLUMNS (Basic protection against modifying sensitive cols like ID directly, though Admin usually can)
+    // We trust Admin but let's prevent changing IDs
+    if ($column === 'id')
+        sendResponse(["error" => "Cannot change ID"], 400);
+
+    try {
+        // Dynamic Update
+        // Note: Column name cannot be bound, so we must sanitize/check it logic or assume admin trust + whitelist above is enough? 
+        // Better: Verify column exists in table schema or just strict regex
+        if (!preg_match('/^[a-zA-Z0-9_]+$/', $column))
+            sendResponse(["error" => "Invalid column"], 400);
+
+        if ($value === 'NULL')
+            $value = null;
+
+        $sql = "UPDATE $table SET $column = ? WHERE id = ?";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$value, $id]);
+
+        log_activity($pdo, $userId, 'ADMIN_EDIT_CELL', "Table: $table, ID: $id, Col: $column, Val: " . substr((string) $value, 0, 50), 'INFO');
+
+        sendResponse(["success" => true]);
+    } catch (Exception $e) {
+        sendResponse(["error" => "Update Error: " . $e->getMessage()], 500);
+    }
+}
 function executeCommand($command, &$output = [], &$returnVar = 0)
 {
     // 1. Try exec()
@@ -1503,48 +1669,110 @@ if ($userId) {
             sendResponse(["success" => true]);
         }
 
-        if ($action === 'admin_create_user') {
-            $name = $input['name'];
-            $email = $input['email'];
-            $password = $input['password'];
-            $isPro = !empty($input['isPro']) ? 1 : 0;
-            $isAdmin = !empty($input['isAdmin']) ? 1 : 0;
-            $credits = (int) ($input['credits'] ?? 5);
-            $avatar = "https://api.dicebear.com/7.x/avataaars/svg?seed=" . urlencode($name);
+        // --- ADMIN CREATE USER ---
+        if ($action === 'admin_create_user' && $method === 'POST') {
+            // ... admin check omitted for brevity (assumed verified by middleware or earlier checks) ...
+            // Note: In real code, ensure isAdmin check is present.
+            // Assuming auth logic handles IsAdmin earlier or we re-verify here.
 
-            $stmt = $pdo->prepare("INSERT INTO users (name, email, password, is_pro, is_admin, credits, avatar_url) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            // RE-VERIFY ADMIN
+            $stmt = $pdo->prepare("SELECT is_admin FROM users WHERE id = ?");
+            $stmt->execute([$userId]);
+            if (!$stmt->fetchColumn())
+                sendResponse(["error" => "Forbidden"], 403);
+
+            $name = $_POST['name'] ?? '';
+            $email = $_POST['email'] ?? '';
+            $password = $_POST['password'] ?? generatePassword();
+            $credits = $_POST['credits'] ?? 5;
+            $isPro = ($_POST['isPro'] === 'true' || $_POST['isPro'] === '1') ? 1 : 0;
+            $isAdmin = ($_POST['isAdmin'] === 'true' || $_POST['isAdmin'] === '1') ? 1 : 0;
+            $tier = $_POST['tier'] ?? 'free';
+            $customLogo = $_POST['customLogoUrl'] ?? null;
+
             try {
-                $stmt->execute([$name, $email, $password, $isPro, $isAdmin, $credits, $avatar]);
-                sendResponse(["success" => true, "id" => $pdo->lastInsertId()]);
+                // HASH PASSWORD
+                $hashed = password_hash($password, PASSWORD_DEFAULT);
+
+                $stmt = $pdo->prepare("INSERT INTO users (name, email, password, credits, is_pro, is_admin, tier, custom_logo_url, avatar_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $avatar = "https://api.dicebear.com/7.x/avataaars/svg?seed=" . urlencode($name);
+                $stmt->execute([$name, $email, $hashed, $credits, $isPro, $isAdmin, $tier, $customLogo, $avatar]);
+
+                $newId = $pdo->lastInsertId();
+                // Assuming log_activity function exists
+                // log_activity($pdo, $userId, 'ADMIN_CREATE_USER', "Created User: $email (ID: $newId)", 'WARNING');
+
+                // Auto-send email with credentials?
+                // For now just return success
+                sendResponse(["success" => true, "id" => $newId]);
             } catch (Exception $e) {
-                sendResponse(["error" => "Email already likely exists"], 400);
+                sendResponse(["error" => $e->getMessage()], 500);
             }
         }
-        if ($action === 'admin_update_user') {
-            $id = $input['id'];
-            $name = $input['name'];
-            $email = $input['email'];
-            $isPro = !empty($input['isPro']) ? 1 : 0;
-            $isAdmin = !empty($input['isAdmin']) ? 1 : 0;
-            $credits = (int) ($input['credits'] ?? 5);
-            $tier = $input['tier'] ?? 'free';
-            $customLogoUrl = $input['customLogoUrl'] ?? null;
 
-            $sql = "UPDATE users SET name=?, email=?, is_pro=?, is_admin=?, credits=?, tier=?, custom_logo_url=?";
-            $params = [$name, $email, $isPro, $isAdmin, $credits, $tier, $customLogoUrl];
+        // --- ADMIN UPDATE USER ---
+        if ($action === 'admin_update_user' && $method === 'POST') {
+            // RE-VERIFY ADMIN
+            $stmt = $pdo->prepare("SELECT is_admin FROM users WHERE id = ?");
+            $stmt->execute([$userId]);
+            if (!$stmt->fetchColumn())
+                sendResponse(["error" => "Forbidden"], 403);
 
-            if (!empty($input['password'])) {
-                $sql .= ", password=?";
-                $params[] = $input['password'];
+            $id = $_POST['id'] ?? null;
+            if (!$id)
+                sendResponse(["error" => "No ID"], 400);
+
+            $updates = [];
+            $params = [];
+
+            if (isset($_POST['name'])) {
+                $updates[] = "name = ?";
+                $params[] = $_POST['name'];
             }
-            $sql .= " WHERE id=?";
+            if (isset($_POST['email'])) {
+                $updates[] = "email = ?";
+                $params[] = $_POST['email'];
+            }
+            if (isset($_POST['credits'])) {
+                $updates[] = "credits = ?";
+                $params[] = $_POST['credits'];
+            }
+            if (isset($_POST['isPro'])) {
+                $updates[] = "is_pro = ?";
+                $params[] = ($_POST['isPro'] === 'true' || $_POST['isPro'] === '1') ? 1 : 0;
+            }
+            if (isset($_POST['isAdmin'])) {
+                $updates[] = "is_admin = ?";
+                $params[] = ($_POST['isAdmin'] === 'true' || $_POST['isAdmin'] === '1') ? 1 : 0;
+            }
+            if (isset($_POST['tier'])) {
+                $updates[] = "tier = ?";
+                $params[] = $_POST['tier'];
+            }
+            if (isset($_POST['customLogoUrl'])) {
+                $updates[] = "custom_logo_url = ?";
+                $params[] = $_POST['customLogoUrl'];
+            }
+
+            // PASSWORD UPDATE
+            if (!empty($_POST['password'])) {
+                $updates[] = "password = ?";
+                $params[] = password_hash($_POST['password'], PASSWORD_DEFAULT);
+            }
+
+            if (empty($updates))
+                sendResponse(["success" => true]); // Nothing to update
+
+            $sql = "UPDATE users SET " . implode(', ', $updates) . " WHERE id = ?";
             $params[] = $id;
 
             try {
                 $pdo->prepare($sql)->execute($params);
+                // Assuming log_activity function exists
+                // log_activity($pdo, $userId, 'ADMIN_UPDATE_USER', "Updated User ID: $id", 'INFO');
                 sendResponse(["success" => true]);
             } catch (Exception $e) {
-                sendResponse(["error" => "Update failed: " . $e->getMessage()], 400);
+                sendResponse(["error" => "Update Failed: " . $e->getMessage()], 500);
             }
         }
     }

@@ -54,21 +54,29 @@ function AppContent() {
 
         const checkUser = async () => {
             const token = localStorage.getItem('sonificart_auth_token');
-            if (!token) {
+            if (token) {
+                try {
+                    const currentUser = await api.checkSession();
+                    if (currentUser) {
+                        setUser(currentUser);
+                        api.logEvent('VISIT_USER', `Page Load: ${location.pathname} (User: ${currentUser.name})`);
+                    } else {
+                        setUser(null);
+                        api.logEvent('VISIT_GUEST', `Page Load: ${location.pathname}`);
+                    }
+                } catch (error) {
+                    console.error("Auth check failed:", error);
+                    await api.logout();
+                    setUser(null);
+                    api.logEvent('VISIT_GUEST', `Page Load: ${location.pathname} (Auth Fail)`);
+                }
+            } else {
                 setUser(null);
-                return;
-            }
-            try {
-                const currentUser = await api.checkSession();
-                if (currentUser) setUser(currentUser); else setUser(null);
-            } catch (error) {
-                console.error("Auth check failed:", error);
-                await api.logout();
-                setUser(null);
+                api.logEvent('VISIT_GUEST', `Page Load: ${location.pathname}`);
             }
         };
         checkUser();
-    }, []);
+    }, [location.pathname]); // Re-run on route change to track navigation
 
     const openRequestAccess = (plan: string = 'Mensile') => {
         setRequestAccessInitialPlan(plan);

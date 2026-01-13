@@ -159,6 +159,52 @@ const UserEditModal: React.FC<UserEditModalProps> = ({ user, onClose, onSave, on
     );
 };
 
+// --- EDITABLE CELL ---
+const EditableCell: React.FC<{ value: any, col: string, id: string, table: string, onUpdate: (val: any) => void }> = ({ value, col, id, table, onUpdate }) => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [editValue, setEditValue] = useState(String(value ?? ''));
+
+    const handleSave = () => {
+        setIsEditing(false);
+        if (editValue !== String(value ?? '')) {
+            onUpdate(editValue);
+        }
+    };
+
+    if (isEditing) {
+        return (
+            <td className="p-2 border-r border-white/5 last:border-0 bg-brand-accent/10">
+                <input
+                    autoFocus
+                    className="w-full bg-transparent text-white font-mono outline-none border-b border-brand-accent"
+                    value={editValue}
+                    onChange={e => setEditValue(e.target.value)}
+                    onBlur={handleSave}
+                    onKeyDown={e => {
+                        if (e.key === 'Enter') handleSave();
+                        if (e.key === 'Escape') { setEditValue(String(value ?? '')); setIsEditing(false); }
+                    }}
+                />
+            </td>
+        );
+    }
+
+    return (
+        <td
+            className="p-2 border-r border-white/5 last:border-0 max-w-[200px] truncate cursor-pointer hover:bg-white/10 transition-colors"
+            title={`${col}: ${String(value)} (Double click to edit)`}
+            onDoubleClick={() => {
+                // Prevent editing IDs or sensitive readonly cols if needed (though API checks too)
+                if (col === 'id') return;
+                setIsEditing(true);
+                setEditValue(String(value ?? ''));
+            }}
+        >
+            {value === null ? <span className="text-gray-600">NULL</span> : (typeof value === 'boolean' ? (value ? '1' : '0') : String(value))}
+        </td>
+    );
+};
+
 // --- ADMIN PANEL ---
 export const AdminPanel: React.FC = () => {
     const [activeTab, setActiveTab] = useState<AdminTab>('overview');
@@ -592,9 +638,23 @@ export const AdminPanel: React.FC = () => {
                                             {tableData.rows.map((row, i) => (
                                                 <tr key={i} className="hover:bg-white/5">
                                                     {tableData.columns.map(c => (
-                                                        <td key={c} className="p-2 border-r border-white/5 last:border-0 max-w-[200px] truncate" title={String(row[c])}>
-                                                            {row[c] === null ? <span className="text-gray-600">NULL</span> : (typeof row[c] === 'boolean' ? (row[c] ? '1' : '0') : String(row[c]))}
-                                                        </td>
+                                                        <EditableCell
+                                                            key={c}
+                                                            value={row[c]}
+                                                            col={c}
+                                                            id={row['id']}
+                                                            table={selectedTable!}
+                                                            onUpdate={(val) => {
+                                                                // Optimistic update locally? Or just refetch. Refetch is safer.
+                                                                api.adminUpdateCell(selectedTable!, String(row['id']), c, val)
+                                                                    .then(() => {
+                                                                        // Optional: toast success
+                                                                        // Reload data
+                                                                        api.getDbTableContent(selectedTable!).then(setTableData);
+                                                                    })
+                                                                    .catch(err => alert("Errore modifica: " + err.message));
+                                                            }}
+                                                        />
                                                     ))}
                                                 </tr>
                                             ))}
