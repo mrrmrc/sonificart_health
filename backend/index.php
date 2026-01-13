@@ -464,9 +464,33 @@ if ($action === 'get_user_info') {
 
 // --- GET HISTORY (Protetta) ---
 if ($action === 'get_history' && $method === 'POST') {
-    $stmt = $pdo->prepare("SELECT * FROM history WHERE user_id = ? ORDER BY timestamp DESC");
-    $stmt->execute([$userId]);
+    // Pagination parameters (optional)
+    $limit = isset($_POST['limit']) ? intval($_POST['limit']) : 50; // Default 50 items
+    $offset = isset($_POST['offset']) ? intval($_POST['offset']) : 0;
+
+    // OPTIMIZED: Only fetch columns needed for list view (exclude heavy JSON fields)
+    $stmt = $pdo->prepare("
+        SELECT 
+            id, 
+            image_hash, 
+            timestamp, 
+            image_url, 
+            audio_url, 
+            paradigm, 
+            tradition_name, 
+            title, 
+            subtitle, 
+            description, 
+            video_url,
+            generated_ai_track_url
+        FROM history 
+        WHERE user_id = ? 
+        ORDER BY timestamp DESC 
+        LIMIT ? OFFSET ?
+    ");
+    $stmt->execute([$userId, $limit, $offset]);
     $history = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
     $mapped = array_map(function ($h) use ($baseUrl) {
         return [
             "id" => (string) $h['id'],
@@ -479,19 +503,50 @@ if ($action === 'get_history' && $method === 'POST') {
             "title" => $h['title'] ?? null,
             "subtitle" => $h['subtitle'] ?? null,
             "description" => $h['description'] ?? null,
-            "musicGenerationPrompt" => isset($h['music_generation_prompt']) ? json_decode($h['music_generation_prompt'], true) : null,
-            "generatedAiTrackUrl" => $h['generated_ai_track_url'] ? ((strpos($h['generated_ai_track_url'], 'http') === 0) ? $h['generated_ai_track_url'] : $baseUrl . (strpos($h['generated_ai_track_url'], '/') === 0 ? '' : '/') . $h['generated_ai_track_url']) : null,
-            "configUsed" => isset($h['config_json']) ? json_decode($h['config_json'], true) : null,
-            "events" => isset($h['event_data']) ? json_decode($h['event_data'], true) : null,
-            "blockData" => isset($h['block_data']) ? json_decode($h['block_data'], true) : null,
             "videoUrl" => $h['video_url'] ? ((strpos($h['video_url'], 'http') === 0) ? $h['video_url'] : $baseUrl . (strpos($h['video_url'], '/') === 0 ? '' : '/') . $h['video_url']) : null,
-            // NEW FIELDS MAPPING
-            "audioHash" => $h['audio_hash'] ?? null,
-            "acquisitionMetadata" => isset($h['acquisition_metadata']) ? json_decode($h['acquisition_metadata'], true) : null,
-            "validationHashes" => isset($h['validation_hashes']) ? json_decode($h['validation_hashes'], true) : null
+            "generatedAiTrackUrl" => $h['generated_ai_track_url'] ? ((strpos($h['generated_ai_track_url'], 'http') === 0) ? $h['generated_ai_track_url'] : $baseUrl . (strpos($h['generated_ai_track_url'], '/') === 0 ? '' : '/') . $h['generated_ai_track_url']) : null,
+            // NOTE: Heavy fields (events, blockData, configUsed, etc.) are loaded on-demand via get_history_item
         ];
     }, $history);
     sendResponse($mapped);
+}
+
+// --- GET SINGLE HISTORY ITEM (Full Details - Lazy Load) ---
+if ($action === 'get_history_item' && $method === 'POST') {
+    $id = $_POST['id'] ?? null;
+    if (!$id) {
+        sendResponse(["error" => "ID richiesto"], 400);
+    }
+
+    $stmt = $pdo->prepare("SELECT * FROM history WHERE id = ? AND user_id = ?");
+    $stmt->execute([$id, $userId]);
+    $h = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$h) {
+        sendResponse(["error" => "Elemento non trovato"], 404);
+    }
+
+    sendResponse([
+        "id" => (string) $h['id'],
+        "imageHash" => $h['image_hash'],
+        "timestamp" => $h['timestamp'],
+        "imageUrl" => (strpos($h['image_url'], '/media') !== false) ? $baseUrl . $h['image_url'] : $h['image_url'],
+        "audioUrl" => $h['audio_url'] ? ((strpos($h['audio_url'], '/media') !== false) ? $baseUrl . $h['audio_url'] : $h['audio_url']) : null,
+        "paradigm" => $h['paradigm'],
+        "traditionName" => $h['tradition_name'],
+        "title" => $h['title'] ?? null,
+        "subtitle" => $h['subtitle'] ?? null,
+        "description" => $h['description'] ?? null,
+        "musicGenerationPrompt" => isset($h['music_generation_prompt']) ? json_decode($h['music_generation_prompt'], true) : null,
+        "generatedAiTrackUrl" => $h['generated_ai_track_url'] ? ((strpos($h['generated_ai_track_url'], 'http') === 0) ? $h['generated_ai_track_url'] : $baseUrl . (strpos($h['generated_ai_track_url'], '/') === 0 ? '' : '/') . $h['generated_ai_track_url']) : null,
+        "configUsed" => isset($h['config_json']) ? json_decode($h['config_json'], true) : null,
+        "events" => isset($h['event_data']) ? json_decode($h['event_data'], true) : null,
+        "blockData" => isset($h['block_data']) ? json_decode($h['block_data'], true) : null,
+        "videoUrl" => $h['video_url'] ? ((strpos($h['video_url'], 'http') === 0) ? $h['video_url'] : $baseUrl . (strpos($h['video_url'], '/') === 0 ? '' : '/') . $h['video_url']) : null,
+        "audioHash" => $h['audio_hash'] ?? null,
+        "acquisitionMetadata" => isset($h['acquisition_metadata']) ? json_decode($h['acquisition_metadata'], true) : null,
+        "validationHashes" => isset($h['validation_hashes']) ? json_decode($h['validation_hashes'], true) : null
+    ]);
 }
 
 // --- GET SHOWCASE (Pubblica + Admin) ---

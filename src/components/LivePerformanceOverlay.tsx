@@ -10,6 +10,8 @@ interface Props {
     onClose: () => void;
     title?: string;
     author?: string;
+    description?: string; // NEW
+    date?: string;        // NEW
     mode?: 'modal' | 'fullscreen';
     isAdmin?: boolean; // NEW: Triggers auto-open of calibration
     id?: string;       // NEW: For saving persistence
@@ -23,7 +25,7 @@ interface Particle {
     size: number;
 }
 
-export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onClose, title, author, mode = 'modal', isAdmin = false, id }) => {
+export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onClose, title, author, description, date, mode = 'modal', isAdmin = false, id }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const videoRef = useRef<HTMLVideoElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -234,29 +236,38 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         const h = spectrumCanvasRef.current.height;
                         sCtx.clearRect(0, 0, w, h);
 
-                        // Use a brand-themed gradient
-                        const grad = sCtx.createLinearGradient(0, h, 0, 0);
-                        grad.addColorStop(0, '#ec4899'); // Pink
-                        grad.addColorStop(1, '#06b6d4'); // Cyan
-
-                        sCtx.fillStyle = grad;
-
-                        // Visualizer Bar Config
-                        const barCount = 32; // More bars for wider
+                        // Use RGB Split Gradient
+                        // Low (Red) | Mid (Green) | High (Blue)
+                        const barCount = 48;
                         const step = Math.floor(bufferLength / barCount);
                         const barWidth = (w / barCount) - 2;
                         let barX = 0;
 
                         for (let i = 0; i < barCount; i++) {
-                            // Average frequency in this bin
                             let sum = 0;
                             for (let j = 0; j < step; j++) {
                                 sum += dataArray[(i * step) + j];
                             }
                             const avg = sum / step;
-
                             const barHeight = (avg / 255) * h;
+
+                            // Dynamic Color based on Frequency Band
+                            let color = '#ffffff';
+                            if (i < barCount / 3) {
+                                color = `rgba(239, 68, 68, ${avg / 255})`; // Red-500
+                            } else if (i < (barCount / 3) * 2) {
+                                color = `rgba(34, 197, 94, ${avg / 255})`; // Green-500
+                            } else {
+                                color = `rgba(59, 130, 246, ${avg / 255})`; // Blue-500
+                            }
+
+                            sCtx.fillStyle = color;
                             sCtx.fillRect(barX, h - barHeight, barWidth, barHeight);
+
+                            // Reflection (Optional, for "base" effect)
+                            sCtx.fillStyle = color.replace(')', ', 0.2)').replace('rgba', 'rgba').replace(', 1)', ', 0.2)');
+                            sCtx.fillRect(barX, h, barWidth, barHeight * 0.5);
+
                             barX += barWidth + 2;
                         }
                     }
@@ -652,67 +663,89 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
 
 
             {/* --- CONTROL DECK (FOOTER) --- */}
-            <div className="h-24 bg-[#0a0a0a] border-t border-white/10 flex items-center justify-between px-6 z-[120] shrink-0 shadow-[0_-5px_20px_rgba(0,0,0,0.5)]">
+            <div className="bg-[#0a0a0a] border-t border-white/10 flex flex-col z-[120] shrink-0 shadow-[0_-5px_20px_rgba(0,0,0,0.5)] w-full">
 
-                {/* LEFT: Info & Expanded Spectrogram */}
-                <div className="flex items-center gap-8 flex-grow mr-8 overflow-hidden">
-                    <div className="flex flex-col shrink-0 min-w-[150px]">
-                        <h3 className="text-white font-bold text-sm tracking-wide uppercase truncate">{title || "SENZA TITOLO"}</h3>
-                        <span className="text-gray-500 text-[10px] uppercase tracking-wider truncate">{author || "ARTISTA"}</span>
+                <div className="flex items-center justify-between px-6 py-4 w-full">
+
+                    {/* LEFT: Info & Logo */}
+                    <div className="flex items-center gap-6 mr-8 overflow-hidden">
+
+                        {/* Text Info */}
+                        <div className="flex flex-col min-w-[150px]">
+                            <h3 className="text-white font-bold text-lg tracking-wide uppercase truncate">{title || "SENZA TITOLO"}</h3>
+                            <div className="flex flex-col gap-1">
+                                <span className="text-gray-400 text-xs uppercase tracking-wider">{author || "ARTISTA"}</span>
+                                {description && (
+                                    <p className="text-gray-500 text-xs leading-tight max-w-md line-clamp-2" title={description}>
+                                        {description}
+                                    </p>
+                                )}
+                                {date && <span className="text-gray-600 text-[10px] font-mono mt-1">{date}</span>}
+                            </div>
+                        </div>
+
+                        {/* SonificART Logo */}
+                        <div className="h-12 w-12 opacity-80 shrink-0 hidden sm:block">
+                            <img
+                                src={`data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(LOGO_SVG_STRING)))}`}
+                                alt="SonificART"
+                                className="w-full h-full object-contain"
+                            />
+                        </div>
                     </div>
 
-                    {/* WIDE SPECTROGRAM */}
-                    <div className="flex-grow h-12 bg-white/5 rounded-md overflow-hidden border border-white/5 relative hidden sm:block">
-                        <canvas
-                            ref={spectrumCanvasRef}
-                            width={600}
-                            height={48}
-                            className="w-full h-full opacity-60 mix-blend-screen"
-                        />
+                    {/* RIGHT: Controls & Time & Exit */}
+                    <div className="flex items-center gap-6 shrink-0">
+
+                        {/* Controls Group */}
+                        <div className="flex items-center gap-3 bg-white/5 px-4 py-2 rounded-full border border-white/5">
+                            <button
+                                onClick={restart}
+                                className="w-8 h-8 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-all flex items-center justify-center"
+                                title="Riavvia"
+                            >
+                                <i className="fas fa-step-backward text-xs"></i>
+                            </button>
+
+                            <button
+                                onClick={togglePlay}
+                                className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 hover:shadow-[0_0_15px_white] transition-all"
+                            >
+                                <i className={`fas ${isPlaying ? 'fa-pause' : 'fa-play'} text-sm ml-0.5`}></i>
+                            </button>
+
+                            <button
+                                onClick={() => setIsAdminOpen(!isAdminOpen)}
+                                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isAdminOpen ? 'text-brand-accent' : 'text-gray-400 hover:text-white'}`}
+                                title="Configurazione"
+                            >
+                                <i className="fas fa-sliders-h text-xs"></i>
+                            </button>
+                        </div>
+
+                        {/* Time */}
+                        <div className="text-xs font-mono text-brand-accent/80 tracking-widest hidden sm:block w-24 text-right">
+                            {formatTime(currentTime)} / {formatTime(duration)}
+                        </div>
+
+                        {/* Exit */}
+                        <button
+                            onClick={onClose}
+                            className="px-4 py-2 rounded-full border border-white/10 bg-white/5 text-xs font-bold text-gray-300 hover:bg-white/20 hover:text-white transition-colors uppercase tracking-wider"
+                        >
+                            {mode === 'fullscreen' ? 'CHIUDI' : 'INDIETRO'}
+                        </button>
                     </div>
                 </div>
 
-                {/* RIGHT: Controls & Time & Exit */}
-                <div className="flex items-center gap-6 shrink-0">
-
-                    {/* Controls Group */}
-                    <div className="flex items-center gap-3 bg-white/5 px-4 py-2 rounded-full border border-white/5">
-                        <button
-                            onClick={restart}
-                            className="w-8 h-8 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-all flex items-center justify-center"
-                            title="Riavvia"
-                        >
-                            <i className="fas fa-step-backward text-xs"></i>
-                        </button>
-
-                        <button
-                            onClick={togglePlay}
-                            className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 hover:shadow-[0_0_15px_white] transition-all"
-                        >
-                            <i className={`fas ${isPlaying ? 'fa-pause' : 'fa-play'} text-sm ml-0.5`}></i>
-                        </button>
-
-                        <button
-                            onClick={() => setIsAdminOpen(!isAdminOpen)}
-                            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isAdminOpen ? 'text-brand-accent' : 'text-gray-400 hover:text-white'}`}
-                            title="Configurazione"
-                        >
-                            <i className="fas fa-sliders-h text-xs"></i>
-                        </button>
-                    </div>
-
-                    {/* Time */}
-                    <div className="text-xs font-mono text-brand-accent/80 tracking-widest hidden sm:block w-24 text-right">
-                        {formatTime(currentTime)} / {formatTime(duration)}
-                    </div>
-
-                    {/* Exit */}
-                    <button
-                        onClick={onClose}
-                        className="px-4 py-2 rounded-full border border-white/10 bg-white/5 text-xs font-bold text-gray-300 hover:bg-white/20 hover:text-white transition-colors uppercase tracking-wider"
-                    >
-                        {mode === 'fullscreen' ? 'CHIUDI' : 'INDIETRO'}
-                    </button>
+                {/* FULL WIDTH SPECTROGRAM */}
+                <div className="w-full h-24 bg-black/40 relative border-t border-white/5">
+                    <canvas
+                        ref={spectrumCanvasRef}
+                        width={1920}
+                        height={96}
+                        className="w-full h-full opacity-80 mix-blend-screen block"
+                    />
                 </div>
 
             </div>

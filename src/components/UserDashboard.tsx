@@ -137,6 +137,7 @@ const PublishModal: React.FC<{ entry: DashboardEntry, onClose: () => void, user?
                 audioUrl: audioBlob,
                 title: title,
                 subtitle: subtitle,
+                description: description, // Pass description
                 date: new Date(entry.timestamp).toLocaleDateString('it-IT'),
                 author: user?.name,
                 onProgress: (p: number) => setUploadProgress(Math.floor(p))
@@ -182,6 +183,14 @@ const PublishModal: React.FC<{ entry: DashboardEntry, onClose: () => void, user?
         if (!confirm(isPublic ? "Vuoi pubblicare questa opera nella vetrina pubblica?" : "Vuoi salvare questa opera (Privata)?")) return;
         setIsSubmitting(true);
         try {
+            // 1. First, SAVE METADATA explicitly to ensure Title/Desc are persisted in History
+            await api.updateMetadata(entry.id, title, subtitle, description);
+
+            // Update local entry ref so UI reflects changes if modal re-opens
+            entry.title = title;
+            entry.description = description;
+
+            // 2. Then Publish
             await api.publishFromHistory(entry.id, { description, isPublic }, activeVideoUrl ? { url: activeVideoUrl, type: 'video' } : null);
             alert(isPublic ? "Opera pubblicata in vetrina!" : "Opera salvata privatamente!");
         } catch (e) {
@@ -465,7 +474,13 @@ const HistoryItem: React.FC<{ item: DashboardEntry; onView: () => void; onPublis
     <div className="bg-brand-secondary/40 p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center gap-4 hover:bg-brand-secondary/60 transition-all cursor-pointer" onClick={onView}>
         <div className="flex items-center gap-4 w-full">
             <div className="w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0 relative">
-                <img src={fixImage(item.imageUrl)} alt="thumb" className="w-full h-full object-cover rounded bg-black" />
+                <img
+                    src={fixImage(item.imageUrl)}
+                    alt="thumb"
+                    className="w-full h-full object-cover rounded bg-black"
+                    loading="lazy"
+                    decoding="async"
+                />
                 {item.videoUrl && (
                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded">
                         <span className="bg-brand-accent text-brand-primary text-[7px] font-bold px-1 py-0.5 rounded flex items-center gap-1">

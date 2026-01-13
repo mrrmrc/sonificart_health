@@ -95,7 +95,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, mu
             {zoomedQrUrl && <QrZoomModal url={zoomedQrUrl} onClose={() => setZoomedQrUrl(null)} />}
 
             {/* MAIN CONTAINER */}
-            <div className={`bg-[#1e1e2e] w-full ${museumMode ? 'max-w-7xl h-[98vh]' : 'max-w-7xl h-[90vh]'} rounded-2xl overflow-hidden shadow-2xl flex flex-col border border-white/10 relative`} onClick={e => e.stopPropagation()}>
+            <div className={`bg-[#1e1e2e] w-full ${museumMode ? 'max-w-7xl max-h-[98vh]' : 'max-w-7xl max-h-[90vh]'} rounded-2xl overflow-y-auto overflow-x-hidden shadow-2xl flex flex-col border border-white/10 relative`} onClick={e => e.stopPropagation()}>
 
                 <button onClick={onClose} className="absolute top-4 right-4 z-50 text-white/50 hover:text-white bg-black/40 rounded-full w-8 h-8 flex items-center justify-center border border-white/10 transition-colors"><i className="fas fa-times"></i></button>
 
@@ -110,11 +110,11 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, mu
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 bg-[#0B0C10] custom-scrollbar">
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
+                <div className="flex-1 p-4 sm:p-6 bg-[#0B0C10] custom-scrollbar">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
 
                         {/* COL 1: METADATA, CERTIFICATE & CULTURAL (Left, span 3/12) */}
-                        <div className="lg:col-span-3 flex flex-col gap-4 h-full">
+                        <div className="lg:col-span-3 flex flex-col gap-4">
 
                             {/* 1. Preview Image */}
                             <div className="relative aspect-square rounded-xl overflow-hidden border border-white/10 group shadow-lg shrink-0">
@@ -213,7 +213,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, mu
                         </div>
 
                         {/* COL 2: MEDIA (Right, span 9/12) */}
-                        <div className="lg:col-span-9 flex flex-col gap-6 h-full overflow-hidden">
+                        <div className="lg:col-span-9 flex flex-col gap-4 sm:gap-6">
 
                             {/* TOP: AUDIO SOURCE */}
                             <div className="bg-[#15151b] border border-white/5 rounded-xl p-6 relative overflow-hidden shadow-lg shrink-0">
@@ -240,15 +240,15 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, mu
                             </div>
 
                             {/* BOTTOM: GRID 2 */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 min-h-0">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
 
                                 {/* VIDEO GENERATIVO */}
-                                <div className="bg-[#15151b] border border-white/5 rounded-xl p-6 flex flex-col shadow-lg h-full">
+                                <div className="bg-[#15151b] border border-white/5 rounded-xl p-4 sm:p-6 flex flex-col shadow-lg min-h-[280px] sm:min-h-[350px]">
                                     <h4 className="flex items-center gap-2 text-[#2dd4bf] text-xs font-bold uppercase tracking-wider mb-4">
                                         <i className="fas fa-video"></i> Video Generativo
                                     </h4>
 
-                                    <div className="flex-1 bg-black rounded-lg border border-white/10 overflow-hidden relative group min-h-[200px] flex items-center justify-center">
+                                    <div className="flex-1 bg-black rounded-lg border border-white/10 overflow-hidden relative group min-h-[180px] sm:min-h-[220px] flex items-center justify-center">
                                         {project.videoUrl ? (
                                             <video src={getAbsoluteUrl(project.videoUrl)!} className="w-full h-full object-contain" controls />
                                         ) : (
@@ -267,7 +267,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, mu
 
                                 {/* LIVE PERFORMANCE */}
                                 {/* LIVE PERFORMANCE */}
-                                <div className="bg-[#15151b] border border-white/5 rounded-xl p-6 flex flex-col shadow-lg relative overflow-hidden h-full">
+                                <div className="bg-[#15151b] border border-white/5 rounded-xl p-4 sm:p-6 flex flex-col shadow-lg relative overflow-hidden min-h-[280px] sm:min-h-[350px]">
                                     <div className="absolute top-0 right-0 p-4 opacity-20 pointer-events-none"><i className="fas fa-bolt text-6xl text-purple-500"></i></div>
 
                                     <div className="relative z-10 flex flex-col h-full">

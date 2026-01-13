@@ -45,7 +45,7 @@ interface ResultsDashboardProps {
     result: SonificationResult;
     imageUrl: string;
     onReset: () => void;
-    onSave: (title: string) => void;
+    onSave: (title: string, description?: string) => void;
     user: User | null;
     onRequestAccess: () => void;
     isHistoryView?: boolean;
@@ -67,12 +67,13 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
     const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean, title: string, message: string, onConfirm: () => void, type: 'info' | 'warning' | 'danger' | 'success', singleButton?: boolean }>({ isOpen: false, title: '', message: '', onConfirm: () => { }, type: 'info' });
 
     const [workTitle, setWorkTitle] = useState(result.title || `Opera del ${new Date().toLocaleDateString()}`);
+    const [workDescription, setWorkDescription] = useState((result as any).description || ""); // NEW
 
     const handleSaveClick = async () => {
         if (hasSaved || isSaving) return;
         setIsSaving(true);
         try {
-            await onSave(workTitle.trim() || `Opera del ${new Date().toLocaleDateString()}`);
+            await onSave(workTitle.trim() || `Opera del ${new Date().toLocaleDateString()}`, workDescription); // Updated
             setHasSaved(true);
             setConfirmModal({
                 isOpen: true,
@@ -488,7 +489,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                 }
             };
 
-            const blob = await generateSonificationVideo(resultWithBlob, (p) => setVideoProgress(p), { title: videoTitle, author: videoAuthor });
+            const blob = await generateSonificationVideo(resultWithBlob, (p) => setVideoProgress(p), { title: videoTitle, author: videoAuthor, description: workDescription });
             setGeneratedVideoBlob(blob); saveAs(blob, `kinetic_proof_${safeHash.substring(0, 8)}.mp4`);
         } catch (e) {
             console.error(e);
@@ -710,6 +711,20 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                 value={workTitle}
                                 onChange={(e) => { setWorkTitle(e.target.value); setHasSaved(false); }}
                             />
+                            {/* DESCRIPTION INPUT */}
+                            <div className="mt-4 md:max-w-2xl">
+                                <label className="block text-[10px] font-black text-brand-text-secondary uppercase mb-1 tracking-widest flex items-center gap-2">
+                                    <i className="fas fa-align-left"></i>
+                                    Descrizione (Opzionale)
+                                </label>
+                                <textarea
+                                    className={`w-full bg-white/5 border-l-2 p-2 text-xs md:text-sm text-gray-300 font-mono outline-none transition-all placeholder:text-white/10 h-20 resize-none ${hasSaved ? 'border-green-500/50' : 'border-brand-accent/30 focus:border-brand-accent focus:bg-white/10'}`}
+                                    placeholder="Aggiungi una breve descrizione per il video generativo..."
+                                    value={workDescription}
+                                    onChange={(e) => { setWorkDescription(e.target.value); setHasSaved(false); }}
+                                />
+                            </div>
+
                             <p className="text-[10px] text-brand-text-secondary uppercase tracking-[0.2em] font-bold mt-2 flex items-center gap-2">
                                 {hasSaved && <i className="fas fa-check text-green-500"></i>}
                                 {isHistoryView ? "Archivio Sonificazione" : (hasSaved ? "Sonificazione Salvata (Modifica per salvare nuova copia)" : "Nuova Sonificazione Generata")}
@@ -735,48 +750,63 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                 )}
             </div>
 
-            {isVideoModalOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md animate-fade-in p-4">
-                    <div className="bg-brand-secondary p-6 rounded-xl shadow-2xl border border-brand-accent/30 max-w-md w-full animate-zoom-in" onClick={e => e.stopPropagation()}>
-                        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                            <i className="fas fa-video text-brand-accent"></i> {t('results.video_modal_title') || "Prova Forense Cinetica"}
-                        </h3>
-                        <p className="text-sm text-brand-text-secondary mb-6">{t('results.video_modal_desc') || "Generazione del file MP4 che certifica la causalità tra pixel e suono."}</p>
-                        <div className="space-y-4 mb-6">
-                            <div>
-                                <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">{t('results.video_title_label') || "Titolo"}</label>
-                                <input type="text" className="w-full bg-brand-primary border border-brand-secondary p-2 rounded text-white focus:border-brand-accent focus:outline-none" value={videoTitle} onChange={e => setVideoTitle(e.target.value)} />
+            {
+                isVideoModalOpen && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md animate-fade-in p-4">
+                        <div className="bg-brand-secondary p-6 rounded-xl shadow-2xl border border-brand-accent/30 max-w-md w-full animate-zoom-in" onClick={e => e.stopPropagation()}>
+                            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                                <i className="fas fa-video text-brand-accent"></i>
+                                {t('results.video_modal_title') || "Prova Forense Cinetica"}
+                                <span className="text-xs bg-green-600 text-white px-2 py-1 rounded ml-2 shadow-lg animate-pulse">V4.0 REBUILD</span>
+                            </h3>
+                            <p className="text-sm text-brand-text-secondary mb-6">{t('results.video_modal_desc') || "Generazione del file MP4 che certifica la causalità tra pixel e suono."}</p>
+                            <div className="space-y-4 mb-6">
+                                <div>
+                                    <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">{t('results.video_title_label') || "Titolo"}</label>
+                                    <input type="text" className="w-full bg-brand-primary border border-brand-secondary p-2 rounded text-white focus:border-brand-accent focus:outline-none" value={videoTitle} onChange={e => setVideoTitle(e.target.value)} />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">{t('results.video_author_label') || "Autore"}</label>
+                                    <input type="text" className="w-full bg-brand-primary border border-brand-secondary p-2 rounded text-white focus:border-brand-accent focus:outline-none" value={videoAuthor} onChange={e => setVideoAuthor(e.target.value)} />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">Descrizione</label>
+                                    <textarea
+                                        className="w-full bg-brand-primary border border-brand-secondary p-2 rounded text-white focus:border-brand-accent focus:outline-none resize-none h-20 text-xs"
+                                        value={workDescription}
+                                        onChange={e => setWorkDescription(e.target.value)}
+                                        placeholder="Descrizione dell'opera..."
+                                    />
+                                </div>
                             </div>
-                            <div>
-                                <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">{t('results.video_author_label') || "Autore"}</label>
-                                <input type="text" className="w-full bg-brand-primary border border-brand-secondary p-2 rounded text-white focus:border-brand-accent focus:outline-none" value={videoAuthor} onChange={e => setVideoAuthor(e.target.value)} />
+                            <div className="flex justify-end gap-3">
+                                <button onClick={() => setIsVideoModalOpen(false)} className="px-4 py-2 rounded-md text-sm font-bold text-brand-text-secondary hover:text-white hover:bg-white/10 transition-colors">
+                                    {t('dashboard.cancel')}
+                                </button>
+                                <button onClick={startVideoGeneration} className="px-6 py-2 rounded-md text-sm font-bold bg-brand-accent text-brand-primary hover:bg-brand-accent-light transition-colors shadow-lg">
+                                    <i className="fas fa-fingerprint mr-2"></i> {t('results.video_render') || "Renderizza"}
+                                </button>
                             </div>
-                        </div>
-                        <div className="flex justify-end gap-3">
-                            <button onClick={() => setIsVideoModalOpen(false)} className="px-4 py-2 rounded-md text-sm font-bold text-brand-text-secondary hover:text-white hover:bg-white/10 transition-colors">
-                                {t('dashboard.cancel')}
-                            </button>
-                            <button onClick={startVideoGeneration} className="px-6 py-2 rounded-md text-sm font-bold bg-brand-accent text-brand-primary hover:bg-brand-accent-light transition-colors shadow-lg">
-                                <i className="fas fa-fingerprint mr-2"></i> {t('results.video_render') || "Renderizza"}
-                            </button>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
-            {isVideoRendering && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md">
-                    <div className="bg-brand-secondary p-8 rounded-xl shadow-2xl border border-brand-accent/30 max-w-md w-full text-center">
-                        <div className="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-brand-accent mx-auto mb-6"></div>
-                        <h3 className="text-2xl font-bold text-white mb-2">{t('results.video_audit') || "Audit Forense..."}</h3>
-                        <p className="text-brand-text-secondary text-sm mb-6">{t('results.video_time_est') || "Tempo stimato"}: {(safeDuration / 60).toFixed(1)} min.</p>
-                        <div className="w-full bg-brand-primary rounded-full h-4 border border-brand-secondary overflow-hidden">
-                            <div className="bg-brand-accent h-full transition-all duration-200 ease-linear" style={{ width: `${videoProgress}%` }}></div>
+            {
+                isVideoRendering && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md">
+                        <div className="bg-brand-secondary p-8 rounded-xl shadow-2xl border border-brand-accent/30 max-w-md w-full text-center">
+                            <div className="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-brand-accent mx-auto mb-6"></div>
+                            <h3 className="text-2xl font-bold text-white mb-2">{t('results.video_audit') || "Audit Forense..."}</h3>
+                            <p className="text-brand-text-secondary text-sm mb-6">{t('results.video_time_est') || "Tempo stimato"}: {(safeDuration / 60).toFixed(1)} min.</p>
+                            <div className="w-full bg-brand-primary rounded-full h-4 border border-brand-secondary overflow-hidden">
+                                <div className="bg-brand-accent h-full transition-all duration-200 ease-linear" style={{ width: `${videoProgress}%` }}></div>
+                            </div>
+                            <p className="mt-2 text-xs font-mono text-brand-accent-light">{Math.round(videoProgress)}%</p>
                         </div>
-                        <p className="mt-2 text-xs font-mono text-brand-accent-light">{Math.round(videoProgress)}%</p>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
                 <div className="lg:col-span-3 space-y-4">
@@ -1187,6 +1217,6 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                 onConfirm={confirmModal.onConfirm}
                 onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
             />
-        </div>
+        </div >
     );
 };

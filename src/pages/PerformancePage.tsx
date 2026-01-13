@@ -10,7 +10,7 @@ export const PerformancePage: React.FC = () => {
     const query = new URLSearchParams(window.location.search);
     const isAdmin = query.get('admin') === 'true' || query.get('mode') === 'admin';
     const [isLoading, setIsLoading] = useState(true);
-    const [performanceData, setPerformanceData] = useState<{ result: SonificationResult, audioBlob: Blob, title: string, author: string } | null>(null);
+    const [performanceData, setPerformanceData] = useState<{ result: SonificationResult, audioBlob: Blob, title: string, author: string, description: string, date: string } | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -107,7 +107,9 @@ export const PerformancePage: React.FC = () => {
                     result,
                     audioBlob,
                     title: target.title || "Opera",
-                    author: (target as any).author || "Utente"
+                    author: (target as any).author || "Utente",
+                    description: (target as any).description || "",    // NEW
+                    date: (target as any).date ? new Date((target as any).date).toLocaleDateString() : new Date().toLocaleDateString() // NEW
                 });
 
             } catch (err: any) {
@@ -153,6 +155,8 @@ export const PerformancePage: React.FC = () => {
             audioBlob={performanceData.audioBlob}
             title={performanceData.title}
             author={performanceData.author}
+            description={performanceData.description} // NEW
+            date={performanceData.date}               // NEW
             onClose={() => navigate('/dashboard')}
             mode="fullscreen"
             isAdmin={isAdmin}

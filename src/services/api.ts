@@ -152,7 +152,7 @@ export const api = {
         return data.credits;
     },
 
-    saveSonification: async (result: SonificationResult, paradigm: Paradigm, title?: string) => {
+    saveSonification: async (result: SonificationResult, paradigm: Paradigm, title?: string, description?: string) => {
         const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
 
         if (!token) {
@@ -167,6 +167,7 @@ export const api = {
         formData.append('paradigm', paradigm);
         const validTitle = (title && title.trim().length > 0) ? title : `Opera del ${new Date().toLocaleDateString()}`;
         formData.append('title', validTitle);
+        if (description) formData.append('description', description); // NEW
         formData.append('traditionName', result.culturalSelectionResult.tradition.name);
 
         // JSON Fields
@@ -504,6 +505,23 @@ export const api = {
             });
             return await handleResponse(getResponse);
         }
+    },
+
+    // Lazy load full details for a single history item (including heavy JSON fields)
+    getHistoryItem: async (id: string): Promise<DashboardEntry> => {
+        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        if (!token) throw new Error("Unauthorized");
+
+        const params = new URLSearchParams();
+        params.append('auth_token', token);
+        params.append('id', id);
+
+        const response = await fetch(`${API_BASE_URL}/index.php?action=get_history_item`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+        });
+        return await handleResponse(response);
     },
 
     deleteHistoryItem: async (id: string) => {

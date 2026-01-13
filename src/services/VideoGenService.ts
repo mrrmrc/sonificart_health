@@ -6,6 +6,7 @@ export interface VideoGenOptions {
     imageUrl: string | Blob;
     title?: string;
     subtitle?: string;
+    description?: string; // New
     date?: string;
     author?: string;
     duration?: number; // Optional override
@@ -75,8 +76,12 @@ function drawFrame(
     VideoH: number, FooterH: number, SafeArea: number,
     visualBounds: { minX: number, maxX: number, width: number },
     title?: string, author?: string,
-    subtitle?: string, date?: string
+    subtitle?: string, date?: string, description?: string
 ) {
+    // ... (Lines 80-199 retained implicitly, wait tool replaces specific block. 
+    // I need to be careful with range. I will replace the function signature and the footer logic.
+    // Since replacing the whole function is safer for "signature + footer + visualizer" simultaneous edit.)
+
     // 1. Draw Image (Contain Mode with subtle zoom)
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, W, VideoH);
@@ -96,52 +101,45 @@ function drawFrame(
         dx = (W - dw) / 2;
     }
 
-    // A. Zoom (Fixed 1.0 for Precision Alignment)
-    const zoom = 1;
-    const zDw = dw * zoom;
-    const zDh = dh * zoom;
-    const zDx = dx - (zDw - dw) / 2;
-    const zDy = dy - (zDh - dh) / 2;
+    // A. Zoom (Fixed 1.0)
+    const zDw = dw;
+    const zDh = dh;
+    const zDx = dx;
+    const zDy = dy;
 
     ctx.drawImage(img, zDx, zDy, zDw, zDh);
 
     // 2. Synced Scanning Effect & Pixel Sonification
-    // Use Visual Bounds for Scanline
     const progress = Math.min(1, Math.max(0, time / duration));
     const scanStart = visualBounds.minX;
     const scanWidth = visualBounds.width;
     const scanX = Math.floor(scanStart + (progress * scanWidth));
 
     // A. Draw Scanline
-    // Clip to image area to avoid drawing on margins
     ctx.save();
     ctx.beginPath();
-    // Clip to visual bounds instead of geometry bounds
     ctx.rect(visualBounds.minX, zDy, visualBounds.width, zDh);
     ctx.clip();
 
     const grad = ctx.createLinearGradient(0, 0, 0, VideoH);
     grad.addColorStop(0, 'rgba(0, 255, 255, 0)');
-    grad.addColorStop(0.5, 'rgba(0, 255, 255, 0.6)'); // Increased opacity
+    grad.addColorStop(0.5, 'rgba(0, 255, 255, 0.6)');
     grad.addColorStop(1, 'rgba(0, 255, 255, 0)');
 
     ctx.fillStyle = grad;
-    ctx.fillRect(scanX - 1, zDy, 3, zDh); // Scanline restricted to Image Height
+    ctx.fillRect(scanX - 1, zDy, 3, zDh);
 
-    // B. Pixel Viz (Sonification Curve) attached to Scanline
+    // B. Pixel Viz
     if (pixelData) {
         const sampleStep = 15;
-        const vizWidth = 80; // Wider curve
-
-        ctx.lineWidth = 3; // Thicker line
+        const vizWidth = 80;
+        ctx.lineWidth = 3;
 
         for (let y = zDy; y < zDy + zDh; y += sampleStep) {
             const sy = Math.floor(y);
             if (sy < 0 || sy >= VideoH) continue;
-
-            const idx = (sy * W + scanX) * 4; // Sample from scanX
+            const idx = (sy * W + scanX) * 4;
             if (idx < 0 || idx >= pixelData.length - 4) continue;
-
             const r = pixelData[idx];
             const g = pixelData[idx + 1];
             const b = pixelData[idx + 2];
@@ -150,10 +148,8 @@ function drawFrame(
             if (brightness > 30) {
                 const fIdx = Math.floor(((y - zDy) / zDh) * (freqData.length / 2));
                 const amp = freqData[fIdx] || 0;
-
                 if (amp > 20) {
                     const size = (amp / 255) * vizWidth * (brightness / 255);
-
                     ctx.strokeStyle = `rgba(${r},${g},${b}, ${amp / 200})`;
                     ctx.beginPath();
                     ctx.moveTo(scanX - size, y);
@@ -165,94 +161,219 @@ function drawFrame(
     }
     ctx.restore();
 
-    // BRANDING WATERMARK (Top-Left)
+    // ═══════════════════════════════════════════════════════════════════════════════════
+    // PREMIUM VIDEO LAYOUT - Gradient Background, Sinusoidal Waves, Visible Typography
+    // ═══════════════════════════════════════════════════════════════════════════════════
+
+    // --- TOP LEFT BRANDING: Logo + "SonificA.R.T." ---
     if (logo) {
         ctx.save();
-        ctx.globalAlpha = 0.8;
-        ctx.drawImage(logo, 30, 30, 80, 80);
+
+        // Semi-transparent dark bar behind branding for visibility
+        const brandBg = ctx.createLinearGradient(0, 0, 300, 0);
+        brandBg.addColorStop(0, 'rgba(0,0,0,0.7)');
+        brandBg.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = brandBg;
+        ctx.fillRect(0, 0, 350, 80);
+
+        const logoSize = 45;
+        ctx.globalAlpha = 1.0;
+        ctx.drawImage(logo, 25, 18, logoSize, logoSize);
+
+        // Text "SonificA.R.T."
+        ctx.font = 'bold 26px Arial';
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'left';
+        ctx.shadowColor = 'rgba(0,0,0,0.8)';
+        ctx.shadowBlur = 4;
+        ctx.fillText('Sonific', 80, 45);
+
+        // Colored "A.R.T."
+        const sonificWidth = ctx.measureText('Sonific').width;
+        ctx.fillStyle = '#2dd4bf';
+        ctx.fillText('A.R.T.', 80 + sonificWidth, 45);
+
+        // Subtitle
+        ctx.font = '10px Arial';
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.shadowBlur = 2;
+        ctx.fillText('DETERMINISTIC DATA SONIFICATION FRAMEWORK', 80, 60);
+        ctx.shadowBlur = 0;
         ctx.restore();
     }
 
-    // 3. Footer
+    // --- FOOTER BACKGROUND (Premium Gradient, not flat black) ---
     const footerY = VideoH;
-
-    // Solid Background
-    ctx.fillStyle = '#000000';
+    const footerGrad = ctx.createLinearGradient(0, footerY, 0, footerY + FooterH);
+    footerGrad.addColorStop(0, '#0a1520');    // Deep dark blue
+    footerGrad.addColorStop(0.3, '#0d1f2d');  // Slightly lighter
+    footerGrad.addColorStop(1, '#0a0f14');    // Very dark
+    ctx.fillStyle = footerGrad;
     ctx.fillRect(0, footerY, W, FooterH);
 
-    // Separator (Align with Visual Bounds)
-    const sepGrad = ctx.createLinearGradient(visualBounds.minX, footerY, visualBounds.maxX, footerY);
-    sepGrad.addColorStop(0, '#00ffff');
-    sepGrad.addColorStop(1, '#a855f7');
+    // Animated gradient line separator at top of footer
+    const sepGrad = ctx.createLinearGradient(0, footerY, W, footerY);
+    sepGrad.addColorStop(0, 'rgba(45, 212, 191, 0.3)');
+    sepGrad.addColorStop(0.3, '#2dd4bf');
+    sepGrad.addColorStop(0.5, '#a855f7');
+    sepGrad.addColorStop(0.7, '#2dd4bf');
+    sepGrad.addColorStop(1, 'rgba(45, 212, 191, 0.3)');
     ctx.fillStyle = sepGrad;
-    ctx.fillRect(visualBounds.minX, footerY, visualBounds.width, 4);
+    ctx.fillRect(0, footerY, W, 4);
 
-    // A. Left: Logo & Meta
-    const leftMargin = 40;
-    const contentY = footerY + 30; // Start content lower
+    // Subtle glow effect below separator
+    const glowGrad = ctx.createLinearGradient(0, footerY, 0, footerY + 30);
+    glowGrad.addColorStop(0, 'rgba(45, 212, 191, 0.15)');
+    glowGrad.addColorStop(1, 'rgba(45, 212, 191, 0)');
+    ctx.fillStyle = glowGrad;
+    ctx.fillRect(0, footerY + 4, W, 26);
 
-    // Logo (SVG Bitmap)
-    if (logo) {
-        ctx.drawImage(logo, leftMargin, contentY, 100, 100);
-    }
+    // --- FOOTER CONTENT ---
+    const margin = 50;
+    const contentStartY = footerY + 35;
 
-    // Text Group
-    const textX = leftMargin + 120;
-    const textBaseY = contentY + 10;
-
-    ctx.textAlign = 'left';
-
-    // Title
-    ctx.font = 'bold 36px Arial';
+    // Title (Large, Bold, White with shadow)
+    ctx.save();
+    ctx.font = 'bold 34px Arial';
     ctx.fillStyle = '#ffffff';
-    ctx.fillText((title || "Opera Senza Nome").toUpperCase(), textX, textBaseY + 30);
+    ctx.textAlign = 'left';
+    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+    ctx.shadowBlur = 6;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 2;
+    const titleText = (title || "OPERA SENZA TITOLO").toUpperCase();
+    ctx.fillText(titleText, margin, contentStartY + 25);
+    ctx.restore();
 
-    // Subtitle & Date
-    ctx.font = '20px Arial';
-    ctx.fillStyle = '#dddddd';
-    const dateText = date || new Date().toLocaleDateString('it-IT');
-    const subText = subtitle ? `${subtitle} • ${dateText}` : dateText;
-    ctx.fillText(subText, textX, textBaseY + 65);
+    // Author (Medium, Cyan color for visibility)
+    ctx.font = '18px Arial';
+    ctx.fillStyle = '#2dd4bf';
+    const authorText = (author || "SonificA.R.T.").toUpperCase();
+    ctx.fillText(authorText, margin, contentStartY + 55);
 
-    // B. Center/Right: LED Bar Visualizer
-    const vizX = W * 0.50;
-    const vizW = W * 0.45;
-    const vizH = 120; // Taller bars
-    const vizBaseY = footerY + (FooterH - 20);
+    // --- SINUSOIDAL WAVE VISUALIZATION ---
+    const waveY = contentStartY + 95;
+    const waveWidth = W * 0.40;
+    const waveHeight = 40;
+    const waveCenterY = waveY + waveHeight / 2;
 
-    const bars = 32;
-    const gap = 8;
-    const barW = (vizW / bars) - gap;
+    ctx.save();
 
-    const step = Math.floor(freqData.length / bars);
+    // Wave shadow/glow
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = 'rgba(45, 212, 191, 0.5)';
 
-    for (let i = 0; i < bars; i++) {
-        let sum = 0;
-        for (let j = 0; j < step; j++) sum += freqData[i * step + j];
-        const val = sum / step;
+    // Draw smooth sinusoidal wave
+    ctx.beginPath();
+    ctx.moveTo(margin, waveCenterY);
 
-        const boost = val > 10 ? val * 1.5 : val;
-        const h = Math.min(vizH, (boost / 255) * vizH);
+    const points = 100;
+    for (let i = 0; i <= points; i++) {
+        const x = margin + (i / points) * waveWidth;
 
-        const x = vizX + i * (barW + gap);
-        const y = vizBaseY - h;
+        // Sample multiple frequency bins for a smoother wave
+        const freqIndex = Math.floor((i / points) * freqData.length * 0.4);
+        const amp1 = (freqData[freqIndex] || 0) / 255;
+        const amp2 = (freqData[Math.min(freqIndex + 5, freqData.length - 1)] || 0) / 255;
+        const amplitude = (amp1 + amp2) / 2;
 
-        const lg = ctx.createLinearGradient(0, y, 0, y + h);
-        lg.addColorStop(0, '#00ffff');   // Cyan Top
-        lg.addColorStop(0.5, '#2dd4bf'); // Teal Mid
-        lg.addColorStop(1, '#0000ff');   // Blue Base
+        // Create wave oscillation based on position and audio
+        const baseWave = Math.sin((i / points) * Math.PI * 6 + time * 3) * (waveHeight * 0.3);
+        const audioWave = amplitude * waveHeight * 0.6;
 
-        ctx.fillStyle = lg;
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = '#00ffff';
-        ctx.fillRect(x, y, barW, h);
-        ctx.shadowBlur = 0;
+        const y = waveCenterY + baseWave * (0.3 + amplitude * 0.7) + (Math.random() - 0.5) * audioWave * 0.2;
 
-        if (h > 5) {
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(x, y - 6, barW, 4);
+        if (i === 0) {
+            ctx.moveTo(x, y);
+        } else {
+            ctx.lineTo(x, y);
         }
     }
+
+    // Gradient stroke for wave
+    const waveGrad = ctx.createLinearGradient(margin, 0, margin + waveWidth, 0);
+    waveGrad.addColorStop(0, '#2dd4bf');
+    waveGrad.addColorStop(0.5, '#60d5f5');
+    waveGrad.addColorStop(1, '#a855f7');
+
+    ctx.strokeStyle = waveGrad;
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+
+    // Draw a second, fainter wave for depth
+    ctx.globalAlpha = 0.3;
+    ctx.beginPath();
+    for (let i = 0; i <= points; i++) {
+        const x = margin + (i / points) * waveWidth;
+        const freqIndex = Math.floor((i / points) * freqData.length * 0.3);
+        const amplitude = (freqData[freqIndex] || 0) / 255;
+        const y = waveCenterY + Math.sin((i / points) * Math.PI * 4 + time * 2) * waveHeight * 0.2 * (0.5 + amplitude);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.globalAlpha = 1.0;
+    ctx.restore();
+
+    // Date & Description (Below wave)
+    ctx.font = '14px Arial';
+    ctx.fillStyle = '#8899aa';
+    const dateText = date || new Date().toLocaleDateString('it-IT');
+    ctx.fillText(dateText, margin, contentStartY + 155);
+
+    if (description && description.trim().length > 0) {
+        ctx.font = 'italic 14px Arial';
+        ctx.fillStyle = '#aabbcc';
+        const maxWidth = W * 0.35;
+        let truncated = description;
+        if (ctx.measureText(truncated).width > maxWidth) {
+            while (ctx.measureText(truncated + "...").width > maxWidth && truncated.length > 0) {
+                truncated = truncated.slice(0, -1);
+            }
+            truncated += "...";
+        }
+        ctx.fillText(truncated, margin + 100, contentStartY + 155);
+    }
+
+    // --- RIGHT SIDE: Large Logo with Glow ---
+    if (logo) {
+        const logoSize = 90;
+        const logoX = W - margin - logoSize - 30;
+        const logoY = footerY + (FooterH - logoSize) / 2;
+
+        ctx.save();
+
+        // Outer glow ring
+        ctx.beginPath();
+        ctx.arc(logoX + logoSize / 2, logoY + logoSize / 2, logoSize / 2 + 15, 0, Math.PI * 2);
+        const ringGrad = ctx.createRadialGradient(
+            logoX + logoSize / 2, logoY + logoSize / 2, logoSize / 2,
+            logoX + logoSize / 2, logoY + logoSize / 2, logoSize / 2 + 20
+        );
+        ringGrad.addColorStop(0, 'rgba(45, 212, 191, 0.2)');
+        ringGrad.addColorStop(1, 'rgba(45, 212, 191, 0)');
+        ctx.fillStyle = ringGrad;
+        ctx.fill();
+
+        // Inner ring
+        ctx.beginPath();
+        ctx.arc(logoX + logoSize / 2, logoY + logoSize / 2, logoSize / 2 + 5, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(45, 212, 191, 0.6)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Logo
+        ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
+        ctx.restore();
+    }
+
+    // Website watermark (far right bottom)
+    ctx.font = 'bold 13px Arial';
+    ctx.fillStyle = 'rgba(45, 212, 191, 0.5)';
+    ctx.textAlign = 'right';
+    ctx.fillText('sonificart.com', W - margin, footerY + FooterH - 18);
 }
 
 // Helper: Decode Audio
@@ -276,7 +397,7 @@ function decodeAudio(blob: Blob): Promise<AudioBuffer> {
 
 export const VideoGenService = {
     generateVideo: async (options: VideoGenOptions): Promise<Blob> => {
-        const { audioUrl, imageUrl, title, author, subtitle, date, onProgress } = options;
+        const { audioUrl, imageUrl, title, author, subtitle, date, description, onProgress } = options;
         console.log("🚀 Starting Turbo Video Generation (Logo + New Viz)...");
 
         // 1. Load Resources
@@ -417,7 +538,7 @@ export const VideoGenService = {
                 ctx!, imageBitmap, logoBitmap, pixelData, freqData, time, duration,
                 WIDTH, HEIGHT, VIDEO_H, FOOTER_H, TOP_SAFE_AREA,
                 visualBounds,
-                title, author, subtitle, date
+                title, author, subtitle, date, description
             );
 
             const frameBitmap = await createImageBitmap(canvas);

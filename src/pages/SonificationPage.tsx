@@ -201,11 +201,11 @@ export const SonificationPage: React.FC = () => {
         } finally { setIsProcessing(false); }
     };
 
-    const handleManualSave = async (title: string) => {
+    const handleManualSave = async (title: string, description?: string) => { // Updated
         if (!result || !user) return;
         try {
-            await api.saveSonification(result, paradigm, title);
-            setResult(prev => prev ? { ...prev, title } : null);
+            await api.saveSonification(result, paradigm, title, description);
+            setResult(prev => prev ? { ...prev, title } : null); // Note: We might want to update description in result state too if applicable
         } catch (e) {
             console.error(e);
             throw e;

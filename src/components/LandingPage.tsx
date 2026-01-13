@@ -11,7 +11,7 @@ interface LandingPageProps {
     onSelectProject: (id: string) => void;
 }
 
-// ... FeatureCard remains same ...
+// Reusable Feature Card Component for the bottom grid
 const FeatureCard: React.FC<{ icon: string, title: string, desc: React.ReactNode, color: string, onClick?: () => void }> = ({ icon, title, desc, color, onClick }) => (
     <div onClick={onClick} className={`group relative bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-8 transition-all duration-500 hover:-translate-y-2 hover:bg-white/10 hover:border-white/20 hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5)] overflow-hidden ${onClick ? 'cursor-pointer' : ''}`}>
         <div className={`absolute top-0 right-0 w-32 h-32 bg-${color}-500/10 rounded-full blur-3xl -mr-16 -mt-16 transition-all group-hover:bg-${color}-500/20`}></div>
@@ -36,75 +36,159 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onExplor
     return (
         <div className="w-full font-sans overflow-x-hidden text-white selection:bg-brand-accent selection:text-brand-primary">
 
-            {/* HERO SPLIT (LEFT TEXT, RIGHT VIDEO) */}
-            <div className="relative min-h-[90vh] flex items-center pt-32 pb-20 z-20 px-6 overflow-hidden">
-                <div className="absolute top-1/2 left-0 -translate-y-1/2 w-[800px] h-[800px] bg-brand-accent/5 rounded-full blur-[120px] pointer-events-none"></div>
+            {/* HERO SECTION */}
+            <div className="relative min-h-[100vh] flex items-center pt-24 pb-20 overflow-hidden">
+                {/* Ambient Background */}
+                <div className="absolute top-[-20%] right-[-10%] w-[1000px] h-[1000px] bg-brand-accent/10 rounded-full blur-[120px] pointer-events-none animate-blob"></div>
+                <div className="absolute bottom-[-20%] left-[-10%] w-[800px] h-[800px] bg-purple-600/10 rounded-full blur-[120px] pointer-events-none animate-blob animation-delay-2000"></div>
 
-                <div className="max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-                    {/* LEFT CONTENT */}
-                    <div className="text-left animate-fade-in-left relative z-20">
-                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-md mb-8 shadow-lg"><span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span><span className="text-xs font-bold tracking-widest text-green-400 uppercase">{t('landing.badge')}</span></div>
+                <div className="max-w-7xl mx-auto w-full px-6 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center relative z-10">
 
-                        <h1 className="font-display text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-black text-white mb-6 leading-tight tracking-tighter drop-shadow-2xl">
+                    {/* LEFT: TEXT CONTENT */}
+                    <div className="text-left animate-fade-in-left">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 backdrop-blur-md mb-8 shadow-[0_0_20px_rgba(13,148,136,0.2)]">
+                            <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-accent opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-accent"></span>
+                            </span>
+                            <span className="text-[10px] font-bold tracking-[0.2em] text-brand-accent uppercase">{t('landing.badge')}</span>
+                        </div>
+
+                        <h1 className="font-display text-5xl sm:text-7xl lg:text-8xl font-black text-white mb-8 leading-[0.9] tracking-tighter">
                             {t('landing.title_start')} <br />
-                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-accent via-white to-purple-400">
+                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-accent to-purple-500 relative">
                                 {t('landing.title_end')}
+                                <svg className="absolute w-full h-3 -bottom-1 left-0 text-brand-accent opacity-40" viewBox="0 0 100 10" preserveAspectRatio="none">
+                                    <path d="M0 5 Q 50 10 100 5" stroke="currentColor" strokeWidth="4" fill="none" />
+                                </svg>
                             </span>
                         </h1>
 
-                        <p className="text-lg md:text-xl text-brand-text-secondary font-light mb-10 max-w-xl leading-relaxed">
+                        <p className="text-xl text-gray-400 font-light mb-10 max-w-lg leading-relaxed">
                             <span dangerouslySetInnerHTML={{ __html: t('landing.subtitle') }} />
                         </p>
 
-                        <div className="flex flex-col sm:flex-row gap-4">
-                            <button onClick={onGetStarted} className="px-8 py-4 bg-brand-accent text-brand-primary font-black text-lg rounded-full hover:bg-brand-accent-light hover:scale-105 transition-all flex items-center justify-center gap-2 shadow-lg shadow-brand-accent/20"><i className="fas fa-play"></i> {t('landing.cta_start')}</button>
-                            <button onClick={onExplore} className="px-8 py-4 bg-white/5 border border-white/10 text-white font-bold text-lg rounded-full hover:bg-white/10 hover:border-white/30 transition-all flex items-center justify-center gap-2"><i className="fas fa-compass"></i> {t('landing.cta_explore')}</button>
+                        <div className="flex flex-col sm:flex-row gap-5">
+                            <button onClick={onGetStarted} className="group relative px-8 py-4 bg-brand-accent text-brand-primary font-black text-lg rounded-xl overflow-hidden shadow-[0_0_40px_rgba(13,148,136,0.3)] transition-all hover:scale-105 hover:shadow-[0_0_60px_rgba(13,148,136,0.5)]">
+                                <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shimmer"></span>
+                                <span className="relative flex items-center gap-3">
+                                    <i className="fas fa-play"></i> {t('landing.cta_start')}
+                                </span>
+                            </button>
+                            <button onClick={onExplore} className="px-8 py-4 bg-white/5 border border-white/10 text-white font-bold text-lg rounded-xl hover:bg-white/10 hover:border-white/20 transition-all flex items-center gap-3 backdrop-blur-sm">
+                                <i className="fas fa-compass"></i> {t('landing.cta_explore')}
+                            </button>
+                        </div>
+
+                        <div className="mt-12 flex items-center gap-4 text-sm text-gray-500 font-medium">
+                            <div className="flex -space-x-3">
+                                {[1, 2, 3].map(i => <div key={i} className="w-8 h-8 rounded-full bg-slate-800 border-2 border-slate-950 flex items-center justify-center text-[10px] text-gray-400"><i className="fas fa-user"></i></div>)}
+                            </div>
+                            <p>Unisciti a <span className="text-white font-bold">2,000+</span> artisti digitali</p>
                         </div>
                     </div>
 
-                    {/* RIGHT VIDEO */}
-                    <div className="relative z-10 animate-fade-in-right w-full">
-                        <div className="absolute -inset-4 bg-gradient-to-r from-brand-accent/20 to-purple-500/20 blur-2xl rounded-3xl -z-10 opacity-50"></div>
-                        <div className="rounded-2xl overflow-hidden shadow-2xl border border-white/20 aspect-video bg-black transform rotate-1 hover:rotate-0 transition-transform duration-500">
-                            <iframe
-                                width="100%"
-                                height="100%"
-                                src="https://www.youtube.com/embed/rX8s4JyIRBI?autoplay=1&mute=1&loop=1&playlist=rX8s4JyIRBI&controls=0&rel=0&modestbranding=1"
-                                title="SonificA.R.T. Demo"
-                                frameBorder="0"
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                allowFullScreen
-                                className="w-full h-full object-cover pointer-events-none"
-                            ></iframe>
+                    {/* RIGHT: DYNAMIC FEATURE LIST - "What It Actually Does" */}
+                    <div className="relative animate-fade-in-right w-full h-[600px] flex items-center justify-center perspective-1000">
+                        {/* Dynamic Background Elements - "Living Ecosystem" */}
+                        <div className="absolute inset-0 overflow-hidden rounded-3xl">
+                            <div className="absolute top-[-50%] left-[-50%] w-[200%] h-[200%] bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-brand-accent/10 via-transparent to-transparent animate-spin-slow opacity-50"></div>
+                            <div className="absolute top-10 right-10 w-72 h-72 bg-purple-600/20 rounded-full blur-[100px] animate-blob mix-blend-screen"></div>
+                            <div className="absolute bottom-10 left-10 w-72 h-72 bg-brand-accent/20 rounded-full blur-[100px] animate-blob animation-delay-2000 mix-blend-screen"></div>
+                            {/* Grid Overlay */}
+                            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[length:40px_40px]"></div>
                         </div>
-                        {/* Overlay 'Click to Watch' if needed, or leave as ambient */}
+
+                        {/* THE FEATURE LIST */}
+                        <div className="relative z-10 w-full max-w-lg space-y-4">
+
+                            {/* Header Label */}
+                            <div className="text-xs font-bold text-gray-400 uppercase tracking-[0.2em] mb-6 ml-2">Core Capabilities</div>
+
+                            {/* Item 1: Smart Vision (Guided Capture) */}
+                            <div className="group relative bg-black/40 backdrop-blur-md border border-white/10 p-4 rounded-xl hover:bg-white/10 hover:border-brand-accent/50 transition-all duration-300 cursor-default hover:translate-x-2">
+                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-brand-accent rounded-l-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-lg bg-brand-accent/10 flex items-center justify-center text-brand-accent text-xl group-hover:scale-110 transition-transform">
+                                        <i className="fas fa-eye"></i>
+                                    </div>
+                                    <div>
+                                        <h3 className="text-white font-bold text-lg leading-tight group-hover:text-brand-accent transition-colors">Analisi Ottica Real-time</h3>
+                                        <p className="text-gray-400 text-sm mt-1">Feedback biometrico su entropia, contrasto e bilanciamento.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Item 2: Spectral Transcoding (The Core) */}
+                            <div className="group relative bg-black/40 backdrop-blur-md border border-white/10 p-4 rounded-xl hover:bg-white/10 hover:border-purple-500/50 transition-all duration-300 cursor-default hover:translate-x-2">
+                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-purple-500 rounded-l-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-lg bg-purple-500/10 flex items-center justify-center text-purple-400 text-xl group-hover:scale-110 transition-transform">
+                                        <i className="fas fa-wave-square"></i>
+                                    </div>
+                                    <div>
+                                        <h3 className="text-white font-bold text-lg leading-tight group-hover:text-purple-400 transition-colors">Transcodifica Spettrale</h3>
+                                        <p className="text-gray-400 text-sm mt-1">Conversione matematica da pixel a frequenze sonore.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Item 3: AI Hybrid Synthesis (Integration) */}
+                            <div className="group relative bg-black/40 backdrop-blur-md border border-white/10 p-4 rounded-xl hover:bg-white/10 hover:border-pink-500/50 transition-all duration-300 cursor-default hover:translate-x-2">
+                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-pink-500 rounded-l-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-lg bg-pink-500/10 flex items-center justify-center text-pink-400 text-xl group-hover:scale-110 transition-transform">
+                                        <i className="fas fa-microchip"></i>
+                                    </div>
+                                    <div>
+                                        <h3 className="text-white font-bold text-lg leading-tight group-hover:text-pink-400 transition-colors">Sintesi AI Ibrida</h3>
+                                        <p className="text-gray-400 text-sm mt-1">Co-creazione musicale assistita da Intelligenza Artificiale.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Item 4: Multi-Format Export */}
+                            <div className="group relative bg-black/40 backdrop-blur-md border border-white/10 p-4 rounded-xl hover:bg-white/10 hover:border-blue-500/50 transition-all duration-300 cursor-default hover:translate-x-2">
+                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 rounded-l-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 text-xl group-hover:scale-110 transition-transform">
+                                        <i className="fas fa-share-nodes"></i>
+                                    </div>
+                                    <div>
+                                        <h3 className="text-white font-bold text-lg leading-tight group-hover:text-blue-400 transition-colors">Export Multimediale</h3>
+                                        <p className="text-gray-400 text-sm mt-1">Generazione automatica di Video, WAV e spartiti MIDI.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {/* SHOWCASE PREVIEW SECTION */}
-            <div className="w-full bg-[#0f172a]/50 py-20 border-y border-white/5 relative z-20 backdrop-blur-sm">
+            {/* SHOWCASE SECTION */}
+            <div className="w-full bg-slate-950 py-32 border-t border-white/5 relative z-20">
                 <div className="max-w-7xl mx-auto px-6">
-                    <div className="flex flex-col md:flex-row justify-between items-end mb-10 gap-4">
+                    <div className="flex flex-col md:flex-row justify-between items-end mb-16 gap-6">
                         <div>
-                            <h2 className="text-3xl font-display font-bold text-white mb-2">Vetrina Opere</h2>
-                            <p className="text-gray-400">Esplora le ultime sonificazioni create dalla community.</p>
+                            <h2 className="text-4xl font-display font-black text-white mb-4">Vetrina Opere</h2>
+                            <p className="text-gray-400 text-lg max-w-md">Esplora le ultime sonificazioni create dalla community. Arte che puoi ascoltare.</p>
                         </div>
-                        <button onClick={onExplore} className="text-brand-accent font-bold hover:text-white transition-colors flex items-center gap-2 group">
-                            Vedi tutte le opere <i className="fas fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                        <button onClick={onExplore} className="text-brand-accent font-bold text-lg hover:text-white transition-colors flex items-center gap-3 group">
+                            Vedi tutte le opere <i className="fas fa-arrow-right group-hover:translate-x-2 transition-transform"></i>
                         </button>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
                         {displayProjects.map((p: any) => (
-                            <div key={p.id} onClick={() => onSelectProject(p.id)} className="group relative aspect-square bg-black rounded-xl overflow-hidden cursor-pointer border border-white/10 hover:border-brand-accent/50 hover:shadow-xl transition-all">
-                                <img src={p.imageUrl} alt={p.title} className="w-full h-full object-cover opacity-80 group-hover:scale-110 transition-transform duration-700" />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent p-4 flex flex-col justify-end">
-                                    <span className="text-[10px] text-brand-accent font-bold uppercase mb-1 tracking-wider">{p.paradigm}</span>
-                                    <h3 className="text-white font-bold text-lg leading-tight truncate group-hover:text-brand-accent transition-colors">{p.title}</h3>
-                                    <p className="text-xs text-gray-400 mt-1">{p.author}</p>
+                            <div key={p.id} onClick={() => onSelectProject(p.id)} className="group relative aspect-[4/5] bg-black rounded-2xl overflow-hidden cursor-pointer border border-white/10 hover:border-brand-accent/50 hover:shadow-[0_10px_40px_-10px_rgba(13,148,136,0.3)] transition-all duration-500">
+                                <img src={p.imageUrl} alt={p.title} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all duration-700" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent p-6 flex flex-col justify-end translate-y-4 group-hover:translate-y-0 transition-transform duration-500">
+                                    <span className="text-[10px] text-brand-accent font-black uppercase mb-2 tracking-widest">{p.paradigm}</span>
+                                    <h3 className="text-white font-display font-bold text-xl leading-tight mb-1">{p.title}</h3>
+                                    <p className="text-xs text-gray-400">{p.author}</p>
                                 </div>
-                                <div className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/10 backdrop-blur flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center opacity-0 group-hover:opacity-100 scale-50 group-hover:scale-100 transition-all duration-500 delay-100">
                                     <i className="fas fa-play text-xs text-white"></i>
                                 </div>
                             </div>
@@ -113,89 +197,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onExplor
                 </div>
             </div>
 
-            {/* FEATURES GRID */}
+            {/* FEATURES GRID - Glassmorphism */}
             <div className="w-full max-w-7xl mx-auto px-6 py-24 relative z-20">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                     <FeatureCard icon="fa-microscope" title={t('landing.features.color')} desc={t('landing.features.color_desc')} color="teal" onClick={() => onOpenDocs('doc-colorimetry')} />
                     <FeatureCard icon="fa-globe-americas" title={t('landing.features.culture')} desc={t('landing.features.culture_desc')} color="purple" onClick={() => onOpenDocs('doc-database')} />
-                    <FeatureCard icon="fa-fingerprint" title={t('landing.features.deter')} desc={t('landing.features.deter_desc')} color="blue" onClick={() => onOpenDocs('doc-determinism')} />
+                    <FeatureCard icon="fa-fingerprint" title={t('landing.features.deter')} desc={t('landing.features.deter_desc')} color="pink" onClick={() => onOpenDocs('doc-determinism')} />
                 </div>
             </div>
 
-            {/* PRICING (ORA COMPLETAMENTE TRADOTTO) */}
-            <div className="w-full bg-gradient-to-b from-transparent to-black/40 py-24 border-t border-white/5">
-                <div className="w-full max-w-7xl mx-auto px-6">
-                    <div className="text-center mb-12">
-                        <h2 className="text-3xl md:text-5xl font-display font-bold text-white mb-4">{t('landing.pricing.title')}</h2>
-                        <p className="text-brand-text-secondary mb-6">{t('landing.pricing.subtitle')}</p>
-
-                        <div className="inline-flex bg-white/10 p-1 rounded-full border border-white/10">
-                            <button onClick={() => setBillingCycle('Mensile')} className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${billingCycle === 'Mensile' ? 'bg-brand-accent text-brand-primary shadow-lg' : 'text-white hover:text-white/80'}`}>{t('landing.pricing.monthly')}</button>
-                            <button onClick={() => setBillingCycle('Annuale')} className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${billingCycle === 'Annuale' ? 'bg-brand-accent text-brand-primary shadow-lg' : 'text-white hover:text-white/80'}`}>{t('landing.pricing.annual')} (-20%)</button>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
-                        {/* GRATIS */}
-                        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 flex flex-col hover:border-white/20 transition-colors">
-                            <div className="mb-6">
-                                <h3 className="text-xl font-bold text-white">{t('landing.pricing.free.title')}</h3>
-                                <div className="text-3xl font-black text-white mt-2">{t('landing.pricing.free.price')}</div>
-                                <p className="text-xs text-brand-text-secondary mt-1">{t('landing.pricing.free.desc')}</p>
-                            </div>
-                            <ul className="space-y-4 text-sm text-brand-text-secondary flex-grow mb-8">
-                                <li className="flex gap-3"><i className="fas fa-check text-green-400"></i> <span>{t('landing.pricing.free.f1')}</span></li>
-                                <li className="flex gap-3"><i className="fas fa-check text-green-400"></i> <span>{t('landing.pricing.free.f2')}</span></li>
-                                <li className="flex gap-3"><i className="fas fa-check text-green-400"></i> <span>{t('landing.pricing.free.f3')}</span></li>
-                                <li className="flex gap-3"><i className="fas fa-check text-green-400"></i> <span>{t('landing.pricing.free.f4')}</span></li>
-                                <li className="flex gap-3"><i className="fas fa-check text-green-400"></i> <span>{t('landing.pricing.free.f5')}</span></li>
-                            </ul>
-                            <button onClick={onGetStarted} className="w-full py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold transition-colors">{t('landing.pricing.free.btn')}</button>
-                        </div>
-
-                        {/* PRO */}
-                        <div className="bg-brand-secondary/80 backdrop-blur-xl border border-brand-accent/50 rounded-2xl p-8 flex flex-col relative sm:transform sm:scale-105 shadow-2xl shadow-brand-accent/10 z-10">
-                            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-brand-accent text-brand-primary text-xs font-black px-4 py-1.5 rounded-full uppercase tracking-wide shadow-lg">{t('landing.pricing.recommended')}</div>
-                            <div className="mb-6">
-                                <h3 className="text-xl font-bold text-white text-brand-accent">{t('landing.pricing.pro.title')}</h3>
-                                <div className="text-3xl font-black text-white mt-2">
-                                    {billingCycle === 'Mensile' ? t('landing.pricing.pro.price_monthly') : t('landing.pricing.pro.price_annual')}
-                                    <span className="text-sm font-normal text-gray-400"> / {billingCycle === 'Mensile' ? t('landing.pricing.month') : t('landing.pricing.year')}</span>
-                                </div>
-                                <p className="text-xs text-brand-text-secondary mt-1">{t('landing.pricing.pro.desc')}</p>
-                            </div>
-                            <ul className="space-y-4 text-sm text-white/90 flex-grow mb-8">
-                                <li className="flex gap-3"><i className="fas fa-infinity text-brand-accent"></i> <span>{t('landing.pricing.pro.f1')}</span></li>
-                                <li className="flex gap-3"><i className="fas fa-check text-brand-accent"></i> <span>{t('landing.pricing.pro.f2')}</span></li>
-                                <li className="flex gap-3"><i className="fas fa-check text-brand-accent"></i> <span>{t('landing.pricing.pro.f3')}</span></li>
-                                <li className="flex gap-3"><i className="fas fa-check text-brand-accent"></i> <span>{t('landing.pricing.pro.f4')}</span></li>
-                                <li className="flex gap-3"><i className="fas fa-check text-brand-accent"></i> <span>{t('landing.pricing.pro.f5')}</span></li>
-                                <li className="flex gap-3"><i className="fas fa-check text-brand-accent"></i> <span>{t('landing.pricing.pro.f6')}</span></li>
-                            </ul>
-                            <button onClick={() => onOpenPricing(billingCycle)} className="w-full py-4 bg-brand-accent hover:bg-brand-accent-light text-brand-primary font-bold rounded-xl transition-colors shadow-lg shadow-brand-accent/20">
-                                {t('landing.pricing.pro.btn')}
-                            </button>
-                        </div>
-
-                        {/* ENTERPRISE */}
-                        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 flex flex-col hover:border-white/20 transition-colors">
-                            <div className="mb-6">
-                                <h3 className="text-xl font-bold text-white">{t('landing.pricing.custom.title')}</h3>
-                                <div className="text-3xl font-black text-white mt-2">{t('landing.pricing.custom.subtitle')}</div>
-                                <p className="text-xs text-brand-text-secondary mt-1">{t('landing.pricing.custom.desc')}</p>
-                            </div>
-                            <ul className="space-y-4 text-sm text-brand-text-secondary flex-grow mb-8">
-                                <li className="flex gap-3"><i className="fas fa-check text-white"></i> <span>{t('landing.pricing.custom.f1')}</span></li>
-                                <li className="flex gap-3"><i className="fas fa-check text-white"></i> <span>{t('landing.pricing.custom.f2')}</span></li>
-                                <li className="flex gap-3"><i className="fas fa-check text-white"></i> <span>{t('landing.pricing.custom.f3')}</span></li>
-                                <li className="flex gap-3"><i className="fas fa-check text-white"></i> <span>{t('landing.pricing.custom.f4')}</span></li>
-                                <li className="flex gap-3"><i className="fas fa-check text-white"></i> <span>{t('landing.pricing.custom.f5')}</span></li>
-                            </ul>
-                            <button onClick={() => onOpenPricing('Enterprise')} className="w-full py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold transition-colors">{t('landing.pricing.custom.btn')}</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
     );
 };
