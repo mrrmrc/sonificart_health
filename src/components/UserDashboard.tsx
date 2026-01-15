@@ -14,10 +14,17 @@ const fixImage = (url: string | null | undefined) => {
 };
 
 // --- PUBLISH DASHBOARD COMPONENT (Refactored) ---
-const PublishModal: React.FC<{ entry: DashboardEntry, onClose: () => void, user?: User }> = ({ entry, onClose, user }) => {
+// --- PUBLISH DASHBOARD COMPONENT (Refactored) ---
+const PublishModal: React.FC<{
+    entry: DashboardEntry,
+    onClose: () => void,
+    user?: User,
+    onShowMessage: (title: string, message: string, type: 'info' | 'warning' | 'danger' | 'success') => void,
+    onRequestConfirmation: (title: string, message: string, onConfirm: () => void) => void
+}> = ({ entry, onClose, user, onShowMessage, onRequestConfirmation }) => {
     // STATE: Metadata
     const [title, setTitle] = useState(entry.title || "Opera Senza Titolo");
-    const [subtitle, setSubtitle] = useState(entry.subtitle || ""); // Ensure entry has subtitle prop or default empty
+    const [subtitle, setSubtitle] = useState(entry.subtitle || "");
     const [description, setDescription] = useState(entry.description || "");
 
     // STATE: Audio
@@ -45,29 +52,17 @@ const PublishModal: React.FC<{ entry: DashboardEntry, onClose: () => void, user?
         setIsSubmitting(true);
         try {
             await api.updateMetadata(entry.id, title, subtitle, description);
-            alert("Dati salvati con successo!");
-            entry.title = title; // Update local ref
-            // entry.subtitle = subtitle; // Check types
+            // Silent success or optional toast
+            // onShowMessage("Salvataggio", "Dati salvati con successo!", 'success'); 
+            entry.title = title;
         } catch (e) {
-            alert("Errore salvataggio dati: " + e);
+            onShowMessage("Errore", "Errore salvataggio dati: " + e, 'danger');
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    // ACTION: Change Audio (Immediate Upload)
-    const handleAudioFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        // Auto-delete video logic
-        if (activeVideoUrl) {
-            if (!confirm("Attenzione: Modificando l'audio, il video generato attuale non sarà più sincronizzato e verrà eliminato. Vuoi procedere?")) {
-                if (fileInputRef.current) fileInputRef.current.value = ''; // Reset input
-                return;
-            }
-        }
-
+    const processAudioUpload = async (file: File) => {
         setIsUploadingAudio(true);
         try {
             // Delete old video if needed
@@ -80,34 +75,45 @@ const PublishModal: React.FC<{ entry: DashboardEntry, onClose: () => void, user?
             // Upload Audio
             const newUrl = await api.uploadHistoryAudio(entry.id, file);
 
-            // Validate new URL (ensure it's not empty)
+            // Validate new URL
             if (!newUrl) throw new Error("URL audio non valido dal server");
 
             // Update Entry Ref & UI
             entry.audioUrl = newUrl;
             entry.traditionName = file.name;
 
-            // Force re-render of audio player via key or just state update?
-            // Since we don't have local state for audioUrl, we rely on 'entry' mutation which doesn't trigger re-render.
-            // We need a local state to force update or just use the ref.
-            // Let's force an update by toggling a dummy state or similar, OR better: use local state for audioUrl.
-            // But we can just use the key trick with timestamp on the player.
-
-            alert("Audio caricato e aggiornato con successo!");
+            // NO ALERT - Visual feedback is handled by isUploadingAudio spinner in the UI
 
         } catch (e) {
             console.error("Errore upload audio", e);
-            alert("Errore durante l'upload dell'audio: " + e);
+            onShowMessage("Errore Upload", "Errore durante l'upload dell'audio: " + e, 'danger');
         } finally {
             setIsUploadingAudio(false);
             if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
 
-    // ACTION: Ensure Audio (Now just checks if audioUrl exists, redundant but kept for interface compatibility)
+    // ACTION: Change Audio (Immediate Upload)
+    const handleAudioFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Auto-delete video logic
+        if (activeVideoUrl) {
+            onRequestConfirmation(
+                "Attenzione",
+                "Modificando l'audio, il video generato attuale non sarà più sincronizzato e verrà eliminato. Vuoi procedere?",
+                () => processAudioUpload(file)
+            );
+        } else {
+            processAudioUpload(file);
+        }
+    };
+
+    // ACTION: Ensure Audio
     const ensureAudioUploaded = async (): Promise<boolean> => {
         if (!entry.audioUrl) {
-            alert("Nessun audio presente. Carica un file audio prima di procedere.");
+            onShowMessage("Audio Mancante", "Nessun audio presente. Carica un file audio prima di procedere.", 'warning');
             return false;
         }
         return true;
@@ -137,7 +143,7 @@ const PublishModal: React.FC<{ entry: DashboardEntry, onClose: () => void, user?
                 audioUrl: audioBlob,
                 title: title,
                 subtitle: subtitle,
-                description: description, // Pass description
+                description: description,
                 date: new Date(entry.timestamp).toLocaleDateString('it-IT'),
                 author: user?.name,
                 onProgress: (p: number) => setUploadProgress(Math.floor(p))
@@ -153,7 +159,7 @@ const PublishModal: React.FC<{ entry: DashboardEntry, onClose: () => void, user?
                 entry.videoUrl = uniqueUrl;
             }
         } catch (e) {
-            alert("Errore Generazione Video: " + e);
+            onShowMessage("Errore Generazione", "Errore Generazione Video: " + e, 'danger');
         } finally {
             setIsSubmitting(false);
         }
@@ -169,33 +175,50 @@ const PublishModal: React.FC<{ entry: DashboardEntry, onClose: () => void, user?
     const checkWebcam = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            alert("✅ Webcam Rilevata e Funzionante!");
+            onShowMessage("Webcam", "✅ Webcam Rilevata e Funzionante!", 'success');
             stream.getTracks().forEach(t => t.stop());
         } catch (e) {
-            alert("❌ Webcam Errore: " + e + ". Verifica i permessi del browser.");
+            onShowMessage("Errore Webcam", "❌ Webcam Errore: " + e + ". Verifica i permessi del browser.", 'danger');
         }
     };
 
     // STATE: Visibility
     const [isPublic, setIsPublic] = useState(true);
 
-    const handlePublish = async () => {
-        if (!confirm(isPublic ? "Vuoi pubblicare questa opera nella vetrina pubblica?" : "Vuoi salvare questa opera (Privata)?")) return;
+    const performPublish = async () => {
+        // Use native confirm for critical branching decision, or implement a custom flow. 
+        // For now native confirm is acceptable as per user request to change the FINAL message.
+        // User asked: "quando vado su salva deve apparire la finestra del messaggio con lo stesso coordinato grafico"
+
         setIsSubmitting(true);
         try {
-            // 1. First, SAVE METADATA explicitly to ensure Title/Desc are persisted in History
+            // 1. First, SAVE METADATA
             await api.updateMetadata(entry.id, title, subtitle, description);
 
-            // Update local entry ref so UI reflects changes if modal re-opens
+            // Update local entry ref
             entry.title = title;
             entry.description = description;
 
             // 2. Then Publish
             await api.publishFromHistory(entry.id, { description, isPublic }, activeVideoUrl ? { url: activeVideoUrl, type: 'video' } : null);
-            alert(isPublic ? "Opera pubblicata in vetrina!" : "Opera salvata privatamente!");
+
+            // CUSTOM MODAL SUCCESS MESSAGE
+            onShowMessage(
+                isPublic ? "Pubblicazione Completata" : "Salvataggio Completato",
+                isPublic ? "La tua opera è stata pubblicata correttamente nella vetrina!" : "La tua opera è stata salvata privatamente nel tuo archivio.",
+                'success'
+            );
         } catch (e) {
-            alert("Errore : " + e);
+            onShowMessage("Errore", "Impossibile completare l'operazione: " + e, 'danger');
         } finally { setIsSubmitting(false); }
+    };
+
+    const handlePublish = async () => {
+        onRequestConfirmation(
+            isPublic ? "Conferma Pubblicazione" : "Conferma Salvataggio",
+            isPublic ? "Vuoi pubblicare questa opera nella vetrina pubblica? Sarà visibile a tutti." : "Vuoi salvare questa opera in modo privato? (Non sarà visibile in galleria)",
+            () => performPublish()
+        );
     };
 
     const downloadFile = (url: string | null | undefined, name: string) => {
@@ -222,7 +245,7 @@ const PublishModal: React.FC<{ entry: DashboardEntry, onClose: () => void, user?
     const copyLink = (url: string) => {
         if (!url) return;
         const full = url.startsWith('http') ? url : getAbsoluteUrl(url) || "";
-        navigator.clipboard.writeText(full).then(() => alert("Link copiato negli appunti!"));
+        navigator.clipboard.writeText(full).then(() => onShowMessage("Link Copiato", "Link copiato negli appunti!", 'success'));
     };
 
     const socialShare = (platform: 'whatsapp' | 'facebook' | 'twitter' | 'linkedin', url: string, text: string) => {
@@ -281,7 +304,7 @@ const PublishModal: React.FC<{ entry: DashboardEntry, onClose: () => void, user?
 
                 <button onClick={onClose} className="absolute top-4 right-4 z-50 text-white/50 hover:text-white bg-black/40 rounded-full w-8 h-8 flex items-center justify-center"><i className="fas fa-times"></i></button>
 
-                <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-[#15151b] shrink-0">
+                <div className="px-6 py-6 border-b border-white/10 flex justify-between items-center bg-[#15151b] shrink-0 relative z-10 w-full">
                     <div className="flex items-center gap-4">
                         <div className="w-1.5 h-8 bg-gradient-to-b from-brand-accent to-brand-primary rounded-full"></div>
                         <div>
@@ -331,7 +354,7 @@ const PublishModal: React.FC<{ entry: DashboardEntry, onClose: () => void, user?
                                 </div>
 
                                 <button onClick={handlePublish} disabled={isSubmitting} className="w-full py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-lg border border-white/10 transition-all flex items-center justify-center gap-2 uppercase text-xs tracking-wider shrink-0">
-                                    {isSubmitting ? <i className="fas fa-circle-notch fa-spin"></i> : <><i className="fas fa-save"></i> Salva & Aggiorna</>}
+                                    {isSubmitting ? <i className="fas fa-circle-notch fa-spin"></i> : <><i className="fas fa-save"></i> Salva & Pubblica</>}
                                 </button>
                             </div>
                         </div>
@@ -352,10 +375,16 @@ const PublishModal: React.FC<{ entry: DashboardEntry, onClose: () => void, user?
 
                                 <div className="bg-black/30 rounded-lg p-4 border border-white/5 flex items-center gap-4 mb-4">
                                     <div className="w-10 h-10 rounded-full bg-[#2dd4bf]/10 flex items-center justify-center text-[#2dd4bf]">
-                                        <i className="fas fa-music"></i>
+                                        {isUploadingAudio ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-music"></i>}
                                     </div>
                                     <div className="flex-1 overflow-hidden">
-                                        <div className="text-white font-bold text-sm truncate">{entry.traditionName || "Audio Originale.wav"}</div>
+                                        <div className="text-white font-bold text-sm truncate">
+                                            {isUploadingAudio ? (
+                                                <span className="text-[#2dd4bf] italic animate-pulse">Caricamento in corso...</span>
+                                            ) : (
+                                                entry.traditionName || "Audio Originale.wav"
+                                            )}
+                                        </div>
                                         <div className="text-xs text-gray-500 uppercase tracking-wider">{entry.paradigm || "Scientifico"}</div>
                                     </div>
                                     <audio key={(entry.audioUrl || "audio") + Date.now()} controls src={getAbsoluteUrl(entry.audioUrl) || undefined} className="h-8 max-w-[200px]" />
@@ -638,6 +667,29 @@ export const UserDashboard: React.FC<{ user: User, onLoadEntry: (entry: Dashboar
                     onClose={() => {
                         setPublishingEntry(null);
                         loadHistory();
+                    }}
+                    onShowMessage={(title, message, type) => {
+                        setConfirmModal({
+                            isOpen: true,
+                            title,
+                            message,
+                            type,
+                            singleButton: true,
+                            onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+                        });
+                    }}
+                    onRequestConfirmation={(title, message, onConfirm) => {
+                        setConfirmModal({
+                            isOpen: true,
+                            title,
+                            message,
+                            type: 'warning',
+                            singleButton: false,
+                            onConfirm: () => {
+                                onConfirm();
+                                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                            }
+                        });
                     }}
                 />
             )}

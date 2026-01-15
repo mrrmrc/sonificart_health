@@ -490,7 +490,11 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
             };
 
             const blob = await generateSonificationVideo(resultWithBlob, (p) => setVideoProgress(p), { title: videoTitle, author: videoAuthor, description: workDescription });
-            setGeneratedVideoBlob(blob); saveAs(blob, `kinetic_proof_${safeHash.substring(0, 8)}.mp4`);
+            setGeneratedVideoBlob(blob);
+            // Use title for filename, sanitized
+            const sanitizedTitle = (videoTitle || workTitle || 'sonificart_video').replace(/[^a-zA-Z0-9_\-]/g, '_').substring(0, 50);
+            const dateStr = new Date().toISOString().slice(0, 10);
+            saveAs(blob, `${sanitizedTitle}_${dateStr}.mp4`);
         } catch (e) {
             console.error(e);
             setConfirmModal({

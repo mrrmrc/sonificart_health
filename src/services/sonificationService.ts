@@ -467,42 +467,63 @@ function adjustTiming(baseDuration: number, tradition: Tradition, scanPosition: 
 
 
 function transformNote(mappedBlock: MappedBlock, tradition: Tradition): Omit<TransformedNoteEvent, 'time' | 'duration'> {
-    const { baseNote, noteName, microtoneOffset } = mappedBlock.mapping;
+    const { baseNote, noteName } = mappedBlock.mapping;
     const { lab, variance, isFiller } = mappedBlock.blockData;
 
-    // SILENCE FILLER BLOCKS (Border Transparency)
+    // SILENCE FILLER BLOCKS
     if (isFiller) {
         return {
-            baseNote: 0,
-            transformedCents: 0,
-            midiFloat: 0,
-            velocity: 0,
-            expression: 0,
-            chroma: 0,
-            articulation: 'normal',
-            noteName: '-',
-            sourceBlock: mappedBlock.blockData,
-            isAccompaniment: false,
+            baseNote: 0, transformedCents: 0, midiFloat: 0, velocity: 0,
+            expression: 0, chroma: 0, articulation: 'normal', noteName: '-',
+            sourceBlock: mappedBlock.blockData, isAccompaniment: false,
         };
     }
 
-    const midiFloat = baseNote + (microtoneOffset / 100.0);
-    const transformedCents = (midiFloat - 60) * 100;
+    // --- QUANTIZATION ALGORITHM (Strict Cultural Scale Matching) ---
+    // 1. Get Input Pitch (Hue based 0-11)
+    const rawPitchClass = baseNote % 12; // 0 to 11
+    const rawCents = rawPitchClass * 100;
+
+    // 2. Find Nearest Interval in Tradition Scale
+    // traditions.scale_cents is e.g. [0, 200, 400, 500, 700, 900, 1100, 1200]
+    let closestCents = 0;
+    let minDiff = Infinity;
+
+    // Normalize tradition scale (ensure it covers an octave)
+    const scale = tradition.scale_cents && tradition.scale_cents.length > 0
+        ? tradition.scale_cents
+        : [0, 200, 400, 500, 700, 900, 1100, 1200]; // Default Major
+
+    for (const scaleStep of scale) {
+        // Direct distance
+        let diff = Math.abs(scaleStep - rawCents);
+        // Wrap-around distance (e.g. 1100 vs 0 is 100 diff, not 1100)
+        if (diff > 600) diff = 1200 - diff;
+
+        if (diff < minDiff) {
+            minDiff = diff;
+            closestCents = scaleStep;
+        }
+    }
+
+    // 3. Construct Quantized MIDI
+    const octave = Math.floor(baseNote / 12);
+    // closestCents can be 1200 (next octave C), handled naturally by float addition
+    const quantizedMidi = (octave * 12) + (closestCents / 100.0);
 
     const chromaValue = Math.sqrt(lab.a * lab.a + lab.b * lab.b);
     const velocity = Math.max(1, Math.min(127, Math.floor((chromaValue / 128.0) * 127)));
-
     const articulation = variance > 500 ? 'staccato' : variance < 100 ? 'legato' : 'normal';
 
     return {
-        baseNote,
-        transformedCents,
-        midiFloat,
+        baseNote: Math.round(quantizedMidi),
+        transformedCents: (quantizedMidi - Math.round(quantizedMidi)) * 100,
+        midiFloat: quantizedMidi,
         velocity,
-        expression: lab.l / 100, // Expression (timbre brightness) is mapped from Lightness L*
+        expression: lab.l / 100,
         chroma: Math.min(1, chromaValue / 128.0),
         articulation,
-        noteName,
+        noteName: noteName, // Retain original color-based name or derived? keeping original for reference
         sourceBlock: mappedBlock.blockData,
         isAccompaniment: false,
     };

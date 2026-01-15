@@ -430,11 +430,23 @@ if ($action === 'save_sonification' && $method === 'POST') {
         $audioHash = $_POST['audioHash'] ?? $input['audioHash'] ?? null;
         $acquisitionMetadata = $_POST['acquisitionMetadata'] ?? $input['acquisitionMetadata'] ?? null;
         $validationHashes = $_POST['validationHashes'] ?? $input['validationHashes'] ?? null;
+        $description = $_POST['description'] ?? $input['description'] ?? null; // Description field
 
         $generatedAiTrackUrl = $_POST['generatedAiTrackUrl'] ?? $input['generatedAiTrackUrl'] ?? null;
 
-        $stmt = $pdo->prepare("INSERT INTO history (user_id, image_hash, paradigm, tradition_name, image_url, audio_url, music_generation_prompt, generated_ai_track_url, config_json, event_data, block_data, title, audio_hash, acquisition_metadata, validation_hashes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$userId, $hash, $input['paradigm'] ?? 'scientific', $input['traditionName'] ?? 'Standard', $imgUrl, $audioUrl, $musicPrompt, $generatedAiTrackUrl, $configJson, $eventData, $blockData, $finalTitle, $audioHash, $acquisitionMetadata, $validationHashes]);
+        // SMART INSERT WITH FALLBACK
+        try {
+            $stmt = $pdo->prepare("INSERT INTO history (user_id, image_hash, paradigm, tradition_name, image_url, audio_url, music_generation_prompt, generated_ai_track_url, config_json, event_data, block_data, title, description, audio_hash, acquisition_metadata, validation_hashes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$userId, $hash, $input['paradigm'] ?? 'scientific', $input['traditionName'] ?? 'Standard', $imgUrl, $audioUrl, $musicPrompt, $generatedAiTrackUrl, $configJson, $eventData, $blockData, $finalTitle, $description, $audioHash, $acquisitionMetadata, $validationHashes]);
+        } catch (PDOException $e) {
+            // Fallback: If 'description' column is missing (Code 42S22) or other schema mismatch, try legacy insert
+            if (strpos($e->getMessage(), 'description') !== false || strpos($e->getMessage(), 'Unknown column') !== false) {
+                $stmt = $pdo->prepare("INSERT INTO history (user_id, image_hash, paradigm, tradition_name, image_url, audio_url, music_generation_prompt, generated_ai_track_url, config_json, event_data, block_data, title, audio_hash, acquisition_metadata, validation_hashes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$userId, $hash, $input['paradigm'] ?? 'scientific', $input['traditionName'] ?? 'Standard', $imgUrl, $audioUrl, $musicPrompt, $generatedAiTrackUrl, $configJson, $eventData, $blockData, $finalTitle, $audioHash, $acquisitionMetadata, $validationHashes]);
+            } else {
+                throw $e; // Re-throw other errors
+            }
+        }
 
         sendResponse(["success" => true]);
     } catch (Exception $e) {
@@ -464,51 +476,54 @@ if ($action === 'get_user_info') {
 
 // --- GET HISTORY (Protetta) ---
 if ($action === 'get_history' && $method === 'POST') {
-    // Pagination parameters (optional)
-    $limit = isset($_POST['limit']) ? intval($_POST['limit']) : 50; // Default 50 items
-    $offset = isset($_POST['offset']) ? intval($_POST['offset']) : 0;
+    try {
+        // Pagination parameters (optional)
+        $limit = isset($_POST['limit']) ? intval($_POST['limit']) : 50;
+        $offset = isset($_POST['offset']) ? intval($_POST['offset']) : 0;
 
-    // OPTIMIZED: Only fetch columns needed for list view (exclude heavy JSON fields)
-    $stmt = $pdo->prepare("
-        SELECT 
-            id, 
-            image_hash, 
-            timestamp, 
-            image_url, 
-            audio_url, 
-            paradigm, 
-            tradition_name, 
-            title, 
-            subtitle, 
-            description, 
-            video_url,
-            generated_ai_track_url
-        FROM history 
-        WHERE user_id = ? 
-        ORDER BY timestamp DESC 
-        LIMIT ? OFFSET ?
-    ");
-    $stmt->execute([$userId, $limit, $offset]);
-    $history = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $history = [];
+        // Inject integers directly into query (safe because intval used) to avoid PDO string binding issues with LIMIT
+        try {
+            // Optimized select
+            $stmt = $pdo->prepare("
+                SELECT 
+                    id, image_hash, timestamp, image_url, audio_url, paradigm, tradition_name, 
+                    title, subtitle, description, video_url, generated_ai_track_url
+                FROM history 
+                WHERE user_id = ? 
+                ORDER BY timestamp DESC 
+                LIMIT $limit OFFSET $offset
+            ");
+            $stmt->execute([$userId]);
+            $history = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Exception $e) {
+            // Fallback: Select * 
+            // Also here inject integers directly
+            $stmt = $pdo->prepare("SELECT * FROM history WHERE user_id = ? ORDER BY timestamp DESC LIMIT $limit OFFSET $offset");
+            $stmt->execute([$userId]);
+            $history = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        }
 
-    $mapped = array_map(function ($h) use ($baseUrl) {
-        return [
-            "id" => (string) $h['id'],
-            "imageHash" => $h['image_hash'],
-            "timestamp" => $h['timestamp'],
-            "imageUrl" => (strpos($h['image_url'], '/media') !== false) ? $baseUrl . $h['image_url'] : $h['image_url'],
-            "audioUrl" => $h['audio_url'] ? ((strpos($h['audio_url'], '/media') !== false) ? $baseUrl . $h['audio_url'] : $h['audio_url']) : null,
-            "paradigm" => $h['paradigm'],
-            "traditionName" => $h['tradition_name'],
-            "title" => $h['title'] ?? null,
-            "subtitle" => $h['subtitle'] ?? null,
-            "description" => $h['description'] ?? null,
-            "videoUrl" => $h['video_url'] ? ((strpos($h['video_url'], 'http') === 0) ? $h['video_url'] : $baseUrl . (strpos($h['video_url'], '/') === 0 ? '' : '/') . $h['video_url']) : null,
-            "generatedAiTrackUrl" => $h['generated_ai_track_url'] ? ((strpos($h['generated_ai_track_url'], 'http') === 0) ? $h['generated_ai_track_url'] : $baseUrl . (strpos($h['generated_ai_track_url'], '/') === 0 ? '' : '/') . $h['generated_ai_track_url']) : null,
-            // NOTE: Heavy fields (events, blockData, configUsed, etc.) are loaded on-demand via get_history_item
-        ];
-    }, $history);
-    sendResponse($mapped);
+        $mapped = array_map(function ($h) use ($baseUrl) {
+            return [
+                "id" => (string) $h['id'],
+                "imageHash" => $h['image_hash'],
+                "timestamp" => $h['timestamp'],
+                "imageUrl" => (strpos($h['image_url'], '/media') !== false) ? $baseUrl . $h['image_url'] : $h['image_url'],
+                "audioUrl" => $h['audio_url'] ? ((strpos($h['audio_url'], '/media') !== false) ? $baseUrl . $h['audio_url'] : $h['audio_url']) : null,
+                "paradigm" => $h['paradigm'],
+                "traditionName" => $h['tradition_name'],
+                "title" => $h['title'] ?? null,
+                "subtitle" => $h['subtitle'] ?? null,
+                "description" => $h['description'] ?? null,
+                "videoUrl" => ($h['video_url'] ?? null) ? ((strpos($h['video_url'], 'http') === 0) ? $h['video_url'] : $baseUrl . (strpos($h['video_url'], '/') === 0 ? '' : '/') . $h['video_url']) : null,
+                "generatedAiTrackUrl" => ($h['generated_ai_track_url'] ?? null) ? ((strpos($h['generated_ai_track_url'], 'http') === 0) ? $h['generated_ai_track_url'] : $baseUrl . (strpos($h['generated_ai_track_url'], '/') === 0 ? '' : '/') . $h['generated_ai_track_url']) : null,
+            ];
+        }, $history);
+        sendResponse($mapped);
+    } catch (Exception $e) {
+        sendResponse(["error" => "History Error: " . $e->getMessage()], 500);
+    }
 }
 
 // --- GET SINGLE HISTORY ITEM (Full Details - Lazy Load) ---

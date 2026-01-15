@@ -10,20 +10,74 @@ interface Props {
     onClose: () => void;
     title?: string;
     author?: string;
-    description?: string; // NEW
-    date?: string;        // NEW
+    description?: string;
+    date?: string;
     mode?: 'modal' | 'fullscreen';
-    isAdmin?: boolean; // NEW: Triggers auto-open of calibration
-    id?: string;       // NEW: For saving persistence
+    isAdmin?: boolean;
+    id?: string;
 }
 
 interface Particle {
-    x: number; // Normalized -0.5 to 0.5
-    y: number; // Normalized -0.5 to 0.5
-    z: number; // Extrusion 0 to 1 based on brightness
+    x: number; y: number; z: number;
     r: number; g: number; b: number; a: number;
     size: number;
 }
+
+// --- I18N TEXTS ---
+const TEXTS = {
+    it: {
+        settings: "IMPOSTAZIONI",
+        masterVol: "VOLUME MASTER",
+        autoCalib: "AUTO CALIBRAZIONE",
+        autoCalibDesc: "Posizionati davanti alla camera e clicca. Il sistema imposterà questa distanza come punto di ascolto ottimale (suono originale).",
+        calibSuccess: "Calibrazione Completata!",
+        videoFx: "EFFETTI VIDEO",
+        audioFx: "EFFETTI AUDIO",
+        save: "SALVA CONFIGURAZIONE",
+        back: "INDIETRO",
+        close: "CHIUDI",
+        // Params
+        smile: "Sorriso (Saturazione/Distorsione)",
+        mouth: "Bocca (Contrasto/Eco)",
+        tilt: "Inclinazione (Rotazione/Pitch)",
+        eyebrow: "Sopracciglia (Luminosità)",
+        blink: "Occhi (Flash)",
+        zoom: "Zoom (Prossimità)",
+        pan: "Movimento Orizzontale",
+        dist: "Sensibilità Distanza (Ambiente)",
+        gazeX: "Sguardo X (Panning)",
+        gazeY: "Sguardo Y (Tono)",
+        errorWebcam: "Webcam non rilevata. Modalità automatica attiva.",
+        configSaved: "Configurazione Salvata!",
+        calibInstr: "CLICCA PER CALIBRARE IL PUNTO ZERO"
+    },
+    en: {
+        settings: "SETTINGS",
+        masterVol: "MASTER VOLUME",
+        autoCalib: "AUTO CALIBRATION",
+        autoCalibDesc: "Position yourself comfortably and click. The system will set this distance as the optimal listening point (original sound).",
+        calibSuccess: "Calibration Complete!",
+        videoFx: "VIDEO EFFECTS",
+        audioFx: "AUDIO EFFECTS",
+        save: "SAVE CONFIGURATION",
+        back: "BACK",
+        close: "CLOSE",
+        // Params
+        smile: "Smile (Saturation/Distortion)",
+        mouth: "Mouth (Contrast/Echo)",
+        tilt: "Tilt (Rotation/Pitch)",
+        eyebrow: "Eyebrows (Brightness)",
+        blink: "Blink (Flash)",
+        zoom: "Zoom (Proximity)",
+        pan: "Pan Sensitivity",
+        dist: "Distance Sensitivity (Ambience)",
+        gazeX: "Gaze X (Panning)",
+        gazeY: "Gaze Y (Tone)",
+        errorWebcam: "Webcam not detected. Auto mode active.",
+        configSaved: "Configuration Saved!",
+        calibInstr: "CLICK TO SET ZERO POINT"
+    }
+};
 
 export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onClose, title, author, description, date, mode = 'modal', isAdmin = false, id }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -31,19 +85,26 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
     const containerRef = useRef<HTMLDivElement>(null);
     const faceLinkCanvasRef = useRef<HTMLCanvasElement>(null);
     const bgImageRef = useRef<HTMLImageElement>(null);
-    const stageRef = useRef<HTMLDivElement>(null); // NEW: Stage Container for split layout
+    const stageRef = useRef<HTMLDivElement>(null);
+
+    // Lang Detection
+    const lang = navigator.language.startsWith('it') ? 'it' : 'en';
+    const t = TEXTS[lang];
 
     // States
     const [metrics, setMetrics] = useState<FaceMetrics | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [isPlaying, setIsPlaying] = useState(true); // Default to playing
+    const [isPlaying, setIsPlaying] = useState(true);
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
 
-    // --- ADMIN CALIBRATION ---
-    const [isAdminOpen, setIsAdminOpen] = useState(isAdmin); // Sync with prop
+    // --- SETTINGS UI ---
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false); // Sidebar closed by default
+    const [expandedSection, setExpandedSection] = useState<'video' | 'audio' | null>(null);
+    const [masterVolume, setMasterVolume] = useState(1.0);
+    const [isCalibrated, setIsCalibrated] = useState(false);
 
-    // Load initial config if available, otherwise defaults
+    // Load initial config
     const initialConfig = result.configUsed || {};
 
     const calibRef = useRef({
@@ -56,13 +117,42 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
         smileSensitivity: (initialConfig as any).smileSensitivity ?? 1.0,
         mouthSensitivity: (initialConfig as any).mouthSensitivity ?? 1.0,
         gazeSensitivity: (initialConfig as any).gazeSensitivity ?? 1.0,
-        gazeCursorOpacity: (initialConfig as any).gazeCursorOpacity ?? 0.5
+        gazeCursorOpacity: (initialConfig as any).gazeCursorOpacity ?? 0.4,
+        headTiltEffect: (initialConfig as any).headTiltEffect ?? 0.8,
+        eyebrowEffect: (initialConfig as any).eyebrowEffect ?? 0.5,
+        blinkEffect: (initialConfig as any).blinkEffect ?? 0.6,
+        showFaceMesh: (initialConfig as any).showFaceMesh ?? false,
+        gazePointerSize: (initialConfig as any).gazePointerSize ?? 40,
+
+        // AUDIO
+        smileAudio: (initialConfig as any).smileAudio ?? 0.0,
+        mouthAudio: (initialConfig as any).mouthAudio ?? 0.0,
+        tiltAudio: (initialConfig as any).tiltAudio ?? 0.0,
+        eyebrowAudio: (initialConfig as any).eyebrowAudio ?? 0.0,
+        distAudio: (initialConfig as any).distAudio ?? 1.0,
+        gazeAudioX: (initialConfig as any).gazeAudioX ?? 1.0,
+        gazeAudioY: (initialConfig as any).gazeAudioY ?? 1.0,
+
+        // AUTO CALIB
+        neutralZ: 0.5 // Default mid-distance (will be overwritten by auto-calib)
     });
-    // Force re-render for UI sliders (since ref doesn't trigger it)
+
+    // Force re-render for UI
     const [calibState, setCalibState] = useState(calibRef.current);
+    const smoothCam = useRef({ x: 0, y: 0, z: -1.0, tiltX: 0, tiltY: 0 });
+
     const updateCalib = (key: keyof typeof calibRef.current, val: number) => {
         calibRef.current = { ...calibRef.current, [key]: val };
         setCalibState(calibRef.current);
+    };
+
+    // --- AUTO CALIBRATION ---
+    const calibrateDistance = () => {
+        if (!metrics) return;
+        // Set current Z as neutral (Original Sound Point)
+        calibRef.current.neutralZ = metrics.z;
+        setIsCalibrated(true);
+        setTimeout(() => setIsCalibrated(false), 2000); // Reset success msg
     };
 
     // Engine Refs
@@ -71,19 +161,29 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
         source: AudioBufferSourceNode | null;
         panner: StereoPannerNode | null;
         filter: BiquadFilterNode | null;
-        gain: GainNode | null;
+        autoGain: GainNode | null; // Controlled by distance
+        masterGain: GainNode | null; // Controlled by User Slider
         analyser: AnalyserNode | null;
         animationId: number | null;
         startTime: number;
         duration: number;
         particles: Particle[];
-        imageAspect: number; // Store aspect ratio of the image for projection
+        imageAspect: number;
+        delayWet: GainNode | null;
+        highShelf: BiquadFilterNode | null;
     } | null>(null);
 
     useEffect(() => {
         startPerformance();
         return () => stopPerformance();
     }, []);
+
+    // Update Master Volume in real-time
+    useEffect(() => {
+        if (engineRef.current?.masterGain) {
+            engineRef.current.masterGain.gain.setTargetAtTime(masterVolume, engineRef.current.audioCtx!.currentTime, 0.1);
+        }
+    }, [masterVolume]);
 
     const startPerformance = async () => {
         try {
@@ -99,20 +199,56 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
             const source = ctx.createBufferSource();
             source.buffer = audioBuffer;
 
+            // NODE GRAPH
             const panner = ctx.createStereoPanner();
             const filter = ctx.createBiquadFilter();
             filter.type = 'lowpass';
             filter.frequency.value = 20000;
+            filter.Q.value = 1.0;
 
+            const highShelf = ctx.createBiquadFilter();
+            highShelf.type = 'highshelf';
+            highShelf.frequency.value = 4000;
+            highShelf.gain.value = 0;
+
+            // Auto Gain (Distance Volume)
+            const autoGain = ctx.createGain();
+            autoGain.gain.value = 1.0;
+
+            // FX: Delay
+            const delayNode = ctx.createDelay();
+            delayNode.delayTime.value = 0.35;
+            const delayFeedback = ctx.createGain();
+            delayFeedback.gain.value = 0.4;
+            const delayWet = ctx.createGain();
+            delayWet.gain.value = 0.0;
+
+            // Master Gain (User Volume)
             const masterGain = ctx.createGain();
-            masterGain.gain.value = 1.0;
+            masterGain.gain.value = masterVolume;
 
             const analyser = ctx.createAnalyser();
             analyser.fftSize = 256;
 
+            // ROUTING
+            /* 
+               Source -> Panner -> Filter -> HighShelf -> AutoGain -> [Branch Delay] -> Mix -> MasterGain -> Analyser -> Dest
+            */
             source.connect(panner);
             panner.connect(filter);
-            filter.connect(masterGain);
+            filter.connect(highShelf);
+            highShelf.connect(autoGain);
+
+            // Branch Direct
+            autoGain.connect(masterGain);
+
+            // Branch Delay
+            autoGain.connect(delayWet);
+            delayWet.connect(delayNode);
+            delayNode.connect(delayFeedback);
+            delayFeedback.connect(delayNode);
+            delayNode.connect(masterGain); // Mix delay back to master
+
             masterGain.connect(analyser);
             analyser.connect(ctx.destination);
 
@@ -121,7 +257,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 await WebcamService.initialize(videoRef.current);
             } catch (e) {
                 console.warn("Webcam failed", e);
-                setError("Webcam non rilevata. Modalità automatica attiva.");
+                setError(t.errorWebcam);
             }
 
             // 3. Init Visuals
@@ -137,79 +273,20 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
             });
 
             const mainImg = await loadImage(result.standardizedImageUrl);
-            const imageAspect = mainImg.naturalWidth / mainImg.naturalHeight; // Store Image Aspect
+            const imageAspect = mainImg.naturalWidth / mainImg.naturalHeight;
 
             const logoStub = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(LOGO_SVG_STRING)));
             const logoImg = await loadImage(logoStub);
 
-            // --- SMART OBJECT GENERATION ---
-            const particles: Particle[] = [];
-            const tempCanvas = document.createElement('canvas');
-            const density = 450; // High Density for smooth objects
-
-            tempCanvas.width = density;
-            tempCanvas.height = density;
-            const tempCtx = tempCanvas.getContext('2d');
-            if (tempCtx) {
-                tempCtx.drawImage(mainImg, 0, 0, density, density);
-                const imgData = tempCtx.getImageData(0, 0, density, density);
-                const data = imgData.data;
-
-                const brightnessMap = new Float32Array(density * density);
-                for (let i = 0; i < density * density; i++) {
-                    const r = data[i * 4];
-                    const g = data[i * 4 + 1];
-                    const b = data[i * 4 + 2];
-                    brightnessMap[i] = (r + g + b) / 3 / 255;
-                }
-
-                for (let y = 0; y < density; y++) {
-                    for (let x = 0; x < density; x++) {
-                        // Smoothing
-                        let sumB = 0;
-                        let count = 0;
-                        for (let dy = -1; dy <= 1; dy++) {
-                            for (let dx = -1; dx <= 1; dx++) {
-                                const ny = y + dy;
-                                const nx = x + dx;
-                                if (nx >= 0 && nx < density && ny >= 0 && ny < density) {
-                                    sumB += brightnessMap[ny * density + nx];
-                                    count++;
-                                }
-                            }
-                        }
-                        const smoothedB = sumB / count;
-
-                        const i = (y * density + x) * 4;
-                        const r = data[i];
-                        const g = data[i + 1];
-                        const b = data[i + 2];
-
-                        // FILTERING: "Ghost" Objects
-                        // Only extrude parts that are significantly bright or have high contrast.
-                        const isObject = smoothedB > 0.45; // HIGH THRESHOLD to reduce "rubbish"
-
-                        if (isObject) {
-                            particles.push({
-                                x: (x / density) - 0.5,
-                                y: (y / density) - 0.5,
-                                z: smoothedB * 0.3, // Depth
-                                r, g, b,
-                                a: 0.15 + (smoothedB * 0.3), // Very transparent, only hints
-                                size: 1.0
-                            });
-                        }
-                    }
-                }
-            }
-
             source.start(0);
 
             engineRef.current = {
-                audioCtx: ctx, source, panner, filter, gain: masterGain, analyser,
+                audioCtx: ctx, source, panner, filter, autoGain, masterGain, analyser,
                 animationId: 0, startTime: ctx.currentTime, duration: audioBuffer.duration,
-                particles,
-                imageAspect
+                particles: [],
+                imageAspect,
+                delayWet,
+                highShelf
             };
 
             // 4. Render Loop
@@ -217,57 +294,34 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 if (!engineRef.current) return;
                 const now = ctx.currentTime;
 
-                // Track Progress
                 if (ctx.state === 'running') {
-                    // Since we handle Play/Pause via suspend, currentTime continues? 
-                    // No, ctx.currentTime progresses only when running usually, but let's approximate
                     setCurrentTime(ctx.currentTime - engineRef.current.startTime);
                 }
 
-                // --- VISUALIZER DRAW ---
+                // Spectrum Visualizer
                 if (spectrumCanvasRef.current && engineRef.current.analyser) {
                     const sCtx = spectrumCanvasRef.current.getContext('2d');
                     if (sCtx) {
                         const bufferLength = engineRef.current.analyser.frequencyBinCount;
                         const dataArray = new Uint8Array(bufferLength);
                         engineRef.current.analyser.getByteFrequencyData(dataArray);
-
                         const w = spectrumCanvasRef.current.width;
                         const h = spectrumCanvasRef.current.height;
                         sCtx.clearRect(0, 0, w, h);
-
-                        // Use RGB Split Gradient
-                        // Low (Red) | Mid (Green) | High (Blue)
                         const barCount = 48;
                         const step = Math.floor(bufferLength / barCount);
                         const barWidth = (w / barCount) - 2;
                         let barX = 0;
-
                         for (let i = 0; i < barCount; i++) {
                             let sum = 0;
-                            for (let j = 0; j < step; j++) {
-                                sum += dataArray[(i * step) + j];
-                            }
+                            for (let j = 0; j < step; j++) { sum += dataArray[(i * step) + j]; }
                             const avg = sum / step;
                             const barHeight = (avg / 255) * h;
-
-                            // Dynamic Color based on Frequency Band
-                            let color = '#ffffff';
-                            if (i < barCount / 3) {
-                                color = `rgba(239, 68, 68, ${avg / 255})`; // Red-500
-                            } else if (i < (barCount / 3) * 2) {
-                                color = `rgba(34, 197, 94, ${avg / 255})`; // Green-500
-                            } else {
-                                color = `rgba(59, 130, 246, ${avg / 255})`; // Blue-500
-                            }
-
+                            let color = i < barCount / 3 ? `rgba(239, 68, 68, ${avg / 255})` : i < (barCount / 3) * 2 ? `rgba(34, 197, 94, ${avg / 255})` : `rgba(59, 130, 246, ${avg / 255})`;
                             sCtx.fillStyle = color;
                             sCtx.fillRect(barX, h - barHeight, barWidth, barHeight);
-
-                            // Reflection (Optional, for "base" effect)
                             sCtx.fillStyle = color.replace(')', ', 0.2)').replace('rgba', 'rgba').replace(', 1)', ', 0.2)');
                             sCtx.fillRect(barX, h, barWidth, barHeight * 0.5);
-
                             barX += barWidth + 2;
                         }
                     }
@@ -276,211 +330,157 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 const m = WebcamService.getMetrics();
                 setMetrics(m);
 
-                // --- AUDIO LOGIC (TUNED) ---
                 if (m.isActive) {
-                    const dist = m.z; // Typical Range 0.1 (Very Close) - 0.8 (Far)
+                    // --- RELATIVE DISTANCE LOGIC ---
+                    const rawZ = m.z;
+                    const neutralZ = calibRef.current.neutralZ;
 
-                    // Volume
-                    // Keep Volume high until they are very far
-                    const targetVol = dist > 0.7 ? 1.0 - ((dist - 0.7) * 2) : 1.2;
-                    masterGain.gain.value += (Math.max(0.1, targetVol) - masterGain.gain.value) * 0.1;
+                    // Difference from neutral point. 
+                    // Positive = Moving Away (Further than neutral). Negative = Moving Closer.
+                    const deltaDist = rawZ - neutralZ;
 
-                    // Filter (Muffling)
-                    // We want it Clear up to 0.5 (50cm+)
-                    // Then drop off.
+                    // 1. Ambience / Muffling
+                    // If near neutralZ (+/- threshold), pure sound.
+                    // If further, add reverb/muffle.
                     let targetFreq = 20000;
-                    if (dist > 0.5) {
-                        // Drop from 20k to 200Hz between 0.5 and 1.0
-                        const t = (dist - 0.5) * 2.0; // 0 to 1
+                    let ambientWet = 0;
+
+                    if (deltaDist > 0.1) {
+                        // Allontanamento -> Muffled + Ambience
+                        const t = Math.min(1, (deltaDist - 0.1) * 3); // Scale factor
                         targetFreq = 20000 * Math.pow(1 - t, 2);
+                        ambientWet = t * 0.7 * (calibRef.current as any).distAudio;
+                    } else if (deltaDist < -0.1) {
+                        // Avvicinamento -> Pure, maybe slight boost?
+                        // Currently just keeping it clean/full.
+                        targetFreq = 20000;
+                        ambientWet = 0;
                     }
+
                     targetFreq = Math.max(200, targetFreq);
+                    if (engineRef.current.filter) engineRef.current.filter.frequency.setTargetAtTime(targetFreq, now, 0.1);
 
-                    filter.frequency.value += (targetFreq - filter.frequency.value) * 0.15;
+                    // 2. Panning
+                    const gazeOffset = (m.gazeX || 0) * 0.8 * (calibRef.current as any).gazeAudioX;
+                    const headPan = -(m.yaw * calibRef.current.panSensitivity);
+                    const totalPan = headPan - gazeOffset;
+                    if (engineRef.current.panner) engineRef.current.panner.pan.setTargetAtTime(Math.max(-1, Math.min(1, totalPan)), now, 0.1);
 
-                    // Panning (Yaw + Gaze)
-                    // Incorporate GazeX for finer control
-                    const gazeOffset = (m.gazeX || 0) * 0.5 * calibRef.current.gazeSensitivity;
-                    const totalPan = -(m.yaw * calibRef.current.panSensitivity) - gazeOffset;
-                    const clampedPan = Math.max(-1, Math.min(1, totalPan));
-                    panner.pan.setTargetAtTime(clampedPan, now, 0.1);
+                    // 3. Tone (Gaze Y)
+                    const gazeY = m.gazeY || 0;
+                    const targetQ = 1.0 + ((gazeY + 0.5) * 6.0 * (calibRef.current as any).gazeAudioY);
+                    if (engineRef.current.filter) engineRef.current.filter.Q.setTargetAtTime(Math.max(0.1, targetQ), now, 0.1);
+
+                    // 4. Expression FX
+                    const mouthEcho = (m.mouthOpen || 0) * (calibRef.current as any).mouthAudio;
+                    const totalWet = Math.min(0.9, mouthEcho + ambientWet);
+                    if (engineRef.current.delayWet) engineRef.current.delayWet.gain.setTargetAtTime(totalWet, now, 0.1);
+
+                    const brightAmount = ((m.smile || 0) * (calibRef.current as any).smileAudio);
+                    if (engineRef.current.highShelf) engineRef.current.highShelf.gain.setTargetAtTime(brightAmount * 15, now, 0.1);
+
+                    const tiltFactor = Math.abs(smoothCam.current.tiltX) / 45;
+                    const detuneAmount = tiltFactor * (calibRef.current as any).tiltAudio * 500;
+                    if (engineRef.current.source) engineRef.current.source.detune.setTargetAtTime(detuneAmount, now, 0.1);
 
                 } else {
-                    // AUTO MODE
+                    // Auto Mode
                     const time = now * 0.4;
-                    panner.pan.value = Math.sin(time);
-                    filter.frequency.value = 15000 + Math.sin(time * 0.5) * 5000;
-                    masterGain.gain.value = 1.0;
+                    if (engineRef.current.panner) engineRef.current.panner.pan.value = Math.sin(time);
+                    if (engineRef.current.filter) engineRef.current.filter.frequency.value = 15000 + Math.sin(time * 0.5) * 5000;
                 }
 
-                // --- VISUAL RENDERING ---
-                // Size matches the STAGE container, not window
+                // --- VISUALS ---
                 const w = canvas.width = stageRef.current ? stageRef.current.clientWidth : window.innerWidth;
                 const h = canvas.height = stageRef.current ? stageRef.current.clientHeight : window.innerHeight;
 
-                // VISUAL MAPPING (Expression -> Color)
+                // Visual Feedback
                 if (bgImageRef.current && m.isActive) {
-                    // Smile -> Saturation & Warmth
                     const smileVal = (m.smile || 0) * calibRef.current.smileSensitivity;
-                    const satVal = 1.0 + (smileVal * 1.5); // Up to 2.5x
-                    const hueVal = smileVal * 20; // 20deg shift
-
-                    // Mouth Open -> Contrast & Bloom (Blur?)
+                    const satVal = 1.0 + (smileVal * 1.5);
+                    const hueVal = smileVal * 20;
                     const mouthVal = (m.mouthOpen || 0) * calibRef.current.mouthSensitivity;
                     const contrastVal = 1.0 + (mouthVal * 0.5);
-
-                    // Mouth open > 0.3 triggers 'Dreamy' Blur?
                     const blurVal = mouthVal > 0.3 ? (mouthVal - 0.3) * 10 : 0;
-
                     const baseFilter = mode === 'fullscreen' ? 'brightness(0.8)' : 'brightness(0.5)';
-
                     bgImageRef.current.style.filter = `${baseFilter} contrast(${1.2 * contrastVal}) saturate(${satVal}) hue-rotate(${hueVal}deg) blur(${blurVal}px)`;
                 } else if (bgImageRef.current) {
-                    // Reset filter in auto mode or when inactive
                     bgImageRef.current.style.filter = mode === 'fullscreen' ? 'brightness(0.8) contrast(1.2)' : 'brightness(0.5) contrast(1.2)';
                 }
 
-                // Clear with transparency (Using source-over to clear properly)
-                context.globalCompositeOperation = 'source-over';
                 context.clearRect(0, 0, w, h);
 
-                // Additive Blending
-                context.globalCompositeOperation = 'screen';
-
-                // --- Calculate "Object-CONTAIN" Scale ---
-                // We want to match the CSS object-contain image.
-                const screenAspect = w / h;
-                const imgAspect = engineRef.current.imageAspect;
-
-                let renderW, renderH;
-                if (screenAspect > imgAspect) {
-                    // Screen is wider. Image bounded by Height.
-                    renderH = h;
-                    renderW = h * imgAspect;
-                } else {
-                    // Screen is taller. Image bounded by Width.
-                    renderW = w;
-                    renderH = w / imgAspect;
-                }
-
-                // CSS Object-Fit: Contain Centers the image.
-                // Our particle coord system is -0.5 to 0.5 (Centered).
-                // So scaling by renderW/H works perfectly.
-
-                // Sync Camera (Matches CSS)
+                // Camera Math
                 let camX = 0, camY = 0, camZ = -1.2;
                 let tiltX = 0, tiltY = 0;
+                const breath = Math.sin(now * 0.8) * 0.02;
 
                 if (m.isActive) {
-                    camX = (m.x - 0.5) * calibRef.current.moveXSensitivity;
-                    camY = (m.y - 0.5) * calibRef.current.moveYSensitivity;
-                    camZ = -1.0 + (m.z * calibRef.current.zoomSensitivity);
+                    const targetCamX = (m.x - 0.5) * calibRef.current.moveXSensitivity;
+                    const targetCamY = (m.y - 0.5) * calibRef.current.moveYSensitivity;
 
-                    // Add Gaze to Tilt
+                    // Zoom relative to calibration
+                    // If Z is neutralZ, zoom is -1.0 (standard).
+                    // If Z > neutralZ (farther), zoom out.
+                    // If Z < neutralZ (closer), zoom in.
+                    const relZ = m.z - calibRef.current.neutralZ;
+                    const targetCamZ = -1.0 + (relZ * calibRef.current.zoomSensitivity * 2);
+
                     const gazeTiltX = -(m.gazeY || 0) * 5 * calibRef.current.gazeSensitivity;
                     const gazeTiltY = (m.gazeX || 0) * 5 * calibRef.current.gazeSensitivity;
+                    const targetTiltY = ((m.x - 0.5) * calibRef.current.tiltSensitivity) + gazeTiltY;
+                    const targetTiltX = (-(m.y - 0.5) * calibRef.current.tiltSensitivity) + gazeTiltX;
 
-                    tiltY = ((m.x - 0.5) * calibRef.current.tiltSensitivity) + gazeTiltY;
-                    tiltX = (-(m.y - 0.5) * calibRef.current.tiltSensitivity) + gazeTiltX;
+                    const lerpFactor = 0.08;
+                    smoothCam.current.x += (targetCamX - smoothCam.current.x) * lerpFactor;
+                    smoothCam.current.y += (targetCamY - smoothCam.current.y) * lerpFactor;
+                    smoothCam.current.z += (targetCamZ - smoothCam.current.z) * lerpFactor;
+                    smoothCam.current.tiltX += (targetTiltX - smoothCam.current.tiltX) * lerpFactor;
+                    smoothCam.current.tiltY += (targetTiltY - smoothCam.current.tiltY) * lerpFactor;
+
+                    camX = smoothCam.current.x;
+                    camY = smoothCam.current.y;
+                    camZ = smoothCam.current.z + breath;
+                    tiltX = smoothCam.current.tiltX;
+                    tiltY = smoothCam.current.tiltY;
                 } else {
                     const time = now * 0.5;
                     camX = Math.sin(time) * 0.2;
                     camY = Math.cos(time * 0.7) * 0.1;
                     tiltY = Math.sin(time) * 5;
                     tiltX = Math.cos(time * 0.7) * 5;
+                    camZ = -1.2 + breath;
+                    smoothCam.current = { x: camX, y: camY, z: camZ, tiltX, tiltY };
                 }
 
-                // CSS Apply
                 if (bgImageRef.current) {
                     const cssZ = (camZ + 1.2) * 200;
-
-                    bgImageRef.current.style.transform = `
-                        perspective(1000px)
-                        rotateX(${tiltX * 1.5}deg)
-                        rotateY(${tiltY * 1.5}deg)
-                        scale(${1.0 + (m.z * 0.2)})
-                        translate3d(${-camX * 100}px, ${-camY * 100}px, ${cssZ}px)
-                    `;
+                    bgImageRef.current.style.transform = `perspective(1000px) rotateX(${tiltX * 1.5}deg) rotateY(${tiltY * 1.5}deg) scale(${1.0 + breath * 2}) translate3d(${-camX * 100}px, ${-camY * 100}px, ${cssZ}px)`;
                 }
 
-                // Particle Projection
-                // Should match the CSS transform roughly.
-                // CSS scale is applied to the image plane.
-                // Scale factor due to "cover" is handled by renderW/renderH.
+                // Draw Logic
+                const cx = w / 2, cy = h / 2;
+                const screenAspect = w / h;
+                const imgAspect = engineRef.current.imageAspect;
+                let renderW = screenAspect > imgAspect ? h * imgAspect : w;
+                let renderH = screenAspect > imgAspect ? h : w / imgAspect;
 
-                const fov = 1000;
-                const cx = w / 2;
-                const cy = h / 2;
-
-                const radY = -tiltY * 0.0174533 * 1.5;
-                const cosY = Math.cos(radY);
-                const sinY = Math.sin(radY);
-                const radX = -tiltX * 0.0174533 * 1.5;
-                const cosX = Math.cos(radX);
-                const sinX = Math.sin(radX);
-
-                const scaleFactor = 1.0 + (m.isActive ? m.z * 0.2 : 0); // Must match CSS scale
-
-                engineRef.current.particles.forEach(p => {
-                    // Initial scale to match object-cover dimension
-                    let wx = p.x * renderW * scaleFactor;
-                    let wy = p.y * renderH * scaleFactor;
-                    let wz = p.z * 200 * scaleFactor; // Extrusion scale
-
-                    // 1. Rotate
-                    let x1 = wx * cosY - wz * sinY;
-                    let z1 = wx * sinY + wz * cosY;
-                    let y2 = wy * cosX - z1 * sinX;
-                    let z2 = wy * sinX + z1 * cosX;
-
-                    // 2. Translate Cam (Inverse Camera Move)
-                    // CSS translates image by (-camX*100), so we do same.
-                    let tx = x1 - (camX * 100);
-                    let ty = y2 - (camY * 100);
-                    let tz = z2 - (camZ * 200) + 1000; // +1000 for perspective depth
-
-                    // Project
-                    if (tz > 0.1) {
-                        const pScale = fov / tz;
-
-                        const projX = cx + (tx * pScale * 1.3); // 1.3 fudge factor for fov match?
-                        const projY = cy + (ty * pScale * 1.3);
-
-                        const size = p.size * (pScale) * 1.5;
-
-                        context.fillStyle = `rgba(${p.r},${p.g},${p.b}, ${p.a * 0.8})`; // More transparent
-                        context.fillRect(projX, projY, size, size);
-                    }
-                });
-
-                // HUD (Re-enabled with high Z-Index logic implicit in rendering order? No, canvas is z-10)
-                // We render HUD on Canvas too?
-                context.globalCompositeOperation = 'source-over';
-
-                // HUD TEXT REMOVED IN FAVOR OF FOOTER DISPLAY
+                // Gaze Cursor
+                if (m.isActive && calibRef.current.gazeCursorOpacity > 0) {
+                    const gazeX = 0.5 + (m.gazeX || 0) * calibRef.current.gazeSensitivity;
+                    const gazeY = 0.5 + (m.gazeY || 0) * calibRef.current.gazeSensitivity;
+                    const pointerX = cx + ((gazeX - 0.5) * renderW);
+                    const pointerY = cy + ((gazeY - 0.5) * renderH);
+                    context.save();
+                    context.globalAlpha = calibRef.current.gazeCursorOpacity * 0.6;
+                    context.beginPath(); context.arc(pointerX, pointerY, calibRef.current.gazePointerSize, 0, Math.PI * 2);
+                    context.strokeStyle = 'rgba(45, 212, 191, 0.8)'; context.lineWidth = 2; context.stroke();
+                    context.restore();
+                }
 
                 context.drawImage(logoImg, w - 120, h - 120, 80, 80);
-
-                // FACE MESH
-                if (faceLinkCanvasRef.current && m.landmarks) {
-                    const flCtx = faceLinkCanvasRef.current.getContext('2d');
-                    if (flCtx) {
-                        const cw = faceLinkCanvasRef.current.width;
-                        const ch = faceLinkCanvasRef.current.height;
-                        flCtx.clearRect(0, 0, cw, ch);
-                        // Draw semi-transparent face mesh
-                        flCtx.fillStyle = 'rgba(0, 255, 255, 0.4)';
-                        m.landmarks.forEach((pt: any) => {
-                            flCtx.beginPath();
-                            flCtx.arc((1 - pt.x) * cw, pt.y * ch, 1.5, 0, Math.PI * 2);
-                            flCtx.fill();
-                        });
-                    }
-                }
-
                 engineRef.current.animationId = requestAnimationFrame(render);
             };
-
             engineRef.current.animationId = requestAnimationFrame(render);
 
         } catch (err: any) {
@@ -498,259 +498,221 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
         WebcamService.stop();
     };
 
-    // --- CONTROLS ---
     const togglePlay = async () => {
         if (!engineRef.current?.audioCtx) return;
-
         if (engineRef.current.audioCtx.state === 'running') {
-            await engineRef.current.audioCtx.suspend();
-            setIsPlaying(false);
+            await engineRef.current.audioCtx.suspend(); setIsPlaying(false);
         } else {
-            await engineRef.current.audioCtx.resume();
-            setIsPlaying(true);
+            await engineRef.current.audioCtx.resume(); setIsPlaying(true);
         }
     };
 
-    const restart = () => {
-        // Simple reload for now as rewinding buffers is complex with current setup
-        stopPerformance();
-        startPerformance();
-        setIsPlaying(true);
-    };
-
+    const restart = () => { stopPerformance(); startPerformance(); setIsPlaying(true); };
     const formatTime = (time: number) => {
-        const min = Math.floor(time / 60);
-        const sec = Math.floor(time % 60);
+        const min = Math.floor(time / 60); const sec = Math.floor(time % 60);
         return `${min}:${sec.toString().padStart(2, '0')}`;
     };
-
-    // --- VISUALIZER REF ---
     const spectrumCanvasRef = useRef<HTMLCanvasElement>(null);
 
     return (
-        <div ref={containerRef} className="fixed inset-0 z-[100] bg-black flex flex-col overflow-hidden">
-
-            {/* --- STAGE AREA --- */}
+        <div ref={containerRef} className="fixed inset-0 z-[100] bg-black flex flex-col overflow-hidden font-sans">
             <div ref={stageRef} className="flex-grow relative overflow-hidden w-full">
-
-                {/* AMBIENT BACKGROUND: Only in 'fullscreen' mode */}
-                {mode === 'fullscreen' && (
-                    <div className="absolute inset-0 z-0">
-                        <img
-                            src={result.standardizedImageUrl}
-                            alt="Ambient"
-                            className="w-full h-full object-cover filter blur-[40px] opacity-40 scale-110"
-                        />
-                    </div>
-                )}
-
-                {/* MAIN IMAGE: Object-Contain */}
+                {/* Backgrounds */}
+                {mode === 'fullscreen' && <div className="absolute inset-0 z-0"><img src={result.standardizedImageUrl} className="w-full h-full object-cover filter blur-[40px] opacity-40 scale-110" /></div>}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-1">
-                    <img
-                        ref={bgImageRef}
-                        src={result.standardizedImageUrl}
-                        alt="Background"
-                        className="w-full h-full object-contain transition-transform duration-75 ease-out"
-                        style={{
-                            transformStyle: 'preserve-3d',
-                            backfaceVisibility: 'hidden',
-                            filter: mode === 'fullscreen' ? 'brightness(0.8) contrast(1.2)' : 'brightness(0.5) contrast(1.2)'
-                        }}
-                    />
+                    <img ref={bgImageRef} src={result.standardizedImageUrl} className="w-full h-full object-contain transition-transform duration-75 ease-out" style={{ transformStyle: 'preserve-3d', backfaceVisibility: 'hidden' }} />
                 </div>
-
                 <canvas ref={canvasRef} className="absolute inset-0 w-full h-full block z-10 mix-blend-screen" />
 
                 {/* WEBCAM PIP */}
-                <div className="absolute top-6 right-6 flex flex-col items-center gap-0 z-50">
+                <div className="absolute bottom-32 right-6 flex flex-col items-center gap-0 z-50 transition-all duration-500 hover:scale-105 opacity-80 hover:opacity-100">
                     <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-cyan-500 shadow-lg bg-black relative">
                         <video ref={videoRef} className="w-full h-full object-cover mirror-mode opacity-100" autoPlay muted playsInline />
                         <canvas ref={faceLinkCanvasRef} width={640} height={480} className="absolute inset-0 w-full h-full pointer-events-none" />
                     </div>
-                    {/* Tiny stats under webcam */}
-                    <div className="bg-black/80 rounded-b-lg border-x border-b border-cyan-500/30 p-2 text-[8px] font-mono text-cyan-400 w-32 text-center -mt-2 pt-4">
-                        <div className="flex justify-between"><span>EXPR</span><span>{(metrics?.smile || 0).toFixed(1)}</span></div>
-                        <div className="flex justify-between"><span>GAZE</span><span>X:{(metrics?.gazeX || 0).toFixed(1)}</span></div>
-                    </div>
                 </div>
 
-                {/* ADMIN TOGGLE (Hidden trigger area) */}
-                <div
-                    className="absolute top-0 left-0 w-32 h-32 z-40"
-                    onDoubleClick={() => setIsAdminOpen(!isAdminOpen)}
-                    title="Double Click for Admin Calibration"
-                ></div>
+                {/* SETTINGS TOGGLE (Top Left) */}
+                <button
+                    onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                    className="absolute top-6 left-6 z-[60] text-gray-400 hover:text-white bg-black/50 p-3 rounded-full backdrop-blur transition-all border border-transparent hover:border-white/20"
+                >
+                    <i className="fas fa-cog text-xl"></i>
+                </button>
 
-                {/* ADMIN PANEL */}
-                {isAdminOpen && (
-                    <div className="absolute top-20 left-6 z-[60] bg-black/90 backdrop-blur-md border border-brand-accent/30 p-4 rounded-xl w-64 shadow-2xl animate-fade-in text-xs font-mono max-h-[80vh] overflow-y-auto">
-                        <div className="flex justify-between items-center mb-4 border-b border-white/10 pb-2">
-                            <h4 className="font-bold text-brand-accent tracking-widest">CALIBRAZIONE</h4>
-                            <button onClick={() => setIsAdminOpen(false)} className="text-white/50 hover:text-white"><i className="fas fa-times"></i></button>
-                        </div>
-                        {/* Sliders */}
-                        <div className="space-y-4 text-gray-300">
+                {/* SIDEBAR SETTINGS */}
+                <div className={`absolute top-0 left-0 h-full w-80 bg-black/95 backdrop-blur-xl border-r border-white/10 z-[70] transition-transform duration-300 transform ${isSettingsOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col shadow-2xl`}>
+
+                    {/* Header */}
+                    <div className="p-6 border-b border-white/10 flex justify-between items-center">
+                        <h2 className="text-white font-bold text-lg tracking-widest">{t.settings}</h2>
+                        <button onClick={() => setIsSettingsOpen(false)} className="text-gray-500 hover:text-white"><i className="fas fa-times"></i></button>
+                    </div>
+
+                    {/* Content Scroll */}
+                    <div className="flex-1 overflow-y-auto p-6 space-y-8">
+
+                        {/* 1. MASTER VOLUME & AUTO CALIB */}
+                        <div className="space-y-6">
+
+                            {/* Master Vol */}
                             <div>
-                                <div className="flex justify-between mb-1 text-[10px] uppercase text-gray-500"><span>Pan Sensitivity</span><span>{calibState.panSensitivity.toFixed(1)}</span></div>
-                                <input type="range" min="0" max="10" step="0.1" value={calibState.panSensitivity} onChange={(e) => updateCalib('panSensitivity', parseFloat(e.target.value))} className="w-full h-1 bg-white/10 rounded appearance-none cursor-pointer" />
+                                <label className="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider">{t.masterVol}</label>
+                                <div className="flex items-center gap-3">
+                                    <i className="fas fa-volume-up text-gray-500 text-xs"></i>
+                                    <input
+                                        type="range" min="0" max="2" step="0.05"
+                                        value={masterVolume}
+                                        onChange={(e) => setMasterVolume(parseFloat(e.target.value))}
+                                        className="w-full h-1 bg-white/20 rounded-full appearance-none cursor-pointer accent-white"
+                                    />
+                                    <span className="text-xs font-mono w-8 text-right">{(masterVolume * 100).toFixed(0)}%</span>
+                                </div>
                             </div>
-                            <div>
-                                <div className="flex justify-between mb-1 text-[10px] uppercase text-gray-500"><span>Tilt Sensitivity</span><span>{calibState.tiltSensitivity.toFixed(0)}</span></div>
-                                <input type="range" min="0" max="100" step="1" value={calibState.tiltSensitivity} onChange={(e) => updateCalib('tiltSensitivity', parseFloat(e.target.value))} className="w-full h-1 bg-white/10 rounded appearance-none cursor-pointer" />
-                            </div>
-                            <div>
-                                <div className="flex justify-between mb-1 text-[10px] uppercase text-gray-500"><span>Move X (H-Scroll)</span><span>{calibState.moveXSensitivity.toFixed(1)}</span></div>
-                                <input type="range" min="0" max="5" step="0.1" value={calibState.moveXSensitivity} onChange={(e) => updateCalib('moveXSensitivity', parseFloat(e.target.value))} className="w-full h-1 bg-white/10 rounded appearance-none cursor-pointer" />
-                            </div>
-                            <div>
-                                <div className="flex justify-between mb-1 text-[10px] uppercase text-gray-500"><span>Move Y (V-Scroll)</span><span>{calibState.moveYSensitivity.toFixed(1)}</span></div>
-                                <input type="range" min="0" max="5" step="0.1" value={calibState.moveYSensitivity} onChange={(e) => updateCalib('moveYSensitivity', parseFloat(e.target.value))} className="w-full h-1 bg-white/10 rounded appearance-none cursor-pointer" />
-                            </div>
-                            <div>
-                                <div className="flex justify-between mb-1 text-[10px] uppercase text-gray-500"><span>Proximity Zoom</span><span>{calibState.zoomSensitivity.toFixed(1)}</span></div>
-                                <input type="range" min="0" max="2" step="0.1" value={calibState.zoomSensitivity} onChange={(e) => updateCalib('zoomSensitivity', parseFloat(e.target.value))} className="w-full h-1 bg-white/10 rounded appearance-none cursor-pointer" />
-                            </div>
-                            {/* Expressions */}
-                            <div>
-                                <div className="flex justify-between mb-1 text-[10px] uppercase text-pink-500"><span>Smile (Saturaz/Hue)</span><span>{calibState.smileSensitivity.toFixed(1)}</span></div>
-                                <input type="range" min="0" max="3" step="0.1" value={calibState.smileSensitivity} onChange={(e) => updateCalib('smileSensitivity', parseFloat(e.target.value))} className="w-full h-1 bg-white/10 rounded appearance-none cursor-pointer" />
-                            </div>
-                            <div>
-                                <div className="flex justify-between mb-1 text-[10px] uppercase text-purple-400"><span>Mouth (Contrast/Blur)</span><span>{calibState.mouthSensitivity.toFixed(1)}</span></div>
-                                <input type="range" min="0" max="3" step="0.1" value={calibState.mouthSensitivity} onChange={(e) => updateCalib('mouthSensitivity', parseFloat(e.target.value))} className="w-full h-1 bg-white/10 rounded appearance-none cursor-pointer" />
-                            </div>
-                            <div>
-                                <div className="flex justify-between mb-1 text-[10px] uppercase text-cyan-500"><span>Gaze Sensitivity</span><span>{calibState.gazeSensitivity.toFixed(1)}</span></div>
-                                <input type="range" min="0" max="3" step="0.1" value={calibState.gazeSensitivity} onChange={(e) => updateCalib('gazeSensitivity', parseFloat(e.target.value))} className="w-full h-1 bg-white/10 rounded appearance-none cursor-pointer" />
-                            </div>
-                            <div>
-                                <div className="flex justify-between mb-1 text-[10px] uppercase text-cyan-200"><span>Gaze Visualizer Opacity</span><span>{calibState.gazeCursorOpacity.toFixed(1)}</span></div>
-                                <input type="range" min="0" max="1" step="0.1" value={calibState.gazeCursorOpacity} onChange={(e) => updateCalib('gazeCursorOpacity', parseFloat(e.target.value))} className="w-full h-1 bg-white/10 rounded appearance-none cursor-pointer" />
+
+                            {/* Auto Calibrate */}
+                            <div className="bg-gradient-to-br from-cyan-900/30 to-blue-900/30 p-4 rounded-xl border border-cyan-500/30">
+                                <label className="block text-xs font-bold text-cyan-400 mb-2 uppercase tracking-wider flex items-center gap-2">
+                                    <i className="fas fa-magic"></i> {t.autoCalib}
+                                </label>
+                                <p className="text-[10px] text-gray-400 mb-4 leading-relaxed">
+                                    {t.autoCalibDesc}
+                                </p>
+                                <button
+                                    onClick={calibrateDistance}
+                                    className={`w-full py-3 rounded-lg text-xs font-bold tracking-widest uppercase transition-all shadow-lg flex items-center justify-center gap-2
+                                        ${isCalibrated ? 'bg-green-500 text-black' : 'bg-cyan-600 hover:bg-cyan-500 text-white'}`}
+                                >
+                                    {isCalibrated ? <><i className="fas fa-check"></i> {t.calibSuccess}</> : <><i className="fas fa-crosshairs"></i> {t.calibInstr}</>}
+                                </button>
                             </div>
                         </div>
 
-                        <div className="mt-6 pt-4 border-t border-white/10">
+                        {/* 2. VIDEO EFFECTS (Accordion) */}
+                        <div className="border-t border-white/5 pt-4">
                             <button
-                                onClick={async () => {
-                                    try {
-                                        if (id) {
-                                            await api.updateHistoryItemConfig(id, calibState);
-                                            alert("Configurazione Salvata!");
-                                        } else {
-                                            alert("ID Opera non trovato. Impossibile salvare.");
-                                        }
-                                    } catch (e) {
-                                        alert("Errore salvataggio: " + e);
-                                    }
-                                }}
-                                className="w-full py-2 bg-brand-accent/20 hover:bg-brand-accent/40 text-brand-accent border border-brand-accent rounded text-[10px] font-bold tracking-widest uppercase transition-all"
+                                onClick={() => setExpandedSection(expandedSection === 'video' ? null : 'video')}
+                                className="w-full flex justify-between items-center py-2 text-xs font-bold text-pink-500 uppercase tracking-widest hover:text-pink-400"
                             >
-                                SALVA CONFIGURAZIONE
+                                <span><i className="fas fa-video mr-2"></i> {t.videoFx}</span>
+                                <i className={`fas fa-chevron-down transition-transform ${expandedSection === 'video' ? 'rotate-180' : ''}`}></i>
                             </button>
-                        </div>
-                    </div>
-                )}
 
-                {/* Error Banner */}
-                {error && (
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[60] bg-red-900/90 text-white p-8 rounded-xl">
-                        <h3 className="text-2xl font-bold mb-2">Errore</h3>
-                        <p>{error}</p>
-                        <button onClick={onClose} className="mt-6 bg-white text-black px-6 py-2 rounded-full font-bold">Chiudi</button>
-                    </div>
-                )}
-            </div>
-
-
-            {/* --- CONTROL DECK (FOOTER) --- */}
-            <div className="bg-[#0a0a0a] border-t border-white/10 flex flex-col z-[120] shrink-0 shadow-[0_-5px_20px_rgba(0,0,0,0.5)] w-full">
-
-                <div className="flex items-center justify-between px-6 py-4 w-full">
-
-                    {/* LEFT: Info & Logo */}
-                    <div className="flex items-center gap-6 mr-8 overflow-hidden">
-
-                        {/* Text Info */}
-                        <div className="flex flex-col min-w-[150px]">
-                            <h3 className="text-white font-bold text-lg tracking-wide uppercase truncate">{title || "SENZA TITOLO"}</h3>
-                            <div className="flex flex-col gap-1">
-                                <span className="text-gray-400 text-xs uppercase tracking-wider">{author || "ARTISTA"}</span>
-                                {description && (
-                                    <p className="text-gray-500 text-xs leading-tight max-w-md line-clamp-2" title={description}>
-                                        {description}
-                                    </p>
-                                )}
-                                {date && <span className="text-gray-600 text-[10px] font-mono mt-1">{date}</span>}
-                            </div>
+                            {expandedSection === 'video' && (
+                                <div className="mt-4 space-y-4 animate-fade-in pl-2 border-l border-white/5">
+                                    <InputSlider label={t.smile} value={calibState.smileSensitivity} max={3} onChange={(v) => updateCalib('smileSensitivity', v)} color="text-pink-400" />
+                                    <InputSlider label={t.mouth} value={calibState.mouthSensitivity} max={3} onChange={(v) => updateCalib('mouthSensitivity', v)} color="text-purple-400" />
+                                    <InputSlider label={t.eyebrow} value={calibState.eyebrowEffect} max={2} onChange={(v) => updateCalib('eyebrowEffect', v)} color="text-orange-400" />
+                                    <InputSlider label={t.zoom} value={calibState.zoomSensitivity} max={2} onChange={(v) => updateCalib('zoomSensitivity', v)} color="text-blue-400" />
+                                    <InputSlider label={t.tilt} value={calibState.tiltSensitivity} max={100} step={1} onChange={(v) => updateCalib('tiltSensitivity', v)} color="text-gray-300" />
+                                    <InputSlider label={t.pan} value={calibState.panSensitivity} max={10} onChange={(v) => updateCalib('panSensitivity', v)} color="text-gray-300" />
+                                </div>
+                            )}
                         </div>
 
-                        {/* SonificART Logo */}
-                        <div className="h-12 w-12 opacity-80 shrink-0 hidden sm:block">
-                            <img
-                                src={`data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(LOGO_SVG_STRING)))}`}
-                                alt="SonificART"
-                                className="w-full h-full object-contain"
-                            />
+                        {/* 3. AUDIO EFFECTS (Accordion) */}
+                        <div className="border-t border-white/5 pt-2">
+                            <button
+                                onClick={() => setExpandedSection(expandedSection === 'audio' ? null : 'audio')}
+                                className="w-full flex justify-between items-center py-2 text-xs font-bold text-green-500 uppercase tracking-widest hover:text-green-400"
+                            >
+                                <span><i className="fas fa-music mr-2"></i> {t.audioFx}</span>
+                                <i className={`fas fa-chevron-down transition-transform ${expandedSection === 'audio' ? 'rotate-180' : ''}`}></i>
+                            </button>
+
+                            {expandedSection === 'audio' && (
+                                <div className="mt-4 space-y-4 animate-fade-in pl-2 border-l border-white/5">
+                                    <InputSlider label={t.dist} value={(calibState as any).distAudio} max={2} onChange={(v) => updateCalib('distAudio' as any, v)} color="text-blue-400" />
+                                    <InputSlider label={t.gazeX} value={(calibState as any).gazeAudioX} max={3} onChange={(v) => updateCalib('gazeAudioX' as any, v)} color="text-cyan-400" />
+                                    <InputSlider label={t.gazeY} value={(calibState as any).gazeAudioY} max={3} onChange={(v) => updateCalib('gazeAudioY' as any, v)} color="text-cyan-200" />
+                                    <InputSlider label={`${t.smile} (Audio)`} value={(calibState as any).smileAudio} max={5} onChange={(v) => updateCalib('smileAudio' as any, v)} color="text-pink-400" />
+                                    <InputSlider label={`${t.mouth} (Audio)`} value={(calibState as any).mouthAudio} max={2} onChange={(v) => updateCalib('mouthAudio' as any, v)} color="text-purple-400" />
+                                    <InputSlider label={`${t.tilt} (Audio)`} value={(calibState as any).tiltAudio} max={2} step={0.05} onChange={(v) => updateCalib('tiltAudio' as any, v)} color="text-orange-400" />
+                                </div>
+                            )}
                         </div>
                     </div>
 
-                    {/* RIGHT: Controls & Time & Exit */}
-                    <div className="flex items-center gap-6 shrink-0">
-
-                        {/* Controls Group */}
-                        <div className="flex items-center gap-3 bg-white/5 px-4 py-2 rounded-full border border-white/5">
-                            <button
-                                onClick={restart}
-                                className="w-8 h-8 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-all flex items-center justify-center"
-                                title="Riavvia"
-                            >
-                                <i className="fas fa-step-backward text-xs"></i>
-                            </button>
-
-                            <button
-                                onClick={togglePlay}
-                                className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 hover:shadow-[0_0_15px_white] transition-all"
-                            >
-                                <i className={`fas ${isPlaying ? 'fa-pause' : 'fa-play'} text-sm ml-0.5`}></i>
-                            </button>
-
-                            <button
-                                onClick={() => setIsAdminOpen(!isAdminOpen)}
-                                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isAdminOpen ? 'text-brand-accent' : 'text-gray-400 hover:text-white'}`}
-                                title="Configurazione"
-                            >
-                                <i className="fas fa-sliders-h text-xs"></i>
-                            </button>
-                        </div>
-
-                        {/* Time */}
-                        <div className="text-xs font-mono text-brand-accent/80 tracking-widest hidden sm:block w-24 text-right">
-                            {formatTime(currentTime)} / {formatTime(duration)}
-                        </div>
-
-                        {/* Exit */}
+                    {/* Footer Actions */}
+                    <div className="p-6 border-t border-white/10">
                         <button
-                            onClick={onClose}
-                            className="px-4 py-2 rounded-full border border-white/10 bg-white/5 text-xs font-bold text-gray-300 hover:bg-white/20 hover:text-white transition-colors uppercase tracking-wider"
+                            onClick={async () => {
+                                try {
+                                    if (id) {
+                                        await api.updateHistoryItemConfig(id, calibState);
+                                        alert(t.configSaved);
+                                    }
+                                } catch (e) { alert("Error: " + e); }
+                            }}
+                            className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-[10px] font-bold tracking-widest uppercase transition-all text-white"
                         >
-                            {mode === 'fullscreen' ? 'CHIUDI' : 'INDIETRO'}
+                            {t.save}
                         </button>
                     </div>
                 </div>
 
-                {/* FULL WIDTH SPECTROGRAM */}
-                <div className="w-full h-24 bg-black/40 relative border-t border-white/5">
-                    <canvas
-                        ref={spectrumCanvasRef}
-                        width={1920}
-                        height={96}
-                        className="w-full h-full opacity-80 mix-blend-screen block"
-                    />
-                </div>
-
+                {/* ERROR BANNER */}
+                {error && (
+                    <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[80] bg-red-900/90 text-white px-8 py-4 rounded-xl flex items-center gap-4">
+                        <i className="fas fa-exclamation-triangle"></i>
+                        <span>{error}</span>
+                    </div>
+                )}
             </div>
 
+            {/* CONTROL DECK */}
+            <div className="bg-[#0a0a0a] border-t border-white/10 flex flex-col z-[120] shrink-0 shadow-[0_-5px_20px_rgba(0,0,0,0.5)] w-full">
+                <div className="flex items-center justify-between px-6 py-4 w-full">
+                    {/* INFO */}
+                    <div className="flex items-center gap-6 mr-8 overflow-hidden">
+                        <div className="flex flex-col min-w-[150px]">
+                            <h3 className="text-white font-bold text-lg tracking-wide uppercase truncate">{title || "SENZA TITOLO"}</h3>
+                            <div className="flex flex-col gap-1">
+                                <span className="text-gray-400 text-xs uppercase tracking-wider">{author || "ARTISTA"}</span>
+                                {date && <span className="text-gray-600 text-[10px] font-mono mt-1">{date}</span>}
+                            </div>
+                        </div>
+                        <div className="h-12 w-12 opacity-80 shrink-0 hidden sm:block">
+                            <img src={`data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(LOGO_SVG_STRING)))}`} className="w-full h-full object-contain" />
+                        </div>
+                    </div>
+
+                    {/* CONTROLS */}
+                    <div className="flex items-center gap-6 shrink-0">
+                        <div className="flex items-center gap-3 bg-white/5 px-4 py-2 rounded-full border border-white/5">
+                            <button onClick={restart} className="w-8 h-8 rounded-full text-gray-400 hover:text-white transition-all"><i className="fas fa-step-backward text-xs"></i></button>
+                            <button onClick={togglePlay} className="w-10 h-10 rounded-full bg-white text-black hover:scale-105 transition-all"><i className={`fas ${isPlaying ? 'fa-pause' : 'fa-play'} text-sm ml-0.5`}></i></button>
+                        </div>
+                        <div className="text-xs font-mono text-brand-accent/80 tracking-widest hidden sm:block w-24 text-right">
+                            {formatTime(currentTime)} / {formatTime(duration)}
+                        </div>
+                        <button onClick={onClose} className="px-4 py-2 rounded-full border border-white/10 bg-white/5 text-xs font-bold text-gray-300 hover:text-white uppercase">
+                            {mode === 'fullscreen' ? t.close : t.back}
+                        </button>
+                    </div>
+                </div>
+                {/* SPECTRUM */}
+                <div className="w-full h-24 bg-black/40 relative border-t border-white/5">
+                    <canvas ref={spectrumCanvasRef} width={1920} height={96} className="w-full h-full opacity-80 mix-blend-screen block" />
+                </div>
+            </div>
             <style>{`.mirror-mode { transform: scaleX(-1); }`}</style>
         </div >
     );
 };
+
+// HELPER COMPONENTS
+interface InputSliderProps { label: string; value: number; min?: number; max: number; step?: number; onChange: (val: number) => void; color?: string; }
+const InputSlider: React.FC<InputSliderProps> = ({ label, value, min = 0, max, step = 0.1, onChange, color }) => (
+    <div>
+        <div className={`flex justify-between text-[10px] uppercase font-bold mb-1 ${color}`}>
+            <span>{label}</span>
+            <span>{value.toFixed(1)}</span>
+        </div>
+        <input
+            type="range" min={min} max={max} step={step} value={value}
+            onChange={(e) => onChange(parseFloat(e.target.value))}
+            className="w-full h-1 bg-white/10 rounded cursor-pointer appearance-none"
+        />
+    </div>
+);
