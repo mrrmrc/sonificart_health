@@ -1,14 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
 import { api } from '../services/api';
 import { LivePerformanceOverlay } from '../components/LivePerformanceOverlay';
-import { SonificationResult, DashboardEntry, ShowcaseProject } from '../types';
+import { SonificationResult, DashboardEntry, ShowcaseProject, User } from '../types';
 
 export const PerformancePage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const { user } = useOutletContext<{ user: User | null }>(); // Get User from Outlet Context
     const query = new URLSearchParams(window.location.search);
-    const isAdmin = query.get('admin') === 'true' || query.get('mode') === 'admin';
+
+    // Admin/Edit Mode: True if Admin param OR if User is Logged In (Not a visitor)
+    const isAdmin = (query.get('admin') === 'true' || query.get('mode') === 'admin') || !!user;
+
     const [isLoading, setIsLoading] = useState(true);
     const [performanceData, setPerformanceData] = useState<{ result: SonificationResult, audioBlob: Blob, title: string, author: string, description: string, date: string } | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -98,6 +102,8 @@ export const PerformancePage: React.FC = () => {
                     scanPattern: { name: "Default" } as any,
                     configUsed: (target as any).configUsed || {},
                     sacContainer: {} as any,
+                    description: (target as any).description || (target as any).subtitle || "",
+                    title: (target as any).title || "Opera Senza Titolo",
                     validationResult: {} as any,
                     performanceMetrics: {} as any,
                     validationHashes: {} as any

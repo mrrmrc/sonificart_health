@@ -275,23 +275,18 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
             case 'scientific':
                 return (
                     <div className="space-y-6 animate-fade-in pb-10">
-                        {/* 
-                            NOTA: Questa sezione scientifica è ancora hardcoded in Italiano 
-                            come da codice originale, poiché il file di traduzione 
-                            aggiornato copriva solo la sezione FAQ. 
-                        */}
                         <div className="bg-brand-secondary/50 p-4 rounded-lg border border-brand-secondary mb-6">
-                            <h2 className="text-xl font-bold text-white mb-2">White Paper Tecnico</h2>
+                            <h2 className="text-xl font-bold text-white mb-2">{t('help.scientific.white_paper')}</h2>
                             <p className="text-sm text-brand-text-secondary">
-                                Documentazione completa del Framework SonificA.R.T. v1.0.
-                                <br />Basato su: <em>"Metodologia Deterministica per Sonificazione Culturalmente Consapevole dell'Arte Visiva"</em> (Mirra, 2025).
+                                {t('help.scientific.white_paper_desc')}
+                                <br /><em>{t('help.scientific.based_on')}</em>
                             </p>
                         </div>
 
                         {/* 1. INTRODUZIONE E MOTIVAZIONI */}
                         <details className="group bg-black/20 rounded-lg border border-white/10 overflow-hidden">
                             <summary className="flex justify-between items-center p-4 cursor-pointer bg-white/5 hover:bg-white/10 transition-colors">
-                                <h3 className="font-bold text-white">1. Introduzione e Motivazioni</h3>
+                                <h3 className="font-bold text-white">{t('help.scientific.intro_title')}</h3>
                                 <i className="fas fa-chevron-down text-brand-text-secondary group-open:rotate-180 transition-transform"></i>
                             </summary>
                             <div className="p-6 text-sm text-brand-text-secondary space-y-4 leading-relaxed border-t border-white/5">
@@ -319,7 +314,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
                         {/* 2. FONDAMENTI METODOLOGICI */}
                         <details className="group bg-black/20 rounded-lg border border-white/10 overflow-hidden" id="doc-colorimetry">
                             <summary className="flex justify-between items-center p-4 cursor-pointer bg-white/5 hover:bg-white/10 transition-colors">
-                                <h3 className="font-bold text-white">2. Fondamenti Metodologici (CIE LAB & Determinismo)</h3>
+                                <h3 className="font-bold text-white">{t('help.scientific.methodology_title')}</h3>
                                 <i className="fas fa-chevron-down text-brand-text-secondary group-open:rotate-180 transition-transform"></i>
                             </summary>
                             <div className="p-6 text-sm text-brand-text-secondary space-y-4 leading-relaxed border-t border-white/5">
@@ -347,7 +342,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
                         {/* 3. I 3 PARADIGMI */}
                         <details className="group bg-black/20 rounded-lg border border-white/10 overflow-hidden">
                             <summary className="flex justify-between items-center p-4 cursor-pointer bg-white/5 hover:bg-white/10 transition-colors">
-                                <h3 className="font-bold text-white">3. I Tre Paradigmi di Sonificazione</h3>
+                                <h3 className="font-bold text-white">{t('help.scientific.paradigms_title')}</h3>
                                 <i className="fas fa-chevron-down text-brand-text-secondary group-open:rotate-180 transition-transform"></i>
                             </summary>
                             <div className="p-6 text-sm text-brand-text-secondary space-y-6 leading-relaxed border-t border-white/5">
@@ -375,7 +370,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
                         {/* 4. PIPELINE 7 FASI */}
                         <details className="group bg-black/20 rounded-lg border border-white/10 overflow-hidden" id="doc-pipeline">
                             <summary className="flex justify-between items-center p-4 cursor-pointer bg-white/5 hover:bg-white/10 transition-colors">
-                                <h3 className="font-bold text-white">4. Architettura: Pipeline a 7 Fasi</h3>
+                                <h3 className="font-bold text-white">{t('help.scientific.pipeline_title')}</h3>
                                 <i className="fas fa-chevron-down text-brand-text-secondary group-open:rotate-180 transition-transform"></i>
                             </summary>
                             <div className="p-0 border-t border-white/5">
@@ -423,7 +418,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
                         {/* 5. CERTIFICAZIONE SAC */}
                         <details className="group bg-black/20 rounded-lg border border-white/10 overflow-hidden" id="doc-sac">
                             <summary className="flex justify-between items-center p-4 cursor-pointer bg-white/5 hover:bg-white/10 transition-colors">
-                                <h3 className="font-bold text-white">5. Certificazione e Verifica (SAC)</h3>
+                                <h3 className="font-bold text-white">{t('help.scientific.sac_title')}</h3>
                                 <i className="fas fa-chevron-down text-brand-text-secondary group-open:rotate-180 transition-transform"></i>
                             </summary>
                             <div className="p-6 text-sm text-brand-text-secondary space-y-4 leading-relaxed border-t border-white/5">
@@ -474,7 +469,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
                         onClick={() => setActiveTab('platform')}
                         className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'platform' ? 'border-brand-accent text-white' : 'border-transparent text-brand-text-secondary hover:text-white'}`}
                     >
-                        Piattaforma
+                        {t('help.tabs.platform')}
                     </button>
                     <button
                         onClick={() => setActiveTab('guide')}

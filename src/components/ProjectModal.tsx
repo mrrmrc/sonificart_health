@@ -30,8 +30,9 @@ export interface ProjectModalProps {
     museumMode?: boolean;
 }
 
-export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, museumMode }) => {
+export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, user, museumMode }) => {
     const [zoomedQrUrl, setZoomedQrUrl] = useState<string | null>(null);
+    const isGuest = !user; // Check if user is guest
 
     // Helpers
     const getAbsoluteUrl = (url: string | undefined) => {
@@ -105,7 +106,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, mu
                         <div className="w-1.5 h-8 bg-gradient-to-b from-brand-accent to-brand-primary rounded-full"></div>
                         <div>
                             <h2 className="text-xl font-bold text-white tracking-tight uppercase">Galleria Opere</h2>
-                            <p className="text-[10px] text-gray-400 uppercase tracking-widest font-medium">Visualizzazione & Performance</p>
+                            <p className="text-[10px] text-gray-400 uppercase tracking-widest font-medium">Visualizzazione &amp; Performance</p>
                         </div>
                     </div>
                 </div>
@@ -155,27 +156,29 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, mu
                                 </div>
                             </div>
 
-                            {/* 3. FORENSIC CERTIFICATE (New) */}
-                            <div className="bg-[#15151b] border border-white/5 rounded-xl p-4 flex flex-col gap-3 shadow-lg relative overflow-hidden">
-                                <div className="absolute top-0 right-0 p-2 opacity-10"><i className="fas fa-fingerprint text-5xl text-white"></i></div>
-                                <h4 className="flex items-center gap-2 text-blue-400 text-[10px] font-bold uppercase tracking-wider border-b border-white/5 pb-2 z-10 relative">
-                                    <i className="fas fa-certificate"></i> Certificato Forense
-                                </h4>
+                            {/* 3. FORENSIC CERTIFICATE (New) - HIDDEN FOR GUESTS */}
+                            {!isGuest && (
+                                <div className="bg-[#15151b] border border-white/5 rounded-xl p-4 flex flex-col gap-3 shadow-lg relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-2 opacity-10"><i className="fas fa-fingerprint text-5xl text-white"></i></div>
+                                    <h4 className="flex items-center gap-2 text-blue-400 text-[10px] font-bold uppercase tracking-wider border-b border-white/5 pb-2 z-10 relative">
+                                        <i className="fas fa-certificate"></i> Certificato Forense
+                                    </h4>
 
-                                <div className="z-10 relative">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                                        <span className="text-[10px] text-green-400 font-bold uppercase tracking-wider">Verificato su Blockchain</span>
-                                    </div>
-                                    <label className="block text-[9px] font-bold text-gray-500 mb-1 uppercase">SHA-256 Hash</label>
-                                    <div className="flex items-center gap-2 bg-black/40 rounded p-2 border border-white/5 group cursor-pointer" onClick={() => { navigator.clipboard.writeText(project.imageHash || "N/A"); alert("Hash copiato!"); }}>
-                                        <code className="text-[10px] text-blue-300 font-mono truncate flex-1 block">
-                                            {project.imageHash || "Hash non disponibile"}
-                                        </code>
-                                        <i className="fas fa-copy text-gray-500 group-hover:text-white text-xs transition-colors"></i>
+                                    <div className="z-10 relative">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                                            <span className="text-[10px] text-green-400 font-bold uppercase tracking-wider">Verificato su Blockchain</span>
+                                        </div>
+                                        <label className="block text-[9px] font-bold text-gray-500 mb-1 uppercase">SHA-256 Hash</label>
+                                        <div className="flex items-center gap-2 bg-black/40 rounded p-2 border border-white/5 group cursor-pointer" onClick={() => { navigator.clipboard.writeText(project.imageHash || "N/A"); alert("Hash copiato!"); }}>
+                                            <code className="text-[10px] text-blue-300 font-mono truncate flex-1 block">
+                                                {project.imageHash || "Hash non disponibile"}
+                                            </code>
+                                            <i className="fas fa-copy text-gray-500 group-hover:text-white text-xs transition-colors"></i>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            )}
 
                             {/* 4. CULTURAL SELECTION (New) */}
                             {project.blockData && (
@@ -189,24 +192,26 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, mu
                                         <p className="text-sm font-bold text-white">{project.tradition}</p>
                                     </div>
 
-                                    {/* Mini Palette Visualization based on blockData stats if available, else static placeholder */}
-                                    <div className="space-y-2 mt-auto">
-                                        <div className="flex justify-between text-[9px] text-gray-400 uppercase">
-                                            <span>Analisi Cromatica</span>
-                                            <span>{project.blockData.coveragePercentage?.toFixed(0) || 0}% Coverage</span>
+                                    {/* Mini Palette Visualization stats - HIDDEN FOR GUESTS */}
+                                    {!isGuest && (
+                                        <div className="space-y-2 mt-auto">
+                                            <div className="flex justify-between text-[9px] text-gray-400 uppercase">
+                                                <span>Analisi Cromatica</span>
+                                                <span>{project.blockData.coveragePercentage?.toFixed(0) || 0}% Coverage</span>
+                                            </div>
+                                            <div className="h-2 w-full bg-gray-800 rounded-full overflow-hidden flex">
+                                                {/* Simulate distribution based on available data or generic if missing detailed breakdown */}
+                                                <div className="h-full bg-red-500" style={{ width: '30%' }}></div>
+                                                <div className="h-full bg-yellow-500" style={{ width: '20%' }}></div>
+                                                <div className="h-full bg-blue-500" style={{ width: '15%' }}></div>
+                                                <div className="h-full bg-green-500" style={{ width: '35%' }}></div>
+                                            </div>
+                                            <div className="flex justify-between items-center bg-white/5 rounded px-2 py-1">
+                                                <span className="text-[9px] text-gray-400">Hue Diversity</span>
+                                                <span className="text-[10px] text-white font-mono">{project.blockData.globalStats?.hue_diversity?.toFixed(2) || "0.00"}</span>
+                                            </div>
                                         </div>
-                                        <div className="h-2 w-full bg-gray-800 rounded-full overflow-hidden flex">
-                                            {/* Simulate distribution based on available data or generic if missing detailed breakdown */}
-                                            <div className="h-full bg-red-500" style={{ width: '30%' }}></div>
-                                            <div className="h-full bg-yellow-500" style={{ width: '20%' }}></div>
-                                            <div className="h-full bg-blue-500" style={{ width: '15%' }}></div>
-                                            <div className="h-full bg-green-500" style={{ width: '35%' }}></div>
-                                        </div>
-                                        <div className="flex justify-between items-center bg-white/5 rounded px-2 py-1">
-                                            <span className="text-[9px] text-gray-400">Hue Diversity</span>
-                                            <span className="text-[10px] text-white font-mono">{project.blockData.globalStats?.hue_diversity?.toFixed(2) || "0.00"}</span>
-                                        </div>
-                                    </div>
+                                    )}
                                 </div>
                             )}
 
@@ -236,7 +241,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, mu
                                     {project.audioUrl && <audio controls src={getAbsoluteUrl(project.audioUrl)!} className="h-8 w-full max-w-[250px]" />}
                                 </div>
 
-                                <ActionToolbar url={project.audioUrl} type="audio" filename={`audio_${project.id}.wav`} title={project.title} />
+                                {!isGuest && <ActionToolbar url={project.audioUrl} type="audio" filename={`audio_${project.id}.wav`} title={project.title} />}
                             </div>
 
                             {/* BOTTOM: GRID 2 */}
@@ -258,24 +263,27 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, mu
                                             </div>
                                         )}
                                     </div>
-                                    {project.videoUrl && (
+                                    {!isGuest && project.videoUrl && (
                                         <div className="mt-4">
                                             <ActionToolbar url={project.videoUrl} type="video" filename={`video_${project.id}.mp4`} title={project.title} />
                                         </div>
                                     )}
                                 </div>
 
-                                {/* LIVE PERFORMANCE */}
-                                {/* LIVE PERFORMANCE */}
+                                {/* LIVE PERFORMANCE - AVAILABLE FOR EVERYONE */}
                                 <div className="bg-[#15151b] border border-white/5 rounded-xl p-4 sm:p-6 flex flex-col shadow-lg relative overflow-hidden min-h-[280px] sm:min-h-[350px]">
                                     <div className="absolute top-0 right-0 p-4 opacity-20 pointer-events-none"><i className="fas fa-bolt text-6xl text-purple-500"></i></div>
 
                                     <div className="relative z-10 flex flex-col h-full">
                                         <h4 className="flex items-center gap-2 text-purple-400 text-xs font-bold uppercase tracking-wider mb-4">
-                                            <i className="fas fa-bolt"></i> Live Performance
+                                            <i className="fas fa-bolt"></i> {isGuest ? "Esperienza Interattiva" : "Live Performance"}
                                         </h4>
+
                                         <p className="text-gray-400 text-xs mb-6 leading-relaxed bg-transparent">
-                                            Esegui questa opera in tempo reale con il motore sinestetico.
+                                            {isGuest
+                                                ? "Diventa il direttore d'orchestra. Interagisci con l'opera usando la webcam o il mouse per alterare suoni e colori in tempo reale."
+                                                : "Esegui questa opera in tempo reale con il motore sinestetico."
+                                            }
                                         </p>
 
                                         <div className="bg-black/30 border border-white/5 p-4 rounded-lg mb-6">
@@ -291,12 +299,14 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, mu
 
                                         <div className="mt-auto w-full">
                                             <button onClick={() => window.open(`https://sonificart.com/live/${project.id || project.historyId}?play=true`, '_blank')} className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold rounded-lg shadow-lg hover:shadow-purple-500/20 transition-all text-xs uppercase tracking-widest relative group overflow-hidden">
-                                                <span className="relative z-10"><i className="fas fa-play mr-2"></i> OPEN CONSOLE</span>
+                                                <span className="relative z-10"><i className="fas fa-play mr-2"></i> {isGuest ? "AVVIA ESPERIENZA" : "OPEN CONSOLE"}</span>
                                                 <div className="absolute inset-0 bg-white/20 transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out"></div>
                                             </button>
-                                            <div className="mt-4 flex justify-center w-full">
-                                                <ActionToolbar url={`https://sonificart.com/live/${project.id || project.historyId}`} type="live" title={project.title} />
-                                            </div>
+                                            {!isGuest && (
+                                                <div className="mt-4 flex justify-center w-full">
+                                                    <ActionToolbar url={`https://sonificart.com/live/${project.id || project.historyId}`} type="live" title={project.title} />
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>

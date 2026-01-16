@@ -99,7 +99,7 @@ export const translations = {
       title_end: "delle immagini",
       subtitle: "Non una semplice interpretazione, ma un'architettura acustica oggettiva. SonificA.R.T. è il framework deterministico per la trasduzione rigorosa dei dati visivi in frequenze sonore, validato da protocolli di ricerca scientifica (<a href=\"https://zenodo.org/records/17622067\" target=\"_blank\" class=\"underline text-brand-accent hover:text-white transition-colors\">Zenodo DOI: 17622067</a>). Trasforma ogni pixel in un evento sonoro matematicamente certificato.",
       cta_start: "INIZIA A CREARE",
-      cta_explore: "ESPLORA VETRINA",
+      cta_explore: "ESPLORA GALLERIA",
       features: {
         color: "Colorimetria CIE LAB D65",
         color_desc: "Analisi percettivamente uniforme e scientificamente validata.",
@@ -370,10 +370,40 @@ export const translations = {
     help: {
       title: "Manuale Utente",
       tabs: {
+        platform: "Piattaforma",
         guide: "Guida Rapida",
         glossary: "Glossario Interfaccia",
         faq: "FAQ",
         science: "Appendice Scientifica"
+      },
+      platform: {
+        title: "SonificA.R.T. Framework",
+        subtitle: "La prima piattaforma professionale per la Sonificazione Culturale Deterministica.",
+        accessibility_title: "Accessibilità Museale 2.0",
+        accessibility_desc: "Rende l'arte visibile accessibile a non vedenti e ipovedenti. Non una semplice descrizione vocale, ma una traduzione sensoriale diretta: la luce diventa volume, il colore diventa timbro, la composizione diventa ritmo.",
+        sac_title: "Certificazione Forense (SAC)",
+        sac_desc: "Ogni opera generata è un asset digitale unico. Il formato proprietario .SAC include una prova crittografica che lega i pixel alle note generate.",
+        culture_title: "Consapevolezza Culturale",
+        culture_desc: "L'unico sistema al mondo con un database di 48 tradizioni musicali globali. SonificART non impone la musica occidentale.",
+        creative_title: "Nuovi Linguaggi Creativi",
+        creative_desc: "Uno strumento potente per artisti digitali, musicisti e performer.",
+        audience_title: "A chi si rivolge?",
+        audience_institutions: "Istituzioni Culturali",
+        audience_institutions_desc: "Musei, Gallerie, Fondazioni che vogliono innovare l'esperienza dei visitatori.",
+        audience_artists: "Digital Artists",
+        audience_artists_desc: "Creativi che cercano nuovi medium espressivi cross-modali.",
+        audience_research: "Ricercatori & Edu",
+        audience_research_desc: "Scuole e università per lo studio della sinestesia e percezione."
+      },
+      scientific: {
+        white_paper: "White Paper Tecnico",
+        white_paper_desc: "Documentazione completa del Framework SonificA.R.T. v1.0.",
+        based_on: "Basato su: \"Metodologia Deterministica per Sonificazione Culturalmente Consapevole dell'Arte Visiva\" (Mirra, 2025).",
+        intro_title: "1. Introduzione e Motivazioni",
+        methodology_title: "2. Fondamenti Metodologici (CIE LAB & Determinismo)",
+        paradigms_title: "3. I Tre Paradigmi di Sonificazione",
+        pipeline_title: "4. Architettura: Pipeline a 7 Fasi",
+        sac_title: "5. Certificazione e Verifica (SAC)"
       },
       faq: {
         q1: "Posso usare la musica generata per i miei video?",
@@ -595,10 +625,40 @@ export const translations = {
     help: {
       title: "User Manual",
       tabs: {
+        platform: "Platform",
         guide: "Quick Guide",
         glossary: "Interface Glossary",
         faq: "FAQ",
         science: "Scientific Appendix"
+      },
+      platform: {
+        title: "SonificA.R.T. Framework",
+        subtitle: "The first professional platform for Deterministic Cultural Sonification.",
+        accessibility_title: "Museum Accessibility 2.0",
+        accessibility_desc: "Makes visual art accessible to the blind and visually impaired. Not just a voice description, but a direct sensory translation: light becomes volume, color becomes timbre, composition becomes rhythm.",
+        sac_title: "Forensic Certification (SAC)",
+        sac_desc: "Every generated work is a unique digital asset. The proprietary .SAC format includes cryptographic proof linking pixels to generated notes.",
+        culture_title: "Cultural Awareness",
+        culture_desc: "The only system in the world with a database of 48 global musical traditions. SonificART doesn't impose Western music.",
+        creative_title: "New Creative Languages",
+        creative_desc: "A powerful tool for digital artists, musicians, and performers.",
+        audience_title: "Who is it for?",
+        audience_institutions: "Cultural Institutions",
+        audience_institutions_desc: "Museums, Galleries, Foundations looking to innovate visitor experience.",
+        audience_artists: "Digital Artists",
+        audience_artists_desc: "Creatives seeking new cross-modal expressive mediums.",
+        audience_research: "Researchers & Edu",
+        audience_research_desc: "Schools and universities for the study of synesthesia and perception."
+      },
+      scientific: {
+        white_paper: "Technical White Paper",
+        white_paper_desc: "Complete documentation of the SonificA.R.T. Framework v1.0.",
+        based_on: "Based on: \"Deterministic Methodology for Culturally Aware Sonification of Visual Art\" (Mirra, 2025).",
+        intro_title: "1. Introduction and Motivations",
+        methodology_title: "2. Methodological Foundations (CIE LAB & Determinism)",
+        paradigms_title: "3. The Three Sonification Paradigms",
+        pipeline_title: "4. Architecture: 7-Phase Pipeline",
+        sac_title: "5. Certification and Verification (SAC)"
       },
       faq: {
         q1: "Can I use the generated music for my videos?",
@@ -970,7 +1030,36 @@ export const translations = {
     },
     help: {
       title: "Manuel Utilisateur",
-      tabs: { guide: "Guide", glossary: "Glossaire", faq: "FAQ", science: "Science" },
+      tabs: { platform: "Plateforme", guide: "Guide", glossary: "Glossaire", faq: "FAQ", science: "Science" },
+      platform: {
+        title: "SonificA.R.T. Framework",
+        subtitle: "La première plateforme professionnelle pour la Sonification Culturelle Déterministe.",
+        accessibility_title: "Accessibilité Musée 2.0",
+        accessibility_desc: "Rend l'art visuel accessible aux aveugles et malvoyants. Une traduction sensorielle directe.",
+        sac_title: "Certification Forensique (SAC)",
+        sac_desc: "Chaque œuvre générée est un actif numérique unique avec preuve cryptographique.",
+        culture_title: "Conscience Culturelle",
+        culture_desc: "Le seul système avec 48 traditions musicales mondiales.",
+        creative_title: "Nouveaux Langages Créatifs",
+        creative_desc: "Un outil puissant pour artistes numériques, musiciens et performers.",
+        audience_title: "Pour qui ?",
+        audience_institutions: "Institutions Culturelles",
+        audience_institutions_desc: "Musées, Galeries, Fondations innovantes.",
+        audience_artists: "Artistes Numériques",
+        audience_artists_desc: "Créatifs cherchant de nouveaux médiums.",
+        audience_research: "Chercheurs & Edu",
+        audience_research_desc: "Écoles et universités pour la synesthésie."
+      },
+      scientific: {
+        white_paper: "Livre Blanc Technique",
+        white_paper_desc: "Documentation complète du Framework SonificA.R.T. v1.0.",
+        based_on: "Basé sur: \"Méthodologie Déterministe pour Sonification Culturellement Consciente de l'Art Visuel\" (Mirra, 2025).",
+        intro_title: "1. Introduction et Motivations",
+        methodology_title: "2. Fondements Méthodologiques (CIE LAB & Déterminisme)",
+        paradigms_title: "3. Les Trois Paradigmes de Sonification",
+        pipeline_title: "4. Architecture: Pipeline en 7 Phases",
+        sac_title: "5. Certification et Vérification (SAC)"
+      },
       faq: {
         q1: "Puis-je utiliser la musique générée pour mes vidéos ?",
         a1: "Oui. Avec un compte <strong>PRO</strong>, vous possédez les droits commerciaux de l'output. Avec un compte gratuit, usage personnel/éducatif en citant 'Généré avec SonificA.R.T.'.",
@@ -1121,7 +1210,36 @@ export const translations = {
     landing: { badge: "Framework v1.0", title_start: "El sonido", title_end: "de las imágenes", subtitle: "Más que una simple interpretación, una arquitectura acústica objetiva. SonificA.R.T. es el único framework determinista acreditado para la transducción rigurosa de datos visuales en frecuencias sonoras, validado por protocolos de investigación científica (<a href=\"https://zenodo.org/records/17622067\" target=\"_blank\" class=\"underline text-brand-accent hover:text-white transition-colors\">Zenodo DOI: 17622067</a>). Transforma cada píxel en un evento sonoro matemáticamente certificado.", cta_start: "EMPEZAR", cta_explore: "EXPLORAR", features: { color: "Colorimetría", color_desc: "...", culture: "Base de datos", culture_desc: "...", deter: "Determinismo", deter_desc: "..." }, pricing: { title: "Precios", subtitle: "...", monthly: "Mensual", annual: "Anual", month: "mes", year: "año", recommended: "Recomendado", free: { title: "Gratis", price: "0 €", desc: "...", btn: "Crear cuenta", f1: "5 Créditos", f2: "...", f3: "...", f4: "...", f5: "..." }, pro: { title: "Pro", price_monthly: "8.80 €", price_annual: "88.00 €", desc: "...", btn: "Solicitar", f1: "Ilimitado", f2: "...", f3: "...", f4: "...", f5: "...", f6: "..." }, custom: { title: "Instituciones", subtitle: "A medida", desc: "...", btn: "Contacto", f1: "...", f2: "...", f3: "...", f4: "...", f5: "..." } } },
     help: {
       title: "Manual de Usuario",
-      tabs: { guide: "Guía", glossary: "Glosario", faq: "FAQ", science: "Ciencia" },
+      tabs: { platform: "Plataforma", guide: "Guía", glossary: "Glosario", faq: "FAQ", science: "Ciencia" },
+      platform: {
+        title: "SonificA.R.T. Framework",
+        subtitle: "La primera plataforma profesional para Sonificación Cultural Determinista.",
+        accessibility_title: "Accesibilidad Museística 2.0",
+        accessibility_desc: "Hace accesible el arte visual a personas ciegas y con baja visión. Una traducción sensorial directa.",
+        sac_title: "Certificación Forense (SAC)",
+        sac_desc: "Cada obra es un activo digital único con prueba criptográfica.",
+        culture_title: "Conciencia Cultural",
+        culture_desc: "El único sistema con 48 tradiciones musicales mundiales.",
+        creative_title: "Nuevos Lenguajes Creativos",
+        creative_desc: "Una herramienta poderosa para artistas digitales, músicos y performers.",
+        audience_title: "¿Para quién?",
+        audience_institutions: "Instituciones Culturales",
+        audience_institutions_desc: "Museos, Galerías, Fundaciones innovadoras.",
+        audience_artists: "Artistas Digitales",
+        audience_artists_desc: "Creativos que buscan nuevos medios expresivos.",
+        audience_research: "Investigadores & Edu",
+        audience_research_desc: "Escuelas y universidades para el estudio de la sinestesia."
+      },
+      scientific: {
+        white_paper: "Libro Blanco Técnico",
+        white_paper_desc: "Documentación completa del Framework SonificA.R.T. v1.0.",
+        based_on: "Basado en: \"Metodología Determinista para Sonificación Culturalmente Consciente del Arte Visual\" (Mirra, 2025).",
+        intro_title: "1. Introducción y Motivaciones",
+        methodology_title: "2. Fundamentos Metodológicos (CIE LAB & Determinismo)",
+        paradigms_title: "3. Los Tres Paradigmas de Sonificación",
+        pipeline_title: "4. Arquitectura: Pipeline de 7 Fases",
+        sac_title: "5. Certificación y Verificación (SAC)"
+      },
       faq: {
         q1: "¿Puedo usar la música generada para mis videos?",
         a1: "Sí. Con cuenta <strong>PRO</strong> tienes derechos comerciales. Con cuenta gratuita, uso personal/educativo citando 'Generado con SonificA.R.T.'.",

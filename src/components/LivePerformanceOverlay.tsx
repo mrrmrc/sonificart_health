@@ -147,13 +147,28 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
     };
 
     // --- AUTO CALIBRATION ---
+    // --- AUTO CALIBRATION ---
     const calibrateDistance = () => {
-        if (!metrics) return;
-        // Set current Z as neutral (Original Sound Point)
-        calibRef.current.neutralZ = metrics.z;
+        // Use smoothCam.current.z (real-time filtered position)
+        const currentZ = smoothCam.current.z;
+        // Default is -1.0. If close to default, camera might not be ready.
+        if (currentZ <= -0.95) {
+            return;
+        }
+
+        calibRef.current.neutralZ = currentZ;
         setIsCalibrated(true);
-        setTimeout(() => setIsCalibrated(false), 2000); // Reset success msg
+        setTimeout(() => setIsCalibrated(false), 2000);
     };
+
+    // Auto-Calibrate on Startup (User Request: "First Second")
+    // We try multiple times to ensure we catch the user once the webcam is ready
+    useEffect(() => {
+        const t1 = setTimeout(calibrateDistance, 1500); // "Primo Secondo" (approssimato per loading)
+        const t2 = setTimeout(calibrateDistance, 3000); // Retry
+        const t3 = setTimeout(calibrateDistance, 5000); // Retry
+        return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+    }, []);
 
     // Engine Refs
     const engineRef = useRef<{
@@ -332,32 +347,33 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
 
                 if (m.isActive) {
                     // --- RELATIVE DISTANCE LOGIC ---
+                    // --- RELATIVE DISTANCE & VOLUME LOGIC ---
                     const rawZ = m.z;
                     const neutralZ = calibRef.current.neutralZ;
+                    // zDiff > 0 means Closer (Z increases towards 0). zDiff < 0 means Further.
+                    const zDiff = rawZ - neutralZ;
 
-                    // Difference from neutral point. 
-                    // Positive = Moving Away (Further than neutral). Negative = Moving Closer.
-                    const deltaDist = rawZ - neutralZ;
+                    // VOLUME: Closer -> Lower Volume. Further -> Higher Volume.
+                    let volFactor = 1.0;
+                    const sensitivity = (calibRef.current as any).distAudio || 1.0;
 
-                    // 1. Ambience / Muffling
-                    // If near neutralZ (+/- threshold), pure sound.
-                    // If further, add reverb/muffle.
-                    let targetFreq = 20000;
-                    let ambientWet = 0;
-
-                    if (deltaDist > 0.1) {
-                        // Allontanamento -> Muffled + Ambience
-                        const t = Math.min(1, (deltaDist - 0.1) * 3); // Scale factor
-                        targetFreq = 20000 * Math.pow(1 - t, 2);
-                        ambientWet = t * 0.7 * (calibRef.current as any).distAudio;
-                    } else if (deltaDist < -0.1) {
-                        // Avvicinamento -> Pure, maybe slight boost?
-                        // Currently just keeping it clean/full.
-                        targetFreq = 20000;
-                        ambientWet = 0;
+                    if (zDiff > 0) {
+                        // Closer: Reduce Volume
+                        volFactor = Math.max(0.1, 1.0 - (zDiff * sensitivity * 1.5));
+                    } else {
+                        // Further: Increase Volume
+                        volFactor = Math.min(2.5, 1.0 + (Math.abs(zDiff) * sensitivity));
                     }
 
-                    targetFreq = Math.max(200, targetFreq);
+                    if (engineRef.current.autoGain) {
+                        engineRef.current.autoGain.gain.setTargetAtTime(volFactor, now, 0.15);
+                    }
+
+                    // FILTER (Ambience): Further = Slight Muffle/Reverb feel? 
+                    // Keeping standard for now, focusing on Volume as requested.
+                    const targetFreq = 20000;
+                    const ambientWet = zDiff < -0.5 ? 0.3 : 0; // Add echo if very far
+
                     if (engineRef.current.filter) engineRef.current.filter.frequency.setTargetAtTime(targetFreq, now, 0.1);
 
                     // 2. Panning
@@ -455,7 +471,11 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
 
                 if (bgImageRef.current) {
                     const cssZ = (camZ + 1.2) * 200;
+                    const shadowX = -tiltY * 15;
+                    const shadowY = tiltX * 15; // Inverted for realism?
                     bgImageRef.current.style.transform = `perspective(1000px) rotateX(${tiltX * 1.5}deg) rotateY(${tiltY * 1.5}deg) scale(${1.0 + breath * 2}) translate3d(${-camX * 100}px, ${-camY * 100}px, ${cssZ}px)`;
+                    // Dynamic Depth Shadow
+                    bgImageRef.current.style.boxShadow = `${shadowX}px ${shadowY}px ${30 + Math.abs(cssZ / 5)}px rgba(0,0,0,0.6)`;
                 }
 
                 // Draw Logic
@@ -515,12 +535,41 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
     const spectrumCanvasRef = useRef<HTMLCanvasElement>(null);
 
     return (
-        <div ref={containerRef} className="fixed inset-0 z-[100] bg-black flex flex-col overflow-hidden font-sans">
+        <div ref={containerRef} className="fixed inset-0 z-[9999] bg-black flex flex-col overflow-hidden font-sans">
             <div ref={stageRef} className="flex-grow relative overflow-hidden w-full">
                 {/* Backgrounds */}
                 {mode === 'fullscreen' && <div className="absolute inset-0 z-0"><img src={result.standardizedImageUrl} className="w-full h-full object-cover filter blur-[40px] opacity-40 scale-110" /></div>}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-1">
-                    <img ref={bgImageRef} src={result.standardizedImageUrl} className="w-full h-full object-contain transition-transform duration-75 ease-out" style={{ transformStyle: 'preserve-3d', backfaceVisibility: 'hidden' }} />
+                {/* 3D PLATFORM IMAGE */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-1" style={{ perspective: '1500px', transformStyle: 'preserve-3d' }}>
+                    <div className="relative" style={{ transformStyle: 'preserve-3d' }}>
+                        {/* Main Image */}
+                        <img ref={bgImageRef} src={result.standardizedImageUrl} className="w-full h-full object-contain transition-transform duration-75 ease-out relative z-10" style={{ transformStyle: 'preserve-3d', backfaceVisibility: 'hidden' }} />
+
+                        {/* 3D Base Platform - Bottom Face */}
+                        <div className="absolute bottom-0 left-0 right-0 h-8 pointer-events-none" style={{
+                            transform: 'rotateX(90deg) translateZ(-4px)',
+                            transformOrigin: 'bottom center',
+                            background: 'linear-gradient(to bottom, rgba(20, 20, 30, 0.8), rgba(10, 10, 15, 0.95))',
+                            borderTop: '1px solid rgba(45, 212, 191, 0.2)',
+                            boxShadow: '0 0 20px rgba(0, 0, 0, 0.8)'
+                        }}></div>
+
+                        {/* 3D Base Platform - Left Side */}
+                        <div className="absolute bottom-0 left-0 w-8 h-8 pointer-events-none" style={{
+                            transform: 'rotateY(90deg) translateZ(-4px) translateX(-4px)',
+                            transformOrigin: 'left bottom',
+                            background: 'linear-gradient(to right, rgba(15, 15, 20, 0.9), rgba(20, 20, 30, 0.8))',
+                            borderRight: '1px solid rgba(45, 212, 191, 0.15)'
+                        }}></div>
+
+                        {/* 3D Base Platform - Right Side */}
+                        <div className="absolute bottom-0 right-0 w-8 h-8 pointer-events-none" style={{
+                            transform: 'rotateY(-90deg) translateZ(-4px) translateX(4px)',
+                            transformOrigin: 'right bottom',
+                            background: 'linear-gradient(to left, rgba(15, 15, 20, 0.9), rgba(20, 20, 30, 0.8))',
+                            borderLeft: '1px solid rgba(45, 212, 191, 0.15)'
+                        }}></div>
+                    </div>
                 </div>
                 <canvas ref={canvasRef} className="absolute inset-0 w-full h-full block z-10 mix-blend-screen" />
 
@@ -533,15 +582,17 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 </div>
 
                 {/* SETTINGS TOGGLE (Top Left) */}
-                <button
-                    onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                    className="absolute top-6 left-6 z-[60] text-gray-400 hover:text-white bg-black/50 p-3 rounded-full backdrop-blur transition-all border border-transparent hover:border-white/20"
-                >
-                    <i className="fas fa-cog text-xl"></i>
-                </button>
+                {isAdmin && (
+                    <button
+                        onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                        className="absolute top-24 left-6 z-[9999] text-gray-400 hover:text-white bg-black/50 p-3 rounded-full backdrop-blur transition-all border border-transparent hover:border-white/20"
+                    >
+                        <i className="fas fa-cog text-xl"></i>
+                    </button>
+                )}
 
                 {/* SIDEBAR SETTINGS */}
-                <div className={`absolute top-0 left-0 h-full w-80 bg-black/95 backdrop-blur-xl border-r border-white/10 z-[70] transition-transform duration-300 transform ${isSettingsOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col shadow-2xl`}>
+                <div className={`absolute top-0 left-0 h-full w-80 bg-black/95 backdrop-blur-xl border-r border-white/10 z-[10000] transition-transform duration-300 transform ${isSettingsOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col shadow-2xl`}>
 
                     {/* Header */}
                     <div className="p-6 border-b border-white/10 flex justify-between items-center">
@@ -660,40 +711,87 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 )}
             </div>
 
-            {/* CONTROL DECK */}
-            <div className="bg-[#0a0a0a] border-t border-white/10 flex flex-col z-[120] shrink-0 shadow-[0_-5px_20px_rgba(0,0,0,0.5)] w-full">
-                <div className="flex items-center justify-between px-6 py-4 w-full">
-                    {/* INFO */}
-                    <div className="flex items-center gap-6 mr-8 overflow-hidden">
-                        <div className="flex flex-col min-w-[150px]">
-                            <h3 className="text-white font-bold text-lg tracking-wide uppercase truncate">{title || "SENZA TITOLO"}</h3>
-                            <div className="flex flex-col gap-1">
-                                <span className="text-gray-400 text-xs uppercase tracking-wider">{author || "ARTISTA"}</span>
-                                {date && <span className="text-gray-600 text-[10px] font-mono mt-1">{date}</span>}
-                            </div>
+            {/* CONTROL DECK (3-COLUMN LAYOUT) */}
+            <div className="bg-gradient-to-t from-black via-black/95 to-black/80 border-t border-white/10 flex flex-col z-[120] shrink-0 shadow-[0_-10px_40px_rgba(0,0,0,0.8)] w-full backdrop-blur-md">
+
+                {/* Main Grid: Info | Spectrum | Controls */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 px-8 py-6 items-center w-full">
+
+                    {/* LEFT COL: METADATA */}
+                    <div className="flex flex-col justify-center min-w-[200px]">
+                        <h3 className="text-white font-bold text-2xl tracking-wide uppercase truncate font-display">{title || "SENZA TITOLO"}</h3>
+                        <div className="flex flex-col gap-1 mt-1">
+                            <span className="text-gray-400 text-xs uppercase tracking-wider font-bold">{author || "ARTISTA"}</span>
+                            {date && <span className="text-gray-500 text-[10px] font-mono">{date}</span>}
                         </div>
-                        <div className="h-12 w-12 opacity-80 shrink-0 hidden sm:block">
-                            <img src={`data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(LOGO_SVG_STRING)))}`} className="w-full h-full object-contain" />
+                        {result.description && (
+                            <p className="text-gray-400 text-xs mt-3 line-clamp-2 leading-relaxed opacity-80 max-w-sm">
+                                {result.description}
+                            </p>
+                        )}
+
+                        {/* Social Links & QR Code */}
+                        <div className="mt-4 flex items-center gap-4">
+                            <div className="flex gap-3">
+                                <a href={`https://facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`} target="_blank" rel="noopener" className="text-gray-500 hover:text-blue-500 transition-colors">
+                                    <i className="fab fa-facebook text-lg"></i>
+                                </a>
+                                <a href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(window.location.href)}&text=${encodeURIComponent(title || 'SonificART')}`} target="_blank" rel="noopener" className="text-gray-500 hover:text-cyan-400 transition-colors">
+                                    <i className="fab fa-twitter text-lg"></i>
+                                </a>
+                                <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(window.location.href)}`} target="_blank" rel="noopener" className="text-gray-500 hover:text-blue-400 transition-colors">
+                                    <i className="fab fa-linkedin text-lg"></i>
+                                </a>
+                                <button
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(window.location.href);
+                                        alert('Link copiato!');
+                                    }}
+                                    className="text-gray-500 hover:text-green-400 transition-colors"
+                                    title="Copia Link"
+                                >
+                                    <i className="fas fa-link text-lg"></i>
+                                </button>
+                            </div>
+
+                            {/* QR Code */}
+                            <div className="ml-2 p-1 bg-white rounded" title="Scansiona per condividere">
+                                <img
+                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=60x60&data=${encodeURIComponent(window.location.href)}`}
+                                    alt="QR Code"
+                                    className="w-12 h-12"
+                                />
+                            </div>
                         </div>
                     </div>
 
-                    {/* CONTROLS */}
-                    <div className="flex items-center gap-6 shrink-0">
-                        <div className="flex items-center gap-3 bg-white/5 px-4 py-2 rounded-full border border-white/5">
-                            <button onClick={restart} className="w-8 h-8 rounded-full text-gray-400 hover:text-white transition-all"><i className="fas fa-step-backward text-xs"></i></button>
-                            <button onClick={togglePlay} className="w-10 h-10 rounded-full bg-white text-black hover:scale-105 transition-all"><i className={`fas ${isPlaying ? 'fa-pause' : 'fa-play'} text-sm ml-0.5`}></i></button>
+                    {/* CENTER COL: SPECTRUM VISUALIZER */}
+                    <div className="w-full h-16 bg-black/30 rounded-lg overflow-hidden border border-white/5 relative shadow-inner">
+                        <canvas ref={spectrumCanvasRef} width={800} height={64} className="w-full h-full opacity-90 mix-blend-screen block" />
+                    </div>
+
+                    {/* RIGHT COL: CONTROLS & LOGO */}
+                    <div className="flex items-center justify-end gap-6">
+                        {/* Player Controls */}
+                        <div className="flex items-center gap-4 bg-white/5 px-6 py-3 rounded-full border border-white/10 shadow-lg">
+                            <button onClick={restart} className="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-white transition-all hover:bg-white/10"><i className="fas fa-step-backward text-xs"></i></button>
+                            <button onClick={togglePlay} className="w-12 h-12 flex items-center justify-center rounded-full bg-white text-black hover:scale-110 transition-all shadow-lg hover:shadow-cyan-500/50"><i className={`fas ${isPlaying ? 'fa-pause' : 'fa-play'} text-lg ml-0.5`}></i></button>
                         </div>
-                        <div className="text-xs font-mono text-brand-accent/80 tracking-widest hidden sm:block w-24 text-right">
+
+                        {/* Time */}
+                        <div className="text-xs font-mono text-cyan-500/80 tracking-widest hidden lg:block w-24 text-right">
                             {formatTime(currentTime)} / {formatTime(duration)}
                         </div>
-                        <button onClick={onClose} className="px-4 py-2 rounded-full border border-white/10 bg-white/5 text-xs font-bold text-gray-300 hover:text-white uppercase">
+
+                        {/* Logo */}
+                        <div className="h-14 w-14 opacity-80 shrink-0 hidden xl:block">
+                            <img src={`data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(LOGO_SVG_STRING)))}`} className="w-full h-full object-contain drop-shadow-[0_0_10px_rgba(45,212,191,0.3)]" />
+                        </div>
+
+                        <button onClick={onClose} className="ml-4 px-4 py-2 rounded-lg border border-white/10 bg-white/5 text-xs font-bold text-gray-400 hover:text-white hover:bg-red-900/40 uppercase transition-all">
                             {mode === 'fullscreen' ? t.close : t.back}
                         </button>
                     </div>
-                </div>
-                {/* SPECTRUM */}
-                <div className="w-full h-24 bg-black/40 relative border-t border-white/5">
-                    <canvas ref={spectrumCanvasRef} width={1920} height={96} className="w-full h-full opacity-80 mix-blend-screen block" />
                 </div>
             </div>
             <style>{`.mirror-mode { transform: scaleX(-1); }`}</style>

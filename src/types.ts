@@ -226,6 +226,7 @@ export interface SonificationResult {
     generatedVideoBlob?: Blob;
     acquisitionMetadata?: AcquisitionMetadata;
     title?: string | null;
+    description?: string | null;
 }
 
 export interface SacVerificationDetails {

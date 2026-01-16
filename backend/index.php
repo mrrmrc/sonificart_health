@@ -488,7 +488,7 @@ if ($action === 'get_history' && $method === 'POST') {
             $stmt = $pdo->prepare("
                 SELECT 
                     id, image_hash, timestamp, image_url, audio_url, paradigm, tradition_name, 
-                    title, subtitle, description, video_url, generated_ai_track_url
+                    title, subtitle, description, video_url, generated_ai_track_url, event_data
                 FROM history 
                 WHERE user_id = ? 
                 ORDER BY timestamp DESC 
@@ -505,6 +505,12 @@ if ($action === 'get_history' && $method === 'POST') {
         }
 
         $mapped = array_map(function ($h) use ($baseUrl) {
+            // Parse event_data if present
+            $events = null;
+            if (!empty($h['event_data'])) {
+                $events = is_string($h['event_data']) ? json_decode($h['event_data'], true) : $h['event_data'];
+            }
+
             return [
                 "id" => (string) $h['id'],
                 "imageHash" => $h['image_hash'],
@@ -518,6 +524,7 @@ if ($action === 'get_history' && $method === 'POST') {
                 "description" => $h['description'] ?? null,
                 "videoUrl" => ($h['video_url'] ?? null) ? ((strpos($h['video_url'], 'http') === 0) ? $h['video_url'] : $baseUrl . (strpos($h['video_url'], '/') === 0 ? '' : '/') . $h['video_url']) : null,
                 "generatedAiTrackUrl" => ($h['generated_ai_track_url'] ?? null) ? ((strpos($h['generated_ai_track_url'], 'http') === 0) ? $h['generated_ai_track_url'] : $baseUrl . (strpos($h['generated_ai_track_url'], '/') === 0 ? '' : '/') . $h['generated_ai_track_url']) : null,
+                "events" => $events,  // Piano Roll data for ComparePage
             ];
         }, $history);
         sendResponse($mapped);
@@ -723,7 +730,12 @@ if ($action === 'attach_video_to_history' && $method === 'POST') {
     $ownerId = $stmt->fetchColumn();
 
     if ($ownerId != $userId) {
-        sendResponse(["error" => "Unauthorized access to this item"], 403);
+        // Check Admin Override
+        $stmtAdmin = $pdo->prepare("SELECT is_admin FROM users WHERE id = ?");
+        $stmtAdmin->execute([$userId]);
+        if (!$stmtAdmin->fetchColumn()) {
+            sendResponse(["error" => "Unauthorized access to this item"], 403);
+        }
     }
 
     $finalVideoUrl = "";
@@ -778,8 +790,14 @@ if ($action === 'detach_video_from_history' && $method === 'POST') {
 
     if (!$item)
         sendResponse(["error" => "Not found"], 404);
-    if ($item['user_id'] != $userId)
-        sendResponse(["error" => "Unauthorized"], 403);
+    if ($item['user_id'] != $userId) {
+        // Check Admin Override
+        $stmtAdmin = $pdo->prepare("SELECT is_admin FROM users WHERE id = ?");
+        $stmtAdmin->execute([$userId]);
+        if (!$stmtAdmin->fetchColumn()) {
+            sendResponse(["error" => "Unauthorized"], 403);
+        }
+    }
 
     // Optional: Delete file if physical (cleanup)
     if (!empty($item['video_url']) && strpos($item['video_url'], '/media') !== false) {
@@ -802,8 +820,15 @@ if ($action === 'attach_audio_to_history' && $method === 'POST') {
     $stmt = $pdo->prepare("SELECT user_id FROM history WHERE id = ?");
     $stmt->execute([$entryId]);
     $ownerId = $stmt->fetchColumn();
-    if ($ownerId != $userId)
-        sendResponse(["error" => "Unauthorized"], 403);
+
+    if ($ownerId != $userId) {
+        // Check Admin Override
+        $stmtAdmin = $pdo->prepare("SELECT is_admin FROM users WHERE id = ?");
+        $stmtAdmin->execute([$userId]);
+        if (!$stmtAdmin->fetchColumn()) {
+            sendResponse(["error" => "Unauthorized"], 403);
+        }
+    }
 
     $finalAudioUrl = "";
 
@@ -1050,8 +1075,8 @@ if ($action === 'login' && $method === 'POST') {
         // Generate Token
         $token = 'user_' . $user['id'] . '_' . bin2hex(random_bytes(16));
         $expires = date('Y-m-d H:i:s', strtotime('+60 days')); // LONG SESSION
-        $stmt = $pdo->prepare("UPDATE users SET token = ?, token_expires_at = ? WHERE id = ?");
-        $stmt->execute([$token, $expires, $user['id']]);
+        // $stmt = $pdo->prepare("UPDATE users SET token = ?, token_expires_at = ? WHERE id = ?");
+        // $stmt->execute([$token, $expires, $user['id']]);
 
         // LOG LOGIN SUCCESS
         log_activity($pdo, $user['id'], 'LOGIN', "Login Success: $email " . ($migrated ? '(Migrated)' : ''), 'INFO');

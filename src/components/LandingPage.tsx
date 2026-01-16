@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ShowcaseProject } from '../types';
+import BackgroundGrid from './BackgroundGrid';
 
 interface LandingPageProps {
     onGetStarted: () => void;
@@ -35,6 +36,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onExplor
 
     return (
         <div className="w-full font-sans overflow-x-hidden text-white selection:bg-brand-accent selection:text-brand-primary">
+
+            {/* GLOBAL BACKGROUND GRID */}
+            <BackgroundGrid />
 
             {/* HERO SECTION */}
             <div className="relative min-h-[100vh] flex items-center pt-24 pb-20 overflow-hidden">
@@ -167,11 +171,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onExplor
             </div>
 
             {/* SHOWCASE SECTION */}
-            <div className="w-full bg-slate-950 py-32 border-t border-white/5 relative z-20">
+            <div className="w-full bg-slate-950/40 backdrop-blur-sm py-32 border-t border-white/5 relative z-20">
                 <div className="max-w-7xl mx-auto px-6">
                     <div className="flex flex-col md:flex-row justify-between items-end mb-16 gap-6">
                         <div>
-                            <h2 className="text-4xl font-display font-black text-white mb-4">Vetrina Opere</h2>
+                            <h2 className="text-4xl font-display font-black text-white mb-4">Galleria</h2>
                             <p className="text-gray-400 text-lg max-w-md">Esplora le ultime sonificazioni create dalla community. Arte che puoi ascoltare.</p>
                         </div>
                         <button onClick={onExplore} className="text-brand-accent font-bold text-lg hover:text-white transition-colors flex items-center gap-3 group">
