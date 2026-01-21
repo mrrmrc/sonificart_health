@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Paradigm } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
+import { LegalModal } from './LegalModal';
 
 interface ParadigmInfoProps {
     paradigm: Paradigm;
@@ -10,6 +11,11 @@ interface ParadigmInfoProps {
 
 export const ParadigmInfo: React.FC<ParadigmInfoProps> = ({ paradigm, onGoPro, isProUser }) => {
     const { t } = useLanguage();
+    const [legalModal, setLegalModal] = useState<{ isOpen: boolean, key: string, title: string }>({ isOpen: false, key: '', title: '' });
+
+    const openLegal = (key: string, title: string) => {
+        setLegalModal({ isOpen: true, key, title });
+    };
 
     const content = {
         scientific: {
@@ -27,7 +33,7 @@ export const ParadigmInfo: React.FC<ParadigmInfoProps> = ({ paradigm, onGoPro, i
             ],
             license: {
                 type: t('paradigm.scientific.license_type'),
-                rights: [t('paradigm.scientific.right1'), t('paradigm.scientific.right2'), t('paradigm.scientific.right3')],
+                rights: [t('paradigm.scientific.right1'), t('paradigm.scientific.right2')], // Reduced hardcoded list
                 limitations: [t('paradigm.scientific.cost')]
             }
         },
@@ -46,7 +52,7 @@ export const ParadigmInfo: React.FC<ParadigmInfoProps> = ({ paradigm, onGoPro, i
             ],
             license: {
                 type: t('paradigm.hybrid.license_type'),
-                rights: [t('paradigm.hybrid.right1'), t('paradigm.hybrid.right2'), t('paradigm.hybrid.right3')],
+                rights: [t('paradigm.hybrid.right1'), t('paradigm.hybrid.right2')],
                 limitations: [t('paradigm.hybrid.cost')]
             }
         },
@@ -65,7 +71,7 @@ export const ParadigmInfo: React.FC<ParadigmInfoProps> = ({ paradigm, onGoPro, i
             ],
             license: {
                 type: t('paradigm.artistic.license_type'),
-                rights: [t('paradigm.artistic.right1'), t('paradigm.artistic.right2'), t('paradigm.artistic.right3')],
+                rights: [t('paradigm.artistic.right1'), t('paradigm.artistic.right2')],
                 limitations: [t('paradigm.artistic.cost')]
             }
         }
@@ -75,7 +81,7 @@ export const ParadigmInfo: React.FC<ParadigmInfoProps> = ({ paradigm, onGoPro, i
     const isProTier = paradigm !== 'scientific';
 
     return (
-        <div className="h-full animate-fade-in">
+        <div className="h-full animate-fade-in relative z-0">
             <div className={`h-full ${info.bg} backdrop-blur-xl p-6 rounded-xl border ${info.border} flex flex-col shadow-2xl`}>
 
                 {/* Header */}
@@ -141,7 +147,17 @@ export const ParadigmInfo: React.FC<ParadigmInfoProps> = ({ paradigm, onGoPro, i
                         </div>
                     </div>
 
-                    {/* Button Logic: Always allow usage with credits unless Pro */}
+                    {/* Dynamic Legal Links */}
+                    <div className="mb-4 flex flex-col gap-2">
+                        <button
+                            onClick={() => openLegal('image_upload_policy', 'Politica Upload & Copyright')}
+                            className="w-full text-left text-[10px] text-brand-accent hover:text-white underline decoration-brand-accent/30 hover:decoration-white transition-colors flex items-center gap-2"
+                        >
+                            <i className="fas fa-external-link-alt text-[9px]"></i> Leggi Policy Completa su Copyright e Immagini
+                        </button>
+                    </div>
+
+                    {/* Button Logic */}
                     {isProUser ? (
                         <div className="w-full py-2 bg-green-900/30 border border-green-600/30 text-green-400 text-sm font-bold rounded-md text-center flex items-center justify-center gap-2">
                             <i className="fas fa-check-circle"></i> {t('paradigm.pro_active')}
@@ -149,7 +165,7 @@ export const ParadigmInfo: React.FC<ParadigmInfoProps> = ({ paradigm, onGoPro, i
                     ) : (
                         <button
                             className="w-full py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-bold rounded-md transition-all transform hover:scale-[1.02]"
-                            disabled={true} // This is purely informational here, action is on Image Upload
+                            disabled={true}
                         >
                             {t('paradigm.use_credits', { cost: isProTier ? 2 : 1 })}
                         </button>
@@ -157,6 +173,13 @@ export const ParadigmInfo: React.FC<ParadigmInfoProps> = ({ paradigm, onGoPro, i
                 </div>
 
             </div>
+
+            <LegalModal
+                isOpen={legalModal.isOpen}
+                onClose={() => setLegalModal({ ...legalModal, isOpen: false })}
+                documentKey={legalModal.key}
+                title={legalModal.title}
+            />
         </div>
     );
 };

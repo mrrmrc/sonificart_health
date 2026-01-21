@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
 import { ConfirmationModal } from './ConfirmationModal';
+import { PrivacyModal } from './PrivacyModal';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface RequestAccessModalProps {
@@ -24,6 +25,8 @@ export const RequestAccessModal: React.FC<RequestAccessModalProps> = ({ isOpen, 
         purpose: '',
         website: ''
     });
+    const [privacyAccepted, setPrivacyAccepted] = useState(false);
+    const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // MODAL STATE
@@ -47,6 +50,8 @@ export const RequestAccessModal: React.FC<RequestAccessModalProps> = ({ isOpen, 
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!privacyAccepted) return; // Should be handled by 'required' attribute but safety check
+
         setIsSubmitting(true);
         try {
             await api.requestAccess(formData);
@@ -100,81 +105,54 @@ export const RequestAccessModal: React.FC<RequestAccessModalProps> = ({ isOpen, 
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    {/* PLAN SELECTION (Custom Radio Grid) */}
-                    <div>
-                        <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-2">{t('request_access.plan')}</label>
-                        <div className="grid grid-cols-3 gap-3">
-                            {['Mensile', 'Annuale', 'Enterprise'].map(plan => (
-                                <div
-                                    key={plan}
-                                    onClick={() => handlePlanSelect(plan)}
-                                    className={`cursor-pointer p-3 rounded-lg border text-center transition-all flex flex-col items-center justify-center h-full ${formData.plan === plan
-                                        ? 'bg-brand-accent text-brand-primary border-brand-accent shadow-lg ring-1 ring-brand-accent'
-                                        : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:border-white/20'
-                                        }`}
-                                >
-                                    <div className="text-sm font-bold leading-tight">
-                                        {plan === 'Enterprise' ? t('request_access.plan_enterprise') : (plan === 'Annuale' ? t('request_access.plan_annual') : t('request_access.plan_monthly'))}
-                                    </div>
-                                    <div className="text-[11px] mt-1 font-medium opacity-90">
-                                        {plan === 'Enterprise' ? t('request_access.plan_enterprise_price') : (plan === 'Annuale' ? t('request_access.plan_annual_price') : t('request_access.plan_monthly_price'))}
-                                    </div>
-                                    {plan === 'Annuale' && <div className="text-[9px] font-bold bg-white/20 px-1.5 py-0.5 rounded mt-1">-20%</div>}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+                    {/* Simplified Contact Form for Beta */}
 
-                    {/* CONDITIONAL FIELDS FOR ENTERPRISE */}
-                    {formData.plan === 'Enterprise' && (
-                        <div className="bg-white/5 p-4 rounded-lg border border-white/10 space-y-3 animate-fade-in">
-                            <div className="flex items-center gap-2 mb-2 border-b border-white/10 pb-2">
-                                <i className="fas fa-building-columns text-brand-accent text-xs"></i>
-                                <h4 className="text-xs font-bold text-brand-accent uppercase">Dettagli Istituzione</h4>
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-bold text-brand-text-secondary uppercase mb-1">{t('request_access.institution_type')}</label>
-                                <input type="text" name="institutionType" className="w-full bg-black/40 border border-white/10 p-2 rounded text-white text-sm focus:border-brand-accent focus:outline-none" placeholder={t('request_access.institution_placeholder')} value={formData.institutionType} onChange={handleChange} />
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-bold text-brand-text-secondary uppercase mb-1">{t('request_access.purpose')}</label>
-                                <textarea name="purpose" className="w-full bg-black/40 border border-white/10 p-2 rounded text-white text-sm h-16 focus:border-brand-accent focus:outline-none" placeholder={t('request_access.purpose_placeholder')} value={formData.purpose} onChange={handleChange}></textarea>
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-bold text-brand-text-secondary uppercase mb-1">{t('request_access.website')}</label>
-                                <input type="text" name="website" className="w-full bg-black/40 border border-white/10 p-2 rounded text-white text-sm focus:border-brand-accent focus:outline-none" placeholder="https://" value={formData.website} onChange={handleChange} />
-                            </div>
-                        </div>
-                    )}
+                    <div className="bg-white/5 p-4 rounded-lg border border-white/10 mb-6">
+                        <p className="text-sm text-gray-300 leading-relaxed">
+                            {t('request_access.subtitle')}
+                        </p>
+                    </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">{t('request_access.company_name')}</label>
-                            <input type="text" name="name" required className="w-full bg-black/30 border border-white/10 p-3 rounded-lg text-white focus:border-brand-accent focus:outline-none" value={formData.name} onChange={handleChange} />
+                            <input type="text" name="name" required className="w-full bg-black/30 border border-white/10 p-3 rounded-lg text-white focus:border-brand-accent focus:outline-none" value={formData.name} onChange={handleChange} placeholder="Mario Rossi" />
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">{t('request_access.billing_email')}</label>
-                            <input type="email" name="email" required className="w-full bg-black/30 border border-white/10 p-3 rounded-lg text-white focus:border-brand-accent focus:outline-none" value={formData.email} onChange={handleChange} />
+                            <input type="email" name="email" required className="w-full bg-black/30 border border-white/10 p-3 rounded-lg text-white focus:border-brand-accent focus:outline-none" value={formData.email} onChange={handleChange} placeholder="email@example.com" />
                         </div>
                     </div>
 
                     <div>
-                        <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">{t('request_access.address')}</label>
-                        <input type="text" name="address" required className="w-full bg-black/30 border border-white/10 p-3 rounded-lg text-white focus:border-brand-accent focus:outline-none" placeholder={t('request_access.address_placeholder')} value={formData.address} onChange={handleChange} />
+                        <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">{t('request_access.purpose')}</label>
+                        <textarea name="purpose" required className="w-full bg-black/30 border border-white/10 p-3 rounded-lg text-white h-32 focus:border-brand-accent focus:outline-none resize-none" placeholder={t('request_access.purpose_placeholder')} value={formData.purpose} onChange={handleChange}></textarea>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">{t('request_access.vat_number')}</label>
-                            <input type="text" name="piva" required className="w-full bg-black/30 border border-white/10 p-3 rounded-lg text-white focus:border-brand-accent focus:outline-none" value={formData.piva} onChange={handleChange} />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">{t('request_access.sdi_code')}</label>
-                            <input type="text" name="sdi" className="w-full bg-black/30 border border-white/10 p-3 rounded-lg text-white focus:border-brand-accent focus:outline-none" placeholder="0000000" value={formData.sdi} onChange={handleChange} />
-                        </div>
+                    {/* Checkbox Privacy */}
+                    <div className="flex items-start gap-3 mt-4">
+                        <input
+                            type="checkbox"
+                            id="privacyCheck"
+                            required
+                            checked={privacyAccepted}
+                            onChange={(e) => setPrivacyAccepted(e.target.checked)}
+                            className="mt-1 w-4 h-4 rounded border-gray-600 bg-black/40 text-brand-accent focus:ring-brand-accent"
+                        />
+                        <label htmlFor="privacyCheck" className="text-xs text-brand-text-secondary leading-relaxed">
+                            Ho letto e accetto l'&nbsp;
+                            <button
+                                type="button"
+                                onClick={() => setIsPrivacyModalOpen(true)}
+                                className="text-brand-accent hover:underline font-bold"
+                            >
+                                Informativa Privacy
+                            </button>
+                            . Acconsento al trattamento dei dati personali trasmessi.
+                        </label>
                     </div>
 
-                    <button type="submit" disabled={isSubmitting} className="w-full bg-brand-accent hover:bg-brand-accent-light text-brand-primary font-bold py-3 rounded-lg shadow-lg transition-all mt-2 disabled:opacity-50">
+                    <button type="submit" disabled={isSubmitting || !privacyAccepted} className="w-full bg-brand-accent hover:bg-brand-accent-light text-brand-primary font-bold py-3 rounded-lg shadow-lg transition-all mt-4 disabled:opacity-50 disabled:cursor-not-allowed">
                         {isSubmitting ? t('request_access.sending') : t('request_access.submit')}
                     </button>
                 </form>
@@ -189,6 +167,8 @@ export const RequestAccessModal: React.FC<RequestAccessModalProps> = ({ isOpen, 
                 onConfirm={confirmModal.onConfirm}
                 onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
             />
+
+            <PrivacyModal isOpen={isPrivacyModalOpen} onClose={() => setIsPrivacyModalOpen(false)} />
         </div>
     );
 };

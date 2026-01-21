@@ -500,13 +500,33 @@ export async function normalizeImage(
 ): Promise<{ normalizedFile: File; report: NormalizationReport }> {
     const startTime = performance.now();
 
-    // Load image
-    const imageBitmap = await createImageBitmap(file);
+    // Load and resize image if too large (prevents memory issues)
+    const MAX_DIMENSION = 2048;
+    let imageBitmap = await createImageBitmap(file);
+
+    // Check if resizing is needed
+    let targetWidth = imageBitmap.width;
+    let targetHeight = imageBitmap.height;
+
+    if (imageBitmap.width > MAX_DIMENSION || imageBitmap.height > MAX_DIMENSION) {
+        if (imageBitmap.width > imageBitmap.height) {
+            targetWidth = MAX_DIMENSION;
+            targetHeight = Math.round((imageBitmap.height * MAX_DIMENSION) / imageBitmap.width);
+        } else {
+            targetHeight = MAX_DIMENSION;
+            targetWidth = Math.round((imageBitmap.width * MAX_DIMENSION) / imageBitmap.height);
+        }
+        console.log(`Resizing image from ${imageBitmap.width}x${imageBitmap.height} to ${targetWidth}x${targetHeight}`);
+    }
+
     const canvas = document.createElement('canvas');
-    canvas.width = imageBitmap.width;
-    canvas.height = imageBitmap.height;
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
     const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
-    ctx.drawImage(imageBitmap, 0, 0);
+    ctx.drawImage(imageBitmap, 0, 0, targetWidth, targetHeight);
+
+    // Release original bitmap
+    imageBitmap.close();
 
     const originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);

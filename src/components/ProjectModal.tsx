@@ -100,222 +100,179 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, us
 
                 <button onClick={onClose} className="absolute top-4 right-4 z-50 text-white/50 hover:text-white bg-black/40 rounded-full w-8 h-8 flex items-center justify-center border border-white/10 transition-colors"><i className="fas fa-times"></i></button>
 
-                {/* HEADER */}
-                <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-[#15151b] shrink-0">
-                    <div className="flex items-center gap-4">
-                        <div className="w-1.5 h-8 bg-gradient-to-b from-brand-accent to-brand-primary rounded-full"></div>
-                        <div>
-                            <h2 className="text-xl font-bold text-white tracking-tight uppercase">Galleria Opere</h2>
-                            <p className="text-[10px] text-gray-400 uppercase tracking-widest font-medium">Visualizzazione &amp; Performance</p>
+                {/* HEADER - Minimal & Clean */}
+                <div className="px-8 py-6 border-b border-white/10 flex justify-between items-end bg-[#15151b] shrink-0 sticky top-0 z-20">
+                    <div>
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] font-bold text-brand-accent uppercase tracking-[0.3em]">Opera Pubblicata</span>
+                            <div className="w-1 h-1 rounded-full bg-white/20"></div>
+                            <span className="text-[10px] font-medium text-white/40 uppercase tracking-widest">{new Date(project.date).toLocaleDateString()}</span>
+                        </div>
+                        <h2 className="text-3xl font-black text-white tracking-tight uppercase font-display leading-none">
+                            {project.title}
+                        </h2>
+                        <div className="flex items-center gap-4 mt-3">
+                            <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-brand-accent to-brand-primary flex items-center justify-center text-[10px] text-brand-primary font-bold">
+                                    {project.author?.charAt(0) || 'A'}
+                                </div>
+                                <span className="text-xs font-bold text-white/80 uppercase tracking-wide">{project.author || "Anonimo"}</span>
+                            </div>
+                            <div className="h-4 w-px bg-white/10"></div>
+                            <span className="text-[10px] font-bold text-brand-text-secondary uppercase tracking-widest">{project.tradition} • {project.paradigm}</span>
                         </div>
                     </div>
+                    <button onClick={onClose} className="text-white/30 hover:text-white transition-colors p-2"><i className="fas fa-times text-xl"></i></button>
                 </div>
 
-                <div className="flex-1 p-4 sm:p-6 bg-[#0B0C10] custom-scrollbar">
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
+                <div className="flex-1 p-8 bg-[#0B0C10] overflow-y-auto custom-scrollbar">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 max-w-6xl mx-auto">
 
-                        {/* COL 1: METADATA, CERTIFICATE & CULTURAL (Left, span 3/12) */}
-                        <div className="lg:col-span-3 flex flex-col gap-4">
-
-                            {/* 1. Preview Image */}
-                            <div className="relative aspect-square rounded-xl overflow-hidden border border-white/10 group shadow-lg shrink-0">
-                                <img src={fixImage(project.imageUrl)} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt="Preview" />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent p-4 flex flex-col justify-end">
-                                    <h3 className="text-white font-bold text-lg leading-tight uppercase font-display shadow-black drop-shadow-md">{project.title}</h3>
-                                </div>
-                            </div>
-
-                            {/* 2. Metadata Info (Condensed) */}
-                            <div className="bg-[#15151b] border border-white/5 rounded-xl p-4 flex flex-col gap-3 shadow-lg">
-                                <h4 className="flex items-center gap-2 text-[#2dd4bf] text-[10px] font-bold uppercase tracking-wider border-b border-white/5 pb-2">
-                                    <i className="fas fa-info-circle"></i> Info Opera
-                                </h4>
-
-                                <div>
-                                    <label className="block text-[9px] font-bold text-gray-500 mb-1 uppercase">Titolo</label>
-                                    <div className="w-full bg-black/30 border border-white/5 rounded px-3 py-2 text-xs text-white font-bold truncate">
-                                        {project.title}
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label className="block text-[9px] font-bold text-gray-500 mb-1 uppercase">Descrizione</label>
-                                    <div className="w-full max-h-[80px] bg-black/30 border border-white/5 rounded px-3 py-2 text-xs text-gray-300 overflow-y-auto custom-scrollbar leading-relaxed">
-                                        {project.description || "Nessuna descrizione disponibile."}
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-2 mt-auto">
-                                    <div>
-                                        <label className="block text-[9px] font-bold text-gray-500 mb-1 uppercase">Autore</label>
-                                        <p className="text-xs text-white truncate"><i className="fas fa-user-circle mr-1 text-gray-400"></i> {project.author || "Anonimo"}</p>
-                                    </div>
-                                    <div>
-                                        <label className="block text-[9px] font-bold text-gray-500 mb-1 uppercase">Data</label>
-                                        <p className="text-xs text-white truncate"><i className="fas fa-calendar mr-1 text-gray-400"></i> {new Date(project.date).toLocaleDateString()}</p>
+                        {/* LEFT COLUMN: VISUAL & STORY */}
+                        <div className="flex flex-col gap-8">
+                            {/* Main Preview Card */}
+                            <div className="relative group">
+                                <div className="absolute -inset-1 bg-gradient-to-r from-brand-accent/20 to-purple-600/20 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
+                                <div className="relative aspect-[4/5] rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
+                                    <img src={fixImage(project.imageUrl)} className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" alt={project.title} />
+                                    <div className="absolute top-4 right-4 flex gap-2">
+                                        {!isGuest && (
+                                            <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-2">
+                                                <i className="fas fa-fingerprint text-blue-400 text-[10px]"></i>
+                                                <span className="text-[9px] font-bold text-white uppercase tracking-widest">Certified</span>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
 
-                            {/* 3. FORENSIC CERTIFICATE (New) - HIDDEN FOR GUESTS */}
-                            {!isGuest && (
-                                <div className="bg-[#15151b] border border-white/5 rounded-xl p-4 flex flex-col gap-3 shadow-lg relative overflow-hidden">
-                                    <div className="absolute top-0 right-0 p-2 opacity-10"><i className="fas fa-fingerprint text-5xl text-white"></i></div>
-                                    <h4 className="flex items-center gap-2 text-blue-400 text-[10px] font-bold uppercase tracking-wider border-b border-white/5 pb-2 z-10 relative">
-                                        <i className="fas fa-certificate"></i> Certificato Forense
-                                    </h4>
-
-                                    <div className="z-10 relative">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                                            <span className="text-[10px] text-green-400 font-bold uppercase tracking-wider">Verificato su Blockchain</span>
-                                        </div>
-                                        <label className="block text-[9px] font-bold text-gray-500 mb-1 uppercase">SHA-256 Hash</label>
-                                        <div className="flex items-center gap-2 bg-black/40 rounded p-2 border border-white/5 group cursor-pointer" onClick={() => { navigator.clipboard.writeText(project.imageHash || "N/A"); alert("Hash copiato!"); }}>
-                                            <code className="text-[10px] text-blue-300 font-mono truncate flex-1 block">
-                                                {project.imageHash || "Hash non disponibile"}
-                                            </code>
-                                            <i className="fas fa-copy text-gray-500 group-hover:text-white text-xs transition-colors"></i>
-                                        </div>
-                                    </div>
+                            {/* Description & Metadata Group */}
+                            <div className="space-y-6">
+                                <div className="border-l-2 border-brand-accent/30 pl-6">
+                                    <h4 className="text-[10px] font-black text-brand-accent uppercase tracking-[0.2em] mb-3">La Visione</h4>
+                                    <p className="text-gray-300 text-lg leading-relaxed font-medium italic">
+                                        "{project.description || "Un'esperienza sinestetica generata attraverso il framework deterministico SonificA.R.T."}"
+                                    </p>
                                 </div>
-                            )}
 
-                            {/* 4. CULTURAL SELECTION (New) */}
-                            {project.blockData && (
-                                <div className="bg-[#15151b] border border-white/5 rounded-xl p-4 flex-1 shadow-lg relative overflow-hidden flex flex-col">
-                                    <h4 className="flex items-center gap-2 text-pink-400 text-[10px] font-bold uppercase tracking-wider border-b border-white/5 pb-2 mb-2">
-                                        <i className="fas fa-globe-americas"></i> Selezione Culturale
-                                    </h4>
-
-                                    <div className="mb-3">
-                                        <label className="block text-[9px] font-bold text-gray-500 mb-1 uppercase">Tradizione Identificata</label>
-                                        <p className="text-sm font-bold text-white">{project.tradition}</p>
-                                    </div>
-
-                                    {/* Mini Palette Visualization stats - HIDDEN FOR GUESTS */}
-                                    {!isGuest && (
-                                        <div className="space-y-2 mt-auto">
-                                            <div className="flex justify-between text-[9px] text-gray-400 uppercase">
-                                                <span>Analisi Cromatica</span>
-                                                <span>{project.blockData.coveragePercentage?.toFixed(0) || 0}% Coverage</span>
+                                {!isGuest && project.imageHash && (
+                                    <div className="bg-white/5 rounded-2xl p-4 border border-white/5 flex items-center justify-between group cursor-pointer hover:bg-white/10 transition-all" onClick={() => { navigator.clipboard.writeText(project.imageHash!); alert("Hash copiato!"); }}>
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400">
+                                                <i className="fas fa-link text-xs"></i>
                                             </div>
-                                            <div className="h-2 w-full bg-gray-800 rounded-full overflow-hidden flex">
-                                                {/* Simulate distribution based on available data or generic if missing detailed breakdown */}
-                                                <div className="h-full bg-red-500" style={{ width: '30%' }}></div>
-                                                <div className="h-full bg-yellow-500" style={{ width: '20%' }}></div>
-                                                <div className="h-full bg-blue-500" style={{ width: '15%' }}></div>
-                                                <div className="h-full bg-green-500" style={{ width: '35%' }}></div>
-                                            </div>
-                                            <div className="flex justify-between items-center bg-white/5 rounded px-2 py-1">
-                                                <span className="text-[9px] text-gray-400">Hue Diversity</span>
-                                                <span className="text-[10px] text-white font-mono">{project.blockData.globalStats?.hue_diversity?.toFixed(2) || "0.00"}</span>
+                                            <div>
+                                                <span className="block text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1">Blockchain Hash</span>
+                                                <code className="text-[10px] text-blue-300/80 font-mono">{project.imageHash.substring(0, 32)}...</code>
                                             </div>
                                         </div>
-                                    )}
-                                </div>
-                            )}
+                                        <i className="fas fa-copy text-white/20 group-hover:text-white/60 transition-colors"></i>
+                                    </div>
+                                )}
 
+                                <div className="pt-4 flex flex-wrap gap-3">
+                                    <ActionToolbar url={project.imageUrl} type="live" title={project.title} />
+                                </div>
+                            </div>
                         </div>
 
-                        {/* COL 2: MEDIA (Right, span 9/12) */}
-                        <div className="lg:col-span-9 flex flex-col gap-4 sm:gap-6">
+                        {/* RIGHT COLUMN: INTERACTION & MEDIA */}
+                        <div className="flex flex-col gap-6">
 
-                            {/* TOP: AUDIO SOURCE */}
-                            <div className="bg-[#15151b] border border-white/5 rounded-xl p-6 relative overflow-hidden shadow-lg shrink-0">
-                                <div className="flex justify-between items-center mb-6">
-                                    <h4 className="flex items-center gap-2 text-[#2dd4bf] text-xs font-bold uppercase tracking-wider">
-                                        <i className="fas fa-music"></i> Sorgente Audio
+                            {/* 1. Main Interaction: LIVE CONSOLE (Highest Priority) */}
+                            <div className="bg-gradient-to-br from-[#1e1e2e] to-[#15151b] rounded-3xl p-8 border border-white/10 shadow-2xl relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-8 opacity-[0.03] transform translate-x-12 -translate-y-12 rotate-12 group-hover:rotate-0 transition-transform duration-1000">
+                                    <i className="fas fa-bolt text-[200px] text-white"></i>
+                                </div>
+
+                                <div className="relative z-10">
+                                    <h4 className="flex items-center gap-2 text-purple-400 text-xs font-black uppercase tracking-[0.3em] mb-4">
+                                        <i className="fas fa-bolt"></i> Esperienza Live
                                     </h4>
-                                    {/* Read Only Badge */}
-                                    <span className="text-[9px] font-bold bg-white/5 text-gray-400 px-2 py-1 rounded border border-white/10">READ ONLY</span>
-                                </div>
+                                    <p className="text-gray-400 text-sm mb-8 leading-relaxed max-w-sm">
+                                        {isGuest
+                                            ? "Entra nello spazio dell'opera. Interagisci in tempo reale con suoni e colori usando i tuoi sensi."
+                                            : "Avvia il motore sinestetico e controlla i parametri biometrici dell'esecuzione."
+                                        }
+                                    </p>
 
-                                <div className="bg-black/30 rounded-lg p-4 border border-white/5 flex items-center gap-4 mb-4">
-                                    <div className="w-10 h-10 rounded-full bg-[#2dd4bf]/10 flex items-center justify-center text-[#2dd4bf] shrink-0">
-                                        <i className="fas fa-music"></i>
-                                    </div>
-                                    <div className="flex-1 overflow-hidden">
-                                        <div className="text-white font-bold text-sm truncate">{project.tradition || "Audio Originale"}</div>
-                                        <div className="text-xs text-gray-500 uppercase tracking-wider">{project.paradigm || "Scientifico"}</div>
-                                    </div>
-                                    {project.audioUrl && <audio controls src={getAbsoluteUrl(project.audioUrl)!} className="h-8 w-full max-w-[250px]" />}
-                                </div>
+                                    <button
+                                        onClick={() => window.open(`https://sonificart.com/live/${project.id || project.historyId}?play=true`, '_blank')}
+                                        className="w-full py-5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold rounded-2xl shadow-[0_10px_40px_rgba(147,51,234,0.3)] hover:shadow-[0_15px_50px_rgba(147,51,234,0.5)] transition-all text-sm uppercase tracking-[0.2em] flex items-center justify-center gap-3 active:scale-[0.98]"
+                                    >
+                                        <i className="fas fa-play"></i> {isGuest ? "ESPLORA OPERA" : "APRI CONSOLE"}
+                                    </button>
 
-                                {!isGuest && <ActionToolbar url={project.audioUrl} type="audio" filename={`audio_${project.id}.wav`} title={project.title} />}
+                                    <div className="mt-8 flex items-center justify-between p-4 bg-black/40 rounded-2xl border border-white/5">
+                                        <div className="flex gap-4">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,1)]"></div>
+                                                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Audio Engine</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,1)]"></div>
+                                                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Webcam AR</span>
+                                            </div>
+                                        </div>
+                                        <span className="text-[9px] font-black text-green-400 uppercase tracking-widest">Pronto</span>
+                                    </div>
+                                </div>
                             </div>
 
-                            {/* BOTTOM: GRID 2 */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-
-                                {/* VIDEO GENERATIVO */}
-                                <div className="bg-[#15151b] border border-white/5 rounded-xl p-4 sm:p-6 flex flex-col shadow-lg min-h-[280px] sm:min-h-[350px]">
-                                    <h4 className="flex items-center gap-2 text-[#2dd4bf] text-xs font-bold uppercase tracking-wider mb-4">
+                            {/* 2. Multimedia Center: VIDEO & AUDIO */}
+                            <div className="grid grid-cols-1 gap-6">
+                                {/* Video Section */}
+                                <div className="bg-[#15151b] rounded-3xl p-6 border border-white/5 shadow-xl">
+                                    <h4 className="flex items-center gap-2 text-[#2dd4bf] text-[10px] font-black uppercase tracking-[0.2em] mb-4">
                                         <i className="fas fa-video"></i> Video Generativo
                                     </h4>
-
-                                    <div className="flex-1 bg-black rounded-lg border border-white/10 overflow-hidden relative group min-h-[180px] sm:min-h-[220px] flex items-center justify-center">
+                                    <div className="aspect-video bg-black rounded-2xl overflow-hidden border border-white/10 shadow-inner group relative">
                                         {project.videoUrl ? (
                                             <video src={getAbsoluteUrl(project.videoUrl)!} className="w-full h-full object-contain" controls />
                                         ) : (
-                                            <div className="text-center opacity-50">
-                                                <i className="fas fa-film text-4xl text-gray-700 mb-3 block"></i>
-                                                <p className="text-xs text-gray-500">Nessun video generato.</p>
+                                            <div className="absolute inset-0 flex flex-col items-center justify-center opacity-30">
+                                                <i className="fas fa-film text-3xl mb-2"></i>
+                                                <span className="text-[10px] font-bold uppercase">Non Generato</span>
                                             </div>
                                         )}
                                     </div>
                                     {!isGuest && project.videoUrl && (
-                                        <div className="mt-4">
+                                        <div className="mt-4 flex justify-between items-center">
                                             <ActionToolbar url={project.videoUrl} type="video" filename={`video_${project.id}.mp4`} title={project.title} />
                                         </div>
                                     )}
                                 </div>
 
-                                {/* LIVE PERFORMANCE - AVAILABLE FOR EVERYONE */}
-                                <div className="bg-[#15151b] border border-white/5 rounded-xl p-4 sm:p-6 flex flex-col shadow-lg relative overflow-hidden min-h-[280px] sm:min-h-[350px]">
-                                    <div className="absolute top-0 right-0 p-4 opacity-20 pointer-events-none"><i className="fas fa-bolt text-6xl text-purple-500"></i></div>
-
-                                    <div className="relative z-10 flex flex-col h-full">
-                                        <h4 className="flex items-center gap-2 text-purple-400 text-xs font-bold uppercase tracking-wider mb-4">
-                                            <i className="fas fa-bolt"></i> {isGuest ? "Esperienza Interattiva" : "Live Performance"}
+                                {/* Audio Section */}
+                                <div className="bg-[#15151b] rounded-3xl p-6 border border-white/5 shadow-xl">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h4 className="flex items-center gap-2 text-brand-primary-light text-[10px] font-black uppercase tracking-[0.2em]">
+                                            <i className="fas fa-music"></i> Audio Originale
                                         </h4>
-
-                                        <p className="text-gray-400 text-xs mb-6 leading-relaxed bg-transparent">
-                                            {isGuest
-                                                ? "Diventa il direttore d'orchestra. Interagisci con l'opera usando la webcam o il mouse per alterare suoni e colori in tempo reale."
-                                                : "Esegui questa opera in tempo reale con il motore sinestetico."
-                                            }
-                                        </p>
-
-                                        <div className="bg-black/30 border border-white/5 p-4 rounded-lg mb-6">
-                                            <div className="flex justify-between items-center mb-2">
-                                                <span className="text-xs text-gray-300">System Status</span>
-                                                <span className="text-[10px] font-mono text-green-400 animate-pulse">READY</span>
-                                            </div>
-                                            <div className="flex gap-4">
-                                                <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_5px_lime]"></div><span className="text-[10px] text-gray-400 uppercase">Audio</span></div>
-                                                <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_5px_lime]"></div><span className="text-[10px] text-gray-400 uppercase">Webcam</span></div>
-                                            </div>
+                                        <span className="text-[8px] font-black bg-white/5 px-2 py-1 rounded text-white/20 border border-white/5 tracking-[0.2em]">SINTESI DIGITALE</span>
+                                    </div>
+                                    <div className="flex items-center gap-4 bg-black/40 p-4 rounded-2xl border border-white/5">
+                                        <div className="w-10 h-10 rounded-xl bg-brand-accent/10 flex items-center justify-center text-brand-accent shrink-0">
+                                            <i className="fas fa-wave-square"></i>
                                         </div>
-
-                                        <div className="mt-auto w-full">
-                                            <button onClick={() => window.open(`https://sonificart.com/live/${project.id || project.historyId}?play=true`, '_blank')} className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold rounded-lg shadow-lg hover:shadow-purple-500/20 transition-all text-xs uppercase tracking-widest relative group overflow-hidden">
-                                                <span className="relative z-10"><i className="fas fa-play mr-2"></i> {isGuest ? "AVVIA ESPERIENZA" : "OPEN CONSOLE"}</span>
-                                                <div className="absolute inset-0 bg-white/20 transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out"></div>
-                                            </button>
-                                            {!isGuest && (
-                                                <div className="mt-4 flex justify-center w-full">
-                                                    <ActionToolbar url={`https://sonificart.com/live/${project.id || project.historyId}`} type="live" title={project.title} />
-                                                </div>
+                                        <div className="flex-1 min-w-0">
+                                            {project.audioUrl ? (
+                                                <audio controls src={getAbsoluteUrl(project.audioUrl)!} className="h-8 w-full invert opacity-80" />
+                                            ) : (
+                                                <span className="text-xs text-white/30 italic">Audio non disponibile</span>
                                             )}
                                         </div>
                                     </div>
+                                    {!isGuest && project.audioUrl && (
+                                        <div className="mt-4">
+                                            <ActionToolbar url={project.audioUrl} type="audio" filename={`audio_${project.id}.wav`} title={project.title} />
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
                         </div>
-
                     </div>
-
                 </div>
             </div>
         </div>

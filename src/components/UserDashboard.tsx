@@ -32,9 +32,11 @@ const PublishModal: React.FC<{
 
     // REFS
     const fileInputRef = React.useRef<HTMLInputElement>(null);
+    const videoRef = React.useRef<HTMLVideoElement>(null);
 
     // STATE: Video
     const [activeVideoUrl, setActiveVideoUrl] = useState<string | null>(entry.videoUrl || null);
+    const [isVideoPlaying, setIsVideoPlaying] = useState(false);
 
     // STATE: Actions
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -168,7 +170,13 @@ const PublishModal: React.FC<{
     // ACTION: Open Live
     const handleOpenLive = async () => {
         if (!(await ensureAudioUploaded())) return;
-        window.open(`https://sonificart.com/live/${entry.id}?play=true`, '_blank');
+
+        // Pause generated video if playing
+        if (videoRef.current && !videoRef.current.paused) {
+            videoRef.current.pause();
+        }
+
+        window.open(`https://sonificart.com/live/${entry.id}`, '_blank');
     };
 
     // ACTION: Webcam Check
@@ -299,16 +307,16 @@ const PublishModal: React.FC<{
     };
 
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 animate-fade-in p-4 backdrop-blur-md" onClick={onClose}>
-            <div className="bg-[#1e1e2e] w-full max-w-7xl h-[90vh] rounded-2xl overflow-hidden shadow-2xl flex flex-col border border-white/10 relative" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 animate-fade-in p-4 backdrop-blur-md notranslate" onClick={onClose}>
+            <div className="bg-[#1e1e2e] w-full max-w-7xl max-h-[95vh] h-full rounded-2xl overflow-hidden shadow-2xl flex flex-col border border-white/10 relative" onClick={e => e.stopPropagation()}>
 
-                <button onClick={onClose} className="absolute top-4 right-4 z-50 text-white/50 hover:text-white bg-black/40 rounded-full w-8 h-8 flex items-center justify-center"><i className="fas fa-times"></i></button>
+                <button onClick={onClose} className="absolute top-3 right-3 z-50 text-white/50 hover:text-white bg-black/40 rounded-full w-8 h-8 flex items-center justify-center"><i className="fas fa-times"></i></button>
 
-                <div className="px-6 py-6 border-b border-white/10 flex justify-between items-center bg-[#15151b] shrink-0 relative z-10 w-full">
-                    <div className="flex items-center gap-4">
-                        <div className="w-1.5 h-8 bg-gradient-to-b from-brand-accent to-brand-primary rounded-full"></div>
+                <div className="px-5 py-4 border-b border-white/10 flex justify-between items-center bg-[#15151b] shrink-0 relative z-10 w-full">
+                    <div className="flex items-center gap-3">
+                        <div className="w-1.5 h-6 bg-gradient-to-b from-brand-accent to-brand-primary rounded-full"></div>
                         <div>
-                            <h2 className="text-xl font-bold text-white tracking-tight">STUDIO MULTIMEDIALE</h2>
+                            <h2 className="text-lg font-bold text-white tracking-tight">STUDIO MULTIMEDIALE</h2>
                             <p className="text-[10px] text-gray-400 uppercase tracking-widest font-medium">Editing & Pubblicazione</p>
                         </div>
                     </div>
@@ -317,103 +325,111 @@ const PublishModal: React.FC<{
                 {/* Hidden Input */}
                 <input type="file" ref={fileInputRef} hidden accept="audio/*" onChange={handleAudioFileSelect} />
 
-                <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 bg-[#0B0C10] custom-scrollbar">
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 bg-[#0B0C10] custom-scrollbar">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-full">
 
                         {/* COL 1: METADATA & PREVIEW (Left, span 3/12 ~ 25%) */}
-                        <div className="lg:col-span-3 flex flex-col gap-4 h-full">
-                            {/* Preview */}
-                            <div className="relative aspect-square rounded-xl overflow-hidden border border-white/10 group shadow-lg shrink-0">
+                        <div className="lg:col-span-3 flex flex-col gap-3 h-full">
+                            {/* Preview - Reduced height constraint */}
+                            <div className="relative w-full aspect-square max-h-[200px] lg:max-h-[25vh] rounded-xl overflow-hidden border border-white/10 group shadow-lg shrink-0 mx-auto">
                                 <img src={fixImage(entry.imageUrl)} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt="Preview" />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent p-4 flex flex-col justify-end">
-                                    <h3 className="text-white font-bold text-lg leading-tight uppercase font-display">{title}</h3>
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent p-3 flex flex-col justify-end">
+                                    <h3 className="text-white font-bold text-sm leading-tight uppercase font-display truncate">{title}</h3>
                                 </div>
                             </div>
 
                             {/* Metadata Form */}
-                            <div className="bg-[#15151b] border border-white/5 rounded-xl p-5 flex-1 flex flex-col gap-4 shadow-lg h-full">
-                                <h4 className="flex items-center gap-2 text-[#2dd4bf] text-xs font-bold uppercase tracking-wider border-b border-white/5 pb-2">
+                            <div className="bg-[#15151b] border border-white/5 rounded-xl p-4 flex-1 flex flex-col gap-3 shadow-lg h-full min-h-0 overflow-y-auto">
+                                <h4 className="flex items-center gap-2 text-[#2dd4bf] text-[10px] font-bold uppercase tracking-wider border-b border-white/5 pb-2 shrink-0">
                                     <i className="fas fa-pen"></i> Metadata
                                 </h4>
-                                <div>
+                                <div className="shrink-0">
                                     <label className="block text-[10px] font-bold text-gray-500 mb-1 uppercase">Titolo</label>
-                                    <input value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-brand-accent outline-none transition-colors" />
+                                    <input value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-xs text-white focus:border-brand-accent outline-none transition-colors" />
                                 </div>
-                                <div className="flex-1">
+                                <div className="flex-1 min-h-0 flex flex-col">
                                     <label className="block text-[10px] font-bold text-gray-500 mb-1 uppercase">Descrizione</label>
-                                    <textarea value={description} onChange={e => setDescription(e.target.value)} className="w-full h-full min-h-[100px] bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-brand-accent outline-none resize-none transition-colors" />
+                                    <textarea value={description} onChange={e => setDescription(e.target.value)} className="w-full flex-1 min-h-[60px] bg-black/30 border border-white/10 rounded px-3 py-2 text-xs text-white focus:border-brand-accent outline-none resize-none transition-colors" />
                                 </div>
 
                                 {/* VISIBILITY TOGGLE INTEGRATION */}
-                                <div className="bg-white/5 p-3 rounded-lg border border-white/5 flex items-center justify-between shrink-0">
+                                <div className="bg-white/5 p-2 rounded-lg border border-white/5 flex items-center justify-between shrink-0">
                                     <span className={`text-[10px] font-bold ${isPublic ? 'text-green-400' : 'text-gray-400'}`}>{isPublic ? 'PUBBLICA' : 'PRIVATA'}</span>
                                     <label className="relative inline-flex items-center cursor-pointer">
                                         <input type="checkbox" className="sr-only peer" checked={isPublic} onChange={e => setIsPublic(e.target.checked)} />
-                                        <div className="w-8 h-4 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-brand-accent"></div>
+                                        <div className="w-7 h-3.5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-2.5 after:w-2.5 after:transition-all peer-checked:bg-brand-accent"></div>
                                     </label>
                                 </div>
 
-                                <button onClick={handlePublish} disabled={isSubmitting} className="w-full py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-lg border border-white/10 transition-all flex items-center justify-center gap-2 uppercase text-xs tracking-wider shrink-0">
+                                <button onClick={handlePublish} disabled={isSubmitting} className="w-full py-2.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-lg border border-white/10 transition-all flex items-center justify-center gap-2 uppercase text-[10px] tracking-wider shrink-0">
                                     {isSubmitting ? <i className="fas fa-circle-notch fa-spin"></i> : <><i className="fas fa-save"></i> Salva & Pubblica</>}
                                 </button>
                             </div>
                         </div>
 
                         {/* COL 2: MEDIA (Right, span 9/12) */}
-                        <div className="lg:col-span-9 flex flex-col gap-6">
+                        <div className="lg:col-span-9 flex flex-col gap-4 h-full min-h-0">
 
                             {/* TOP: AUDIO SOURCE */}
-                            <div className="bg-[#15151b] border border-white/5 rounded-xl p-6 relative overflow-hidden shadow-lg shrink-0">
-                                <div className="flex justify-between items-start mb-6">
-                                    <h4 className="flex items-center gap-2 text-[#2dd4bf] text-xs font-bold uppercase tracking-wider">
+                            <div className="bg-[#15151b] border border-white/5 rounded-xl p-4 relative overflow-hidden shadow-lg shrink-0">
+                                <div className="flex justify-between items-start mb-3">
+                                    <h4 className="flex items-center gap-2 text-[#2dd4bf] text-[10px] font-bold uppercase tracking-wider">
                                         <i className="fas fa-music"></i> Sorgente Audio
                                     </h4>
-                                    <button onClick={() => fileInputRef.current?.click()} disabled={isUploadingAudio} className="text-[10px] bg-[#2dd4bf]/10 text-[#2dd4bf] px-3 py-1 rounded-full font-bold hover:bg-[#2dd4bf]/20 transition-colors uppercase border border-[#2dd4bf]/20 cursor-pointer disabled:opacity-50">
+                                    <button onClick={() => fileInputRef.current?.click()} disabled={isUploadingAudio} className="text-[9px] bg-[#2dd4bf]/10 text-[#2dd4bf] px-2 py-1 rounded-full font-bold hover:bg-[#2dd4bf]/20 transition-colors uppercase border border-[#2dd4bf]/20 cursor-pointer disabled:opacity-50">
                                         {isUploadingAudio ? <i className="fas fa-spinner fa-spin mr-1"></i> : <i className="fas fa-upload mr-1"></i>} Cambia Audio
                                     </button>
                                 </div>
 
-                                <div className="bg-black/30 rounded-lg p-4 border border-white/5 flex items-center gap-4 mb-4">
-                                    <div className="w-10 h-10 rounded-full bg-[#2dd4bf]/10 flex items-center justify-center text-[#2dd4bf]">
+                                <div className="bg-black/30 rounded-lg p-3 border border-white/5 flex items-center gap-3 mb-2">
+                                    <div className="w-8 h-8 rounded-full bg-[#2dd4bf]/10 flex items-center justify-center text-[#2dd4bf] text-xs">
                                         {isUploadingAudio ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-music"></i>}
                                     </div>
                                     <div className="flex-1 overflow-hidden">
-                                        <div className="text-white font-bold text-sm truncate">
+                                        <div className="text-white font-bold text-xs truncate">
                                             {isUploadingAudio ? (
                                                 <span className="text-[#2dd4bf] italic animate-pulse">Caricamento in corso...</span>
                                             ) : (
                                                 entry.traditionName || "Audio Originale.wav"
                                             )}
                                         </div>
-                                        <div className="text-xs text-gray-500 uppercase tracking-wider">{entry.paradigm || "Scientifico"}</div>
+                                        <div className="text-[10px] text-gray-500 uppercase tracking-wider">{entry.paradigm || "Scientifico"}</div>
                                     </div>
-                                    <audio key={(entry.audioUrl || "audio") + Date.now()} controls src={getAbsoluteUrl(entry.audioUrl) || undefined} className="h-8 max-w-[200px]" />
+                                    <audio key={(entry.audioUrl || "audio") + Date.now()} controls src={getAbsoluteUrl(entry.audioUrl) || undefined} className="h-6 max-w-[150px]" />
                                 </div>
 
                                 <ActionToolbar url={entry.audioUrl || ""} type="audio" filename={`audio_${entry.id}.wav`} title={title} />
                             </div>
 
-                            {/* BOTTOM: GRID 2 */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1">
+                            {/* BOTTOM: GRID 2 - Reduced gaps and flexible height */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 min-h-0">
 
                                 {/* VIDEO GENERATIVO */}
-                                <div className="bg-[#15151b] border border-white/5 rounded-xl p-6 flex flex-col shadow-lg">
-                                    <h4 className="flex items-center gap-2 text-[#2dd4bf] text-xs font-bold uppercase tracking-wider mb-4">
+                                <div className="bg-[#15151b] border border-white/5 rounded-xl p-4 flex flex-col shadow-lg h-full">
+                                    <h4 className="flex items-center gap-2 text-[#2dd4bf] text-[10px] font-bold uppercase tracking-wider mb-3 shrink-0">
                                         <i className="fas fa-video"></i> Video Generativo
                                     </h4>
 
-                                    <div className="flex-1 bg-black rounded-lg border border-white/10 overflow-hidden relative group min-h-[250px] flex items-center justify-center">
+                                    <div className="flex-1 bg-black rounded-lg border border-white/10 overflow-hidden relative group min-h-[150px] flex items-center justify-center">
                                         {activeVideoUrl ? (
-                                            <video src={getAbsoluteUrl(activeVideoUrl)!} className="w-full h-full object-contain" controls />
+                                            <video
+                                                ref={videoRef}
+                                                src={getAbsoluteUrl(activeVideoUrl)!}
+                                                className="w-full h-full object-contain"
+                                                controls
+                                                onPlay={() => setIsVideoPlaying(true)}
+                                                onPause={() => setIsVideoPlaying(false)}
+                                                onEnded={() => setIsVideoPlaying(false)}
+                                            />
                                         ) : (
                                             <div className="text-center w-full px-4">
                                                 {isSubmitting ? (
                                                     <div className="w-full max-w-xs mx-auto">
-                                                        <div className="flex justify-between text-xs text-[#2dd4bf] mb-2 font-bold uppercase tracking-wider">
-                                                            <span>Generazione in corso...</span>
+                                                        <div className="flex justify-between text-[10px] text-[#2dd4bf] mb-1 font-bold uppercase tracking-wider">
+                                                            <span>Generazione...</span>
                                                             <span>{uploadProgress}%</span>
                                                         </div>
-                                                        <div className="h-2 bg-gray-800 rounded-full overflow-hidden border border-white/10">
+                                                        <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden border border-white/10">
                                                             <div
                                                                 className="h-full bg-[#2dd4bf] transition-all duration-300 ease-out shadow-[0_0_10px_rgba(45,212,191,0.5)]"
                                                                 style={{ width: `${uploadProgress}%` }}
@@ -422,8 +438,8 @@ const PublishModal: React.FC<{
                                                     </div>
                                                 ) : (
                                                     <>
-                                                        <i className="fas fa-film text-4xl text-gray-700 mb-3 block"></i>
-                                                        <button onClick={handleGenerateVideo} className="px-5 py-2 bg-[#2dd4bf] text-black font-bold rounded-full shadow-lg hover:scale-105 transition-transform text-xs uppercase tracking-wide">
+                                                        <i className="fas fa-film text-2xl text-gray-700 mb-2 block"></i>
+                                                        <button onClick={handleGenerateVideo} className="px-4 py-1.5 bg-[#2dd4bf] text-black font-bold rounded-full shadow-lg hover:scale-105 transition-transform text-[10px] uppercase tracking-wide">
                                                             Genera Video
                                                         </button>
                                                     </>
@@ -432,38 +448,39 @@ const PublishModal: React.FC<{
                                         )}
                                     </div>
                                     {activeVideoUrl && (
-                                        <div className="mt-4">
+                                        <div className="mt-3 shrink-0">
                                             <ActionToolbar url={activeVideoUrl} type="video" filename={`video_${entry.id}.mp4`} title={title} />
                                         </div>
                                     )}
                                 </div>
 
                                 {/* LIVE PERFORMANCE */}
-                                <div className="bg-[#15151b] border border-white/5 rounded-xl p-6 flex flex-col shadow-lg relative overflow-hidden">
-                                    <div className="absolute top-0 right-0 p-4 opacity-20"><i className="fas fa-bolt text-6xl text-purple-500"></i></div>
-                                    <h4 className="flex items-center gap-2 text-purple-400 text-xs font-bold uppercase tracking-wider mb-4">
+                                <div className="bg-[#15151b] border border-white/5 rounded-xl p-4 flex flex-col shadow-lg relative overflow-hidden h-full">
+                                    <div className="absolute top-0 right-0 p-3 opacity-20"><i className="fas fa-bolt text-4xl text-purple-500"></i></div>
+                                    <h4 className="flex items-center gap-2 text-purple-400 text-[10px] font-bold uppercase tracking-wider mb-3 shrink-0">
                                         <i className="fas fa-bolt"></i> Live Performance
                                     </h4>
-                                    <p className="text-gray-400 text-xs mb-6 leading-relaxed">
-                                        Ambiente interattivo guidato da Face-Tracker e Motion-Tracking.
+                                    <p className="text-gray-300 text-[11px] mb-4 leading-relaxed shrink-0 font-medium">
+                                        Esperienza interattiva reale.<br />
+                                        <span className="text-gray-400 font-normal text-[10px] block mt-1">Interagisci con l'opera usando i movimenti del volto e l'espressione.</span>
                                     </p>
 
-                                    <div className="bg-black/30 border border-white/5 p-4 rounded-lg mb-6">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <span className="text-xs text-gray-300">System Status</span>
-                                            <span className="text-[10px] font-mono text-green-400">READY</span>
+                                    <div className="bg-black/30 border border-white/5 p-3 rounded-lg mb-4 shrink-0">
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="text-[10px] text-gray-300">System Status</span>
+                                            <span className="text-[9px] font-mono text-green-400">READY</span>
                                         </div>
-                                        <div className="flex gap-4">
-                                            <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-500"></div><span className="text-[10px] text-gray-400 uppercase">Audio</span></div>
-                                            <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-500"></div><span className="text-[10px] text-gray-400 uppercase">Webcam</span></div>
+                                        <div className="flex gap-3">
+                                            <div className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-green-500"></div><span className="text-[9px] text-gray-400 uppercase">Audio</span></div>
+                                            <div className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-green-500"></div><span className="text-[9px] text-gray-400 uppercase">Webcam</span></div>
                                         </div>
                                     </div>
 
-                                    <div className="mt-auto">
-                                        <button onClick={handleOpenLive} className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold rounded-lg shadow-lg hover:shadow-purple-500/20 transition-all text-xs uppercase tracking-widest">
+                                    <div className="mt-auto shrink-0">
+                                        <button onClick={handleOpenLive} className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold rounded-lg shadow-lg hover:shadow-purple-500/20 transition-all text-[10px] uppercase tracking-widest">
                                             Open Console
                                         </button>
-                                        <div className="mt-4 flex justify-center">
+                                        <div className="mt-3 flex justify-center">
                                             <ActionToolbar url={`https://sonificart.com/live/${entry.id}`} type="live" title={title} />
                                         </div>
                                     </div>
@@ -542,7 +559,15 @@ const HistoryItem: React.FC<{ item: DashboardEntry; onView: () => void; onPublis
                         <i className="fas fa-video"></i> VIDEO
                     </button>
                 )}
-                {isPro && onPublishClick && <button onClick={(e) => { e.stopPropagation(); onPublishClick(); }} className="bg-purple-600/20 text-purple-300 hover:bg-purple-600 hover:text-white text-[10px] sm:text-xs font-bold py-2 px-3 sm:px-4 rounded border border-purple-500/30">Pubblica</button>}
+                {onPublishClick && (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onPublishClick(); }}
+                        className="bg-brand-accent/10 text-brand-accent hover:bg-brand-accent hover:text-brand-primary text-[10px] sm:text-xs font-black py-2 px-3 sm:px-4 rounded border border-brand-accent/30 uppercase tracking-tighter transition-all flex items-center gap-2"
+                    >
+                        <i className="fas fa-globe"></i>
+                        Pubblicazione
+                    </button>
+                )}
             </div>
             <button onClick={(e) => { e.stopPropagation(); if (onDelete) onDelete(); }} className="bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white p-2 rounded ml-2"><i className="fas fa-trash text-xs"></i></button>
         </div>
@@ -615,7 +640,7 @@ export const UserDashboard: React.FC<{ user: User, onLoadEntry: (entry: Dashboar
     };
 
     return (
-        <div className="max-w-5xl mx-auto pb-20">
+        <div className="max-w-5xl mx-auto pb-20 notranslate">
             <div className="flex justify-between items-end mb-8 border-b border-white/10 pb-6">
                 <div><h2 className="text-3xl font-display font-bold text-white mb-2">Archivio Opere</h2><p className="text-brand-text-secondary">Gestisci le tue creazioni.</p></div>
             </div>

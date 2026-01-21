@@ -9,6 +9,26 @@ const STORAGE_KEYS = {
     TOKEN: 'sonificart_auth_token',
 };
 
+// --- AUTH HELPERS ---
+const getToken = (): string | null => {
+    return localStorage.getItem(STORAGE_KEYS.TOKEN) || sessionStorage.getItem(STORAGE_KEYS.TOKEN);
+};
+
+const setAuthToken = (token: string, remember: boolean) => {
+    if (remember) {
+        localStorage.setItem(STORAGE_KEYS.TOKEN, token);
+        sessionStorage.removeItem(STORAGE_KEYS.TOKEN);
+    } else {
+        sessionStorage.setItem(STORAGE_KEYS.TOKEN, token);
+        localStorage.removeItem(STORAGE_KEYS.TOKEN);
+    }
+};
+
+const clearAuthToken = () => {
+    localStorage.removeItem(STORAGE_KEYS.TOKEN);
+    sessionStorage.removeItem(STORAGE_KEYS.TOKEN);
+};
+
 const handleResponse = async (response: Response) => {
     if (response.status === 413) {
         throw new Error("File troppo grande (Errore 413). Il server ha rifiutato l'upload. Riduci la durata o contatta l'assistenza per aumentare il limite di upload.");
@@ -51,7 +71,7 @@ const handleResponse = async (response: Response) => {
 };
 
 export const api = {
-    login: async (email: string, password: string): Promise<User> => {
+    login: async (email: string, password: string, rememberMe: boolean = false): Promise<User> => {
         const response = await fetch(`${API_BASE_URL}/index.php?action=login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -59,7 +79,7 @@ export const api = {
         });
         const data = await handleResponse(response);
         if (data.token && data.token !== 'undefined' && data.token !== 'null') {
-            localStorage.setItem(STORAGE_KEYS.TOKEN, data.token);
+            setAuthToken(data.token, rememberMe);
         }
         return data.user;
     },
@@ -72,13 +92,13 @@ export const api = {
         });
         const data = await handleResponse(response);
         if (data.token && data.token !== 'undefined' && data.token !== 'null') {
-            localStorage.setItem(STORAGE_KEYS.TOKEN, data.token);
+            setAuthToken(data.token, true); // Default to remember for registration? Or session? Let's say session or persistent. Persistent is standard.
         }
         return data.user;
     },
 
     requestAccess: async (data: any): Promise<void> => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         const params = new URLSearchParams();
         Object.keys(data).forEach(key => params.append(key, data[key]));
         if (token) params.append('auth_token', token);
@@ -90,9 +110,9 @@ export const api = {
     },
 
     checkSession: async (): Promise<User | null> => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         if (!token || token === 'undefined' || token === 'null') {
-            if (token) localStorage.removeItem(STORAGE_KEYS.TOKEN);
+            if (token) clearAuthToken();
             return null;
         }
         try {
@@ -112,7 +132,7 @@ export const api = {
             const data = await handleResponse(response);
             if (!data.user) {
                 console.warn("Session check returned no user, clearing token.");
-                localStorage.removeItem(STORAGE_KEYS.TOKEN);
+                clearAuthToken();
                 return null;
             }
             return data.user;
@@ -126,7 +146,7 @@ export const api = {
                 lowercaseMsg.includes("credenziali") ||
                 lowercaseMsg.includes("invalid token")) {
                 console.warn("Session check definitively failed, clearing token:", msg);
-                localStorage.removeItem(STORAGE_KEYS.TOKEN);
+                clearAuthToken();
             } else {
                 console.error("Network/Server error during checkSession. Holding token.", error);
             }
@@ -134,10 +154,10 @@ export const api = {
         }
     },
 
-    logout: async () => localStorage.removeItem(STORAGE_KEYS.TOKEN),
+    logout: async () => clearAuthToken(),
 
     consumeCredit: async (userId: string, cost: number) => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         const params = new URLSearchParams();
         params.append('cost', cost.toString());
         if (token) params.append('auth_token', token);
@@ -153,7 +173,7 @@ export const api = {
     },
 
     saveSonification: async (result: SonificationResult, paradigm: Paradigm, title?: string, description?: string) => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
 
         if (!token) {
             console.error("Save attempt failed: No auth token found in localStorage.");
@@ -251,7 +271,7 @@ export const api = {
     },
 
     uploadChunk: async (formData: FormData): Promise<any> => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         if (token) formData.append('auth_token', token);
 
         const response = await fetch(`${API_BASE_URL}/index.php?action=upload_chunk`, {
@@ -262,7 +282,7 @@ export const api = {
     },
 
     attachVideoToHistory: async (entryId: string, videoBlob: Blob, fileName: string = "generated_video.mp4", onProgress?: (p: number) => void): Promise<string> => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         if (!token) throw new Error("Unauthorized");
 
         const file = new File([videoBlob], fileName, { type: videoBlob.type });
@@ -327,7 +347,7 @@ export const api = {
     },
 
     detachVideoFromHistory: async (entryId: string): Promise<boolean> => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         if (!token) throw new Error("Unauthorized");
 
         const formData = new FormData();
@@ -343,7 +363,7 @@ export const api = {
     },
 
     generateVideoServer: async (entryId: string): Promise<any> => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         if (!token) throw new Error("Unauthorized");
 
         const formData = new FormData();
@@ -359,7 +379,7 @@ export const api = {
     },
 
     checkGenerationStatus: async (entryId: string): Promise<{ status: string, videoUrl?: string, error?: string, message?: string }> => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         const formData = new FormData();
         formData.append('entryId', entryId);
         if (token) formData.append('auth_token', token);
@@ -373,7 +393,7 @@ export const api = {
 
     // --- ATTACH AUDIO TO HISTORY (NEW) ---
     updateHistoryItemConfig: async (id: string, config: any): Promise<boolean> => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         if (!token) throw new Error("Unauthorized");
 
         const formData = new FormData();
@@ -390,7 +410,7 @@ export const api = {
     },
 
     attachAudioToHistory: async (entryId: string, audioBlob: Blob, fileName: string = "uploaded_audio.mp3", onProgress?: (p: number) => void): Promise<string> => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         if (!token) throw new Error("Unauthorized");
 
         const file = new File([audioBlob], fileName, { type: audioBlob.type });
@@ -445,7 +465,7 @@ export const api = {
     },
 
     publishFromHistory: async (entryId: string, metadata: any, customMedia: { url: string, type: string } | null) => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         const body = {
             entryId: entryId,
             metadata: metadata,
@@ -463,7 +483,7 @@ export const api = {
     },
 
     updateProfile: async (data: { name?: string, email?: string, avatarUrl?: string, customLogoUrl?: string, password?: string }) => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         const params = new URLSearchParams();
         Object.keys(data).forEach(key => params.append(key, (data as any)[key]));
         if (token) params.append('auth_token', token);
@@ -477,7 +497,7 @@ export const api = {
     },
 
     getHistory: async () => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         if (!token) throw new Error("Unauthorized");
 
         const url = `${API_BASE_URL}/index.php?action=get_history&auth_token=${encodeURIComponent(token)}&t=${new Date().getTime()}`;
@@ -509,7 +529,7 @@ export const api = {
 
     // Lazy load full details for a single history item (including heavy JSON fields)
     getHistoryItem: async (id: string): Promise<DashboardEntry> => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         if (!token) throw new Error("Unauthorized");
 
         const params = new URLSearchParams();
@@ -525,7 +545,7 @@ export const api = {
     },
 
     deleteHistoryItem: async (id: string) => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         const response = await fetch(`${API_BASE_URL}/index.php?action=delete_history_item`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -535,7 +555,7 @@ export const api = {
     },
 
     uploadHistoryAudio: async (id: string, file: File): Promise<string> => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         const formData = new FormData();
         formData.append('entryId', id);
         formData.append('audioFile', file);
@@ -559,7 +579,7 @@ export const api = {
     // --- ADMIN FUNCTIONS ---
 
     updateShowcaseItem: async (item: Partial<ShowcaseProject> & { id: string }) => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         const params = new URLSearchParams();
         Object.keys(item).forEach(key => params.append(key, (item as any)[key]));
         if (token) params.append('auth_token', token);
@@ -572,7 +592,7 @@ export const api = {
     },
 
     deleteShowcaseItem: async (id: string) => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         const params = new URLSearchParams();
         params.append('id', id);
         if (token) params.append('auth_token', token);
@@ -586,13 +606,13 @@ export const api = {
     },
 
     getAccessRequests: async (): Promise<any[]> => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         const response = await fetch(`${API_BASE_URL}/index.php?action=admin_get_requests`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auth_token: token }) });
         return await handleResponse(response);
     },
 
     approveAccessRequest: async (id: string): Promise<any> => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         const params = new URLSearchParams();
         params.append('id', id);
         if (token) params.append('auth_token', token);
@@ -606,7 +626,7 @@ export const api = {
     },
 
     rejectAccessRequest: async (id: string): Promise<any> => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         const params = new URLSearchParams();
         params.append('id', id);
         if (token) params.append('auth_token', token);
@@ -620,7 +640,7 @@ export const api = {
     },
 
     updateAccessRequest: async (id: string, field: string, value: boolean): Promise<any> => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         const params = new URLSearchParams();
         params.append('id', id);
         params.append('field', field);
@@ -636,7 +656,7 @@ export const api = {
     },
 
     updateMetadata: async (id: string, title: string, subtitle: string, description: string): Promise<void> => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         if (!token) throw new Error("Non autenticato");
 
         const data = new FormData();
@@ -654,7 +674,7 @@ export const api = {
     },
 
     logEvent: async (action: string, details?: string) => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         const params = new URLSearchParams();
         params.append('evt_action', action);
         if (details) params.append('evt_details', details);
@@ -669,7 +689,7 @@ export const api = {
     },
 
     getSystemStats: async (): Promise<SystemStats> => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         const params = new URLSearchParams();
         if (token) params.append('auth_token', token);
         const response = await fetch(`${API_BASE_URL}/index.php?action=get_stats`, {
@@ -681,7 +701,7 @@ export const api = {
     },
 
     getSystemLogs: async (): Promise<SystemLog[]> => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         const params = new URLSearchParams();
         if (token) params.append('auth_token', token);
         const response = await fetch(`${API_BASE_URL}/index.php?action=get_logs`, {
@@ -693,7 +713,7 @@ export const api = {
     },
 
     getDbTables: async (): Promise<string[]> => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         const params = new URLSearchParams();
         if (token) params.append('auth_token', token);
         const response = await fetch(`${API_BASE_URL}/index.php?action=get_db_tables`, {
@@ -705,7 +725,7 @@ export const api = {
     },
 
     getDbTableContent: async (table: string): Promise<{ columns: string[], rows: any[] }> => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         const params = new URLSearchParams();
         params.append('table', table);
         if (token) params.append('auth_token', token);
@@ -718,7 +738,7 @@ export const api = {
     },
 
     adminUpdateCell: async (table: string, id: string, column: string, value: any): Promise<void> => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         const params = new URLSearchParams();
         params.append('table', table);
         params.append('id', id);
@@ -740,7 +760,7 @@ export const api = {
     },
 
     getAllUsers: async (): Promise<User[]> => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         const params = new URLSearchParams();
         if (token) params.append('auth_token', token);
         const response = await fetch(`${API_BASE_URL}/index.php?action=get_users`, {
@@ -752,7 +772,7 @@ export const api = {
     },
 
     adminCreateUser: async (u: any) => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         const params = new URLSearchParams();
         Object.keys(u).forEach(key => params.append(key, u[key]));
         if (token) params.append('auth_token', token);
@@ -764,7 +784,7 @@ export const api = {
     },
 
     updateUser: async (u: any) => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         const params = new URLSearchParams();
         Object.keys(u).forEach(key => params.append(key, u[key]));
         if (token) params.append('auth_token', token);
@@ -776,7 +796,7 @@ export const api = {
     },
 
     deleteUser: async (id: string) => {
-        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        const token = getToken();
         const params = new URLSearchParams();
         params.append('id', id);
         if (token) params.append('auth_token', token);
@@ -787,8 +807,38 @@ export const api = {
         });
     },
 
+    getAppSetting: async (key: string): Promise<string> => {
+        const response = await fetch(`${API_BASE_URL}/index.php?action=get_app_setting&key=${key}`);
+        const data = await handleResponse(response);
+        return data.content;
+    },
+
+    updateAppSetting: async (key: string, content: string): Promise<void> => {
+        const token = getToken();
+        if (!token) throw new Error("Unauthorized");
+        const params = new URLSearchParams();
+        params.append('auth_token', token);
+        params.append('key', key);
+        params.append('content', content);
+
+        const response = await fetch(`${API_BASE_URL}/index.php?action=update_app_setting`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+        });
+        await handleResponse(response);
+    },
+
+    getPrivacyPolicy: async (): Promise<string> => {
+        return api.getAppSetting('privacy_policy');
+    },
+
+    updatePrivacyPolicy: async (content: string): Promise<void> => {
+        return api.updateAppSetting('privacy_policy', content);
+    },
+
     cleanAuthSession: () => {
-        localStorage.removeItem(STORAGE_KEYS.TOKEN);
+        clearAuthToken();
         window.location.reload();
     }
 };

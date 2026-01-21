@@ -115,6 +115,16 @@ export const ShowcaseView: React.FC<ShowcaseViewProps> = ({ user, initialProject
                 </div>
             </div>
 
+            {/* Disclaimer */}
+            <div className="flex justify-center mt-6 mb-8 px-4">
+                <div className="bg-white/5 border border-white/10 rounded-lg px-6 py-3 flex items-center gap-3 max-w-2xl text-center shadow-lg backdrop-blur-sm">
+                    <i className="fas fa-info-circle text-brand-accent text-sm"></i>
+                    <p className="text-xs text-gray-400 leading-relaxed">
+                        Le immagini sono pubbliche e scaricabili. Il download non autorizza l’uso commerciale o la redistribuzione.
+                    </p>
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 px-4">
                 {paginatedProjects.map(p => (
                     <div key={p.id} onClick={() => setSelectedProject(p)} className="group relative aspect-square bg-black rounded-xl overflow-hidden cursor-pointer border border-white/10 hover:border-brand-accent/50 hover:shadow-lg transition-all">

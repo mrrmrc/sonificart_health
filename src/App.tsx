@@ -17,7 +17,7 @@ function AppContent() {
     const [requestAccessInitialPlan, setRequestAccessInitialPlan] = useState<string>('Mensile');
     const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
     const [helpInitialSection, setHelpInitialSection] = useState<string | undefined>(undefined);
-    const isUnlimited = user?.isPro || user?.isAdmin;
+    const isUnlimited = user?.isPro;
     const location = useLocation();
 
     // Fix scroll on route change
@@ -29,11 +29,12 @@ function AppContent() {
         // --- EMERGENCY RECOVERY v1.30 ---
         const FORCED_CLEANUP_VERSION = '1.30';
         const lastCleanup = localStorage.getItem('sonificart_recovery_v');
-        const savedToken = localStorage.getItem('sonificart_auth_token');
+        const savedToken = localStorage.getItem('sonificart_auth_token') || sessionStorage.getItem('sonificart_auth_token');
 
         if (lastCleanup !== FORCED_CLEANUP_VERSION) {
             console.warn("Emergency Recovery: Forza pulizia sessione per aggiornamento protocollo v1.30...");
             localStorage.removeItem('sonificart_auth_token');
+            sessionStorage.removeItem('sonificart_auth_token');
             localStorage.setItem('sonificart_recovery_v', FORCED_CLEANUP_VERSION);
             // Nuclear option: reload to ensure ALL components restart with empty state
             window.location.reload();
@@ -47,13 +48,14 @@ function AppContent() {
         )) {
             console.warn("Emergency Wash: Identificato token corrotto, pulizia in corso...", savedToken);
             localStorage.removeItem('sonificart_auth_token');
+            sessionStorage.removeItem('sonificart_auth_token');
             window.location.reload();
             return;
         }
         // -------------------------------
 
         const checkUser = async () => {
-            const token = localStorage.getItem('sonificart_auth_token');
+            const token = localStorage.getItem('sonificart_auth_token') || sessionStorage.getItem('sonificart_auth_token');
             if (token) {
                 try {
                     const currentUser = await api.checkSession();

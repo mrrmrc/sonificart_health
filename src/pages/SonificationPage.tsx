@@ -22,13 +22,14 @@ import { reconstructResultFromPartialData } from '../utils/dataUtils';
 
 interface OutletContextType {
     user: User | null;
+    setUser: (user: User | null) => void;
     isUnlimited: boolean;
     setIsLoginModalOpen: (open: boolean) => void;
     setIsRequestAccessOpen: (open: boolean) => void;
 }
 
 export const SonificationPage: React.FC = () => {
-    const { user, isUnlimited, setIsLoginModalOpen, setIsRequestAccessOpen } = useOutletContext<OutletContextType>();
+    const { user, setUser, isUnlimited, setIsLoginModalOpen, setIsRequestAccessOpen } = useOutletContext<OutletContextType>();
     const { t } = useLanguage();
     const location = useLocation();
 
@@ -166,7 +167,39 @@ export const SonificationPage: React.FC = () => {
     }, []);
 
     const startSonification = async () => {
+        if (isProcessing) return;
         if (!imageFile || !user) { setIsLoginModalOpen(true); return; }
+
+        // Credit check and consumption
+        if (!isUnlimited && user) {
+            const cost = paradigm === 'scientific' ? 1 : 2;
+            if ((user.credits || 0) < cost) {
+                setConfirmModal({
+                    isOpen: true,
+                    title: "Crediti Insufficienti",
+                    message: `Ti servono ${cost} crediti per questa operazione. Hai ${user.credits || 0} crediti.`,
+                    type: 'warning',
+                    confirmText: "Acquista Crediti",
+                    onConfirm: () => { setIsRequestAccessOpen(true); setConfirmModal(prev => ({ ...prev, isOpen: false })); }
+                });
+                return;
+            }
+
+            try {
+                const newCredits = await api.consumeCredit(user.id, cost);
+                setUser({ ...user, credits: newCredits });
+            } catch (e: any) {
+                setConfirmModal({
+                    isOpen: true,
+                    title: "Errore Crediti",
+                    message: e.message || "Impossibile scalare i crediti.",
+                    type: 'danger',
+                    singleButton: true,
+                    onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+                });
+                return;
+            }
+        }
 
         let initialSteps = scientificSteps;
         if (paradigm === 'artistic') initialSteps = artisticSteps;
@@ -183,9 +216,7 @@ export const SonificationPage: React.FC = () => {
             else if (paradigm === 'artistic') res = await sonifyImageArtistic(imageFile, config, progressCb, oscClient, scanPatternOverride, acquisitionMetadata);
             else res = await sonifyImageHybrid(imageFile, config, progressCb, oscClient, scanPatternOverride, acquisitionMetadata);
 
-            // REMOVED AUTO SAVE to ensure 100% progress means READY
-            // if (user) await api.saveSonification(res, paradigm);
-
+            // setResult(res);
             setResult(res);
             setProcessingSteps(prev => prev.map(step => ({ ...step, status: 'completed' })));
         } catch (error) {
@@ -258,7 +289,7 @@ export const SonificationPage: React.FC = () => {
                 </div>
             )}
             {isProcessing && <div className="max-w-3xl mx-auto"><ProcessingView steps={processingSteps} imageUrl={imageUrl} /></div>}
-            {result && imageUrl && (<div className="max-w-7xl mx-auto"><ResultsDashboard result={result} imageUrl={imageUrl} onReset={handleCloseResult} onSave={handleManualSave} user={user} onRequestAccess={() => setIsRequestAccessOpen(true)} isHistoryView={isViewingHistory} /></div>)}
+            {result && imageUrl && (<div className="max-w-7xl mx-auto"><ResultsDashboard result={result} imageUrl={imageUrl} onReset={handleCloseResult} onSave={handleManualSave} user={user} setUser={setUser} onRequestAccess={() => setIsRequestAccessOpen(true)} isHistoryView={isViewingHistory} /></div>)}
 
             {showStandardizationModal && (
                 <PhotoStandardizationModal

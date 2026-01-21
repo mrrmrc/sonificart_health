@@ -33,7 +33,7 @@ const emptyProject: Omit<ShowcaseProject, 'id'> = {
     videoUrl: ''
 };
 
-type AdminTab = 'overview' | 'requests' | 'users' | 'showcase' | 'logs' | 'database';
+type AdminTab = 'overview' | 'requests' | 'users' | 'showcase' | 'logs' | 'database' | 'settings';
 
 const StatCard: React.FC<{ title: string; value: string | number; subtext: string; icon: string; color: string }> = ({ title, value, subtext, icon, color }) => (
     <div className="bg-brand-secondary/40 p-6 rounded-xl border border-brand-secondary flex items-center gap-4 hover:bg-brand-secondary/60 transition-colors">
@@ -218,6 +218,18 @@ export const AdminPanel: React.FC = () => {
     const [tableData, setTableData] = useState<{ columns: string[], rows: any[] } | null>(null);
     const [isLoading, setIsLoading] = useState(false);
 
+    // Settings State
+    const [settingKey, setSettingKey] = useState('privacy_policy');
+    const [settingsContent, setSettingsContent] = useState('');
+
+    const SETTING_KEYS: { [key: string]: string } = {
+        'privacy_policy': 'Informativa Privacy',
+        'terms_of_service': 'Termini di Servizio',
+        'image_upload_policy': 'Informativa Upload Immagini',
+        'notice_and_takedown': 'Notice & Takedown',
+        'upload_disclaimer': 'Disclaimer Upload'
+    };
+
     // Edit States
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [isCreatingUser, setIsCreatingUser] = useState(false);
@@ -244,15 +256,18 @@ export const AdminPanel: React.FC = () => {
                     setTableData(await api.getDbTableContent(selectedTable));
                 }
             }
+            if (activeTab === 'settings') {
+                setSettingsContent(await api.getAppSetting(settingKey));
+            }
         } catch (e) { console.error(e); }
         finally { setIsLoading(false); }
-    }, [activeTab]);
+    }, [activeTab, settingKey]);
 
     useEffect(() => {
         loadData();
         const i = setInterval(loadData, 15000);
         return () => clearInterval(i);
-    }, [activeTab, loadData]);
+    }, [activeTab, settingKey, loadData]);
 
     const handleApprove = async (id: string) => {
         setConfirmModal({
@@ -386,14 +401,40 @@ export const AdminPanel: React.FC = () => {
         }
     };
 
+    const handleSettingsSave = async () => {
+        setIsLoading(true);
+        try {
+            await api.updateAppSetting(settingKey, settingsContent);
+            setConfirmModal({
+                isOpen: true,
+                title: "Salvataggio Riuscito",
+                message: `Il documento "${SETTING_KEYS[settingKey]}" è stato aggiornato con successo.`,
+                type: 'success',
+                singleButton: true,
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            });
+        } catch (e) {
+            setConfirmModal({
+                isOpen: true,
+                title: "Errore",
+                message: "Impossibile salvare le modifiche: " + (e instanceof Error ? e.message : "Errore sconosciuto"),
+                type: 'danger',
+                singleButton: true,
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     return (
         <div className="w-full max-w-7xl mx-auto animate-fade-in pb-20">
             <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
                 <h2 className="text-3xl font-bold text-white flex items-center gap-3"><i className="fas fa-user-shield text-brand-accent"></i> Admin Dashboard</h2>
                 <div className="bg-brand-secondary/50 p-1 rounded-lg flex overflow-x-auto">
-                    {['overview', 'requests', 'users', 'showcase', 'logs', 'database'].map(tab => (
+                    {['overview', 'requests', 'users', 'showcase', 'logs', 'database', 'settings'].map(tab => (
                         <button key={tab} onClick={() => setActiveTab(tab as AdminTab)} className={`px-4 py-2 rounded text-sm font-bold capitalize whitespace-nowrap ${activeTab === tab ? 'bg-brand-accent text-black' : 'text-white hover:bg-white/10'}`}>
-                            {tab} {tab === 'requests' && requests.length > 0 && `(${requests.length})`}
+                            {tab === 'settings' ? 'Impostazioni' : tab} {tab === 'requests' && requests.length > 0 && `(${requests.length})`}
                         </button>
                     ))}
                 </div>
@@ -666,6 +707,44 @@ export const AdminPanel: React.FC = () => {
                                 )}
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'settings' && (
+                <div className="bg-[#1e1e2e] rounded-xl border border-white/10 p-6">
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-xl font-bold text-white">Gestione Termini e Policy</h3>
+                        <div className="flex gap-2">
+                            {Object.entries(SETTING_KEYS).map(([key, label]) => (
+                                <button
+                                    key={key}
+                                    onClick={() => setSettingKey(key)}
+                                    className={`px-3 py-1.5 rounded text-xs font-bold transition-all ${settingKey === key ? 'bg-brand-accent text-black' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <p className="text-sm text-gray-400 mb-4">
+                        Modifica il contenuto di <strong>{SETTING_KEYS[settingKey]}</strong>. Supporta testo formattato in HTML.
+                    </p>
+                    <textarea
+                        value={settingsContent}
+                        onChange={(e) => setSettingsContent(e.target.value)}
+                        className="w-full h-[500px] bg-black/30 border border-white/10 rounded-lg p-4 text-white text-sm font-mono focus:border-brand-accent outline-none resize-y"
+                        placeholder="<h1>Titolo</h1><p>Inserisci qui il contenuto HTML...</p>"
+                    />
+                    <div className="flex justify-end mt-4">
+                        <button
+                            onClick={handleSettingsSave}
+                            disabled={isLoading}
+                            className="bg-brand-accent hover:bg-brand-accent-light text-brand-primary px-6 py-2 rounded-lg font-bold shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {isLoading ? 'Salvataggio...' : 'Salva Modifiche'}
+                        </button>
                     </div>
                 </div>
             )}

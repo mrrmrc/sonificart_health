@@ -59,6 +59,12 @@ try {
     $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_expires_at DATETIME DEFAULT NULL");
     $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS tier VARCHAR(20) DEFAULT 'free'");
     $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_logo_url VARCHAR(255) DEFAULT NULL");
+    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS token VARCHAR(255) DEFAULT NULL");
+    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS token_expires_at DATETIME DEFAULT NULL");
+    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_pro TINYINT(1) DEFAULT 0");
+    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin TINYINT(1) DEFAULT 0");
+    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS credits INT DEFAULT 0");
+    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(255) DEFAULT NULL");
     $pdo->exec("ALTER TABLE history ADD COLUMN IF NOT EXISTS video_url VARCHAR(255) DEFAULT NULL");
 
     // ADMIN LOGS TABLE
@@ -71,6 +77,14 @@ try {
         level VARCHAR(20) DEFAULT 'INFO',
         ip_address VARCHAR(45),
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    )");
+
+    // APP SETTINGS TABLE (Dynamic Content)
+    $pdo->exec("CREATE TABLE IF NOT EXISTS app_settings (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        setting_key VARCHAR(50) UNIQUE NOT NULL,
+        setting_value LONGTEXT,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )");
 
     try {
@@ -338,7 +352,7 @@ if (strpos($_SERVER['CONTENT_TYPE'] ?? '', 'multipart/form-data') !== false) {
 
 // AUTH MIDDLEWARE
 $userId = getUserIdFromToken($input);
-$publicActions = ['login', 'register', 'get_showcase', 'reset_password', 'upload_media', 'request_access', 'admin_get_requests', 'check_info', 'upload_chunk'];
+$publicActions = ['login', 'register', 'get_showcase', 'reset_password', 'upload_media', 'request_access', 'admin_get_requests', 'check_info', 'upload_chunk', 'get_privacy_policy', 'get_app_setting'];
 
 if (!$userId && !in_array($action, $publicActions) && $action !== 'log_event') { // Allow log_event to be public
     if ($action)
@@ -488,7 +502,7 @@ if ($action === 'get_history' && $method === 'POST') {
             $stmt = $pdo->prepare("
                 SELECT 
                     id, image_hash, timestamp, image_url, audio_url, paradigm, tradition_name, 
-                    title, subtitle, description, video_url, generated_ai_track_url, event_data
+                    title, subtitle, description, video_url, generated_ai_track_url, event_data, music_generation_prompt
                 FROM history 
                 WHERE user_id = ? 
                 ORDER BY timestamp DESC 
@@ -524,6 +538,7 @@ if ($action === 'get_history' && $method === 'POST') {
                 "description" => $h['description'] ?? null,
                 "videoUrl" => ($h['video_url'] ?? null) ? ((strpos($h['video_url'], 'http') === 0) ? $h['video_url'] : $baseUrl . (strpos($h['video_url'], '/') === 0 ? '' : '/') . $h['video_url']) : null,
                 "generatedAiTrackUrl" => ($h['generated_ai_track_url'] ?? null) ? ((strpos($h['generated_ai_track_url'], 'http') === 0) ? $h['generated_ai_track_url'] : $baseUrl . (strpos($h['generated_ai_track_url'], '/') === 0 ? '' : '/') . $h['generated_ai_track_url']) : null,
+                "musicGenerationPrompt" => isset($h['music_generation_prompt']) ? json_decode($h['music_generation_prompt'], true) : null,
                 "events" => $events,  // Piano Roll data for ComparePage
             ];
         }, $history);
@@ -925,7 +940,14 @@ if ($action === 'update_metadata' && $method === 'POST') {
     $stmt->execute([$entryId]);
     $ownerId = $stmt->fetchColumn();
 
-    if ($ownerId != $userId)
+    $isAdmin = false;
+    if ($userId) {
+        $stmtAdmin = $pdo->prepare("SELECT is_admin FROM users WHERE id = ?");
+        $stmtAdmin->execute([$userId]);
+        $isAdmin = (bool) $stmtAdmin->fetchColumn();
+    }
+
+    if ($ownerId != $userId && !$isAdmin)
         sendResponse(["error" => "Unauthorized"], 403);
 
     $pdo->prepare("UPDATE history SET title = ?, subtitle = ?, description = ? WHERE id = ?")
@@ -959,7 +981,9 @@ if ($action === 'publish_history' && $method === 'POST') {
                 // Let's enforce ownership or at least log it.
             }
 
-            $author = $pdo->query("SELECT name FROM users WHERE id = $userId")->fetchColumn();
+            $stmtAuthor = $pdo->prepare("SELECT name FROM users WHERE id = ?");
+            $stmtAuthor->execute([$userId]);
+            $author = $stmtAuthor->fetchColumn();
 
             $metadata = is_string($input['metadata'] ?? null) ? json_decode($input['metadata'], true) : ($input['metadata'] ?? []);
             $tags = isset($metadata['tags']) ? (is_array($metadata['tags']) ? implode(',', $metadata['tags']) : $metadata['tags']) : '';
@@ -980,9 +1004,15 @@ if ($action === 'publish_history' && $method === 'POST') {
             $existing->execute([$e['id']]);
             $prev = $existing->fetch();
 
+            // Check Admin Status
+            $isAdmin = false;
+            $stmtAdmin = $pdo->prepare("SELECT is_admin FROM users WHERE id = ?");
+            $stmtAdmin->execute([$userId]);
+            $isAdmin = (bool) $stmtAdmin->fetchColumn();
+
             if ($prev) {
                 // UPDATE
-                if ($prev['owner_id'] != $userId) {
+                if ($prev['owner_id'] != $userId && !$isAdmin) {
                     // Security Check Failed (mismatch owner of history vs owner of showcase)
                     error_log("Publish Update Security Warning: User $userId trying to update Showcase " . $prev['id'] . " owned by " . $prev['owner_id']);
                     sendResponse(["error" => "Non autorizzato ad aggiornare questa vetrina"], 403);
@@ -1118,9 +1148,15 @@ if ($action === 'register' && $method === 'POST') {
         // HASH PASSWORD
         $hashed = password_hash($password, PASSWORD_DEFAULT);
 
-        $stmt = $pdo->prepare("INSERT INTO users (name, email, password, credits, avatar_url) VALUES (?, ?, ?, 5, ?)");
+        // Grant STANDARD access with 10 starting credits (Enable scaling)
+        $isPro = 0;
+        $tier = 'free';
+        $credits = 10;
+        $expires = null;
+
+        $stmt = $pdo->prepare("INSERT INTO users (name, email, password, credits, is_pro, tier, pro_expires_at, avatar_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
         $avatar = "https://api.dicebear.com/7.x/avataaars/svg?seed=" . urlencode($name);
-        $stmt->execute([$name, $email, $hashed, $avatar]);
+        $stmt->execute([$name, $email, $hashed, $credits, $isPro, $tier, $expires, $avatar]);
         $id = $pdo->lastInsertId();
 
         log_activity($pdo, $id, 'REGISTER', "New User: $email", 'INFO');
@@ -1129,7 +1165,33 @@ if ($action === 'register' && $method === 'POST') {
         $token = 'user_' . $id . '_' . bin2hex(random_bytes(16));
         $pdo->prepare("UPDATE users SET token = ? WHERE id = ?")->execute([$token, $id]);
 
-        sendResponse(["token" => $token, "user" => ["id" => (string) $id, "name" => $name, "email" => $email, "isPro" => false, "isAdmin" => false, "credits" => 5]]);
+        // WELCOME EMAIL
+        $welcomeBody = "<p>Ciao <strong>$name</strong>,</p>";
+        $welcomeBody .= "<p>Benvenuto su <strong>SonificA.R.T.</strong>! Siamo felici di averti con noi.</p>";
+        $welcomeBody .= "<p>Il tuo account è stato creato con successo ed è stato attivato con <strong>10 Crediti Omaggio</strong>.</p>";
+        $welcomeBody .= "<div style='background:#fdfcf0; border-left:4px solid #facc15; padding:15px; margin:20px 0; color:#854d0e;'>";
+        $welcomeBody .= "<strong>I tuoi vantaggi iniziali:</strong><ul style='margin:10px 0 0 20px;'><li>10 Crediti inclusi per le tue prime sonificazioni</li><li>Accesso a tutti i paradigmi di lavoro</li><li>Generazione Video e Artefatti</li></ul>";
+        $welcomeBody .= "</div>";
+        $welcomeBody .= "<p>Puoi iniziare subito caricando la tua prima opera o scattando una foto direttamente dalla piattaforma.</p>";
+        $welcomeBody .= "<p style='margin-top:30px;'><a href='https://sonificart.com/' style='background:#2dd4bf; color:#0f172a; padding:12px 20px; text-decoration:none; border-radius:5px; font-weight:bold;'>Inizia a Creare</a></p>";
+        $welcomeBody .= "<p style='margin-top:30px;'>Cordiali saluti,<br><em>Il Team SonificA.R.T.</em></p>";
+        $welcomeBody .= "<p style='margin-top:40px; font-size:12px; color:#64748b; border-top:1px solid #e2e8f0; pt-10;'>Se non hai richiesto tu questa iscrizione, puoi ignorare questa email.</p>";
+
+        sendHtmlEmail($email, "Benvenuto su SonificA.R.T. - Conferma Registrazione", "Registrazione Completata", $welcomeBody);
+
+        sendResponse([
+            "token" => $token,
+            "user" => [
+                "id" => (string) $id,
+                "name" => $name,
+                "email" => $email,
+                "isPro" => false,
+                "isAdmin" => false,
+                "credits" => $credits,
+                "tier" => $tier,
+                "proExpiresAt" => $expires
+            ]
+        ]);
     } catch (Exception $e) {
         sendResponse(["error" => $e->getMessage()], 500);
     }
@@ -1454,8 +1516,30 @@ if ($action === 'update_profile' && $method === 'POST') {
 }
 
 // --- CONSUME CREDITS (Protetta) ---
-if ($action === 'consume_credits')
-    sendResponse(["success" => true, "credits" => 9999]);
+if ($action === 'consume_credits') {
+    $cost = intval($input['cost'] ?? 1);
+
+    $stmt = $pdo->prepare("SELECT credits, is_admin FROM users WHERE id = ?");
+    $stmt->execute([$userId]);
+    $user = $stmt->fetch();
+
+    if (!$user) {
+        sendResponse(["error" => "Utente non trovato"], 404);
+    }
+
+    if ($user['is_pro']) {
+        sendResponse(["success" => true, "credits" => 99999]);
+    }
+
+    if ($user['credits'] < $cost) {
+        sendResponse(["error" => "Crediti insufficienti", "currentCredits" => (int) $user['credits']], 402);
+    }
+
+    $newCredits = (int) $user['credits'] - $cost;
+    $pdo->prepare("UPDATE users SET credits = ? WHERE id = ?")->execute([$newCredits, $userId]);
+
+    sendResponse(["success" => true, "credits" => $newCredits]);
+}
 
 // --- CLEAR HISTORY (Protetta) ---
 if ($action === 'clear_history') {
@@ -1834,11 +1918,11 @@ if ($userId) {
             }
             if (isset($_POST['isPro'])) {
                 $updates[] = "is_pro = ?";
-                $params[] = ($_POST['isPro'] === 'true' || $_POST['isPro'] === '1') ? 1 : 0;
+                $params[] = (strtolower($_POST['isPro']) === 'true' || $_POST['isPro'] === '1') ? 1 : 0;
             }
             if (isset($_POST['isAdmin'])) {
                 $updates[] = "is_admin = ?";
-                $params[] = ($_POST['isAdmin'] === 'true' || $_POST['isAdmin'] === '1') ? 1 : 0;
+                $params[] = (strtolower($_POST['isAdmin']) === 'true' || $_POST['isAdmin'] === '1') ? 1 : 0;
             }
             if (isset($_POST['tier'])) {
                 $updates[] = "tier = ?";
@@ -1870,6 +1954,57 @@ if ($userId) {
                 sendResponse(["error" => "Update Failed: " . $e->getMessage()], 500);
             }
         }
+    }
+}
+
+// --- GET PRIVACY POLICY / GENERIC SETTING (Public) ---
+if (($action === 'get_privacy_policy' || $action === 'get_app_setting') && $method === 'GET') {
+    $key = $_GET['key'] ?? 'privacy_policy';
+    // Validate key to prevent arbitrary reads if sensitive data existed (though app_settings is mostly public info)
+    $allowed_keys = ['privacy_policy', 'terms_of_service', 'image_upload_policy', 'notice_and_takedown', 'upload_disclaimer'];
+    if (!in_array($key, $allowed_keys)) {
+        sendResponse(["error" => "Invalid setting key"], 400);
+    }
+
+    try {
+        $stmt = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key = ?");
+        $stmt->execute([$key]);
+        $val = $stmt->fetchColumn();
+        sendResponse(["success" => true, "content" => $val ? $val : ""]);
+    } catch (Exception $e) {
+        sendResponse(["error" => $e->getMessage()], 500);
+    }
+}
+
+// --- UPDATE SETTING (Admin) ---
+if (($action === 'update_privacy_policy' || $action === 'update_app_setting') && $method === 'POST') {
+    if (!$userId)
+        sendResponse(["error" => "Unauthorized"], 401);
+
+    // Check Admin
+    $stmt = $pdo->prepare("SELECT is_admin FROM users WHERE id = ?");
+    $stmt->execute([$userId]);
+    if (!$stmt->fetchColumn())
+        sendResponse(["error" => "Forbidden"], 403);
+
+    $key = $input['key'] ?? $_POST['key'] ?? 'privacy_policy';
+    $rawContent = $input['content'] ?? $_POST['content'] ?? '';
+    // Fix: Decode entities just in case the client sent escaped HTML (e.g. from a rich editor or sanitizer)
+    // and the user expects it to be rendered as HTML.
+    $content = html_entity_decode($rawContent);
+
+    $allowed_keys = ['privacy_policy', 'terms_of_service', 'image_upload_policy', 'notice_and_takedown', 'upload_disclaimer'];
+    if (!in_array($key, $allowed_keys)) {
+        sendResponse(["error" => "Invalid setting key"], 400);
+    }
+
+    try {
+        // Upsert
+        $stmt = $pdo->prepare("INSERT INTO app_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?");
+        $stmt->execute([$key, $content, $content]);
+        sendResponse(["success" => true]);
+    } catch (Exception $e) {
+        sendResponse(["error" => $e->getMessage()], 500);
     }
 }
 

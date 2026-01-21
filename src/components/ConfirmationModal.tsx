@@ -55,15 +55,15 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 animate-fade-in p-4" onClick={() => onCancel && onCancel()}>
-            <div className={`relative w-full max-w-md bg-[#1e1e2e] rounded-xl shadow-2xl border ${colors.border} animate-zoom-in overflow-hidden`} onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 animate-fade-in p-4 notranslate" onClick={() => onCancel && onCancel()}>
+            <div className={`relative w-full max-w-md bg-[#1e1e2e] rounded-xl shadow-2xl border ${colors.border} animate-zoom-in overflow-hidden notranslate`} onClick={e => e.stopPropagation()}>
                 <div className={`p-6 text-center`}>
                     <div className={`w-16 h-16 rounded-full mx-auto flex items-center justify-center mb-4 ${colors.bg} ${colors.text}`}>
                         <i className={`fas fa-${type === 'danger' ? 'exclamation-triangle' : type === 'success' ? 'check' : type === 'warning' ? 'exclamation' : 'info-circle'} text-2xl`}></i>
                     </div>
 
-                    <h3 className="text-xl font-bold text-white mb-2 font-display">{title}</h3>
-                    <p className="text-gray-300 mb-6 leading-relaxed text-sm">{message}</p>
+                    <h3 className="text-xl font-bold text-white mb-2 font-display"><span>{title}</span></h3>
+                    <p className="text-gray-300 mb-6 leading-relaxed text-sm"><span>{message}</span></p>
 
                     {showInput && (
                         <div className="mb-6">

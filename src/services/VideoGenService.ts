@@ -78,21 +78,40 @@ function drawFrame(
     title?: string, author?: string,
     subtitle?: string, date?: string, description?: string
 ) {
-    // ... (Lines 80-199 retained implicitly, wait tool replaces specific block. 
-    // I need to be careful with range. I will replace the function signature and the footer logic.
-    // Since replacing the whole function is safer for "signature + footer + visualizer" simultaneous edit.)
-
-    // 1. Draw Image (Contain Mode with subtle zoom)
+    // 1. COMPOSITE BACKGROUND (The "Floating" Effect)
+    // Draw base black
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, W, VideoH);
 
+    // Draw blurred background cover
+    ctx.save();
+    ctx.filter = 'blur(60px) brightness(0.35) saturate(0.8)'; // Slightly more muted for better focus
+    // Scale image to cover entire area
+    const coverRatio = W / VideoH;
     const imgRatio = img.width / img.height;
-    const canvasRatio = W / VideoH;
+    let cw = W, ch = VideoH;
+    if (imgRatio > coverRatio) {
+        cw = VideoH * imgRatio;
+    } else {
+        ch = W / imgRatio;
+    }
+    ctx.drawImage(img, (W - cw) / 2, (VideoH - ch) / 2, cw, ch);
+
+    // Add a subtle radial vignette for depth
+    const vignette = ctx.createRadialGradient(W / 2, VideoH / 2, 0, W / 2, VideoH / 2, W / 1.5);
+    vignette.addColorStop(0, 'rgba(0,0,0,0)');
+    vignette.addColorStop(1, 'rgba(0,0,0,0.6)');
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, W, VideoH);
+    ctx.restore();
+
+    // 2. MAIN IMAGE (Floating with Shadow)
     let dw = W;
     let dh = VideoH;
     let dx = 0;
     let dy = 0;
 
+    const canvasRatio = W / VideoH;
     if (imgRatio > canvasRatio) {
         dh = W / imgRatio;
         dy = (VideoH - dh) / 2;
@@ -101,24 +120,31 @@ function drawFrame(
         dx = (W - dw) / 2;
     }
 
-    // A. Zoom (Fixed 1.0)
-    const zDw = dw;
-    const zDh = dh;
-    const zDx = dx;
-    const zDy = dy;
+    ctx.save();
+    // Soft drop shadow for floating effect
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.shadowBlur = 40;
+    ctx.shadowOffsetY = 10;
+
+    // Draw the image
+    const zDw = dw * 0.95; // Slightly smaller to reveal background
+    const zDh = dh * 0.95;
+    const zDx = dx + (dw * 0.025);
+    const zDy = dy + (dh * 0.025);
 
     ctx.drawImage(img, zDx, zDy, zDw, zDh);
+    ctx.restore();
 
-    // 2. Synced Scanning Effect & Pixel Sonification
+    // 3. Synced Scanning Effect & Pixel Sonification
     const progress = Math.min(1, Math.max(0, time / duration));
-    const scanStart = visualBounds.minX;
-    const scanWidth = visualBounds.width;
+    const scanStart = zDx;
+    const scanWidth = zDw;
     const scanX = Math.floor(scanStart + (progress * scanWidth));
 
     // A. Draw Scanline
     ctx.save();
     ctx.beginPath();
-    ctx.rect(visualBounds.minX, zDy, visualBounds.width, zDh);
+    ctx.rect(zDx, zDy, zDw, zDh);
     ctx.clip();
 
     const grad = ctx.createLinearGradient(0, 0, 0, VideoH);
@@ -129,31 +155,32 @@ function drawFrame(
     ctx.fillStyle = grad;
     ctx.fillRect(scanX - 1, zDy, 3, zDh);
 
-    // B. Pixel Viz
+    // B. Pixel Viz (Interactive Particles)
     if (pixelData) {
-        const sampleStep = 15;
-        const vizWidth = 80;
-        ctx.lineWidth = 3;
+        const sampleStep = 18;
+        const vizWidth = 100;
+        ctx.lineWidth = 2.5;
 
         for (let y = zDy; y < zDy + zDh; y += sampleStep) {
             const sy = Math.floor(y);
             if (sy < 0 || sy >= VideoH) continue;
             const idx = (sy * W + scanX) * 4;
             if (idx < 0 || idx >= pixelData.length - 4) continue;
+
             const r = pixelData[idx];
             const g = pixelData[idx + 1];
             const b = pixelData[idx + 2];
             const brightness = (r + g + b) / 3;
 
-            if (brightness > 30) {
+            if (brightness > 40) {
                 const fIdx = Math.floor(((y - zDy) / zDh) * (freqData.length / 2));
                 const amp = freqData[fIdx] || 0;
-                if (amp > 20) {
+                if (amp > 15) {
                     const size = (amp / 255) * vizWidth * (brightness / 255);
-                    ctx.strokeStyle = `rgba(${r},${g},${b}, ${amp / 200})`;
+                    ctx.strokeStyle = `rgba(${r},${g},${b}, ${amp / 180})`;
                     ctx.beginPath();
                     ctx.moveTo(scanX - size, y);
-                    ctx.quadraticCurveTo(scanX, y - size / 2, scanX + size, y);
+                    ctx.lineTo(scanX + size, y);
                     ctx.stroke();
                 }
             }
@@ -162,283 +189,135 @@ function drawFrame(
     ctx.restore();
 
     // ═══════════════════════════════════════════════════════════════════════════════════
-    // SONIFICART PREMIUM VIDEO LAYOUT - Redesigned with 3-column footer
-    // Left: Title, Description, Author/Date | Center: Compact Audio Bars | Right: Logo
+    // SONIFICART PREMIER VIDEO LAYOUT - Final Polish (Legibility & Aesthetics)
     // ═══════════════════════════════════════════════════════════════════════════════════
 
-    // --- TOP LEFT BRANDING: Logo + "SonificA.R.T." (Refined) ---
-    if (logo) {
-        ctx.save();
-
-        // Elegant gradient bar behind branding
-        const brandBg = ctx.createLinearGradient(0, 0, 400, 0);
-        brandBg.addColorStop(0, 'rgba(10, 21, 32, 0.95)');
-        brandBg.addColorStop(0.7, 'rgba(10, 21, 32, 0.6)');
-        brandBg.addColorStop(1, 'rgba(10, 21, 32, 0)');
-        ctx.fillStyle = brandBg;
-        ctx.fillRect(0, 0, 420, 70);
-
-        // Accent line under branding
-        const accentGrad = ctx.createLinearGradient(0, 70, 350, 70);
-        accentGrad.addColorStop(0, '#2dd4bf');
-        accentGrad.addColorStop(0.5, '#a855f7');
-        accentGrad.addColorStop(1, 'rgba(45, 212, 191, 0)');
-        ctx.fillStyle = accentGrad;
-        ctx.fillRect(0, 68, 350, 2);
-
-        const logoSize = 40;
-        ctx.globalAlpha = 1.0;
-        ctx.drawImage(logo, 20, 14, logoSize, logoSize);
-
-        // Text "SonificA.R.T."
-        ctx.font = 'bold 24px "Segoe UI", Arial, sans-serif';
-        ctx.fillStyle = '#ffffff';
-        ctx.textAlign = 'left';
-        ctx.shadowColor = 'rgba(0,0,0,0.8)';
-        ctx.shadowBlur = 6;
-        ctx.fillText('Sonific', 70, 40);
-
-        // Colored "A.R.T."
-        const sonificWidth = ctx.measureText('Sonific').width;
-        ctx.fillStyle = '#2dd4bf';
-        ctx.fillText('A.R.T.', 70 + sonificWidth, 40);
-
-        // Tagline
-        ctx.font = '9px "Segoe UI", Arial, sans-serif';
-        ctx.fillStyle = 'rgba(255,255,255,0.5)';
-        ctx.shadowBlur = 0;
-        ctx.fillText('DETERMINISTIC SONIFICATION FRAMEWORK', 70, 54);
-        ctx.restore();
-    }
-
-    // --- FOOTER BACKGROUND (Premium Dark Gradient) ---
+    // --- FOOTER BACKGROUND (Pure Deep Black) ---
     const footerY = VideoH;
-    const footerGrad = ctx.createLinearGradient(0, footerY, 0, footerY + FooterH);
-    footerGrad.addColorStop(0, '#0d1820');
-    footerGrad.addColorStop(0.4, '#0a1218');
-    footerGrad.addColorStop(1, '#060a0e');
-    ctx.fillStyle = footerGrad;
+    ctx.fillStyle = '#000000';
     ctx.fillRect(0, footerY, W, FooterH);
 
-    // --- PROGRESS BAR (Elegant, integrated at top of footer) ---
-    const progressBarHeight = 4;
+    // --- PROGRESS BAR (Ultra-thin, elegant) ---
+    const progressBarHeight = 2;
     const progressWidth = Math.floor(progress * W);
-
-    // Background track
     ctx.fillStyle = 'rgba(255,255,255,0.1)';
     ctx.fillRect(0, footerY, W, progressBarHeight);
 
-    // Progress fill with gradient
     const progGrad = ctx.createLinearGradient(0, footerY, W, footerY);
     progGrad.addColorStop(0, '#2dd4bf');
-    progGrad.addColorStop(0.5, '#60d5f5');
     progGrad.addColorStop(1, '#a855f7');
     ctx.fillStyle = progGrad;
     ctx.fillRect(0, footerY, progressWidth, progressBarHeight);
 
-    // Glow at progress head
-    if (progressWidth > 0) {
-        const glowGrad = ctx.createRadialGradient(progressWidth, footerY + 2, 0, progressWidth, footerY + 2, 20);
-        glowGrad.addColorStop(0, 'rgba(45, 212, 191, 0.8)');
-        glowGrad.addColorStop(1, 'rgba(45, 212, 191, 0)');
-        ctx.fillStyle = glowGrad;
-        ctx.fillRect(progressWidth - 20, footerY, 40, 10);
-    }
+    // --- 3-COLUMN LAYOUT REDESIGN ---
+    const colLeftWidth = W * 0.35;
+    const colCenterWidth = W * 0.30;
+    const colRightWidth = W * 0.35;
 
-    // --- 3-COLUMN LAYOUT ---
-    // Column widths: Left 55% | Center 25% | Right 20%
-    const colLeftWidth = W * 0.55;
-    const colCenterWidth = W * 0.25;
-    const colRightWidth = W * 0.20;
-    const colLeftX = 30;
-    const colCenterX = colLeftWidth;
-    const colRightX = colLeftWidth + colCenterWidth;
-    const contentY = footerY + progressBarHeight + 15;
+    const colLeftX = 60;
+    const colCenterX = W * 0.35;
+    const colRightX = W * 0.65;
+    const contentY = footerY + 45;
 
-    // === LEFT COLUMN: Title, Description, Author/Date ===
+    // === LEFT COLUMN: METADATA ===
     ctx.save();
-
-    // TITLE (Large, prominent)
-    ctx.font = 'bold 32px "Segoe UI", Arial, sans-serif';
+    // TITLE (Large & Powerful)
+    ctx.font = '900 40px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'left';
-    ctx.shadowColor = 'rgba(0,0,0,0.6)';
-    ctx.shadowBlur = 4;
-    const titleStr = (title || "Opera Senza Titolo");
-    const maxTitleWidth = colLeftWidth - 60;
-    let displayTitle = titleStr;
-    if (ctx.measureText(displayTitle).width > maxTitleWidth) {
-        while (ctx.measureText(displayTitle + '...').width > maxTitleWidth && displayTitle.length > 0) {
-            displayTitle = displayTitle.slice(0, -1);
-        }
-        displayTitle += '...';
-    }
-    ctx.fillText(displayTitle, colLeftX, contentY + 30);
-    ctx.restore();
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 10;
+    const displayTitleStr = (title || "Opera Senza Titolo").toUpperCase();
+    ctx.fillText(displayTitleStr, colLeftX, contentY + 30);
 
-    // DESCRIPTION (Below title, smaller, with text wrap)
-    if (description) {
-        ctx.save();
-        ctx.font = '16px "Segoe UI", Arial, sans-serif';
-        ctx.fillStyle = 'rgba(255,255,255,0.75)';
-        ctx.textAlign = 'left';
-
-        const maxDescWidth = colLeftWidth - 60;
-        let displayDesc = description;
-        if (ctx.measureText(displayDesc).width > maxDescWidth * 2) {
-            while (ctx.measureText(displayDesc + '...').width > maxDescWidth * 2 && displayDesc.length > 0) {
-                displayDesc = displayDesc.slice(0, -1);
-            }
-            displayDesc += '...';
-        }
-
-        // Word wrap for 2 lines max
-        const words = displayDesc.split(' ');
-        let line1 = '';
-        let line2 = '';
-        let onLine1 = true;
-
-        for (const word of words) {
-            const testLine = onLine1 ? line1 + word + ' ' : line2 + word + ' ';
-            if (ctx.measureText(testLine.trim()).width <= maxDescWidth) {
-                if (onLine1) line1 = testLine;
-                else line2 = testLine;
-            } else if (onLine1) {
-                onLine1 = false;
-                line2 = word + ' ';
-            }
-        }
-
-        ctx.fillText(line1.trim(), colLeftX, contentY + 60);
-        if (line2.trim()) {
-            ctx.fillText(line2.trim(), colLeftX, contentY + 80);
-        }
-        ctx.restore();
-    }
-
-    // AUTHOR & DATE (Bottom of left column)
-    ctx.save();
-    const authorDateY = contentY + 120;
-
-    // Author with accent color
-    ctx.font = 'bold 14px "Segoe UI", Arial, sans-serif';
+    // AUTHOR & DATE
+    ctx.font = '700 20px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#2dd4bf';
-    const authorStr = author || "SonificART";
-    ctx.fillText(authorStr.toUpperCase(), colLeftX, authorDateY);
+    const authorText = (author || "SonificART").toUpperCase();
+    ctx.fillText(authorText, colLeftX, contentY + 68);
 
-    // Separator dot
-    const authorWidth = ctx.measureText(authorStr.toUpperCase()).width;
+    ctx.font = '500 18px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.fillText('  •  ', colLeftX + authorWidth, authorDateY);
-
-    // Date
-    ctx.font = '14px "Segoe UI", Arial, sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    const dateStr = date || new Date().toLocaleDateString('it-IT', { year: 'numeric', month: 'long', day: 'numeric' });
-    ctx.fillText(dateStr, colLeftX + authorWidth + 40, authorDateY);
+    const dateStrFormatted = date || new Date().toLocaleDateString('it-IT');
+    ctx.fillText(dateStrFormatted, colLeftX, contentY + 95);
     ctx.restore();
 
-    // === CENTER COLUMN: Compact Audio Equalizer Bars ===
-    const barAreaX = colCenterX + 20;
+    // === CENTER COLUMN: DYNAMIC SPECTRUM ===
     const barAreaWidth = colCenterWidth - 40;
-    const barAreaY = contentY + 20;
-    const barAreaHeight = 100;
-    const numBars = 24;
-    const barWidth = (barAreaWidth / numBars) * 0.7;
-    const barGap = (barAreaWidth / numBars) * 0.3;
+    const barAreaX = colCenterX + (colCenterWidth - barAreaWidth) / 2;
+    const barAreaY = footerY + 60;
+    const barAreaHeight = 70;
+    const numBars = 42;
+    const barWidth = (barAreaWidth / numBars) * 0.6;
+    const barGap = (barAreaWidth / numBars) * 0.4;
 
     ctx.save();
     for (let i = 0; i < numBars; i++) {
-        const freqIndex = Math.floor((i / numBars) * freqData.length * 0.6);
-        const amp = (freqData[freqIndex] || 0) / 255;
-        const barHeight = Math.max(4, amp * barAreaHeight * 0.9);
-        const x = barAreaX + i * (barWidth + barGap);
-        const y = barAreaY + barAreaHeight - barHeight;
+        const freqIndex = Math.floor((i / numBars) * freqData.length * 0.5);
+        const ampValue = (freqData[freqIndex] || 0) / 255;
+        const bH = Math.max(3, ampValue * barAreaHeight);
+        const bx = barAreaX + i * (barWidth + barGap);
+        const by = barAreaY + barAreaHeight - bH;
 
-        // Bar gradient (cyan to purple based on position)
-        const barGrad = ctx.createLinearGradient(x, y + barHeight, x, y);
-        const colorPos = i / numBars;
-        if (colorPos < 0.5) {
-            barGrad.addColorStop(0, '#2dd4bf');
-            barGrad.addColorStop(1, '#60d5f5');
-        } else {
-            barGrad.addColorStop(0, '#60d5f5');
-            barGrad.addColorStop(1, '#a855f7');
-        }
+        const bGrad = ctx.createLinearGradient(bx, by + bH, bx, by);
+        bGrad.addColorStop(0, '#2dd4bf');
+        bGrad.addColorStop(1, '#60a5fa');
 
-        ctx.fillStyle = barGrad;
+        ctx.fillStyle = bGrad;
+        ctx.fillRect(bx, by, barWidth, bH);
 
-        // Rounded bar
-        const radius = barWidth / 2;
-        ctx.beginPath();
-        ctx.roundRect(x, y, barWidth, barHeight, [radius, radius, 0, 0]);
-        ctx.fill();
-
-        // Glow effect on active bars
-        if (amp > 0.3) {
-            ctx.shadowColor = colorPos < 0.5 ? '#2dd4bf' : '#a855f7';
-            ctx.shadowBlur = amp * 15;
+        // Glow for high peaks
+        if (ampValue > 0.6) {
+            ctx.shadowColor = '#2dd4bf';
+            ctx.shadowBlur = 15;
+            ctx.fillRect(bx, by, barWidth, bH);
         }
     }
-    ctx.shadowBlur = 0;
-
-    // Label under equalizer
-    ctx.font = '10px "Segoe UI", Arial, sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.textAlign = 'center';
-    ctx.fillText('AUDIO SPECTRUM', barAreaX + barAreaWidth / 2, barAreaY + barAreaHeight + 20);
     ctx.restore();
 
-    // === RIGHT COLUMN: Logo & Branding ===
+    // === RIGHT COLUMN: BRANDING (Legible & Premium) ===
     if (logo) {
         ctx.save();
-        const logoSize = 80;
-        const logoX = colRightX + (colRightWidth - logoSize) / 2;
-        const logoY = contentY + 20;
+        const logoSize = 100;
+        // Move lx further left to ensure everything fits (padding 60px from right)
+        const lx = W - 520;
+        const ly = footerY + (FooterH - logoSize) / 2 + 10;
 
-        // Subtle glow behind logo
-        const logoGlow = ctx.createRadialGradient(logoX + logoSize / 2, logoY + logoSize / 2, 0, logoX + logoSize / 2, logoY + logoSize / 2, logoSize);
-        logoGlow.addColorStop(0, 'rgba(45, 212, 191, 0.15)');
-        logoGlow.addColorStop(1, 'rgba(45, 212, 191, 0)');
-        ctx.fillStyle = logoGlow;
-        ctx.fillRect(logoX - 20, logoY - 20, logoSize + 40, logoSize + 40);
+        // Draw Eye Icon with glow
+        ctx.shadowColor = 'rgba(45, 212, 191, 0.5)';
+        ctx.shadowBlur = 20;
+        ctx.drawImage(logo, lx, ly, logoSize, logoSize);
 
-        ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
+        ctx.shadowBlur = 0;
+        ctx.textAlign = 'left';
 
-        // Text under logo
-        ctx.font = 'bold 12px "Segoe UI", Arial, sans-serif';
-        ctx.fillStyle = 'rgba(255,255,255,0.6)';
-        ctx.textAlign = 'center';
-        ctx.fillText('SONIFIC', logoX + logoSize / 2, logoY + logoSize + 20);
+        // "SONIFIC"
+        ctx.font = '900 32px "Segoe UI", Arial, sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText('SONIFIC', lx + logoSize + 22, ly + 40);
+        const sonificWidth = ctx.measureText('SONIFIC').width;
+
+        // "A.R.T."
         ctx.fillStyle = '#2dd4bf';
-        ctx.fillText('A.R.T.', logoX + logoSize / 2 + ctx.measureText('SONIFIC').width / 2 + 2, logoY + logoSize + 20);
+        ctx.fillText('A.R.T.', lx + logoSize + 22 + sonificWidth + 8, ly + 40);
+        const artWidth = ctx.measureText('A.R.T.').width;
 
-        // Version/Tagline
-        ctx.font = '9px "Segoe UI", Arial, sans-serif';
-        ctx.fillStyle = 'rgba(255,255,255,0.3)';
-        ctx.fillText('sonificart.com', logoX + logoSize / 2, logoY + logoSize + 35);
+        // Version (Very subtle)
+        ctx.font = '600 12px "Segoe UI", Arial, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.2)';
+        ctx.fillText('v1.0', lx + logoSize + 22 + sonificWidth + artWidth + 25, ly + 40);
+
+        // Subtitle
+        ctx.font = '800 10px "Segoe UI", Arial, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.fillText('DETERMINISTIC DATA SONIFICATION FRAMEWORK', lx + logoSize + 23, ly + 65);
+
+        // Website URL (Teal)
+        ctx.font = '900 15px "Segoe UI", Arial, sans-serif';
+        ctx.fillStyle = '#2dd4bf';
+        ctx.fillText('WWW.SONIFICART.COM', lx + logoSize + 23, ly + 90);
         ctx.restore();
     }
-
-    // --- Decorative corner accents ---
-    ctx.save();
-    ctx.strokeStyle = 'rgba(45, 212, 191, 0.3)';
-    ctx.lineWidth = 2;
-
-    // Bottom-left corner
-    ctx.beginPath();
-    ctx.moveTo(10, footerY + FooterH - 30);
-    ctx.lineTo(10, footerY + FooterH - 10);
-    ctx.lineTo(30, footerY + FooterH - 10);
-    ctx.stroke();
-
-    // Bottom-right corner
-    ctx.beginPath();
-    ctx.moveTo(W - 10, footerY + FooterH - 30);
-    ctx.lineTo(W - 10, footerY + FooterH - 10);
-    ctx.lineTo(W - 30, footerY + FooterH - 10);
-    ctx.stroke();
-    ctx.restore();
 }
 
 

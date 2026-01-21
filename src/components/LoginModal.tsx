@@ -22,7 +22,7 @@ const PrivacyContentModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
     }, []);
 
     return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 animate-backdrop-fade-in p-4">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 animate-backdrop-fade-in p-4 notranslate">
             <div className="relative w-full max-w-2xl bg-white text-black rounded-lg shadow-2xl h-[80vh] flex flex-col animate-zoom-in">
                 <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 rounded-t-lg">
                     <h3 className="text-xl font-bold text-gray-800">Termini e Privacy</h3>
@@ -54,6 +54,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
     const [error, setError] = useState<string | null>(null);
     const [successMsg, setSuccessMsg] = useState<string | null>(null);
     const [showPrivacy, setShowPrivacy] = useState(false);
+    const [rememberMe, setRememberMe] = useState(false);
     const { t } = useLanguage();
 
     useEffect(() => {
@@ -68,6 +69,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
             setPassword('');
             setName('');
             setGdprConsent(false);
+            setRememberMe(false); // Default to not checked (or true if preferred, but false is safer for public terminals)
         } else {
             document.body.style.overflow = 'auto';
         }
@@ -91,7 +93,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
                 setTimeout(() => onLoginSuccess(user), 3000);
             }
             else if (view === 'login') {
-                const user = await api.login(email, password);
+                const user = await api.login(email, password, rememberMe);
                 onLoginSuccess(user);
             }
             else if (view === 'forgot') {
@@ -122,7 +124,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
         <>
             {showPrivacy && <PrivacyContentModal onClose={() => setShowPrivacy(false)} />}
 
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 animate-backdrop-fade-in p-4" aria-modal="true" role="dialog">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 animate-backdrop-fade-in p-4 notranslate" aria-modal="true" role="dialog">
                 <div className="relative w-full max-w-md bg-brand-secondary rounded-lg shadow-2xl border border-brand-secondary/50 animate-zoom-in" onClick={e => e.stopPropagation()}>
                     <button className="absolute top-4 right-4 text-brand-text-secondary text-xl hover:text-white transition-colors z-10" onClick={onClose}>&times;</button>
 
@@ -175,7 +177,20 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
                             )}
 
                             {view === 'login' && (
-                                <div className="text-right">
+                                <div className="flex items-center justify-between mt-2">
+                                    <div className="flex items-center">
+                                        <input
+                                            id="remember-me"
+                                            name="remember-me"
+                                            type="checkbox"
+                                            checked={rememberMe}
+                                            onChange={(e) => setRememberMe(e.target.checked)}
+                                            className="h-4 w-4 rounded bg-brand-primary border-brand-secondary text-brand-accent focus:ring-brand-accent cursor-pointer"
+                                        />
+                                        <label htmlFor="remember-me" className="ml-2 block text-sm text-brand-text-secondary cursor-pointer select-none">
+                                            Ricorda accesso
+                                        </label>
+                                    </div>
                                     <button type="button" onClick={() => { setView('forgot'); setError(null); }} className="text-xs text-brand-accent hover:text-brand-accent-light hover:underline">
                                         Password dimenticata?
                                     </button>

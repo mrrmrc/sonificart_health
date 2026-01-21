@@ -50,14 +50,15 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
                 return (
                     <div className="space-y-8 animate-fade-in pb-10">
                         {/* HERO SECTION */}
-                        <div className="bg-gradient-to-r from-brand-secondary to-brand-primary p-8 rounded-2xl border border-brand-accent/20 relative overflow-hidden">
-                            <div className="absolute top-0 right-0 p-4 opacity-10">
-                                <i className="fas fa-wave-square text-9xl text-brand-accent"></i>
+                        <div className="bg-gradient-to-r from-[#0f172a] to-[#1e293b] p-8 rounded-2xl border border-brand-accent/30 relative overflow-hidden shadow-2xl">
+                            <div className="absolute -top-4 -right-4 p-4 opacity-5 pointer-events-none">
+                                <i className="fas fa-wave-square text-9xl text-white"></i>
                             </div>
-                            <h2 className="text-3xl font-display font-bold text-white mb-4 relative z-10">
+                            <h2 className="text-3xl font-display font-bold text-white mb-4 relative z-10 flex items-center gap-2">
+                                <i className="fas fa-layer-group text-brand-accent"></i>
                                 SonificA.R.T. <span className="text-brand-accent">Framework</span>
                             </h2>
-                            <p className="text-lg text-brand-text-secondary max-w-2xl leading-relaxed relative z-10">
+                            <p className="text-lg text-gray-200 max-w-2xl leading-relaxed relative z-10 drop-shadow-md">
                                 La prima piattaforma professionale per la <strong>Sonificazione Culturale Deterministica</strong>.
                                 Trasforma immagini, opere d'arte e dati visivi in composizioni musicali scientificamente accurate,
                                 culturalmente coerenti e legalmente certificabili.

@@ -10,6 +10,7 @@ import { generateSonificationVideo } from '../services/videoService';
 import { createSacContainer } from '../services/sacService';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ConfirmationModal } from './ConfirmationModal';
+import { api } from '../services/api';
 
 const InfoCard: React.FC<{ title: string, icon: string, children: React.ReactNode, className?: string }> = ({ title, icon, children, className }) => (
     <div className={`bg-brand-primary/50 p-4 rounded-lg border border-brand-secondary ${className}`}>
@@ -47,12 +48,13 @@ interface ResultsDashboardProps {
     onReset: () => void;
     onSave: (title: string, description?: string) => void;
     user: User | null;
+    setUser: (user: User | null) => void;
     onRequestAccess: () => void;
     isHistoryView?: boolean;
 }
 
 export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
-    result, imageUrl, onReset, onSave, user, onRequestAccess, isHistoryView = false
+    result, imageUrl, onReset, onSave, user, setUser, onRequestAccess, isHistoryView = false
 }) => {
     const { t } = useLanguage();
 
@@ -477,6 +479,36 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
 
     const handleVideoAction = () => { if (generatedVideoBlob) { saveAs(generatedVideoBlob, `kinetic_proof_${safeHash.substring(0, 8)}.mp4`); } else { setIsVideoModalOpen(true); } };
     const startVideoGeneration = async () => {
+        // Credit check for video (cost 5)
+        if (!isPro && user) {
+            const cost = 5;
+            if ((user.credits || 0) < cost) {
+                setConfirmModal({
+                    isOpen: true,
+                    title: "Crediti Video Insufficienti",
+                    message: `Ti servono ${cost} crediti per generare il video (Qualità Cinema). Hai ${user.credits || 0} crediti.`,
+                    type: 'warning',
+                    onConfirm: () => { onRequestAccess(); setConfirmModal(prev => ({ ...prev, isOpen: false })); }
+                });
+                return;
+            }
+
+            try {
+                const newCredits = await api.consumeCredit(user.id, cost);
+                setUser({ ...user, credits: newCredits });
+            } catch (e: any) {
+                setConfirmModal({
+                    isOpen: true,
+                    title: "Errore Crediti",
+                    message: e.message || "Impossibile scalare i crediti per il video.",
+                    type: 'danger',
+                    singleButton: true,
+                    onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+                });
+                return;
+            }
+        }
+
         setIsVideoModalOpen(false); setIsVideoRendering(true); setVideoProgress(0);
         try {
             // Assicuriamoci di avere il blob audio prima di generare il video (fondamentale per la cronologia)
@@ -710,7 +742,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                             </label>
                             <input
                                 type="text"
-                                className={`w-full md:max-w-2xl bg-white/5 border-b-2 p-2 text-2xl md:text-3xl font-black text-white font-display outline-none transition-all placeholder:text-white/10 ${hasSaved ? 'border-green-500/50' : 'border-brand-accent/30 focus:border-brand-accent focus:bg-white/10'}`}
+                                className={`w-full md:max-w-2xl bg-white/5 border-b-2 p-2 text-2xl md:text-3xl font-black text-white font-display outline-none transition-all placeholder:text-white/10 notranslate ${hasSaved ? 'border-green-500/50' : 'border-brand-accent/30 focus:border-brand-accent focus:bg-white/10'}`}
                                 placeholder={t('results.enter_name') || "Inserisci un nome..."}
                                 value={workTitle}
                                 onChange={(e) => { setWorkTitle(e.target.value); setHasSaved(false); }}
@@ -722,7 +754,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                     Descrizione (Opzionale)
                                 </label>
                                 <textarea
-                                    className={`w-full bg-white/5 border-l-2 p-2 text-xs md:text-sm text-gray-300 font-mono outline-none transition-all placeholder:text-white/10 h-20 resize-none ${hasSaved ? 'border-green-500/50' : 'border-brand-accent/30 focus:border-brand-accent focus:bg-white/10'}`}
+                                    className={`w-full bg-white/5 border-l-2 p-2 text-xs md:text-sm text-gray-300 font-mono outline-none transition-all placeholder:text-white/10 h-20 resize-none notranslate ${hasSaved ? 'border-green-500/50' : 'border-brand-accent/30 focus:border-brand-accent focus:bg-white/10'}`}
                                     placeholder="Aggiungi una breve descrizione per il video generativo..."
                                     value={workDescription}
                                     onChange={(e) => { setWorkDescription(e.target.value); setHasSaved(false); }}
@@ -756,7 +788,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
 
             {
                 isVideoModalOpen && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md animate-fade-in p-4">
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md animate-fade-in p-4 notranslate">
                         <div className="bg-brand-secondary p-6 rounded-xl shadow-2xl border border-brand-accent/30 max-w-md w-full animate-zoom-in" onClick={e => e.stopPropagation()}>
                             <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
                                 <i className="fas fa-video text-brand-accent"></i>
@@ -798,15 +830,15 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
 
             {
                 isVideoRendering && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md">
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md notranslate">
                         <div className="bg-brand-secondary p-8 rounded-xl shadow-2xl border border-brand-accent/30 max-w-md w-full text-center">
                             <div className="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-brand-accent mx-auto mb-6"></div>
                             <h3 className="text-2xl font-bold text-white mb-2">{t('results.video_audit') || "Audit Forense..."}</h3>
-                            <p className="text-brand-text-secondary text-sm mb-6">{t('results.video_time_est') || "Tempo stimato"}: {(safeDuration / 60).toFixed(1)} min.</p>
+                            <p className="text-brand-text-secondary text-sm mb-6">{t('results.video_time_est') || "Tempo stimato"}: <span className="notranslate">{(safeDuration / 60).toFixed(1)} min.</span></p>
                             <div className="w-full bg-brand-primary rounded-full h-4 border border-brand-secondary overflow-hidden">
                                 <div className="bg-brand-accent h-full transition-all duration-200 ease-linear" style={{ width: `${videoProgress}%` }}></div>
                             </div>
-                            <p className="mt-2 text-xs font-mono text-brand-accent-light">{Math.round(videoProgress)}%</p>
+                            <p className="mt-2 text-xs font-mono text-brand-accent-light notranslate">{Math.round(videoProgress)}%</p>
                         </div>
                     </div>
                 )
@@ -919,9 +951,9 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                                 className={`flex-1 ${hasSaved ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-brand-accent text-brand-primary hover:bg-brand-accent-light'} py-2 rounded text-xs font-black transition-colors border-none flex items-center justify-center gap-2 shadow-lg shadow-brand-accent/10`}
                                             >
                                                 {isSaving ? (
-                                                    <><i className="fas fa-spinner fa-spin"></i> {t('results.saving') || "SALVATAGGIO..."}</>
+                                                    <span className="notranslate"><i className="fas fa-spinner fa-spin"></i> {t('results.saving') || "SALVATAGGIO..."}</span>
                                                 ) : (
-                                                    hasSaved ? <><i className="fas fa-check"></i> {t('results.saved') || "SALVATO"}</> : <><i className="fas fa-save"></i> {t('showcase.save') || "SALVA"}</>
+                                                    hasSaved ? <span className="notranslate"><i className="fas fa-check"></i> {t('results.saved') || "SALVATO"}</span> : <span className="notranslate"><i className="fas fa-save"></i> {t('showcase.save') || "SALVA"}</span>
                                                 )}
                                             </button>
                                         )}
@@ -937,7 +969,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
 
                 {/* --- SEZIONE CONCEPT & AI RIGENERATA CON MULTI-TAB --- */}
                 {correctedResult.paradigm?.toLowerCase().trim() !== 'scientific' && correctedResult.musicGenerationPrompt && (
-                    <InfoCard title={t('results.concept_title') || "Concept & Interpretazione AI"} icon="fa-wand-magic-sparkles" className="lg:col-span-3 relative overflow-hidden">
+                    <InfoCard title="Prompt per IA" icon="fa-robot" className="lg:col-span-3 relative overflow-hidden bg-gradient-to-br from-purple-900/20 to-blue-900/20 border-purple-500/30">
                         <div className='grid grid-cols-1 md:grid-cols-12 gap-8'>
                             {/* COLONNA SINISTRA: CONCEPT E RAGIONAMENTO */}
                             <div className='md:col-span-4 space-y-6 border-r border-white/5 pr-6'>
@@ -982,14 +1014,14 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                             className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-wider transition-all shadow-lg ${activePromptTab === 'suno' ? 'bg-brand-accent text-brand-primary' : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white'}`}
                                         >
                                             <i className="fas fa-bolt mr-1.5"></i>
-                                            {t('results.suno_label') || "SUNO AI"}
+                                            PROMPT 1
                                         </button>
                                         <button
                                             onClick={() => setActivePromptTab('udio')}
                                             className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-wider transition-all shadow-lg ${activePromptTab === 'udio' ? 'bg-blue-500 text-white' : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white'}`}
                                         >
                                             <i className="fas fa-wave-square mr-1.5"></i>
-                                            {t('results.udio_label') || "UDIO AI"}
+                                            PROMPT 2
                                         </button>
                                     </div>
                                     <button
@@ -1003,17 +1035,8 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                 {/* AREA TESTO PROMPT DINAMICA */}
                                 <div className="relative group">
                                     <div className="absolute -top-2 left-3 px-2 bg-brand-secondary text-[9px] font-black text-brand-text-secondary tracking-widest uppercase z-10 flex items-center gap-2">
-                                        {activePromptTab === 'suno' ? (
-                                            <>
-                                                <i className="fas fa-arrow-right text-brand-accent animate-pulse"></i>
-                                                PASTE IN SUNO: STYLE / GENRE
-                                            </>
-                                        ) : (
-                                            <>
-                                                <i className="fas fa-arrow-right text-blue-400 animate-pulse"></i>
-                                                PASTE IN UDIO: PROMPT (Manual Mode ON)
-                                            </>
-                                        )}
+                                        <i className="fas fa-arrow-right text-brand-accent animate-pulse"></i>
+                                        PROMPT PER IA MUSICALE
                                     </div>
                                     <div className="bg-brand-primary/80 p-5 rounded-xl text-sm font-mono break-words border border-brand-accent/20 min-h-[120px] shadow-2xl group-hover:border-brand-accent/40 transition-colors">
                                         {activePromptTab === 'suno' && (
@@ -1033,7 +1056,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                             {t('results.pdc_lyrics') || "Lyrics (Sincronizzazione PDC)"}
                                             <span className="text-brand-accent/60 lowercase font-bold italic ml-2 border-l border-white/10 pl-2">
                                                 <i className="fas fa-level-down-alt mr-1"></i>
-                                                SUNO: Paste in LYRICS field
+                                                Incolla nel campo Lyrics dell'IA
                                             </span>
                                         </h5>
                                         <button
@@ -1183,21 +1206,21 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
 
                 <InfoCard title={t('results.download_artifacts')} icon="fa-download" className="bg-brand-accent/5 border-brand-accent/20">
                     <div className="flex flex-col gap-2 mt-2 relative">
-                        {!isPro && (
+                        {(!isPro && (user?.credits || 0) <= 0) && (
                             <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] z-20 flex flex-col items-center justify-center rounded-lg text-center p-4 border border-brand-accent/20">
                                 <i className="fas fa-lock text-2xl text-brand-accent mb-2"></i>
                                 <button onClick={onRequestAccess} className="px-4 py-1.5 bg-brand-accent text-black text-xs font-bold rounded-full">{t('results.unlock') || "Sblocca"}</button>
                             </div>
                         )}
                         <div className="grid grid-cols-2 gap-2">
-                            <button disabled={!isPro} onClick={handleDownloadWav} className="bg-brand-accent/10 text-brand-accent py-2 rounded hover:bg-brand-accent/20 text-xs font-bold border border-brand-accent/20">
+                            <button disabled={!isPro && (user?.credits || 0) <= 0} onClick={handleDownloadWav} className="bg-brand-accent/10 text-brand-accent py-2 rounded hover:bg-brand-accent/20 text-xs font-bold border border-brand-accent/20">
                                 <i className="fas fa-file-audio mr-2"></i> WAV
                             </button>
-                            <button disabled={!isPro} onClick={() => saveAs(correctedResult.audioOutput.midiBlob, 'musical_notation.mid')} className="bg-brand-accent/10 text-brand-accent py-2 rounded hover:bg-brand-accent/20 text-xs font-bold border border-brand-accent/20">
+                            <button disabled={!isPro && (user?.credits || 0) <= 0} onClick={() => saveAs(correctedResult.audioOutput.midiBlob, 'musical_notation.mid')} className="bg-brand-accent/10 text-brand-accent py-2 rounded hover:bg-brand-accent/20 text-xs font-bold border border-brand-accent/20">
                                 <i className="fas fa-music mr-2"></i> MIDI
                             </button>
                         </div>
-                        <button disabled={!isPro} onClick={() => {
+                        <button disabled={!isPro && (user?.credits || 0) <= 0} onClick={() => {
                             const cleanTitle = workTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
                             if (generatedVideoBlob) saveAs(generatedVideoBlob, `${cleanTitle}_video.mp4`);
                             else if ((result as any).videoUrl) saveAs((result as any).videoUrl, `${cleanTitle}_video.mp4`);
@@ -1205,7 +1228,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                         }} className="w-full bg-purple-600/10 text-purple-300 py-2 rounded hover:bg-purple-600/20 border border-purple-500/20 text-xs font-bold">
                             <i className="fas fa-video mr-2"></i> {(generatedVideoBlob || (result as any).videoUrl) ? t('results.download_video') : t('results.generate_video')}
                         </button>
-                        <button disabled={!isPro} onClick={handleDownloadSac} className="w-full bg-brand-accent font-black text-brand-primary py-3 rounded hover:bg-brand-accent-light mt-1 shadow-lg disabled:opacity-50 text-[10px] uppercase tracking-widest">
+                        <button disabled={!isPro && (user?.credits || 0) <= 0} onClick={handleDownloadSac} className="w-full bg-brand-accent font-black text-brand-primary py-3 rounded hover:bg-brand-accent-light mt-1 shadow-lg disabled:opacity-50 text-[10px] uppercase tracking-widest">
                             <i className="fas fa-box mr-2"></i> {t('results.download_sac')}
                         </button>
                     </div>

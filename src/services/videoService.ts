@@ -423,6 +423,11 @@ export async function generateSonificationVideo(
                     ctx.fillStyle = '#050505';
                     ctx.fillRect(0, 0, width, height);
 
+                    if (ctx) {
+                        // FORCE CACHE INVALIDATION LOG - V3.1
+                        console.log("[VideoService] Rendering Frame - Layout V3 Active");
+                    }
+
                     // Background
                     ctx.save();
                     ctx.translate(width / 2, height / 2);
@@ -560,48 +565,6 @@ export async function generateSonificationVideo(
                     // Left: Title, Description, Author/Date | Center: Compact Audio Bars | Right: Logo
                     // ═══════════════════════════════════════════════════════════════════════════════════════
 
-                    // --- TOP LEFT BRANDING: Logo + "SonificA.R.T." (Refined) ---
-                    ctx.save();
-
-                    // Elegant gradient bar behind branding
-                    const brandBg = ctx.createLinearGradient(0, 0, 450, 0);
-                    brandBg.addColorStop(0, 'rgba(10, 21, 32, 0.95)');
-                    brandBg.addColorStop(0.7, 'rgba(10, 21, 32, 0.6)');
-                    brandBg.addColorStop(1, 'rgba(10, 21, 32, 0)');
-                    ctx.fillStyle = brandBg;
-                    ctx.fillRect(0, 0, 480, 80);
-
-                    // Accent line under branding
-                    const accentGrad = ctx.createLinearGradient(0, 78, 400, 78);
-                    accentGrad.addColorStop(0, '#2dd4bf');
-                    accentGrad.addColorStop(0.5, '#a855f7');
-                    accentGrad.addColorStop(1, 'rgba(45, 212, 191, 0)');
-                    ctx.fillStyle = accentGrad;
-                    ctx.fillRect(0, 76, 400, 3);
-
-                    const brandLogoSize = 45;
-                    ctx.globalAlpha = 1.0;
-                    ctx.drawImage(logoImg, 25, 16, brandLogoSize, brandLogoSize);
-
-                    // Text "SonificA.R.T."
-                    ctx.font = 'bold 26px "Segoe UI", Arial, sans-serif';
-                    ctx.fillStyle = '#ffffff';
-                    ctx.textAlign = 'left';
-                    ctx.shadowColor = 'rgba(0,0,0,0.8)';
-                    ctx.shadowBlur = 6;
-                    ctx.fillText('Sonific', 80, 45);
-
-                    // Colored "A.R.T."
-                    const sonificWidth = ctx.measureText('Sonific').width;
-                    ctx.fillStyle = '#2dd4bf';
-                    ctx.fillText('A.R.T.', 80 + sonificWidth, 45);
-
-                    // Tagline
-                    ctx.font = '10px "Segoe UI", Arial, sans-serif';
-                    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-                    ctx.shadowBlur = 0;
-                    ctx.fillText('DETERMINISTIC SONIFICATION FRAMEWORK', 80, 62);
-                    ctx.restore();
 
                     // --- FOOTER BACKGROUND (Premium Dark Gradient) ---
                     const footerY = height - 200;
@@ -709,23 +672,40 @@ export async function generateSonificationVideo(
                         ctx.restore();
                     }
 
-                    // AUTHOR & DATE
+                    // AUTHOR & DATE (Enlarged and Highlighted)
                     ctx.save();
                     const authorDateY = contentY + 140;
 
-                    ctx.font = 'bold 16px "Segoe UI", Arial, sans-serif';
-                    ctx.fillStyle = '#2dd4bf';
+                    // Author with background highlight
+                    ctx.font = 'bold 24px "Segoe UI", Arial, sans-serif';
                     const authorStr = metadata?.author || "SonificART";
-                    ctx.fillText(authorStr.toUpperCase(), colLeftX, authorDateY);
+                    const authorText = authorStr.toUpperCase();
+                    const authorMetrics = ctx.measureText(authorText);
 
-                    const authorWidth = ctx.measureText(authorStr.toUpperCase()).width;
-                    ctx.fillStyle = 'rgba(255,255,255,0.4)';
-                    ctx.fillText('  •  ', colLeftX + authorWidth, authorDateY);
+                    // Background pill for author
+                    ctx.fillStyle = 'rgba(45, 212, 191, 0.15)';
+                    ctx.beginPath();
+                    ctx.roundRect ? ctx.roundRect(colLeftX - 8, authorDateY - 22, authorMetrics.width + 16, 32, 6) : ctx.fillRect(colLeftX - 8, authorDateY - 22, authorMetrics.width + 16, 32);
+                    ctx.fill();
 
-                    ctx.font = '16px "Segoe UI", Arial, sans-serif';
-                    ctx.fillStyle = 'rgba(255,255,255,0.6)';
-                    const dateStr = new Date().toLocaleDateString('it-IT', { year: 'numeric', month: 'long', day: 'numeric' });
-                    ctx.fillText(dateStr, colLeftX + authorWidth + 50, authorDateY);
+                    // Author text
+                    ctx.fillStyle = '#2dd4bf';
+                    ctx.shadowColor = 'rgba(45, 212, 191, 0.6)';
+                    ctx.shadowBlur = 10;
+                    ctx.fillText(authorText, colLeftX, authorDateY);
+
+                    // Separator
+                    const authorWidth = authorMetrics.width;
+                    ctx.shadowBlur = 0;
+                    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+                    ctx.font = 'bold 22px "Segoe UI", Arial, sans-serif';
+                    ctx.fillText('  •  ', colLeftX + authorWidth + 16, authorDateY);
+
+                    // Date
+                    ctx.font = 'bold 22px "Segoe UI", Arial, sans-serif';
+                    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+                    const dateStr = new Date().toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                    ctx.fillText(dateStr, colLeftX + authorWidth + 60, authorDateY);
                     ctx.restore();
 
                     // === RIGHT COLUMN: EXTENDED AUDIO SPECTRUM ===
@@ -776,24 +756,32 @@ export async function generateSonificationVideo(
                     ctx.shadowBlur = 0;
                     ctx.restore();
 
-                    // === LOGO WATERMARK (Bottom Right, Small) ===
+                    // === LOGO WATERMARK (Bottom Right, Large) ===
                     ctx.save();
-                    const logoWSize = 50;
-                    const logoWX = width - logoWSize - 30;
-                    const logoWY = height - logoWSize - 20;
+                    const logoWSize = 100;
+                    const logoWX = width - logoWSize - 40;
+                    const logoWY = height - logoWSize - 30;
 
-                    ctx.globalAlpha = 0.8;
+                    // Logo glow
+                    ctx.shadowColor = 'rgba(45, 212, 191, 0.4)';
+                    ctx.shadowBlur = 20;
+                    ctx.globalAlpha = 1.0;
                     ctx.drawImage(logoImg, logoWX, logoWY, logoWSize, logoWSize);
+                    ctx.shadowBlur = 0;
 
-                    // Small text next to logo
-                    ctx.font = 'bold 12px "Segoe UI", Arial, sans-serif';
+                    // Text below logo
+                    ctx.font = 'bold 18px "Segoe UI", Arial, sans-serif';
                     ctx.fillStyle = '#ffffff';
                     ctx.textAlign = 'right';
-                    ctx.fillText('SonificA.R.T.', logoWX - 10, logoWY + 30);
+                    ctx.fillText('Sonific', logoWX + logoWSize, logoWY + logoWSize + 25);
 
-                    ctx.font = '9px "Segoe UI", Arial, sans-serif';
-                    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-                    ctx.fillText('sonificart.com', logoWX - 10, logoWY + 42);
+                    const sonificW = ctx.measureText('Sonific').width;
+                    ctx.fillStyle = '#2dd4bf';
+                    ctx.fillText('A.R.T.', logoWX + logoWSize, logoWY + logoWSize + 25);
+
+                    ctx.font = '12px "Segoe UI", Arial, sans-serif';
+                    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+                    ctx.fillText('sonificart.com', logoWX + logoWSize, logoWY + logoWSize + 42);
 
                     ctx.restore();
 

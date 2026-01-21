@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Logo } from './Logo';
+import { GoogleTranslate } from './GoogleTranslate';
 import { useLanguage } from '../contexts/LanguageContext';
-import { Language } from '../services/translations';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 interface NavbarProps {
@@ -16,21 +16,13 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, isAdmin, userCredits, isProUser, onLogin, onLogout, onGoProClick, onOpenHelp }) => {
-    const { language, setLanguage, t } = useLanguage();
-    const [isLangOpen, setIsLangOpen] = useState(false);
+    const { t } = useLanguage();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const navigate = useNavigate();
     const location = useLocation();
 
     // Helper per determinare la vista corrente dal path
     const currentView = location.pathname === '/' ? 'landing' : location.pathname.substring(1);
-
-    const languages: { code: Language; label: string; flag: string }[] = [
-        { code: 'it', label: 'ITA', flag: '🇮🇹' },
-        { code: 'en', label: 'ENG', flag: '🇬🇧' },
-        { code: 'fr', label: 'FRA', flag: '🇫🇷' },
-        { code: 'es', label: 'ESP', flag: '🇪🇸' },
-    ];
 
     const navLinkClass = (view: string) => `
         relative cursor-pointer px-3 py-2 text-sm font-bold tracking-wide uppercase transition-all duration-300 group
@@ -67,13 +59,12 @@ export const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, isAdmin, userCredits
 
                 {/* --- CENTER: MAIN NAVIGATION --- */}
                 <div className="hidden lg:flex items-center justify-center gap-8">
-                    <button onClick={() => navigate('/')} className={navLinkClass('landing')}>
-                        {t('nav.home')}
+                    <button onClick={() => navigate('/')} className={`${navLinkClass('landing')} notranslate`}>
+                        Home
                         <ActiveIndicator isActive={currentView === 'landing'} />
                     </button>
 
                     <button onClick={onGoProClick} className={`${navLinkClass('landing')} text-brand-accent hover:text-brand-accent-light flex items-center gap-2`}>
-                        <i className="fas fa-crown text-xs"></i>
                         {t('nav.access')}
                         <ActiveIndicator isActive={false} />
                     </button>
@@ -92,7 +83,7 @@ export const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, isAdmin, userCredits
                                 {t('nav.verify')}
                                 <ActiveIndicator isActive={currentView === 'verification'} />
                             </button>
-                            <button onClick={() => navigate('/compare')} className={navLinkClass('compare')}>
+                            <button onClick={() => navigate('/compare')} className={`${navLinkClass('compare')} whitespace-nowrap`}>
                                 COMPARA
                                 <ActiveIndicator isActive={currentView === 'compare'} />
                             </button>
@@ -122,32 +113,8 @@ export const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, isAdmin, userCredits
                         <i className="fas fa-book-open text-lg"></i>
                     </button>
 
-                    {/* LINGUA (FIXED: Usa onClick invece di hover) */}
-                    <div className="relative">
-                        <button
-                            onClick={() => setIsLangOpen(!isLangOpen)}
-                            className="text-xs font-bold text-white/70 hover:text-white uppercase flex items-center gap-1 bg-white/5 px-2 py-1 rounded border border-white/10"
-                        >
-                            {languages.find(l => l.code === language)?.flag} <span className="hidden xs:inline">{language}</span> <i className="fas fa-chevron-down text-[8px]"></i>
-                        </button>
-
-                        {isLangOpen && (
-                            <>
-                                <div className="fixed inset-0 z-10" onClick={() => setIsLangOpen(false)}></div>
-                                <div className="absolute top-full right-0 mt-2 w-28 bg-[#1e293b] border border-white/10 rounded-lg shadow-xl overflow-hidden z-20 animate-fade-in">
-                                    {languages.map((lang) => (
-                                        <button
-                                            key={lang.code}
-                                            onClick={() => { setLanguage(lang.code); setIsLangOpen(false); }}
-                                            className={`w-full text-left px-4 py-2.5 text-xs font-bold hover:bg-white/10 transition-colors flex items-center gap-2 ${language === lang.code ? 'text-brand-accent bg-white/5' : 'text-white/80'}`}
-                                        >
-                                            <span>{lang.flag}</span> {lang.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </>
-                        )}
-                    </div>
+                    {/* Google Translate - Integrato */}
+                    <GoogleTranslate />
 
                     <div className="h-6 w-px bg-white/20 mx-2 hidden sm:block"></div>
 
@@ -197,8 +164,8 @@ export const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, isAdmin, userCredits
             {isMobileMenuOpen && (
                 <div className="lg:hidden bg-[#0f172a] border-b border-white/10 animate-fade-in shadow-2xl absolute w-full left-0 top-20 z-50">
                     <div className="p-4 space-y-2">
-                        <button onClick={() => { navigate('/'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">
-                            {t('nav.home')}
+                        <button onClick={() => { navigate('/'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg notranslate">
+                            Home
                         </button>
                         <button onClick={() => { onGoProClick(); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-brand-accent font-bold bg-white/5 rounded-lg border border-brand-accent/20">
                             {t('nav.access')}
