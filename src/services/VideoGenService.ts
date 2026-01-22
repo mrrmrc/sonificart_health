@@ -137,8 +137,12 @@ function drawFrame(
 
     // 3. Synced Scanning Effect & Pixel Sonification
     const progress = Math.min(1, Math.max(0, time / duration));
-    const scanStart = zDx;
-    const scanWidth = zDw;
+
+    // Constrain scan to visual bounds of the ARTWORK, not the whole image file
+    // Note: We account for the 0.95 scaling applied in step 2
+    const scanStart = (visualBounds.minX - dx) * 0.95 + zDx;
+    const scanEnd = (visualBounds.maxX - dx) * 0.95 + zDx;
+    const scanWidth = scanEnd - scanStart;
     const scanX = Math.floor(scanStart + (progress * scanWidth));
 
     // A. Draw Scanline

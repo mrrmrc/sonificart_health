@@ -20,6 +20,13 @@ function AppContent() {
     const isUnlimited = user?.isPro;
     const location = useLocation();
 
+    // Check if we should hide site UI (for modals or specific pages)
+    const [childRequestedHideUI, setHideSiteUI] = useState(false);
+
+    // Computed logic: hide UI if a child component requests it OR if an App-level modal is open
+    const isAnyAppModalOpen = isLoginModalOpen || isRequestAccessOpen || isHelpModalOpen;
+    const hideSiteUI = childRequestedHideUI || isAnyAppModalOpen;
+
     // Fix scroll on route change
     useEffect(() => {
         window.scrollTo(0, 0);
@@ -93,32 +100,35 @@ function AppContent() {
         setIsRequestAccessOpen,
         openRequestAccess, // NEW
         setIsHelpModalOpen,
-        setHelpInitialSection
+        setHelpInitialSection,
+        setHideSiteUI // Allow child components to request hiding UI
     };
 
     return (
         <div className="min-h-screen flex flex-col bg-transparent text-brand-text-primary font-sans antialiased selection:bg-brand-accent selection:text-white overflow-x-hidden">
             <GlobalBackground />
-            <Navbar
-                isLoggedIn={!!user}
-                isAdmin={user?.isAdmin}
-                userCredits={user?.credits}
-                isProUser={isUnlimited}
-                onLogin={() => setIsLoginModalOpen(true)}
-                onLogout={async () => { await api.logout(); setUser(null); }}
-                onGoProClick={() => openRequestAccess('Mensile')}
-                onOpenHelp={() => { setHelpInitialSection(undefined); setIsHelpModalOpen(true); }}
-            />
-            <main className="flex-grow w-full relative z-10">
+            {!hideSiteUI && (
+                <Navbar
+                    isLoggedIn={!!user}
+                    isAdmin={user?.isAdmin}
+                    userCredits={user?.credits}
+                    isProUser={isUnlimited}
+                    onLogin={() => setIsLoginModalOpen(true)}
+                    onLogout={async () => { await api.logout(); setUser(null); }}
+                    onGoProClick={() => openRequestAccess('Mensile')}
+                    onOpenHelp={() => { setHelpInitialSection(undefined); setIsHelpModalOpen(true); }}
+                />
+            )}
+            <main className={`flex-grow w-full relative z-10 ${hideSiteUI ? 'pt-0 pb-0' : ''}`}>
                 {location.pathname === '/' ? (
                     <Outlet context={contextValue} />
                 ) : (
-                    <div className="container mx-auto px-4 sm:px-6 lg:px-8 pt-40 pb-24 animate-fade-in">
+                    <div className={`container mx-auto px-4 sm:px-6 lg:px-8 ${hideSiteUI ? 'pt-0 pb-0' : 'pt-28 pb-24'} animate-fade-in`}>
                         <Outlet context={contextValue} />
                     </div>
                 )}
             </main>
-            <Footer />
+            {!hideSiteUI && <Footer />}
             <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} onLoginSuccess={(u) => { setUser(u); setIsLoginModalOpen(false); }} />
             <RequestAccessModal isOpen={isRequestAccessOpen} onClose={() => setIsRequestAccessOpen(false)} userEmail={user?.email} initialPlan={requestAccessInitialPlan} />
             <HelpModal isOpen={isHelpModalOpen} onClose={() => setIsHelpModalOpen(false)} initialSection={helpInitialSection} />

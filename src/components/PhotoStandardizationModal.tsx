@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { GuidedPhotoCapture } from './GuidedPhotoCapture';
 import { normalizeImage, NormalizationReport, NormalizationOptions } from '../services/imageNormalizationService';
 import { AcquisitionMetadata } from '../types';
@@ -14,6 +15,13 @@ export const PhotoStandardizationModal: React.FC<PhotoStandardizationModalProps>
     onImageReady,
     onClose
 }) => {
+    const { setHideSiteUI } = useOutletContext<any>() || { setHideSiteUI: () => { } };
+
+    useEffect(() => {
+        setHideSiteUI(true);
+        return () => setHideSiteUI(false);
+    }, [setHideSiteUI]);
+
     const [mode, setMode] = useState<Mode>('select');
     const [originalFile, setOriginalFile] = useState<File | null>(null);
     const [normalizedFile, setNormalizedFile] = useState<File | null>(null);
@@ -120,7 +128,7 @@ export const PhotoStandardizationModal: React.FC<PhotoStandardizationModalProps>
                 }}
             />
 
-            <div className="relative z-10 w-full max-w-5xl max-h-[95vh] bg-slate-900 rounded-3xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/10 overflow-hidden flex flex-col animate-zoom-in">
+            <div className="relative z-10 w-full max-w-5xl max-h-[95vh] bg-brand-primary rounded-3xl shadow-[0_0_50px_rgba(0,0,0,0.8)] border border-white/10 overflow-hidden flex flex-col animate-zoom-in">
 
                 {/* File input (Hidden) */}
                 <input
@@ -133,11 +141,11 @@ export const PhotoStandardizationModal: React.FC<PhotoStandardizationModalProps>
                 />
 
                 {mode === 'select' && (
-                    <div className="flex flex-col h-full overflow-y-auto p-4 md:p-10">
+                    <div className="flex flex-col h-full overflow-y-auto lg:overflow-hidden p-4 md:p-8">
                         <div className="flex justify-between items-center mb-6 md:mb-10">
                             <div>
-                                <h2 className="text-xl md:text-3xl font-black text-white font-display tracking-tight mb-2 uppercase md:normal-case">Standardizzazione Foto</h2>
-                                <div className="h-1 w-12 md:w-20 bg-brand-accent rounded-full"></div>
+                                <h2 className="text-xl md:text-3xl font-black text-white font-display tracking-tight mb-2 uppercase">Standardizzazione Foto</h2>
+                                <div className="h-1.5 w-12 md:w-20 bg-brand-accent rounded-full shadow-[0_0_10px_rgba(13,148,136,0.5)]"></div>
                             </div>
                             <button
                                 onClick={(e) => { e.stopPropagation(); onClose(); }}
@@ -147,7 +155,7 @@ export const PhotoStandardizationModal: React.FC<PhotoStandardizationModalProps>
                             </button>
                         </div>
 
-                        <div className="bg-brand-accent/5 border border-brand-accent/20 p-4 md:p-6 rounded-2xl mb-6 md:mb-10">
+                        <div className="bg-brand-accent/5 border border-brand-accent/20 p-4 md:p-5 rounded-2xl mb-4 md:mb-6">
                             <p className="text-gray-300 leading-relaxed text-xs md:text-base">
                                 <span className="text-brand-accent font-bold">Nota Scientifica:</span> Per garantire la validità del framework SonificART, le immagini devono essere standardizzate. Questo elimina il bias dovuto alle condizioni di scatto.
                             </p>
@@ -261,30 +269,33 @@ const NormalizationPreview: React.FC<NormalizationPreviewProps> = ({
 
     if (isProcessing) {
         return (
-            <div className="flex flex-col items-center justify-center h-full p-20 text-center bg-slate-900 border border-white/10 rounded-3xl">
+            <div className="flex flex-col items-center justify-center h-full p-10 text-center bg-brand-primary border border-white/10 rounded-3xl">
                 <div className="relative w-24 h-24 mb-10">
                     <div className="absolute inset-0 border-4 border-white/5 rounded-full"></div>
                     <div className="absolute inset-0 border-4 border-t-brand-accent rounded-full animate-spin"></div>
                 </div>
-                <h3 className="text-3xl font-black text-white mb-4 font-display">Normalizzazione...</h3>
-                <p className="text-gray-400 max-w-xs mx-auto">Standardizzazione bilanciamento bianco e contrasto adattivo in corso</p>
+                <h3 className="text-2xl font-black text-white mb-2 font-display">Normalizzazione...</h3>
+                <p className="text-xs text-gray-400 max-w-xs mx-auto">Standardizzazione bilanciamento bianco e contrasto adattivo</p>
             </div>
         );
     }
 
     return (
-        <div className="flex flex-col h-full overflow-hidden bg-slate-900">
-            <div className="bg-black/20 p-6 flex justify-between items-center border-b border-white/5">
-                <h2 className="text-xl font-bold text-white font-display">Miglioramento Completato</h2>
-                <div className="flex bg-black p-1 rounded-xl border border-white/10">
+        <div className="flex flex-col h-full overflow-hidden bg-brand-primary">
+            <div className="bg-black/40 p-4 md:p-6 flex justify-between items-center border-b border-white/10 shadow-lg relative z-20">
+                <div className="flex items-center gap-4">
+                    <div className="w-1.5 h-8 bg-brand-accent rounded-full shadow-[0_0_15px_rgba(13,148,136,0.5)]"></div>
+                    <h2 className="text-xl md:text-2xl font-black text-white font-display tracking-tight uppercase">Miglioramento Completato</h2>
+                </div>
+                <div className="flex bg-black p-1 rounded-lg border border-white/10">
                     <button
-                        className={`px-5 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${showComparison ? 'bg-brand-accent text-brand-primary' : 'text-gray-500 hover:text-white'}`}
+                        className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${showComparison ? 'bg-brand-accent text-brand-primary' : 'text-gray-500 hover:text-white'}`}
                         onClick={() => setShowComparison(true)}
                     >
                         Confronto
                     </button>
                     <button
-                        className={`px-5 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${!showComparison ? 'bg-brand-accent text-brand-primary' : 'text-gray-500 hover:text-white'}`}
+                        className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${!showComparison ? 'bg-brand-accent text-brand-primary' : 'text-gray-500 hover:text-white'}`}
                         onClick={() => setShowComparison(false)}
                     >
                         Risultato
@@ -292,64 +303,58 @@ const NormalizationPreview: React.FC<NormalizationPreviewProps> = ({
                 </div>
             </div>
 
-            <div className="flex-1 p-6 md:p-8 overflow-y-auto">
+            <div className="flex-1 p-4 md:p-6 overflow-y-auto lg:overflow-hidden custom-scrollbar">
                 {showComparison ? (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start mb-12">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 items-start mb-6 md:mb-10">
                         <div className="space-y-4">
-                            <div className="relative group overflow-hidden rounded-2xl border border-white/5 shadow-2xl">
-                                <img src={originalUrl} className="w-full aspect-square object-cover transition-transform duration-700 group-hover:scale-105" alt="Originale" />
-                                <div className="absolute top-4 left-4 bg-black/80 px-4 py-1.5 rounded-full text-[10px] font-black text-white uppercase tracking-widest backdrop-blur-md border border-white/10">Input Originale</div>
+                            <div className="relative group overflow-hidden rounded-xl border border-white/5 shadow-2xl">
+                                <img src={originalUrl} className="w-full aspect-square max-h-[30vh] md:max-h-[40vh] object-contain transition-transform duration-700 group-hover:scale-105" alt="Originale" />
+                                <div className="absolute top-3 left-3 bg-black/80 px-3 py-1 rounded-full text-[9px] font-black text-white uppercase tracking-widest backdrop-blur-md border border-white/10">Originale</div>
                             </div>
                         </div>
                         <div className="space-y-4">
-                            <div className="relative group overflow-hidden rounded-2xl border border-brand-accent/20 shadow-2xl shadow-brand-accent/5">
-                                <img src={normalizedUrl} className="w-full aspect-square object-cover transition-transform duration-700 group-hover:scale-105" alt="Normalizzata" />
-                                <div className="absolute top-4 right-4 bg-brand-accent px-4 py-1.5 rounded-full text-[10px] font-black text-brand-primary uppercase tracking-widest border border-white/10">Normalizzata (v1.0)</div>
+                            <div className="relative group overflow-hidden rounded-xl border border-brand-accent/20 shadow-2xl shadow-brand-accent/5">
+                                <img src={normalizedUrl} className="w-full aspect-square max-h-[30vh] md:max-h-[40vh] object-contain transition-transform duration-700 group-hover:scale-105" alt="Normalizzata" />
+                                <div className="absolute top-3 right-3 bg-brand-accent px-3 py-1 rounded-full text-[9px] font-black text-brand-primary uppercase tracking-widest border border-white/10">Normalizzato</div>
                             </div>
                         </div>
                     </div>
                 ) : (
-                    <div className="flex items-center justify-center h-full mb-12">
-                        <img src={normalizedUrl} className="max-w-full max-h-[500px] object-contain rounded-3xl shadow-2xl border border-white/5" alt="Normalizzata" />
+                    <div className="flex items-center justify-center h-full mb-10">
+                        <img src={normalizedUrl} className="max-w-full max-h-[45vh] object-contain rounded-2xl shadow-2xl border border-white/5" alt="Normalizzata" />
                     </div>
                 )}
 
                 {report && (
                     <div className="max-w-5xl mx-auto space-y-8 pb-10">
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <MetricCard icon="temperature-high" label="Temp. Colore" value={`${Math.round(report.quality.colorTemperature)}K`} sub="Target 6500K" color="text-orange-400" />
-                            <MetricCard icon="bullseye" label="Accuratezza" value={`${report.quality.colorAccuracy.toFixed(1)}%`} sub="Fedeltà Cromatica" color="text-emerald-400" />
-                            <MetricCard icon="sliders-h" label="Dinamica" value={report.quality.dynamicRange.toFixed(1)} sub="Levels range" color="text-blue-400" />
-                            <MetricCard icon="stopwatch" label="Latency" value={`${(report.processingTime / 1).toFixed(0)}ms`} sub="In-browser engine" color="text-yellow-400" />
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+                            <MetricCard icon="temperature-high" label="TEMP." value={`${Math.round(report.quality.colorTemperature)}K`} sub="6500K" color="text-orange-400" />
+                            <MetricCard icon="bullseye" label="ACCURATEZZA" value={`${report.quality.colorAccuracy.toFixed(1)}%`} sub="Fedeltà" color="text-emerald-400" />
+                            <MetricCard icon="sliders-h" label="DINAMICA" value={report.quality.dynamicRange.toFixed(1)} sub="Levels" color="text-blue-400" />
+                            <MetricCard icon="stopwatch" label="LATENZA" value={`${(report.processingTime / 1).toFixed(0)}ms`} sub="Engine" color="text-yellow-400" />
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="bg-black/30 border border-white/5 p-8 rounded-3xl">
-                                <h4 className="text-xs font-black text-emerald-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-3">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                                    Fase 1: Correzione
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                            <div className="bg-black/20 border border-white/5 p-5 md:p-6 rounded-2xl">
+                                <h4 className="text-[9px] font-black text-emerald-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-3">
+                                    Correzione
                                 </h4>
-                                <ul className="space-y-4">
-                                    {report.applied.map((algo, i) => (
-                                        <li key={i} className="flex items-center gap-3 text-sm text-gray-300">
-                                            <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center text-[10px] text-emerald-500">
-                                                <i className="fas fa-check"></i>
-                                            </div>
-                                            {algo}
+                                <ul className="space-y-2 text-xs text-gray-400">
+                                    {report.applied.slice(0, 3).map((algo, i) => (
+                                        <li key={i} className="flex items-center gap-2 truncate">
+                                            <i className="fas fa-check text-[10px] text-emerald-500"></i> {algo}
                                         </li>
                                     ))}
                                 </ul>
                             </div>
 
-                            <div className="bg-black/30 border border-white/5 p-8 rounded-3xl">
-                                <h4 className="text-xs font-black text-blue-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-3">
-                                    <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
-                                    Fase 2: Validazione
+                            <div className="bg-black/20 border border-white/5 p-5 md:p-6 rounded-2xl">
+                                <h4 className="text-[9px] font-black text-blue-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-3">
+                                    Validazione
                                 </h4>
-                                <div className="space-y-5">
-                                    <DetailRow label="White Balance Shift" value={`${report.metrics.whiteBalanceShift.r.toFixed(1)}, ${report.metrics.whiteBalanceShift.g.toFixed(1)}, ${report.metrics.whiteBalanceShift.b.toFixed(1)}`} />
-                                    <DetailRow label="Exposure Adjustment" value={report.metrics.exposureAdjustment.toFixed(2)} />
-                                    <DetailRow label="Contrast Improvement" value={report.metrics.contrastImprovement.toFixed(2)} />
+                                <div className="space-y-3">
+                                    <DetailRow label="WB Delta" value={report.metrics.whiteBalanceShift.g.toFixed(2)} />
+                                    <DetailRow label="Exposure" value={report.metrics.exposureAdjustment.toFixed(2)} />
                                 </div>
                             </div>
                         </div>
@@ -357,16 +362,16 @@ const NormalizationPreview: React.FC<NormalizationPreviewProps> = ({
                 )}
             </div>
 
-            <div className="p-6 md:p-10 bg-black/40 border-t border-white/5 flex flex-col md:flex-row gap-4">
+            <div className="p-4 md:p-6 bg-black/40 border-t border-white/5 flex flex-col md:flex-row gap-3">
                 <button
                     onClick={onRetake}
-                    className="order-2 md:order-1 px-8 py-5 rounded-2xl border border-white/10 text-gray-500 hover:text-white hover:bg-white/5 transition-all text-[10px] font-black uppercase tracking-[0.3em]"
+                    className="order-2 md:order-1 px-6 py-3.5 rounded-xl border border-white/10 text-gray-500 hover:text-white hover:bg-white/5 transition-all text-[9px] font-black uppercase tracking-[0.2em]"
                 >
                     Scarta
                 </button>
                 <button
                     onClick={onConfirm}
-                    className="order-1 md:order-2 flex-1 px-8 py-5 rounded-2xl bg-brand-accent text-brand-primary hover:bg-brand-accent-light transition-all text-xs font-black uppercase tracking-[0.3em] shadow-2xl shadow-brand-accent/20"
+                    className="order-1 md:order-2 flex-1 px-6 py-3.5 rounded-xl bg-brand-accent text-brand-primary hover:bg-brand-accent-light transition-all text-xs font-black uppercase tracking-[0.2em] shadow-xl shadow-brand-accent/20"
                 >
                     Inizia Processo Sonoro →
                 </button>
@@ -376,11 +381,11 @@ const NormalizationPreview: React.FC<NormalizationPreviewProps> = ({
 };
 
 const MetricCard = ({ icon, label, value, sub, color }: any) => (
-    <div className="bg-black/20 border border-white/5 p-6 rounded-2xl">
-        <div className={`text-xl mb-4 ${color}`}><i className={`fas fa-${icon}`}></i></div>
-        <div className="text-[9px] text-gray-500 uppercase tracking-widest font-black mb-1">{label}</div>
-        <div className="text-2xl font-black text-white mb-1 font-display">{value}</div>
-        <div className="text-[9px] text-gray-600 font-bold">{sub}</div>
+    <div className="bg-black/20 border border-white/5 p-4 rounded-xl">
+        <div className={`text-lg mb-2 ${color}`}><i className={`fas fa-${icon}`}></i></div>
+        <div className="text-[8px] text-gray-500 uppercase tracking-widest font-black mb-1">{label}</div>
+        <div className="text-xl font-black text-white mb-0.5 font-display">{value}</div>
+        <div className="text-[8px] text-gray-600 font-bold">{sub}</div>
     </div>
 );
 

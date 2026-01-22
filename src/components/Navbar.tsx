@@ -37,7 +37,7 @@ export const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, isAdmin, userCredits
 
     return (
         <nav className="fixed w-full z-50 top-0 left-0 border-b border-white/10 bg-[#0f172a]/80 backdrop-blur-xl transition-all duration-300 shadow-2xl">
-            <div className="max-w-[1800px] mx-auto px-6 h-20 flex items-center justify-between">
+            <div className="max-w-[1800px] mx-auto px-6 h-16 flex items-center justify-between">
 
                 {/* --- LEFT: BRANDING --- */}
                 <div className="flex items-center gap-3 cursor-pointer group shrink-0" onClick={() => navigate('/')}>

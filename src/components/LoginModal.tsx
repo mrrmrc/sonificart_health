@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { api } from '../services/api';
 import { User } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -56,6 +57,16 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
     const [showPrivacy, setShowPrivacy] = useState(false);
     const [rememberMe, setRememberMe] = useState(false);
     const { t } = useLanguage();
+    const { setHideSiteUI } = useOutletContext<any>() || { setHideSiteUI: () => { } };
+
+    useEffect(() => {
+        if (isOpen) {
+            setHideSiteUI(true);
+        } else {
+            setHideSiteUI(false);
+        }
+        return () => setHideSiteUI(false);
+    }, [isOpen, setHideSiteUI]);
 
     useEffect(() => {
         if (isOpen) {
@@ -130,13 +141,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
 
                     <div className="p-8">
                         {/* HEADER */}
-                        <div className="text-center mb-6">
-                            <h2 className="text-2xl font-bold text-white">
+                        <div className="text-center mb-8">
+                            <h2 className="text-3xl font-black text-white font-display uppercase tracking-tight">
                                 {view === 'login' && t('login.login')}
                                 {view === 'register' && t('login.create_account')}
                                 {view === 'forgot' && t('login.forgot_password')}
                             </h2>
-                            <p className="text-sm text-brand-text-secondary mt-2">
+                            <div className="w-12 h-1 bg-brand-accent mx-auto mt-3 rounded-full shadow-[0_0_10px_rgba(13,148,136,0.3)]"></div>
+                            <p className="text-sm text-brand-text-secondary mt-4 leading-relaxed max-w-[280px] mx-auto">
                                 {view === 'login' && t('login.login_subtitle')}
                                 {view === 'register' && t('login.register_subtitle')}
                                 {view === 'forgot' && t('login.forgot_password_subtitle') || 'Inserisci la tua email per recuperare l\'accesso.'}

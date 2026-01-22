@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { DashboardEntry, User, TransformedNoteEvent, SonificationResult } from '../types';
 import { api, USE_MOCK_BACKEND } from '../services/api';
 import { ConfirmationModal } from './ConfirmationModal';
@@ -22,6 +23,13 @@ const PublishModal: React.FC<{
     onShowMessage: (title: string, message: string, type: 'info' | 'warning' | 'danger' | 'success') => void,
     onRequestConfirmation: (title: string, message: string, onConfirm: () => void) => void
 }> = ({ entry, onClose, user, onShowMessage, onRequestConfirmation }) => {
+    const { setHideSiteUI } = useOutletContext<any>() || { setHideSiteUI: () => { } };
+
+    useEffect(() => {
+        setHideSiteUI(true);
+        return () => setHideSiteUI(false);
+    }, [setHideSiteUI]);
+
     // STATE: Metadata
     const [title, setTitle] = useState(entry.title || "Opera Senza Titolo");
     const [subtitle, setSubtitle] = useState(entry.subtitle || "");
@@ -312,44 +320,44 @@ const PublishModal: React.FC<{
 
                 <button onClick={onClose} className="absolute top-3 right-3 z-50 text-white/50 hover:text-white bg-black/40 rounded-full w-8 h-8 flex items-center justify-center"><i className="fas fa-times"></i></button>
 
-                <div className="px-5 py-4 border-b border-white/10 flex justify-between items-center bg-[#15151b] shrink-0 relative z-10 w-full">
-                    <div className="flex items-center gap-3">
-                        <div className="w-1.5 h-6 bg-gradient-to-b from-brand-accent to-brand-primary rounded-full"></div>
+                <header className="px-6 md:px-10 py-5 border-b border-white/10 flex justify-between items-center bg-black/40 backdrop-blur-xl shrink-0 relative z-40 w-full">
+                    <div className="flex items-center gap-5">
+                        <div className="w-1.5 h-10 bg-gradient-to-b from-brand-accent to-brand-primary rounded-full shadow-[0_0_20px_rgba(13,148,136,0.4)]"></div>
                         <div>
-                            <h2 className="text-lg font-bold text-white tracking-tight">STUDIO MULTIMEDIALE</h2>
-                            <p className="text-[10px] text-gray-400 uppercase tracking-widest font-medium">Editing & Pubblicazione</p>
+                            <h2 className="text-2xl md:text-3xl font-black text-white tracking-tighter font-display uppercase leading-none">STUDIO MULTIMEDIALE</h2>
+                            <p className="text-[10px] text-brand-accent font-black uppercase tracking-[0.4em] mt-1 opacity-80">Editing & Pubblicazione</p>
                         </div>
                     </div>
-                </div>
+                </header>
 
                 {/* Hidden Input */}
                 <input type="file" ref={fileInputRef} hidden accept="audio/*" onChange={handleAudioFileSelect} />
 
-                <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 bg-[#0B0C10] custom-scrollbar">
+                <div className="flex-1 overflow-y-auto lg:overflow-hidden p-3 md:p-5 bg-[#0B0C10] custom-scrollbar">
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-full">
 
                         {/* COL 1: METADATA & PREVIEW (Left, span 3/12 ~ 25%) */}
-                        <div className="lg:col-span-3 flex flex-col gap-3 h-full">
+                        <div className="lg:col-span-3 flex flex-col gap-3 h-full min-h-0">
                             {/* Preview - Reduced height constraint */}
-                            <div className="relative w-full aspect-square max-h-[200px] lg:max-h-[25vh] rounded-xl overflow-hidden border border-white/10 group shadow-lg shrink-0 mx-auto">
+                            <div className="relative w-full aspect-square max-h-[150px] lg:max-h-[22vh] rounded-xl overflow-hidden border border-white/10 group shadow-lg shrink-0 mx-auto">
                                 <img src={fixImage(entry.imageUrl)} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt="Preview" />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent p-3 flex flex-col justify-end">
-                                    <h3 className="text-white font-bold text-sm leading-tight uppercase font-display truncate">{title}</h3>
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent p-2 flex flex-col justify-end">
+                                    <h3 className="text-white font-bold text-xs leading-tight uppercase font-display truncate">{title}</h3>
                                 </div>
                             </div>
 
                             {/* Metadata Form */}
-                            <div className="bg-[#15151b] border border-white/5 rounded-xl p-4 flex-1 flex flex-col gap-3 shadow-lg h-full min-h-0 overflow-y-auto">
-                                <h4 className="flex items-center gap-2 text-[#2dd4bf] text-[10px] font-bold uppercase tracking-wider border-b border-white/5 pb-2 shrink-0">
+                            <div className="bg-[#15151b] border border-white/5 rounded-xl p-3 flex-1 flex flex-col gap-3 shadow-lg h-full min-h-0 overflow-y-auto custom-scrollbar">
+                                <h4 className="flex items-center gap-2 text-[#2dd4bf] text-[9px] font-bold uppercase tracking-wider border-b border-white/5 pb-2 shrink-0">
                                     <i className="fas fa-pen"></i> Metadata
                                 </h4>
                                 <div className="shrink-0">
-                                    <label className="block text-[10px] font-bold text-gray-500 mb-1 uppercase">Titolo</label>
-                                    <input value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-xs text-white focus:border-brand-accent outline-none transition-colors" />
+                                    <label className="block text-[9px] font-bold text-gray-500 mb-1 uppercase">Titolo</label>
+                                    <input value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-black/30 border border-white/10 rounded px-2.5 py-1.5 text-[11px] text-white focus:border-brand-accent outline-none transition-colors" />
                                 </div>
                                 <div className="flex-1 min-h-0 flex flex-col">
-                                    <label className="block text-[10px] font-bold text-gray-500 mb-1 uppercase">Descrizione</label>
-                                    <textarea value={description} onChange={e => setDescription(e.target.value)} className="w-full flex-1 min-h-[60px] bg-black/30 border border-white/10 rounded px-3 py-2 text-xs text-white focus:border-brand-accent outline-none resize-none transition-colors" />
+                                    <label className="block text-[9px] font-bold text-gray-500 mb-1 uppercase">Descrizione</label>
+                                    <textarea value={description} onChange={e => setDescription(e.target.value)} className="w-full flex-1 min-h-[50px] bg-black/30 border border-white/10 rounded px-2.5 py-1.5 text-[11px] text-white focus:border-brand-accent outline-none resize-none transition-colors custom-scrollbar" />
                                 </div>
 
                                 {/* VISIBILITY TOGGLE INTEGRATION */}
@@ -361,52 +369,54 @@ const PublishModal: React.FC<{
                                     </label>
                                 </div>
 
-                                <button onClick={handlePublish} disabled={isSubmitting} className="w-full py-2.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-lg border border-white/10 transition-all flex items-center justify-center gap-2 uppercase text-[10px] tracking-wider shrink-0">
+                                <button onClick={handlePublish} disabled={isSubmitting} className="w-full py-2 bg-white/10 hover:bg-white/20 text-white font-bold rounded-lg border border-white/10 transition-all flex items-center justify-center gap-2 uppercase text-[9px] tracking-wider shrink-0">
                                     {isSubmitting ? <i className="fas fa-circle-notch fa-spin"></i> : <><i className="fas fa-save"></i> Salva & Pubblica</>}
                                 </button>
                             </div>
                         </div>
 
                         {/* COL 2: MEDIA (Right, span 9/12) */}
-                        <div className="lg:col-span-9 flex flex-col gap-4 h-full min-h-0">
+                        <div className="lg:col-span-9 flex flex-col gap-3 h-full min-h-0">
 
                             {/* TOP: AUDIO SOURCE */}
-                            <div className="bg-[#15151b] border border-white/5 rounded-xl p-4 relative overflow-hidden shadow-lg shrink-0">
-                                <div className="flex justify-between items-start mb-3">
-                                    <h4 className="flex items-center gap-2 text-[#2dd4bf] text-[10px] font-bold uppercase tracking-wider">
+                            <div className="bg-[#15151b] border border-white/5 rounded-xl p-3 relative overflow-hidden shadow-lg shrink-0">
+                                <div className="flex justify-between items-start mb-2">
+                                    <h4 className="flex items-center gap-2 text-[#2dd4bf] text-[9px] font-bold uppercase tracking-wider">
                                         <i className="fas fa-music"></i> Sorgente Audio
                                     </h4>
-                                    <button onClick={() => fileInputRef.current?.click()} disabled={isUploadingAudio} className="text-[9px] bg-[#2dd4bf]/10 text-[#2dd4bf] px-2 py-1 rounded-full font-bold hover:bg-[#2dd4bf]/20 transition-colors uppercase border border-[#2dd4bf]/20 cursor-pointer disabled:opacity-50">
+                                    <button onClick={() => fileInputRef.current?.click()} disabled={isUploadingAudio} className="text-[8px] bg-[#2dd4bf]/10 text-[#2dd4bf] px-2 py-0.5 rounded-full font-bold hover:bg-[#2dd4bf]/20 transition-colors uppercase border border-[#2dd4bf]/20 cursor-pointer disabled:opacity-50">
                                         {isUploadingAudio ? <i className="fas fa-spinner fa-spin mr-1"></i> : <i className="fas fa-upload mr-1"></i>} Cambia Audio
                                     </button>
                                 </div>
 
-                                <div className="bg-black/30 rounded-lg p-3 border border-white/5 flex items-center gap-3 mb-2">
-                                    <div className="w-8 h-8 rounded-full bg-[#2dd4bf]/10 flex items-center justify-center text-[#2dd4bf] text-xs">
+                                <div className="bg-black/30 rounded-lg p-2 border border-white/5 flex items-center gap-3 mb-1">
+                                    <div className="w-7 h-7 rounded-lg bg-[#2dd4bf]/10 flex items-center justify-center text-[#2dd4bf] text-[10px]">
                                         {isUploadingAudio ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-music"></i>}
                                     </div>
                                     <div className="flex-1 overflow-hidden">
-                                        <div className="text-white font-bold text-xs truncate">
+                                        <div className="text-white font-bold text-[11px] truncate">
                                             {isUploadingAudio ? (
                                                 <span className="text-[#2dd4bf] italic animate-pulse">Caricamento in corso...</span>
                                             ) : (
                                                 entry.traditionName || "Audio Originale.wav"
                                             )}
                                         </div>
-                                        <div className="text-[10px] text-gray-500 uppercase tracking-wider">{entry.paradigm || "Scientifico"}</div>
+                                        <div className="text-[9px] text-gray-500 uppercase tracking-wider">{entry.paradigm || "Scientifico"}</div>
                                     </div>
-                                    <audio key={(entry.audioUrl || "audio") + Date.now()} controls src={getAbsoluteUrl(entry.audioUrl) || undefined} className="h-6 max-w-[150px]" />
+                                    <audio key={(entry.audioUrl || "audio") + Date.now()} controls src={getAbsoluteUrl(entry.audioUrl) || undefined} className="h-5 max-w-[120px]" />
                                 </div>
 
-                                <ActionToolbar url={entry.audioUrl || ""} type="audio" filename={`audio_${entry.id}.wav`} title={title} />
+                                <div className="scale-90 origin-left">
+                                    <ActionToolbar url={entry.audioUrl || ""} type="audio" filename={`audio_${entry.id}.wav`} title={title} />
+                                </div>
                             </div>
 
                             {/* BOTTOM: GRID 2 - Reduced gaps and flexible height */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 min-h-0">
 
                                 {/* VIDEO GENERATIVO */}
-                                <div className="bg-[#15151b] border border-white/5 rounded-xl p-4 flex flex-col shadow-lg h-full">
-                                    <h4 className="flex items-center gap-2 text-[#2dd4bf] text-[10px] font-bold uppercase tracking-wider mb-3 shrink-0">
+                                <div className="bg-[#15151b] border border-white/5 rounded-xl p-3 flex flex-col shadow-lg h-full min-h-0">
+                                    <h4 className="flex items-center gap-2 text-[#2dd4bf] text-[9px] font-bold uppercase tracking-wider mb-2 shrink-0">
                                         <i className="fas fa-video"></i> Video Generativo
                                     </h4>
 
@@ -448,39 +458,38 @@ const PublishModal: React.FC<{
                                         )}
                                     </div>
                                     {activeVideoUrl && (
-                                        <div className="mt-3 shrink-0">
+                                        <div className="mt-2 shrink-0 scale-90 origin-left">
                                             <ActionToolbar url={activeVideoUrl} type="video" filename={`video_${entry.id}.mp4`} title={title} />
                                         </div>
                                     )}
                                 </div>
 
                                 {/* LIVE PERFORMANCE */}
-                                <div className="bg-[#15151b] border border-white/5 rounded-xl p-4 flex flex-col shadow-lg relative overflow-hidden h-full">
-                                    <div className="absolute top-0 right-0 p-3 opacity-20"><i className="fas fa-bolt text-4xl text-purple-500"></i></div>
-                                    <h4 className="flex items-center gap-2 text-purple-400 text-[10px] font-bold uppercase tracking-wider mb-3 shrink-0">
+                                <div className="bg-[#15151b] border border-white/5 rounded-xl p-3 flex flex-col shadow-lg relative overflow-hidden h-full min-h-0">
+                                    <div className="absolute top-0 right-0 p-2 opacity-20"><i className="fas fa-bolt text-3xl text-purple-500"></i></div>
+                                    <h4 className="flex items-center gap-2 text-purple-400 text-[9px] font-bold uppercase tracking-wider mb-2 shrink-0">
                                         <i className="fas fa-bolt"></i> Live Performance
                                     </h4>
-                                    <p className="text-gray-300 text-[11px] mb-4 leading-relaxed shrink-0 font-medium">
-                                        Esperienza interattiva reale.<br />
-                                        <span className="text-gray-400 font-normal text-[10px] block mt-1">Interagisci con l'opera usando i movimenti del volto e l'espressione.</span>
+                                    <p className="text-gray-300 text-[10px] mb-2 leading-relaxed shrink-0">
+                                        Espressione interattiva reale.
                                     </p>
 
-                                    <div className="bg-black/30 border border-white/5 p-3 rounded-lg mb-4 shrink-0">
+                                    <div className="bg-black/30 border border-white/5 p-2 rounded-lg mb-3 shrink-0">
                                         <div className="flex justify-between items-center mb-1">
-                                            <span className="text-[10px] text-gray-300">System Status</span>
-                                            <span className="text-[9px] font-mono text-green-400">READY</span>
+                                            <span className="text-[9px] text-gray-500 font-bold">STATUS</span>
+                                            <span className="text-[9px] font-mono text-green-400 font-bold uppercase">Ready</span>
                                         </div>
                                         <div className="flex gap-3">
-                                            <div className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-green-500"></div><span className="text-[9px] text-gray-400 uppercase">Audio</span></div>
-                                            <div className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-green-500"></div><span className="text-[9px] text-gray-400 uppercase">Webcam</span></div>
+                                            <div className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-green-500"></div><span className="text-[8px] text-gray-500 uppercase font-bold">Audio</span></div>
+                                            <div className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-green-500"></div><span className="text-[8px] text-gray-500 uppercase font-bold">Face</span></div>
                                         </div>
                                     </div>
 
                                     <div className="mt-auto shrink-0">
-                                        <button onClick={handleOpenLive} className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold rounded-lg shadow-lg hover:shadow-purple-500/20 transition-all text-[10px] uppercase tracking-widest">
+                                        <button onClick={handleOpenLive} className="w-full py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold rounded-lg shadow-lg transition-all text-[9px] uppercase tracking-widest">
                                             Open Console
                                         </button>
-                                        <div className="mt-3 flex justify-center">
+                                        <div className="mt-2 flex justify-center scale-90">
                                             <ActionToolbar url={`https://sonificart.com/live/${entry.id}`} type="live" title={title} />
                                         </div>
                                     </div>
