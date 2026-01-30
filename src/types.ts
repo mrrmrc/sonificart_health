@@ -159,6 +159,8 @@ export interface AudioOutputResult {
     duration: number;
     bpm: number;
     audioUrl: string;
+    originalArchivedUrl?: string; // NEW: keep track of the file in DB if we override with synth
+    customAudioUrl?: string; // NEW: keep track of the custom/elaborated audio (MP3)
     audioWavBlob: Blob;
     midiBlob: Blob;
 }
@@ -264,7 +266,8 @@ export interface DashboardEntry {
     paradigm: Paradigm;
     traditionName: string;
     audioHash?: string;
-    audioUrl?: string | null;
+    audioUrl?: string | null;  // Custom/Elaborated audio (Suno, Udio, etc.) - MODIFIABLE
+    originalAudioUrl?: string | null; // Sonification audio from SAC - IMMUTABLE
     validationHashes?: ValidationHashes;
     musicGenerationPrompt?: MusicGenerationPrompt | null;
     // Extended fields from backend

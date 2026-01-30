@@ -220,9 +220,10 @@ export const api = {
             const imgBlob = await imgRes.blob();
             formData.append('imageFile', imgBlob, "image.jpg");
 
-            // Audio: Use existing Blob
+            // Audio: Use existing Blob - Save to ORIGINAL audio field (immutable)
             if (result.audioOutput.audioWavBlob) {
                 formData.append('audioFile', result.audioOutput.audioWavBlob, "audio.wav");
+                formData.append('saveToOriginalAudio', 'true'); // Flag for backend to save to original_audio_url
             }
         } catch (e) {
             console.error("Error preparing blobs for upload", e);
@@ -242,7 +243,7 @@ export const api = {
             });
             const data = await handleResponse(response);
             if (!data.success) throw new Error(data.error || "Salvataggio incompleto (Server Error).");
-            return data;
+            return data; // returns { success: true, id: "..." }
         } catch (error) {
             console.warn("Salvataggio Full fallito (probabilmente limiti upload o timeout), tento salvataggio Lite (no audio)...", error);
 
@@ -554,11 +555,13 @@ export const api = {
         await handleResponse(response);
     },
 
+    // Upload custom/elaborated audio (Suno, Udio, etc.) - This does NOT overwrite the original sonification audio
     uploadHistoryAudio: async (id: string, file: File): Promise<string> => {
         const token = getToken();
         const formData = new FormData();
         formData.append('entryId', id);
         formData.append('audioFile', file);
+        formData.append('saveToCustomAudio', 'true'); // Flag for backend: save to audioUrl (custom), NOT originalAudioUrl
         if (token) formData.append('auth_token', token);
 
         const response = await fetch(`${API_BASE_URL}/index.php?action=attach_audio_to_history`, {

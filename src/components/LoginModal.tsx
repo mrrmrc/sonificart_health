@@ -57,16 +57,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
     const [showPrivacy, setShowPrivacy] = useState(false);
     const [rememberMe, setRememberMe] = useState(false);
     const { t } = useLanguage();
-    const { setHideSiteUI } = useOutletContext<any>() || { setHideSiteUI: () => { } };
-
-    useEffect(() => {
-        if (isOpen) {
-            setHideSiteUI(true);
-        } else {
-            setHideSiteUI(false);
-        }
-        return () => setHideSiteUI(false);
-    }, [isOpen, setHideSiteUI]);
+    // REMOVED: setHideSiteUI(true)
 
     useEffect(() => {
         if (isOpen) {

@@ -15,12 +15,7 @@ export const PhotoStandardizationModal: React.FC<PhotoStandardizationModalProps>
     onImageReady,
     onClose
 }) => {
-    const { setHideSiteUI } = useOutletContext<any>() || { setHideSiteUI: () => { } };
-
-    useEffect(() => {
-        setHideSiteUI(true);
-        return () => setHideSiteUI(false);
-    }, [setHideSiteUI]);
+    // REMOVED: setHideSiteUI(true)
 
     const [mode, setMode] = useState<Mode>('select');
     const [originalFile, setOriginalFile] = useState<File | null>(null);

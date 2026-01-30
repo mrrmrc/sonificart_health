@@ -97,6 +97,13 @@ try {
         $pdo->exec("ALTER TABLE history ADD COLUMN IF NOT EXISTS audio_hash VARCHAR(255) DEFAULT NULL");
         $pdo->exec("ALTER TABLE history ADD COLUMN IF NOT EXISTS acquisition_metadata TEXT DEFAULT NULL");
         $pdo->exec("ALTER TABLE history ADD COLUMN IF NOT EXISTS validation_hashes TEXT DEFAULT NULL");
+
+        // NEW: Separate original audio (immutable SAC) from custom audio (modifiable for publication)
+        $pdo->exec("ALTER TABLE history ADD COLUMN IF NOT EXISTS original_audio_url VARCHAR(500) DEFAULT NULL");
+
+        // NEW: Registration Request Fields
+        $pdo->exec("ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS phone VARCHAR(50) DEFAULT NULL");
+        $pdo->exec("ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS city VARCHAR(100) DEFAULT NULL");
     } catch (Exception $e) {
         // Fallback
     }
@@ -448,13 +455,17 @@ if ($action === 'save_sonification' && $method === 'POST') {
 
         $generatedAiTrackUrl = $_POST['generatedAiTrackUrl'] ?? $input['generatedAiTrackUrl'] ?? null;
 
+        // Check if this is the original sonification audio (saveToOriginalAudio flag from frontend)
+        $isOriginalAudio = $_POST['saveToOriginalAudio'] ?? $input['saveToOriginalAudio'] ?? false;
+        $originalAudioUrl = $isOriginalAudio ? $audioUrl : null;
+
         // SMART INSERT WITH FALLBACK
         try {
-            $stmt = $pdo->prepare("INSERT INTO history (user_id, image_hash, paradigm, tradition_name, image_url, audio_url, music_generation_prompt, generated_ai_track_url, config_json, event_data, block_data, title, description, audio_hash, acquisition_metadata, validation_hashes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$userId, $hash, $input['paradigm'] ?? 'scientific', $input['traditionName'] ?? 'Standard', $imgUrl, $audioUrl, $musicPrompt, $generatedAiTrackUrl, $configJson, $eventData, $blockData, $finalTitle, $description, $audioHash, $acquisitionMetadata, $validationHashes]);
+            $stmt = $pdo->prepare("INSERT INTO history (user_id, image_hash, paradigm, tradition_name, image_url, audio_url, original_audio_url, music_generation_prompt, generated_ai_track_url, config_json, event_data, block_data, title, description, audio_hash, acquisition_metadata, validation_hashes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$userId, $hash, $input['paradigm'] ?? 'scientific', $input['traditionName'] ?? 'Standard', $imgUrl, $audioUrl, $originalAudioUrl, $musicPrompt, $generatedAiTrackUrl, $configJson, $eventData, $blockData, $finalTitle, $description, $audioHash, $acquisitionMetadata, $validationHashes]);
         } catch (PDOException $e) {
-            // Fallback: If 'description' column is missing (Code 42S22) or other schema mismatch, try legacy insert
-            if (strpos($e->getMessage(), 'description') !== false || strpos($e->getMessage(), 'Unknown column') !== false) {
+            // Fallback: If 'original_audio_url' column is missing or other schema mismatch, try legacy insert
+            if (strpos($e->getMessage(), 'original_audio_url') !== false || strpos($e->getMessage(), 'description') !== false || strpos($e->getMessage(), 'Unknown column') !== false) {
                 $stmt = $pdo->prepare("INSERT INTO history (user_id, image_hash, paradigm, tradition_name, image_url, audio_url, music_generation_prompt, generated_ai_track_url, config_json, event_data, block_data, title, audio_hash, acquisition_metadata, validation_hashes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                 $stmt->execute([$userId, $hash, $input['paradigm'] ?? 'scientific', $input['traditionName'] ?? 'Standard', $imgUrl, $audioUrl, $musicPrompt, $generatedAiTrackUrl, $configJson, $eventData, $blockData, $finalTitle, $audioHash, $acquisitionMetadata, $validationHashes]);
             } else {
@@ -462,7 +473,8 @@ if ($action === 'save_sonification' && $method === 'POST') {
             }
         }
 
-        sendResponse(["success" => true]);
+        $newId = $pdo->lastInsertId();
+        sendResponse(["success" => true, "id" => $newId]);
     } catch (Exception $e) {
         sendResponse(["error" => "Save Error: " . $e->getMessage()], 500);
     }
@@ -498,10 +510,10 @@ if ($action === 'get_history' && $method === 'POST') {
         $history = [];
         // Inject integers directly into query (safe because intval used) to avoid PDO string binding issues with LIMIT
         try {
-            // Optimized select
+            // Optimized select - Include original_audio_url
             $stmt = $pdo->prepare("
                 SELECT 
-                    id, image_hash, timestamp, image_url, audio_url, paradigm, tradition_name, 
+                    id, image_hash, timestamp, image_url, audio_url, original_audio_url, paradigm, tradition_name, 
                     title, subtitle, description, video_url, generated_ai_track_url, event_data, music_generation_prompt
                 FROM history 
                 WHERE user_id = ? 
@@ -531,6 +543,8 @@ if ($action === 'get_history' && $method === 'POST') {
                 "timestamp" => $h['timestamp'],
                 "imageUrl" => (strpos($h['image_url'], '/media') !== false) ? $baseUrl . $h['image_url'] : $h['image_url'],
                 "audioUrl" => $h['audio_url'] ? ((strpos($h['audio_url'], '/media') !== false) ? $baseUrl . $h['audio_url'] : $h['audio_url']) : null,
+                // NEW: Original audio URL (immutable sonification audio from SAC)
+                "originalAudioUrl" => ($h['original_audio_url'] ?? null) ? ((strpos($h['original_audio_url'], '/media') !== false) ? $baseUrl . $h['original_audio_url'] : $h['original_audio_url']) : null,
                 "paradigm" => $h['paradigm'],
                 "traditionName" => $h['tradition_name'],
                 "title" => $h['title'] ?? null,
@@ -569,6 +583,8 @@ if ($action === 'get_history_item' && $method === 'POST') {
         "timestamp" => $h['timestamp'],
         "imageUrl" => (strpos($h['image_url'], '/media') !== false) ? $baseUrl . $h['image_url'] : $h['image_url'],
         "audioUrl" => $h['audio_url'] ? ((strpos($h['audio_url'], '/media') !== false) ? $baseUrl . $h['audio_url'] : $h['audio_url']) : null,
+        // NEW: Original audio URL (immutable sonification audio from SAC)
+        "originalAudioUrl" => ($h['original_audio_url'] ?? null) ? ((strpos($h['original_audio_url'], '/media') !== false) ? $baseUrl . $h['original_audio_url'] : $h['original_audio_url']) : null,
         "paradigm" => $h['paradigm'],
         "traditionName" => $h['tradition_name'],
         "title" => $h['title'] ?? null,
@@ -881,12 +897,17 @@ if ($action === 'attach_audio_to_history' && $method === 'POST') {
     }
 
     if ($finalAudioUrl) {
-        // Update audio_url AND tradition_name (using original filename if available)
+        // Check if saveToCustomAudio flag is set (meaning this is an elaborated version, NOT the original)
+        $isCustomAudio = $_POST['saveToCustomAudio'] ?? $input['saveToCustomAudio'] ?? false;
         $fileName = isset($_FILES['audioFile']['name']) ? $_FILES['audioFile']['name'] : 'Audio Uploaded';
+
+        // STRICT POLICY: ONE WAY EDITING.
+        // We NEVER touch original_audio_url here. It is immutable (SAC).
+        // We ONLY update the public audio_url and the track name.
         $pdo->prepare("UPDATE history SET audio_url = ?, tradition_name = ? WHERE id = ?")->execute([$finalAudioUrl, $fileName, $entryId]);
-        // Also update showcase if present? Ideally yes, but showcase links to history item via ID usually?
-        // Wait, showcase table copies URLs. We should update showcase too if it exists.
-        $pdo->prepare("UPDATE showcase SET audio_url = ? WHERE image_url = (SELECT image_url FROM history WHERE id = ?)")->execute([$finalAudioUrl, $entryId]);
+
+        // Also update showcase if present
+        $pdo->prepare("UPDATE showcase SET audio_url = ? WHERE history_id = ?")->execute([$finalAudioUrl, $entryId]);
 
         sendResponse(["success" => true, "audioUrl" => $finalAudioUrl]);
     }
@@ -1555,7 +1576,7 @@ if ($action === 'request_access' && $method === 'POST') {
         sendResponse(["error" => "Email mancante"], 400);
 
     // Insert into DB
-    $stmt = $pdo->prepare("INSERT INTO registration_requests (name, email, plan, address, piva, sdi, reason, institution_type, purpose, website) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt = $pdo->prepare("INSERT INTO registration_requests (name, email, plan, address, piva, sdi, reason, institution_type, purpose, website, phone, city) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     $stmt->execute([
         $name,
         $email,
@@ -1566,7 +1587,9 @@ if ($action === 'request_access' && $method === 'POST') {
         $input['reason'] ?? '',
         $input['institutionType'] ?? '',
         $input['purpose'] ?? '',
-        $input['website'] ?? ''
+        $input['website'] ?? '',
+        $input['phone'] ?? '',
+        $input['city'] ?? ''
     ]);
 
     // Send Email to Admin
@@ -1575,6 +1598,8 @@ if ($action === 'request_access' && $method === 'POST') {
     $fields = [
         'Nome / Ragione Sociale' => $name,
         'Email' => $email,
+        'Telefono' => $input['phone'] ?? '-',
+        'Città' => $input['city'] ?? '-',
         'Piano Scelto' => $input['plan'] ?? '-',
         'Indirizzo' => $input['address'] ?? '-',
         'P.IVA / C.F.' => $input['piva'] ?? '-',
@@ -1790,7 +1815,7 @@ if ($userId) {
             sendResponse(["success" => true, "message" => "Utente approvato e credenziali inviate.", "mail_status" => $mailSent]);
         }
         if ($action === 'admin_get_requests') {
-            $reqs = $pdo->query("SELECT id, name, email, plan, piva, institution_type, purpose, website, invoice_sent, paid, created_at FROM registration_requests ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+            $reqs = $pdo->query("SELECT id, name, email, plan, piva, institution_type, purpose, website, phone, city, invoice_sent, paid, created_at FROM registration_requests ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
             foreach ($reqs as &$r) {
                 $r['invoice_sent'] = (bool) $r['invoice_sent'];
                 $r['paid'] = (bool) $r['paid'];

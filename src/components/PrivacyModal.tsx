@@ -53,9 +53,10 @@ export const PrivacyModal: React.FC<PrivacyModalProps> = ({ isOpen, onClose }) =
                             <i className="fas fa-circle-notch fa-spin text-4xl text-brand-accent"></i>
                         </div>
                     ) : (
-                        <div className="prose prose-invert max-w-none text-gray-300 leading-relaxed whitespace-pre-wrap">
-                            {content}
-                        </div>
+                        <div
+                            className="prose prose-invert max-w-none text-gray-300 leading-relaxed"
+                            dangerouslySetInnerHTML={{ __html: content }}
+                        />
                     )}
                 </div>
 

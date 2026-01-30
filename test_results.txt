@@ -1,0 +1,19 @@
+--- START TEST: Audio Source Reconstruction ---
+
+Testing Case A: Legacy entry (only audio_url)...
+Original URL (Should be fixed legacy): https://sonificart.com/media/legacy_audio.wav
+Custom URL (Should be undefined): undefined
+✅ Case A PASSED
+
+Testing Case B: Modern entry (Original + Custom)...
+Original URL (Should be sonification.wav): https://sonificart.com/media/sonification.wav
+Custom URL (Should be elaborated.mp3): https://sonificart.com/media/custom/elaborated.mp3
+✅ Case B PASSED
+
+Testing Case C: URL Fixing logic...
+Fixed 1: https://sonificart.com/relative/path.wav
+Fixed 2: https://sonificart.com/no_slash.mp3
+Fixed 3: https://external.com/file.mp3
+✅ Case C PASSED
+
+--- TEST COMPLETED ---

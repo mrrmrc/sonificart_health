@@ -121,16 +121,18 @@ function drawFrame(
     }
 
     ctx.save();
-    // Soft drop shadow for floating effect
-    ctx.shadowColor = 'rgba(0,0,0,0.8)';
-    ctx.shadowBlur = 40;
-    ctx.shadowOffsetY = 10;
+    // Neutral glow for floating effect (no offset to maintain centering)
+    ctx.shadowColor = 'rgba(0,0,0,0.9)';
+    ctx.shadowBlur = 50;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
 
-    // Draw the image
-    const zDw = dw * 0.95; // Slightly smaller to reveal background
-    const zDh = dh * 0.95;
-    const zDx = dx + (dw * 0.025);
-    const zDy = dy + (dh * 0.025);
+    // Draw the image - Slightly larger for better impact (0.98 scale)
+    const scale = 0.98;
+    const zDw = dw * scale;
+    const zDh = dh * scale;
+    const zDx = dx + (dw * (1 - scale) / 2);
+    const zDy = dy + (dh * (1 - scale) / 2);
 
     ctx.drawImage(img, zDx, zDy, zDw, zDh);
     ctx.restore();
@@ -138,10 +140,9 @@ function drawFrame(
     // 3. Synced Scanning Effect & Pixel Sonification
     const progress = Math.min(1, Math.max(0, time / duration));
 
-    // Constrain scan to visual bounds of the ARTWORK, not the whole image file
-    // Note: We account for the 0.95 scaling applied in step 2
-    const scanStart = (visualBounds.minX - dx) * 0.95 + zDx;
-    const scanEnd = (visualBounds.maxX - dx) * 0.95 + zDx;
+    // Constrain scan to visual bounds of the ARTWORK
+    const scanStart = (visualBounds.minX - dx) * scale + zDx;
+    const scanEnd = (visualBounds.maxX - dx) * scale + zDx;
     const scanWidth = scanEnd - scanStart;
     const scanX = Math.floor(scanStart + (progress * scanWidth));
 
@@ -153,7 +154,7 @@ function drawFrame(
 
     const grad = ctx.createLinearGradient(0, 0, 0, VideoH);
     grad.addColorStop(0, 'rgba(0, 255, 255, 0)');
-    grad.addColorStop(0.5, 'rgba(0, 255, 255, 0.6)');
+    grad.addColorStop(0.5, 'rgba(0, 255, 255, 0.7)');
     grad.addColorStop(1, 'rgba(0, 255, 255, 0)');
 
     ctx.fillStyle = grad;
@@ -168,6 +169,7 @@ function drawFrame(
         for (let y = zDy; y < zDy + zDh; y += sampleStep) {
             const sy = Math.floor(y);
             if (sy < 0 || sy >= VideoH) continue;
+            // Use W for pixelData indexing as it was grabbed from current canvas width
             const idx = (sy * W + scanX) * 4;
             if (idx < 0 || idx >= pixelData.length - 4) continue;
 
@@ -202,9 +204,9 @@ function drawFrame(
     ctx.fillRect(0, footerY, W, FooterH);
 
     // --- PROGRESS BAR (Ultra-thin, elegant) ---
-    const progressBarHeight = 2;
+    const progressBarHeight = 3;
     const progressWidth = Math.floor(progress * W);
-    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.fillStyle = 'rgba(255,255,255,0.05)';
     ctx.fillRect(0, footerY, W, progressBarHeight);
 
     const progGrad = ctx.createLinearGradient(0, footerY, W, footerY);
@@ -213,53 +215,74 @@ function drawFrame(
     ctx.fillStyle = progGrad;
     ctx.fillRect(0, footerY, progressWidth, progressBarHeight);
 
-    // --- 3-COLUMN LAYOUT REDESIGN ---
-    const colLeftWidth = W * 0.35;
-    const colCenterWidth = W * 0.30;
-    const colRightWidth = W * 0.35;
+    // --- 3-COLUMN LAYOUT REDESIGN (Non-overlapping) ---
+    const paddingX = 60;
 
-    const colLeftX = 60;
-    const colCenterX = W * 0.35;
-    const colRightX = W * 0.65;
-    const contentY = footerY + 45;
+    // Column Definitions
+    const colLeftWidth = 450;
+    const colRightWidth = 400;
+    const colCenterWidth = W - (colLeftWidth + colRightWidth + (paddingX * 2));
+
+    const colLeftX = paddingX;
+    const colCenterX = colLeftX + colLeftWidth;
+    const colRightX = W - colRightWidth - paddingX;
 
     // === LEFT COLUMN: METADATA ===
     ctx.save();
-    // TITLE (Large & Powerful)
-    ctx.font = '900 40px "Segoe UI", Arial, sans-serif';
+    // TITLE (Large & Premium)
+    ctx.font = '900 34px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'left';
-    ctx.shadowColor = 'rgba(0,0,0,0.5)';
-    ctx.shadowBlur = 10;
     const displayTitleStr = (title || "Opera Senza Titolo").toUpperCase();
-    ctx.fillText(displayTitleStr, colLeftX, contentY + 30);
 
-    // AUTHOR & DATE
-    ctx.font = '700 20px "Segoe UI", Arial, sans-serif';
+    // Handle truncate if title too long
+    let titleToDraw = displayTitleStr;
+    if (ctx.measureText(titleToDraw).width > colLeftWidth) {
+        while (ctx.measureText(titleToDraw + "...").width > colLeftWidth && titleToDraw.length > 0) {
+            titleToDraw = titleToDraw.slice(0, -1);
+        }
+        titleToDraw += "...";
+    }
+    ctx.fillText(titleToDraw, colLeftX, footerY + 70);
+
+    // AUTHOR
+    ctx.font = '700 22px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#2dd4bf';
     const authorText = (author || "SonificART").toUpperCase();
-    ctx.fillText(authorText, colLeftX, contentY + 68);
+    ctx.fillText(authorText, colLeftX, footerY + 110);
 
+    // DATE
     ctx.font = '500 18px "Segoe UI", Arial, sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
     const dateStrFormatted = date || new Date().toLocaleDateString('it-IT');
-    ctx.fillText(dateStrFormatted, colLeftX, contentY + 95);
+    ctx.fillText(dateStrFormatted, colLeftX, footerY + 140);
+
+    // DESCRIPTION (New!)
+    if (description) {
+        ctx.font = 'italic 500 16px "Segoe UI", Arial, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        let descToDraw = description;
+        if (ctx.measureText(descToDraw).width > colLeftWidth) {
+            descToDraw = descToDraw.substring(0, 60) + "...";
+        }
+        ctx.fillText(descToDraw, colLeftX, footerY + 175);
+    }
     ctx.restore();
 
     // === CENTER COLUMN: DYNAMIC SPECTRUM ===
     const barAreaWidth = colCenterWidth - 40;
-    const barAreaX = colCenterX + (colCenterWidth - barAreaWidth) / 2;
-    const barAreaY = footerY + 60;
-    const barAreaHeight = 70;
-    const numBars = 42;
-    const barWidth = (barAreaWidth / numBars) * 0.6;
-    const barGap = (barAreaWidth / numBars) * 0.4;
+    const barAreaX = colCenterX + 20;
+    const barAreaY = footerY + 65;
+    const barAreaHeight = 80;
+    const numBars = 32; // Fewer bars for cleaner look
+    const barWidth = (barAreaWidth / numBars) * 0.7;
+    const barGap = (barAreaWidth / numBars) * 0.3;
 
     ctx.save();
     for (let i = 0; i < numBars; i++) {
-        const freqIndex = Math.floor((i / numBars) * freqData.length * 0.5);
+        const freqIndex = Math.floor((i / numBars) * freqData.length * 0.4);
         const ampValue = (freqData[freqIndex] || 0) / 255;
-        const bH = Math.max(3, ampValue * barAreaHeight);
+        const bH = Math.max(4, ampValue * barAreaHeight);
         const bx = barAreaX + i * (barWidth + barGap);
         const by = barAreaY + barAreaHeight - bH;
 
@@ -270,26 +293,24 @@ function drawFrame(
         ctx.fillStyle = bGrad;
         ctx.fillRect(bx, by, barWidth, bH);
 
-        // Glow for high peaks
-        if (ampValue > 0.6) {
+        if (ampValue > 0.7) {
             ctx.shadowColor = '#2dd4bf';
-            ctx.shadowBlur = 15;
+            ctx.shadowBlur = 10;
             ctx.fillRect(bx, by, barWidth, bH);
         }
     }
     ctx.restore();
 
-    // === RIGHT COLUMN: BRANDING (Legible & Premium) ===
+    // === RIGHT COLUMN: BRANDING (Aligned & Premium) ===
     if (logo) {
         ctx.save();
-        const logoSize = 100;
-        // Move lx further left to ensure everything fits (padding 60px from right)
-        const lx = W - 520;
+        const logoSize = 110;
+        const lx = colRightX;
         const ly = footerY + (FooterH - logoSize) / 2 + 10;
 
         // Draw Eye Icon with glow
-        ctx.shadowColor = 'rgba(45, 212, 191, 0.5)';
-        ctx.shadowBlur = 20;
+        ctx.shadowColor = 'rgba(45, 212, 191, 0.4)';
+        ctx.shadowBlur = 25;
         ctx.drawImage(logo, lx, ly, logoSize, logoSize);
 
         ctx.shadowBlur = 0;
@@ -306,10 +327,10 @@ function drawFrame(
         ctx.fillText('A.R.T.', lx + logoSize + 22 + sonificWidth + 8, ly + 40);
         const artWidth = ctx.measureText('A.R.T.').width;
 
-        // Version (Very subtle)
+        // Version 
         ctx.font = '600 12px "Segoe UI", Arial, sans-serif';
         ctx.fillStyle = 'rgba(255,255,255,0.2)';
-        ctx.fillText('v1.0', lx + logoSize + 22 + sonificWidth + artWidth + 25, ly + 40);
+        ctx.fillText('v1.0', lx + logoSize + 22 + sonificWidth + artWidth + 15, ly + 40);
 
         // Subtitle
         ctx.font = '800 10px "Segoe UI", Arial, sans-serif';

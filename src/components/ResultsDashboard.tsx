@@ -51,10 +51,11 @@ interface ResultsDashboardProps {
     setUser: (user: User | null) => void;
     onRequestAccess: () => void;
     isHistoryView?: boolean;
+    onVideoGenerated?: (blob: Blob) => void;
 }
 
 export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
-    result, imageUrl, onReset, onSave, user, setUser, onRequestAccess, isHistoryView = false
+    result, imageUrl, onReset, onSave, user, setUser, onRequestAccess, isHistoryView = false, onVideoGenerated
 }) => {
     const { t } = useLanguage();
 
@@ -70,6 +71,10 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
 
     const [workTitle, setWorkTitle] = useState(result.title || `Opera del ${new Date().toLocaleDateString()}`);
     const [workDescription, setWorkDescription] = useState((result as any).description || ""); // NEW
+    const [audioSource, setAudioSource] = useState<'synth' | 'original' | 'custom'>(
+        (result.audioOutput.customAudioUrl) ? 'custom' :
+            ((result.audioOutput.originalArchivedUrl) ? 'original' : 'synth')
+    );
 
     const handleSaveClick = async () => {
         if (hasSaved || isSaving) return;
@@ -99,6 +104,38 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
         } finally {
             setIsSaving(false);
         }
+    };
+
+    // --- SHARE LOGIC ---
+    const [qrUrl, setQrUrl] = useState<string | null>(null);
+
+    const copyLink = (text: string) => {
+        const full = text.startsWith('http') ? text : `https://sonificart.com${text.startsWith('/') ? '' : '/'}${text}`;
+        navigator.clipboard.writeText(full)
+            .then(() => setConfirmModal({
+                isOpen: true, title: "Copia", message: "Link copiato negli appunti!", type: 'success', singleButton: true,
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            }))
+            .catch(() => setConfirmModal({
+                isOpen: true, title: "Errore", message: "Impossibile copiare il link", type: 'danger', singleButton: true,
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            }));
+    };
+
+    const socialShare = (platform: 'whatsapp' | 'facebook' | 'twitter' | 'linkedin', url: string, text: string) => {
+        if (!url) return;
+        const full = url.startsWith('http') ? url : `https://sonificart.com${url.startsWith('/') ? '' : '/'}${url}`;
+        const encUrl = encodeURIComponent(full);
+        const encText = encodeURIComponent(text);
+
+        let link = "";
+        switch (platform) {
+            case 'whatsapp': link = `https://wa.me/?text=${encText}%20${encUrl}`; break;
+            case 'facebook': link = `https://www.facebook.com/sharer/sharer.php?u=${encUrl}`; break;
+            case 'twitter': link = `https://twitter.com/intent/tweet?url=${encUrl}&text=${encText}`; break;
+            case 'linkedin': link = `https://www.linkedin.com/sharing/share-offsite/?url=${encUrl}`; break;
+        }
+        window.open(link, '_blank');
     };
 
     const handleClose = () => {
@@ -176,6 +213,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                 let maxContentY = 511;
                 let minContentX = 0;
                 let maxContentX = 511;
+
 
                 // Scan for Top Y
                 for (let y = 0; y < 512; y++) {
@@ -523,6 +561,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
 
             const blob = await generateSonificationVideo(resultWithBlob, (p) => setVideoProgress(p), { title: videoTitle, author: videoAuthor, description: workDescription });
             setGeneratedVideoBlob(blob);
+            if (onVideoGenerated) onVideoGenerated(blob);
             // Use title for filename, sanitized
             const sanitizedTitle = (videoTitle || workTitle || 'sonificart_video').replace(/[^a-zA-Z0-9_\-]/g, '_').substring(0, 50);
             const dateStr = new Date().toISOString().slice(0, 10);
@@ -934,10 +973,59 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                     </div>
                                 </div>
                                 <div className="bg-brand-primary/30 p-3 rounded-lg border border-brand-secondary">
-                                    <h5 className="text-sm text-brand-text-secondary mb-2 text-center">
-                                        {isHistoryView ? t('results.player_title') + " (Archive)" : t('results.player_title')}
-                                    </h5>
-                                    <AudioPlayer audioRef={audioRef} audioUrl={correctedResult.audioOutput?.audioUrl || ""} onTimeUpdate={handleTimeUpdate} onPlay={handlePlay} onStop={handleStop} />
+                                    <div className="flex flex-col gap-2 mb-2">
+                                        <h5 className="text-[10px] text-brand-accent text-center font-black uppercase tracking-[0.2em] mb-1">
+                                            {audioSource === 'custom' ? (t('results.audio_source_custom') || "Audio Pubblicazione (AI)") :
+                                                (audioSource === 'original' ? (t('results.audio_source_original') || "Originale SAC (WAV)") :
+                                                    (t('results.audio_source_synth') || "Traduzione Tecnica (Synth)"))}
+                                        </h5>
+                                        <div className="flex justify-center gap-2 mb-2 flex-wrap">
+                                            <button
+                                                onClick={() => setAudioSource('synth')}
+                                                className={`px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider transition-all ${audioSource === 'synth' ? 'bg-brand-accent text-brand-primary' : 'bg-white/5 text-gray-500'}`}
+                                                title="Ascolta la traduzione tecnica pura"
+                                            >
+                                                <i className="fas fa-microchip mr-1"></i> Synth
+                                            </button>
+                                            {correctedResult.audioOutput.originalArchivedUrl && (
+                                                <button
+                                                    onClick={() => setAudioSource('original')}
+                                                    className={`px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider transition-all ${audioSource === 'original' ? 'bg-blue-500 text-white' : 'bg-white/5 text-gray-500'}`}
+                                                    title="Ascolta l'audio originale SAC (WAV)"
+                                                >
+                                                    <i className="fas fa-wave-square mr-1"></i> Originale
+                                                </button>
+                                            )}
+                                            {correctedResult.audioOutput.customAudioUrl && (
+                                                <button
+                                                    onClick={() => setAudioSource('custom')}
+                                                    className={`px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider transition-all ${audioSource === 'custom' ? 'bg-purple-500 text-white' : 'bg-white/5 text-gray-500'}`}
+                                                    title="Ascolta l'audio elaborato per la pubblicazione"
+                                                >
+                                                    <i className="fas fa-music mr-1"></i> Pubblicazione
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <AudioPlayer
+                                        audioRef={audioRef}
+                                        audioUrl={
+                                            audioSource === 'custom' ? (correctedResult.audioOutput.customAudioUrl || "") :
+                                                audioSource === 'original' ? (correctedResult.audioOutput.originalArchivedUrl || "") :
+                                                    (correctedResult.audioOutput.audioUrl || "")
+                                        }
+                                        onTimeUpdate={handleTimeUpdate}
+                                        onPlay={handlePlay}
+                                        onStop={handleStop}
+                                    />
+                                    {/* DEBUG: Show filename to confirm source */}
+                                    <div className="text-[9px] text-gray-600 font-mono text-center mt-1 truncate max-w-full opacity-50 hover:opacity-100 transition-opacity">
+                                        Playing: {
+                                            (audioSource === 'custom' ? (correctedResult.audioOutput.customAudioUrl || "") :
+                                                audioSource === 'original' ? (correctedResult.audioOutput.originalArchivedUrl || "") : "Synth (Generated)")
+                                                .split('/').pop()?.split('?')[0]
+                                        }
+                                    </div>
                                     <MusicSheet activeEvent={displayEvent} />
                                     <div className="flex gap-3 mt-4 pt-3 border-t border-brand-secondary/30">
                                         <button onClick={handleClose} className={`flex-1 ${isHistoryView ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-red-500/20 hover:bg-red-500/30 text-red-300'} py-2 rounded text-xs font-bold transition-colors ${isHistoryView ? '' : 'border border-red-500/30'} flex items-center justify-center gap-2`}>
@@ -1198,9 +1286,21 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                 className="w-full h-auto aspect-video"
                             />
                         </div>
-                        <p className="text-[10px] text-purple-300 italic text-center">
-                            {generatedVideoBlob ? "Video generato in questa sessione." : "Video recuperato dall'archivio."}
-                        </p>
+                        <div className="flex flex-col gap-2">
+                            <p className="text-[10px] text-purple-300 italic text-center">
+                                {generatedVideoBlob ? "Video generato in questa sessione." : "Video recuperato dall'archivio."}
+                            </p>
+
+                            {((result as any).videoUrl) && (
+                                <div className="flex justify-center gap-3 py-2 border-t border-white/5 mt-1">
+                                    <button onClick={() => copyLink((result as any).videoUrl)} className="text-gray-400 hover:text-white text-sm" title="Copia Link"><i className="fas fa-link"></i></button>
+                                    <button onClick={() => setQrUrl((result as any).videoUrl)} className="text-gray-400 hover:text-white text-sm" title="QR Code"><i className="fas fa-qrcode"></i></button>
+                                    <button onClick={() => socialShare('whatsapp', (result as any).videoUrl, "Guarda la mia sonificazione su SonificART!")} className="text-green-500 hover:text-green-400 text-sm"><i className="fab fa-whatsapp"></i></button>
+                                    <button onClick={() => socialShare('facebook', (result as any).videoUrl, "Guarda la mia sonificazione su SonificART!")} className="text-blue-500 hover:text-blue-400 text-sm"><i className="fab fa-facebook"></i></button>
+                                    <button onClick={() => socialShare('linkedin', (result as any).videoUrl, "Guarda la mia sonificazione su SonificART!")} className="text-blue-400 hover:text-blue-300 text-sm"><i className="fab fa-linkedin"></i></button>
+                                </div>
+                            )}
+                        </div>
                     </InfoCard>
                 )}
 
@@ -1234,6 +1334,22 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                     </div>
                 </InfoCard>
             </div>
+
+            {qrUrl && (
+                <div className="fixed inset-0 bg-black/80 z-[300] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setQrUrl(null)}>
+                    <div className="bg-[#1a1a1a] p-6 rounded-2xl border border-white/10 max-w-sm w-full text-center shadow-2xl transform scale-100 transition-all" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-bold text-white">QR CODE VIDEO</h3>
+                            <button onClick={() => setQrUrl(null)} className="text-gray-400 hover:text-white"><i className="fas fa-times"></i></button>
+                        </div>
+                        <div className="bg-white p-4 rounded-xl inline-block mb-4">
+                            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrUrl.startsWith('http') ? qrUrl : `https://sonificart.com${qrUrl.startsWith('/') ? '' : '/'}${qrUrl}`)}`} alt="QR Code" className="w-full h-full" />
+                        </div>
+                        <p className="text-xs text-gray-400 break-all bg-black/30 p-2 rounded border border-white/5">{qrUrl}</p>
+                        <button onClick={() => copyLink(qrUrl)} className="text-brand-accent text-xs mt-3 hover:underline">Copia Link</button>
+                    </div>
+                </div>
+            )}
 
             <ConfirmationModal
                 isOpen={confirmModal.isOpen}

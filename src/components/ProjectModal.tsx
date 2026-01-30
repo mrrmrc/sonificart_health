@@ -36,8 +36,6 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, us
     const isGuest = !user;
     const { t } = useLanguage();
 
-    // REMOVED: setHideSiteUI(true) to keep page Navbar and Footer visible
-
     // Helpers
     const getAbsoluteUrl = (url: string | undefined) => {
         if (!url) return null;
@@ -242,11 +240,5 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, us
 
             </div>
         </div>
-    );
-};
-
-
-            </div >
-        </div >
     );
 };

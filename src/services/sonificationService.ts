@@ -582,7 +582,7 @@ function generateAccompaniment(melodyEvents: TransformedNoteEvent[], tradition: 
 
 
 // --- FULLY ASYNCHRONOUS, NON-BLOCKING DSP AUDIO SYNTHESIS ENGINE ---
-async function synthesizeAudio(events: TransformedNoteEvent[], totalDuration: number, config: ConfigSettings): Promise<{ buffer: AudioBuffer, blob: Blob }> {
+export async function synthesizeAudio(events: TransformedNoteEvent[], totalDuration: number, config: ConfigSettings): Promise<{ buffer: AudioBuffer, blob: Blob }> {
     const SAMPLE_RATE = 44100;
     // Add 2 seconds for reverb tail/release
     const totalSamples = Math.ceil((totalDuration + 2) * SAMPLE_RATE);

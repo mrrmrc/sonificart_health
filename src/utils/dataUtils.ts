@@ -1,7 +1,16 @@
 
 // src/utils/dataUtils.ts
-import { SonificationResult, ConfigSettings, TransformedNoteEvent, DashboardEntry } from '../types';
+import { SonificationResult, ConfigSettings, TransformedNoteEvent } from '../types';
 import { initialSettings } from '../config/defaults';
+
+export const fixAudioUrl = (url?: string | null): string | undefined => {
+    if (!url) return undefined;
+    if (url.startsWith('http') || url.startsWith('blob:') || url.startsWith('data:')) return url;
+    // Base URL from the API service or hardcoded if needed
+    const API_BASE = 'https://sonificart.com';
+    const cleanUrl = url.startsWith('/') ? url : `/${url}`;
+    return `${API_BASE}${cleanUrl}`;
+};
 
 export const reconstructResultFromPartialData = (
     partialData: any,
@@ -57,35 +66,28 @@ export const reconstructResultFromPartialData = (
     if (typeof scanName === 'string') scanName = scanName.replace("Manuale: ", "");
 
     // 4. Ricostruzione Eventi e Griglia (Fix Cursore e Note)
-    const rawEvents = partialData.audioOutput?.events
+    let rawEvents = partialData.audioOutput?.events
         || partialData.transformedEvents
         || partialData.events
         || [];
-    const safeRawEvents = Array.isArray(rawEvents) ? rawEvents : [];
 
+    if (typeof rawEvents === 'string') {
+        try { rawEvents = JSON.parse(rawEvents); } catch (e) { console.error("Errore parsing eventi:", e); rawEvents = []; }
+    }
+    const safeRawEvents = Array.isArray(rawEvents) ? rawEvents : [];
     const rawBlockAnalysis = partialData.blockAnalysisResult || partialData.blockData || partialData.analysis || {};
 
-    // Determina Griglia (se manca, la deduce)
-    // Determina Griglia (se manca, la deduce con priorità intelligente)
     let gridSize = 32;
-    // 1. Configurazione Esplicita CARICATA (non il default)
     if (loadedConfig.pixelCount) {
         gridSize = Math.sqrt(loadedConfig.pixelCount);
-    }
-    // 2. Deduzione da Eventi (se config mancante, utile per vecchi salvataggi)
-    else if (safeRawEvents.length > 0) {
-        // Se gli eventi sono > 1024, probabilmente è 64x64 (4096)
-        // Usiamo ceil(sqrt) per sicurezza
+    } else if (safeRawEvents.length > 0) {
         const inferred = Math.ceil(Math.sqrt(safeRawEvents.length));
         if (inferred > 32) gridSize = inferred;
         else if (rawBlockAnalysis.gridSize) gridSize = rawBlockAnalysis.gridSize;
-    }
-    // 3. Fallback analisi o default
-    else if (rawBlockAnalysis.gridSize) {
+    } else if (rawBlockAnalysis.gridSize) {
         gridSize = rawBlockAnalysis.gridSize;
     }
 
-    // Se non ci sono eventi (es. dashboard solo audio), ne creiamo di fittizi per visualizzazione
     const finalEvents = safeRawEvents.length > 0 ? safeRawEvents : Array.from({ length: 256 }, (_, i) => ({
         time: i * safeConfig.noteDurationSeconds,
         duration: safeConfig.noteDurationSeconds,
@@ -94,10 +96,7 @@ export const reconstructResultFromPartialData = (
         sourceBlockIndex: i
     }));
 
-    // Sanitizzazione Coordinate Eventi
     const sanitizedEvents: TransformedNoteEvent[] = finalEvents.map((evt: any, index: number) => {
-
-        // GESTIONE FORMATO COMPRESSO (v1.10+) [time, dur, midi, vel, x, y, noteName]
         if (Array.isArray(evt)) {
             const x = evt[4] ?? -1;
             const y = evt[5] ?? -1;
@@ -108,19 +107,12 @@ export const reconstructResultFromPartialData = (
                 velocity: evt[3],
                 noteName: evt[6] || "C",
                 baseNote: Math.round(evt[2]),
-                sourceBlock: {
-                    r: 100, g: 100, b: 100, // Colore fittizio, verrà ricollegato in Dashboard
-                    position: { x, y }
-                },
+                sourceBlock: { r: 100, g: 100, b: 100, position: { x, y } },
                 sourceBlockIndex: (x >= 0 && y >= 0) ? (y * gridSize + x) : index,
                 isAccompaniment: false
             };
         }
-
-        let cx = 0;
-        let cy = 0;
-        // ... Logic for object format ...
-        // Calcolo coordinate da indice se mancano
+        let cx = 0, cy = 0;
         if (typeof evt.sourceBlockIndex === 'number') {
             cx = evt.sourceBlockIndex % gridSize;
             cy = Math.floor(evt.sourceBlockIndex / gridSize);
@@ -128,22 +120,15 @@ export const reconstructResultFromPartialData = (
             cx = evt.sourceBlock.position.x;
             cy = evt.sourceBlock.position.y;
         } else {
-            // Fallback puro
             cx = index % gridSize;
             cy = Math.floor(index / gridSize);
         }
-
         return {
             ...evt,
-            // Assicuriamoci che noteName e midiFloat esistano
             noteName: evt.noteName || "C",
             midiFloat: evt.midiFloat || 60,
             velocity: evt.velocity || 100,
-            sourceBlock: {
-                r: 100, g: 100, b: 100,
-                ...(evt.sourceBlock || {}),
-                position: { x: cx, y: cy }
-            },
+            sourceBlock: { r: 100, g: 100, b: 100, ...(evt.sourceBlock || {}), position: { x: cx, y: cy } },
             isAccompaniment: false
         };
     });
@@ -154,7 +139,6 @@ export const reconstructResultFromPartialData = (
         || (sanitizedEvents.length * safeConfig.noteDurationSeconds)
         || 0;
 
-    // Ricostruzione Blocchi per Overlay (Se mancano)
     const fakeBlocks = Array.from({ length: gridSize * gridSize }, (_, i) => ({
         r: 100, g: 100, b: 100, position: { x: i % gridSize, y: Math.floor(i / gridSize) },
         isFiller: false, hsv: { h: 0, s: 0, v: 0 }, lab: { l: 50, a: 0, b: 0 }, variance: 0
@@ -163,6 +147,28 @@ export const reconstructResultFromPartialData = (
     const blocksToUse = (Array.isArray(rawBlockAnalysis.blocks) && rawBlockAnalysis.blocks.length > 0)
         ? rawBlockAnalysis.blocks
         : fakeBlocks;
+
+    // DEFINITIVE AUDIO SOURCE MAPPING
+    // 1. Synth: Always starts empty, filled by synthesizeAudio call outside
+    // 2. Original: The immutable WAV from sonification (SAC)
+    // 3. Custom: The elaborated track (MP3) from Suno/Udio
+    const dbAudio = partialData.audioUrl || partialData.audio_url || audioUrl;
+    const dbOriginal = partialData.originalAudioUrl || partialData.original_audio_url;
+
+    let finalOriginal = null;
+    let finalCustom = null;
+
+    if (dbOriginal) {
+        // Modern record with distinct fields
+        finalOriginal = dbOriginal;
+        if (dbAudio && dbAudio !== dbOriginal) {
+            finalCustom = dbAudio;
+        }
+    } else if (dbAudio) {
+        // Legacy record or newly generated sonification: dbAudio is the original
+        finalOriginal = dbAudio;
+        finalCustom = null;
+    }
 
     return {
         imageHash: partialData.imageHash || partialData.hash || meta.image_hash || "restored_entry",
@@ -174,7 +180,9 @@ export const reconstructResultFromPartialData = (
         title: partialData.title || meta.title || null,
 
         audioOutput: {
-            audioUrl: audioUrl || "",
+            audioUrl: "", // Filled by Synth
+            originalArchivedUrl: fixAudioUrl(finalOriginal),
+            customAudioUrl: fixAudioUrl(finalCustom),
             audioWavBlob: new Blob(),
             midiBlob: new Blob(),
             events: sanitizedEvents,
@@ -201,8 +209,6 @@ export const reconstructResultFromPartialData = (
         performanceMetrics: { totalProcessingTime: 0 },
         validationHashes: partialData.validationHashes || { imageBlobHash: "", audioBlobHash: "", midiBlobHash: "" },
         acquisitionMetadata: partialData.acquisitionMetadata || undefined,
-
-        // Recupero prompt se presente (supporto camelCase e snake_case)
         musicGenerationPrompt: partialData.musicGenerationPrompt || partialData.music_generation_prompt || meta.music_generation_prompt || null
     };
 };

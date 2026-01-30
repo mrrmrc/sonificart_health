@@ -5,7 +5,7 @@ import { useOutletContext, useLocation } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
 import OSC from 'osc-js';
 import { SonificationResult, ConfigSettings, ProcessingStep, Paradigm, ScanPatternOverride, User, DashboardEntry } from '../types';
-import { sonifyImage, sonifyImageArtistic, sonifyImageHybrid } from '../services/sonificationService';
+import { sonifyImage, sonifyImageArtistic, sonifyImageHybrid, synthesizeAudio } from '../services/sonificationService';
 import { api } from '../services/api';
 import { ProcessingView } from '../components/ProcessingView';
 import { ResultsDashboard } from '../components/ResultsDashboard';
@@ -85,57 +85,55 @@ export const SonificationPage: React.FC = () => {
         if (location.state?.historyEntry) {
             const entry: DashboardEntry = location.state.historyEntry;
             const fixImg = (url: string) => url.startsWith('data:') || url.startsWith('http') ? url : `data:image/jpeg;base64,${url}`;
+
             const restoredResult = reconstructResultFromPartialData(
                 entry,
                 fixImg(entry.imageUrl),
-                entry.audioUrl || null,
+                null, // reconstructResult will find it in entry
                 "project_from_dashboard.sac"
             );
+
             setResult(restoredResult);
             setImageUrl(restoredResult.standardizedImageUrl);
             setIsViewingHistory(true);
             setParadigm(restoredResult.paradigm as Paradigm);
             if (restoredResult.configUsed) setConfig(restoredResult.configUsed);
 
-            // AUTO-REGENERATE AUDIO IF MISSING (Lite Save Fallback)
-            if (!restoredResult.audioOutput.audioUrl) {
-                // console.log("Audio missing in history entry. Auto-regenerating...");
-                setIsProcessing(true);
-                // Create a self-executing async function to handle regeneration
+            // Fetch image file
+            fetch(restoredResult.standardizedImageUrl)
+                .then(res => {
+                    if (!res.ok) throw new Error("Image not found");
+                    return res.blob();
+                })
+                .then(blob => setImageFile(new File([blob], "restored_image.jpg", { type: "image/jpeg" })))
+                .catch(err => {
+                    console.error("Error restoring image file:", err);
+                    // Fallback: use a placeholder or at least don't crash the state
+                });
+
+            // ALWAYS RE-SYNTHESIZE AUDIO FOR TECHNICAL VIEW
+            if (restoredResult.audioOutput.events.length > 0) {
                 (async () => {
                     try {
-                        const res = await fetch(restoredResult.standardizedImageUrl);
-                        const blob = await res.blob();
-                        const file = new File([blob], "restored.jpg", { type: blob.type });
-                        setImageFile(file); // Update state too
-
-                        let newResult: SonificationResult;
-                        const progressCb = updateProcessingStep;
-
-                        // Small delay to let UI render processing view
-                        await new Promise(r => setTimeout(r, 500));
-
-                        if (entry.paradigm === 'scientific') {
-                            newResult = await sonifyImage(file, restoredResult.configUsed, progressCb, oscClient, scanPatternOverride);
-                        } else if (entry.paradigm === 'artistic') {
-                            newResult = await sonifyImageArtistic(file, restoredResult.configUsed, progressCb, oscClient, scanPatternOverride);
-                        } else {
-                            newResult = await sonifyImageHybrid(file, restoredResult.configUsed, progressCb, oscClient, scanPatternOverride);
-                        }
-                    } catch (e) {
-                        console.error("Failed to regenerate audio:", e);
-                        setConfirmModal({
-                            isOpen: true,
-                            title: "Errore Rigenerazione",
-                            message: "Impossibile rigenerare l'audio per questa opera.",
-                            type: 'danger',
-                            singleButton: true,
-                            onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+                        const { blob } = await synthesizeAudio(
+                            restoredResult.audioOutput.events,
+                            restoredResult.audioOutput.duration,
+                            restoredResult.configUsed
+                        );
+                        const synthUrl = URL.createObjectURL(blob);
+                        setResult(prev => {
+                            if (!prev) return prev;
+                            return {
+                                ...prev,
+                                audioOutput: {
+                                    ...prev.audioOutput,
+                                    audioWavBlob: blob,
+                                    audioUrl: synthUrl, // Pure synthesized audio
+                                }
+                            };
                         });
-                        // Fallback to restored result without audio
-                        setResult(restoredResult);
-                    } finally {
-                        setIsProcessing(false);
+                    } catch (e) {
+                        console.error("Failed to re-synthesize pure audio:", e);
                     }
                 })();
             }
@@ -232,11 +230,26 @@ export const SonificationPage: React.FC = () => {
         } finally { setIsProcessing(false); }
     };
 
-    const handleManualSave = async (title: string, description?: string) => { // Updated
+    const handleManualSave = async (title: string, description?: string) => {
         if (!result || !user) return;
         try {
-            await api.saveSonification(result, paradigm, title, description);
-            setResult(prev => prev ? { ...prev, title } : null); // Note: We might want to update description in result state too if applicable
+            const saveRes = await api.saveSonification(result, paradigm, title, description);
+            const entryId = saveRes.id;
+
+            let finalVideoUrl = (result as any).videoUrl;
+
+            // NEW: Automatically attach video if it has been generated
+            if (result.generatedVideoBlob && entryId) {
+                console.log("Automatically attaching generated video to history record:", entryId);
+                try {
+                    finalVideoUrl = await api.attachVideoToHistory(entryId, result.generatedVideoBlob, `video_${entryId}.mp4`);
+                } catch (videoError) {
+                    console.error("Failed to auto-attach video, but project was saved:", videoError);
+                    // We don't throw here to not invalidate the successful project save
+                }
+            }
+
+            setResult(prev => prev ? { ...prev, title, videoUrl: finalVideoUrl } as any : null);
         } catch (e) {
             console.error(e);
             throw e;
@@ -289,7 +302,23 @@ export const SonificationPage: React.FC = () => {
                 </div>
             )}
             {isProcessing && <div className="max-w-3xl mx-auto"><ProcessingView steps={processingSteps} imageUrl={imageUrl} /></div>}
-            {result && imageUrl && (<div className="max-w-7xl mx-auto"><ResultsDashboard result={result} imageUrl={imageUrl} onReset={handleCloseResult} onSave={handleManualSave} user={user} setUser={setUser} onRequestAccess={() => setIsRequestAccessOpen(true)} isHistoryView={isViewingHistory} /></div>)}
+            {result && imageUrl && (
+                <div className="max-w-7xl mx-auto">
+                    <ResultsDashboard
+                        result={result}
+                        imageUrl={imageUrl}
+                        onReset={handleCloseResult}
+                        onSave={handleManualSave}
+                        user={user}
+                        setUser={setUser}
+                        onRequestAccess={() => setIsRequestAccessOpen(true)}
+                        isHistoryView={isViewingHistory}
+                        onVideoGenerated={(blob) => {
+                            setResult(prev => prev ? { ...prev, generatedVideoBlob: blob } : null);
+                        }}
+                    />
+                </div>
+            )}
 
             {showStandardizationModal && (
                 <PhotoStandardizationModal

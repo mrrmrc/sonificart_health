@@ -23,12 +23,6 @@ const PublishModal: React.FC<{
     onShowMessage: (title: string, message: string, type: 'info' | 'warning' | 'danger' | 'success') => void,
     onRequestConfirmation: (title: string, message: string, onConfirm: () => void) => void
 }> = ({ entry, onClose, user, onShowMessage, onRequestConfirmation }) => {
-    const { setHideSiteUI } = useOutletContext<any>() || { setHideSiteUI: () => { } };
-
-    useEffect(() => {
-        setHideSiteUI(true);
-        return () => setHideSiteUI(false);
-    }, [setHideSiteUI]);
 
     // STATE: Metadata
     const [title, setTitle] = useState(entry.title || "Opera Senza Titolo");
@@ -48,7 +42,18 @@ const PublishModal: React.FC<{
 
     // STATE: Actions
     const [isSubmitting, setIsSubmitting] = useState(false);
+    // Guidelines: Video
     const [uploadProgress, setUploadProgress] = useState(0);
+
+    // STATE: QR Code
+    const [qrUrl, setQrUrl] = useState<string | null>(null);
+    const [qrTitle, setQrTitle] = useState("QR Code Progetto");
+
+    const copyLink = (text: string) => {
+        navigator.clipboard.writeText(text)
+            .then(() => onShowMessage("Copia", "Link copiato negli appunti!", 'success'))
+            .catch(() => onShowMessage("Errore", "Impossibile copiare il link", 'danger'));
+    };
 
     // Helpers
     const getAbsoluteUrl = (url: string | null | undefined) => {
@@ -247,10 +252,6 @@ const PublishModal: React.FC<{
         document.body.removeChild(link);
     };
 
-    // State for QR Modal
-    const [qrUrl, setQrUrl] = useState<string | null>(null);
-    const [qrTitle, setQrTitle] = useState<string>("");
-
     const openQR = (url: string, title: string) => {
         if (!url) return;
         const full = url.startsWith('http') ? url : getAbsoluteUrl(url) || "";
@@ -258,11 +259,7 @@ const PublishModal: React.FC<{
         setQrTitle(title);
     };
 
-    const copyLink = (url: string) => {
-        if (!url) return;
-        const full = url.startsWith('http') ? url : getAbsoluteUrl(url) || "";
-        navigator.clipboard.writeText(full).then(() => onShowMessage("Link Copiato", "Link copiato negli appunti!", 'success'));
-    };
+    // copyLink already defined above
 
     const socialShare = (platform: 'whatsapp' | 'facebook' | 'twitter' | 'linkedin', url: string, text: string) => {
         if (!url) return;
@@ -378,37 +375,45 @@ const PublishModal: React.FC<{
                         {/* COL 2: MEDIA (Right, span 9/12) */}
                         <div className="lg:col-span-9 flex flex-col gap-3 h-full min-h-0">
 
-                            {/* TOP: AUDIO SOURCE */}
+                            {/* TOP: AUDIO SOURCE - This is the CUSTOM/ELABORATED audio for publication */}
                             <div className="bg-[#15151b] border border-white/5 rounded-xl p-3 relative overflow-hidden shadow-lg shrink-0">
-                                <div className="flex justify-between items-start mb-2">
-                                    <h4 className="flex items-center gap-2 text-[#2dd4bf] text-[9px] font-bold uppercase tracking-wider">
-                                        <i className="fas fa-music"></i> Sorgente Audio
-                                    </h4>
-                                    <button onClick={() => fileInputRef.current?.click()} disabled={isUploadingAudio} className="text-[8px] bg-[#2dd4bf]/10 text-[#2dd4bf] px-2 py-0.5 rounded-full font-bold hover:bg-[#2dd4bf]/20 transition-colors uppercase border border-[#2dd4bf]/20 cursor-pointer disabled:opacity-50">
-                                        {isUploadingAudio ? <i className="fas fa-spinner fa-spin mr-1"></i> : <i className="fas fa-upload mr-1"></i>} Cambia Audio
-                                    </button>
+                                <div className="flex justify-between items-center mb-1">
+                                    <h5 className="text-xs font-bold text-brand-accent uppercase tracking-wider flex items-center gap-2">
+                                        <i className="fas fa-music"></i> {entry.originalAudioUrl ? "Audio per Pubblicazione" : "Sorgente Audio"}
+                                    </h5>
+                                    <div className="space-x-2">
+                                        <button
+                                            onClick={() => fileInputRef.current?.click()}
+                                            disabled={isUploadingAudio}
+                                            className="text-[10px] bg-brand-primary/80 hover:bg-brand-accent hover:text-brand-primary text-brand-accent border border-brand-accent px-2 py-1 rounded transition-colors uppercase font-bold"
+                                        >
+                                            {isUploadingAudio ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-upload mr-1"></i>}
+                                            {entry.originalAudioUrl ? "Carica Elaborazione 🎵" : "Carica Nuovo Brano"}
+                                        </button>
+                                    </div>
                                 </div>
-
                                 <div className="bg-black/30 rounded-lg p-2 border border-white/5 flex items-center gap-3 mb-1">
-                                    <div className="w-7 h-7 rounded-lg bg-[#2dd4bf]/10 flex items-center justify-center text-[#2dd4bf] text-[10px]">
-                                        {isUploadingAudio ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-music"></i>}
+                                    <div className="w-7 h-7 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-400 text-[10px]">
+                                        {isUploadingAudio ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-waveform-lines"></i>}
                                     </div>
                                     <div className="flex-1 overflow-hidden">
                                         <div className="text-white font-bold text-[11px] truncate">
                                             {isUploadingAudio ? (
-                                                <span className="text-[#2dd4bf] italic animate-pulse">Caricamento in corso...</span>
+                                                <span className="text-purple-400 italic animate-pulse">Caricamento in corso...</span>
                                             ) : (
-                                                entry.traditionName || "Audio Originale.wav"
+                                                entry.audioUrl ? (entry.traditionName || "Audio Elaborato") : "Nessun audio caricato"
                                             )}
                                         </div>
-                                        <div className="text-[9px] text-gray-500 uppercase tracking-wider">{entry.paradigm || "Scientifico"}</div>
+                                        <div className="text-[9px] text-gray-500 uppercase tracking-wider">{entry.audioUrl ? "Pronto per pubblicazione" : "Carica un file audio elaborato"}</div>
                                     </div>
-                                    <audio key={(entry.audioUrl || "audio") + Date.now()} controls src={getAbsoluteUrl(entry.audioUrl) || undefined} className="h-5 max-w-[120px]" />
+                                    {entry.audioUrl && <audio key={(entry.audioUrl || "audio") + Date.now()} controls src={getAbsoluteUrl(entry.audioUrl) || undefined} className="h-5 max-w-[120px]" />}
                                 </div>
 
-                                <div className="scale-90 origin-left">
-                                    <ActionToolbar url={entry.audioUrl || ""} type="audio" filename={`audio_${entry.id}.wav`} title={title} />
-                                </div>
+                                {entry.audioUrl && (
+                                    <div className="scale-90 origin-left">
+                                        <ActionToolbar url={entry.audioUrl || ""} type="audio" filename={`audio_${entry.id}.wav`} title={title} />
+                                    </div>
+                                )}
                             </div>
 
                             {/* BOTTOM: GRID 2 - Reduced gaps and flexible height */}
@@ -464,62 +469,87 @@ const PublishModal: React.FC<{
                                     )}
                                 </div>
 
-                                {/* LIVE PERFORMANCE */}
-                                <div className="bg-[#15151b] border border-white/5 rounded-xl p-3 flex flex-col shadow-lg relative overflow-hidden h-full min-h-0">
-                                    <div className="absolute top-0 right-0 p-2 opacity-20"><i className="fas fa-bolt text-3xl text-purple-500"></i></div>
-                                    <h4 className="flex items-center gap-2 text-purple-400 text-[9px] font-bold uppercase tracking-wider mb-2 shrink-0">
-                                        <i className="fas fa-bolt"></i> Live Performance
-                                    </h4>
-                                    <p className="text-gray-300 text-[10px] mb-2 leading-relaxed shrink-0">
-                                        Espressione interattiva reale.
-                                    </p>
-
-                                    <div className="bg-black/30 border border-white/5 p-2 rounded-lg mb-3 shrink-0">
-                                        <div className="flex justify-between items-center mb-1">
-                                            <span className="text-[9px] text-gray-500 font-bold">STATUS</span>
-                                            <span className="text-[9px] font-mono text-green-400 font-bold uppercase">Ready</span>
+                                {/* LIVE PERFORMANCE - VISIBLE ONLY IF CUSTOM AUDIO IS PRESENT */}
+                                {(entry.originalAudioUrl && entry.audioUrl && entry.audioUrl !== entry.originalAudioUrl) && (
+                                    <div className="md:col-span-2 bg-[#15151b] border border-white/5 rounded-xl p-4 flex flex-col relative overflow-hidden shadow-lg h-full min-h-[300px]">
+                                        <div className="flex justify-between items-start mb-4 relative z-10">
+                                            <div>
+                                                <h4 className="flex items-center gap-2 text-purple-400 font-bold text-xs uppercase tracking-widest mb-1">
+                                                    <i className="fas fa-bolt"></i> Live Performance
+                                                </h4>
+                                                <p className="text-[9px] text-gray-500">Espressione interattiva reale.</p>
+                                            </div>
+                                            <i className="fas fa-bolt text-purple-500/20 text-4xl absolute right-[-5px] top-[-5px]"></i>
                                         </div>
-                                        <div className="flex gap-3">
-                                            <div className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-green-500"></div><span className="text-[8px] text-gray-500 uppercase font-bold">Audio</span></div>
-                                            <div className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-green-500"></div><span className="text-[8px] text-gray-500 uppercase font-bold">Face</span></div>
+
+                                        <div className="flex-grow flex flex-col justify-center relative min-h-[150px]">
+                                            {/* Status Indicators */}
+                                            <div className="absolute top-0 right-0 py-1 px-2 bg-black/40 rounded border border-white/5">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className="text-[8px] font-mono text-gray-400">STATUS</span>
+                                                    <span className="text-[8px] font-bold text-green-400 uppercase tracking-widest">{activeVideoUrl ? 'VIDEO READY' : 'READY'}</span>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-2 mt-4">
+                                                <div className="flex items-center gap-2">
+                                                    <div className={`w-1.5 h-1.5 rounded-full ${entry.audioUrl ? 'bg-green-500 shadow-[0_0_5px_theme(colors.green.500)]' : 'bg-red-500'}`}></div>
+                                                    <span className="text-[9px] font-mono text-gray-400 uppercase">AUDIO</span>
+                                                    <div className="h-[1px] bg-white/10 flex-grow mx-2"></div>
+                                                    <span className="text-[9px] font-mono text-gray-500">{entry.audioUrl ? 'LOADED' : 'MISSING'}</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-yellow-500 shadow-[0_0_5px_theme(colors.yellow.500)] animate-pulse"></div>
+                                                    <span className="text-[9px] font-mono text-gray-400 uppercase">FACE</span>
+                                                    <div className="h-[1px] bg-white/10 flex-grow mx-2"></div>
+                                                    <span className="text-[9px] font-mono text-gray-500">WAITING</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-auto pt-4 relative z-20">
+                                            <button
+                                                onClick={handleOpenLive}
+                                                disabled={!entry.audioUrl || isUploadingAudio}
+                                                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white py-3 rounded-lg font-black uppercase tracking-widest text-xs shadow-lg shadow-purple-900/50 transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2 border border-white/10"
+                                            >
+                                                <i className="fas fa-external-link-alt"></i> OPEN CONSOLE
+                                            </button>
+                                            <div className="flex justify-center gap-3 mt-3 opacity-60">
+                                                <button className="w-6 h-6 rounded bg-black/40 border border-white/10 flex items-center justify-center text-[10px] text-gray-400 hover:text-white transition-colors" title="Copia Link"><i className="fas fa-link"></i></button>
+                                                <button className="w-6 h-6 rounded bg-black/40 border border-white/10 flex items-center justify-center text-[10px] text-gray-400 hover:text-white transition-colors" title="QR Code" onClick={() => setQrUrl(`https://sonificart.com/live/${entry.id}`)}><i className="fas fa-qrcode"></i></button>
+                                                <button className="w-6 h-6 rounded bg-black/40 border border-white/10 flex items-center justify-center text-[10px] text-green-400/70 hover:text-green-400 transition-colors" title="Condividi Whatsapp"><i className="fab fa-whatsapp"></i></button>
+                                                <button className="w-6 h-6 rounded bg-black/40 border border-white/10 flex items-center justify-center text-[10px] text-blue-400/70 hover:text-blue-400 transition-colors" title="Condividi Facebook"><i className="fab fa-facebook-f"></i></button>
+                                                <button className="w-6 h-6 rounded bg-black/40 border border-white/10 flex items-center justify-center text-[10px] text-blue-600/70 hover:text-blue-600 transition-colors" title="Condividi Linkedin"><i className="fab fa-linkedin-in"></i></button>
+                                            </div>
                                         </div>
                                     </div>
+                                )}
 
-                                    <div className="mt-auto shrink-0">
-                                        <button onClick={handleOpenLive} className="w-full py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold rounded-lg shadow-lg transition-all text-[9px] uppercase tracking-widest">
-                                            Open Console
-                                        </button>
-                                        <div className="mt-2 flex justify-center scale-90">
-                                            <ActionToolbar url={`https://sonificart.com/live/${entry.id}`} type="live" title={title} />
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
-
                         </div>
-
                     </div>
                 </div>
-            </div>
-            {/* QR MODAL */}
-            {
-                qrUrl && (
-                    <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setQrUrl(null)}>
-                        <div className="bg-[#1a1a1a] p-6 rounded-2xl border border-white/10 max-w-sm w-full text-center shadow-2xl transform scale-100 transition-all" onClick={e => e.stopPropagation()}>
-                            <div className="flex justify-between items-center mb-4">
-                                <h3 className="text-lg font-bold text-white">{qrTitle}</h3>
-                                <button onClick={() => setQrUrl(null)} className="text-gray-400 hover:text-white"><i className="fas fa-times"></i></button>
+                {/* QR MODAL */}
+                {
+                    qrUrl && (
+                        <div className="fixed inset-0 bg-black/80 z-[300] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setQrUrl(null)}>
+                            <div className="bg-[#1a1a1a] p-6 rounded-2xl border border-white/10 max-w-sm w-full text-center shadow-2xl transform scale-100 transition-all" onClick={e => e.stopPropagation()}>
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="text-lg font-bold text-white">{qrTitle}</h3>
+                                    <button onClick={() => setQrUrl(null)} className="text-gray-400 hover:text-white"><i className="fas fa-times"></i></button>
+                                </div>
+                                <div className="bg-white p-4 rounded-xl inline-block mb-4">
+                                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrUrl)}`} alt="QR Code" className="w-full h-full" />
+                                </div>
+                                <p className="text-xs text-gray-400 break-all bg-black/30 p-2 rounded border border-white/5">{qrUrl}</p>
+                                <button onClick={() => copyLink(qrUrl)} className="text-brand-accent text-xs mt-3 hover:underline">Copia Link</button>
                             </div>
-                            <div className="bg-white p-4 rounded-xl inline-block mb-4">
-                                <img src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrUrl)}`} alt="QR Code" className="w-full h-full" />
-                            </div>
-                            <p className="text-xs text-gray-400 break-all bg-black/30 p-2 rounded border border-white/5">{qrUrl}</p>
-                            <button onClick={() => copyLink(qrUrl)} className="text-brand-accent text-xs mt-3 hover:underline">Copia Link</button>
                         </div>
-                    </div>
-                )
-            }
-        </div >
+                    )
+                }
+            </div>
+        </div>
     );
 };
 

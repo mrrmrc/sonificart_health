@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manutenzione - SonificA.R.T.</title>
+    <style>
+        body {
+            background: #09090b;
+            color: #fff;
+            font-family: 'Outfit', Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: #0d9488;
+        }
+
+        p {
+            font-size: 1.2rem;
+            opacity: 0.8;
+            max-width: 600px;
+            line-height: 1.6;
+        }
+
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 5px solid #FFF;
+            border-bottom-color: #0d9488;
+            border-radius: 50%;
+            display: inline-block;
+            box-sizing: border-box;
+            animation: rotation 1s linear infinite;
+            margin-bottom: 2rem;
+        }
+
+        @keyframes rotation {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <span class="loader"></span>
+    <h1>SonificA.R.T. in Manutenzione</h1>
+    <p>Stiamo aggiornando il framework algoritmico. Il servizio tornerà disponibile a breve.</p>
+    <br>
+    <p style="font-size: 0.9rem; opacity: 0.5;">Framework Update in Progress.</p>
+</body>
+
+</html>

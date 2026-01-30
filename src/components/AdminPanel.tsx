@@ -14,6 +14,8 @@ interface AccessRequest {
     institution_type?: string;
     purpose?: string;
     website?: string;
+    phone?: string;
+    city?: string;
     invoice_sent: boolean;
     paid: boolean;
     created_at: string;
@@ -527,6 +529,11 @@ export const AdminPanel: React.FC = () => {
                                             <div className="text-xs text-gray-400 flex flex-col gap-0.5">
                                                 <span>{req.email}</span>
                                                 <span className="font-mono text-[10px]">{req.piva}</span>
+                                                {(req.phone || req.city) && (
+                                                    <span className="text-[10px] text-brand-accent/80">
+                                                        {req.phone} {req.phone && req.city && '•'} {req.city}
+                                                    </span>
+                                                )}
                                             </div>
                                             {req.plan === 'Enterprise' && (
                                                 <div className="mt-2 text-xs bg-white/5 p-2 rounded border-l-2 border-purple-500">

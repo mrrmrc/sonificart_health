@@ -1,0 +1,29 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # 1. API - Do not touch
+  RewriteRule ^api/ - [L,NC]
+
+  # 2. ASSETS - If file exists, serve it.
+  RewriteCond %{REQUEST_FILENAME} -f
+  RewriteRule ^ - [L]
+
+  # 3. ASSETS - If file does NOT exist but looks like an asset (js, css, png, jpg, etc), FAIL with 404
+  # This prevents serving index.html (content-type text/html) for missing JS files
+  RewriteRule \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ - [R=404,L,NC]
+
+  # 4. SPA - Everything else goes to index.html
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+    <FilesMatch "\.(js|css|xml|gz)$">
+        Header append Vary: Accept-Encoding
+    </FilesMatch>
+</IfModule>
+
+<IfModule mod_mime.c>
+  AddType application/javascript .js
+  AddType text/css .css
+</IfModule>

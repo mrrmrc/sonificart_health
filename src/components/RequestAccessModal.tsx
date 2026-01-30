@@ -14,16 +14,7 @@ interface RequestAccessModalProps {
 
 export const RequestAccessModal: React.FC<RequestAccessModalProps> = ({ isOpen, onClose, userEmail, initialPlan = 'Mensile' }) => {
     const { t } = useLanguage();
-    const { setHideSiteUI } = useOutletContext<any>() || { setHideSiteUI: () => { } };
-
-    useEffect(() => {
-        if (isOpen) {
-            setHideSiteUI(true);
-        } else {
-            setHideSiteUI(false);
-        }
-        return () => setHideSiteUI(false);
-    }, [isOpen, setHideSiteUI]);
+    // REMOVED: setHideSiteUI(true)
 
     const [formData, setFormData] = useState({
         name: '',
@@ -35,7 +26,9 @@ export const RequestAccessModal: React.FC<RequestAccessModalProps> = ({ isOpen, 
         plan: initialPlan,
         institutionType: '',
         purpose: '',
-        website: ''
+        website: '',
+        phone: '',
+        city: ''
     });
     const [privacyAccepted, setPrivacyAccepted] = useState(false);
     const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
@@ -127,6 +120,17 @@ export const RequestAccessModal: React.FC<RequestAccessModalProps> = ({ isOpen, 
                         <div>
                             <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">{t('request_access.billing_email')}</label>
                             <input type="email" name="email" required className="w-full bg-black/30 border border-white/10 p-3 rounded-lg text-white focus:border-brand-accent focus:outline-none" value={formData.email} onChange={handleChange} placeholder="email@example.com" />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">{t('request_access.phone') || 'Numero di Telefono'}</label>
+                            <input type="tel" name="phone" className="w-full bg-black/30 border border-white/10 p-3 rounded-lg text-white focus:border-brand-accent focus:outline-none" value={(formData as any).phone} onChange={handleChange} placeholder="+39 333 1234567" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-brand-text-secondary uppercase mb-1">{t('request_access.city') || 'Città'}</label>
+                            <input type="text" name="city" className="w-full bg-black/30 border border-white/10 p-3 rounded-lg text-white focus:border-brand-accent focus:outline-none" value={(formData as any).city} onChange={handleChange} placeholder="Roma" />
                         </div>
                     </div>
 

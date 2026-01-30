@@ -240,6 +240,9 @@ export const translations = {
       failed_file: "Il file \"{file}\" non ha superato i controlli di integrità."
     },
     results: {
+      audio_source_custom: "Audio Pubblicazione (AI)",
+      audio_source_original: "Originale SAC (WAV)",
+      audio_source_synth: "Traduzione Tecnica (Synth)",
       chromatic_profile: "Profilo Cromatico",
       lightness: "Luminosità",
       saturation: "Saturazione",
@@ -811,6 +814,9 @@ export const translations = {
       failed_file: "The file \"{file}\" did not pass integrity checks."
     },
     results: {
+      audio_source_custom: "Publication Audio (AI)",
+      audio_source_original: "Original SAC (WAV)",
+      audio_source_synth: "Technical Translation (Synth)",
       chromatic_profile: "Chromatic Profile",
       lightness: "Lightness",
       saturation: "Saturation",
@@ -1097,6 +1103,9 @@ export const translations = {
     showcase: { title: "Galerie", subtitle: "Explorer", all: "Tous", scientific: "Scientifique", artistic: "Artistique", hybrid: "Hybride", newest: "Récents", oldest: "Anciens", scan_qr: "Scanner le QR", close: "Fermer", description: "Description", no_description: "Aucune description.", tradition: "Tradition", paradigm: "Paradigme", share_work: "Partager l'œuvre", copy_link: "Copier le lien", audio_track: "Piste Audio", multimedia: "Œuvre Multimédia", video_active: "Lecture vidéo active", cancel: "Annuler", saving: "Sauvegarde...", save: "Sauver", edit: "Éditer", remove: "Supprimer", confirm_delete: "Supprimer ?", error_save: "Erreur", link_copied: "Copié", loading: "Chargement des œuvres...", error_delete: "Erreur", by: "par", sort: "Trier", multimedia_label: "Œuvre Multimédia" },
     verification: { title: "Vérification", subtitle: "...", upload_title: "Charger SAC", upload_subtitle: "...", scanning: "...", valid: "Valide", invalid: "Invalide", retry: "Réessayer" },
     results: {
+      audio_source_custom: "Audio Publication (IA)",
+      audio_source_original: "Original SAC (WAV)",
+      audio_source_synth: "Traduction Technique (Synth)",
       chromatic: "Chromatique",
       sound: "Sonore",
       player: "Lecteur",

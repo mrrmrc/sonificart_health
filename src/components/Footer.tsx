@@ -26,7 +26,7 @@ export const Footer: React.FC = () => {
                     </div>
 
                     <p className="text-xs text-gray-500">
-                        &copy; {new Date().getFullYear()} SonificA.R.T. Framework. Tutti i diritti riservati.
+                        &copy; {new Date().getFullYear()} SonificA.R.T. Framework. Tutti i diritti riservati. <span className="opacity-50 ml-2">Website Builder 2701</span>
                     </p>
                 </div>
             </footer>
