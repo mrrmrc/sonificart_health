@@ -38,6 +38,7 @@ export default {
         'spin-slow': 'spin 15s linear infinite',
         'reverse-spin': 'reverseSpin 10s linear infinite',
         'progress-indeterminate': 'progressIndeterminate 1.5s infinite linear',
+        'slide-up': 'slideUp 0.5s ease-out forwards',
       },
       keyframes: {
         fadeIn: { '0%': { opacity: 0 }, '100%': { opacity: 1 } },
@@ -64,6 +65,10 @@ export default {
         progressIndeterminate: {
           '0%': { transform: 'translateX(-100%)' },
           '100%': { transform: 'translateX(100%)' }
+        },
+        slideUp: {
+          '0%': { transform: 'translateY(100%)', opacity: 0 },
+          '100%': { transform: 'translateY(0)', opacity: 1 }
         }
       }
     },

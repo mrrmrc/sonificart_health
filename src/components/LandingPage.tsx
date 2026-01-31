@@ -84,12 +84,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onExplor
                             </button>
                         </div>
 
-                        <div className="mt-12 flex items-center gap-4 text-sm text-gray-500 font-medium">
-                            <div className="flex -space-x-3">
-                                {[1, 2, 3].map(i => <div key={i} className="w-8 h-8 rounded-full bg-slate-800 border-2 border-slate-950 flex items-center justify-center text-[10px] text-gray-400"><i className="fas fa-user"></i></div>)}
-                            </div>
-                            <p>Unisciti a <span className="text-white font-bold">2,000+</span> artisti digitali</p>
-                        </div>
+
                     </div>
 
                     {/* RIGHT: DYNAMIC FEATURE LIST - "What It Actually Does" */}

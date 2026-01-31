@@ -21,6 +21,11 @@ export const Footer: React.FC = () => {
 
                     <div className="flex flex-wrap justify-center gap-6 text-sm mb-6 font-medium">
                         <button onClick={() => openLegal('privacy_policy', 'Informativa Privacy')} className="hover:text-brand-accent transition-colors hover:underline">Privacy Policy</button>
+                        <button onClick={() => openLegal('cookie_policy', 'Cookie Policy')} className="hover:text-brand-accent transition-colors hover:underline">Cookie Policy</button>
+                        <button onClick={() => {
+                            const trigger = document.getElementById('cookie-settings-trigger');
+                            if (trigger) trigger.click();
+                        }} className="hover:text-brand-accent transition-colors hover:underline">Impostazioni Cookie</button>
                         <button onClick={() => openLegal('terms_of_service', 'Termini di Servizio')} className="hover:text-brand-accent transition-colors hover:underline">Termini di Servizio</button>
                         <button onClick={() => openLegal('notice_and_takedown', 'Notice & Takedown')} className="hover:text-brand-accent transition-colors hover:underline">Notice & Takedown</button>
                     </div>

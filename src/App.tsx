@@ -6,6 +6,7 @@ import { Footer } from './components/Footer';
 import { RequestAccessModal } from './components/RequestAccessModal';
 import { LoginModal } from './components/LoginModal';
 import { HelpModal } from './components/HelpModal';
+import { CookieConsent } from './components/CookieConsent';
 import { GlobalBackground } from './components/GlobalBackground';
 import { api } from './services/api';
 import { LanguageProvider } from './contexts/LanguageContext';
@@ -132,6 +133,7 @@ function AppContent() {
             <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} onLoginSuccess={(u) => { setUser(u); setIsLoginModalOpen(false); }} />
             <RequestAccessModal isOpen={isRequestAccessOpen} onClose={() => setIsRequestAccessOpen(false)} userEmail={user?.email} initialPlan={requestAccessInitialPlan} />
             <HelpModal isOpen={isHelpModalOpen} onClose={() => setIsHelpModalOpen(false)} initialSection={helpInitialSection} />
+            <CookieConsent />
         </div>
     );
 }

@@ -31,13 +31,16 @@ export const GoogleTranslate: React.FC<GoogleTranslateProps> = ({ className }) =
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
+        const savedConsent = localStorage.getItem('sonificart_cookie_consent');
+        const hasAnalyticalConsent = savedConsent ? JSON.parse(savedConsent).analytics : false;
+
         // Initialize from cookie if exists
         const match = document.cookie.match(/googtrans=\/it\/(\w+)/);
         const cookieLang = match && match[1] ? match[1] : 'it';
         setCurrentLang(cookieLang);
 
-        // If not Italian, load immediately
-        if (cookieLang !== 'it') {
+        // Only load automatically if consent is given or if it was already active
+        if (cookieLang !== 'it' && (hasAnalyticalConsent || match)) {
             loadGoogleTranslate();
         }
     }, []);

@@ -6,10 +6,12 @@ export interface VideoGenOptions {
     imageUrl: string | Blob;
     title?: string;
     subtitle?: string;
-    description?: string; // New
+    description?: string;
     date?: string;
     author?: string;
-    duration?: number; // Optional override
+    duration?: number;
+    events?: any[];
+    cursorType?: 'vertical' | 'horizontal' | 'original' | 'matrix' | 'crosshair';
     onProgress: (percent: number) => void;
 }
 
@@ -76,7 +78,8 @@ function drawFrame(
     VideoH: number, FooterH: number, SafeArea: number,
     visualBounds: { minX: number, maxX: number, width: number },
     title?: string, author?: string,
-    subtitle?: string, date?: string, description?: string
+    subtitle?: string, date?: string, description?: string,
+    cursorType?: string, events?: any[]
 ) {
     // 1. COMPOSITE BACKGROUND (The "Floating" Effect)
     // Draw base black
@@ -138,30 +141,89 @@ function drawFrame(
     ctx.restore();
 
     // 3. Synced Scanning Effect & Pixel Sonification
+    // 3. Synced Scanning Effect & Pixel Sonification
     const progress = Math.min(1, Math.max(0, time / duration));
 
-    // Constrain scan to visual bounds of the ARTWORK
-    const scanStart = (visualBounds.minX - dx) * scale + zDx;
-    const scanEnd = (visualBounds.maxX - dx) * scale + zDx;
-    const scanWidth = scanEnd - scanStart;
-    const scanX = Math.floor(scanStart + (progress * scanWidth));
-
-    // A. Draw Scanline
     ctx.save();
     ctx.beginPath();
     ctx.rect(zDx, zDy, zDw, zDh);
     ctx.clip();
 
-    const grad = ctx.createLinearGradient(0, 0, 0, VideoH);
-    grad.addColorStop(0, 'rgba(0, 255, 255, 0)');
-    grad.addColorStop(0.5, 'rgba(0, 255, 255, 0.7)');
-    grad.addColorStop(1, 'rgba(0, 255, 255, 0)');
+    const type = cursorType || 'vertical';
 
-    ctx.fillStyle = grad;
-    ctx.fillRect(scanX - 1, zDy, 3, zDh);
+    if (type === 'original' && events && events.length > 0) {
+        // Deterministic path following
+        const activeEvent = events.find(e => {
+            const t = Array.isArray(e) ? e[0] : e.time;
+            const d = Array.isArray(e) ? e[1] : e.duration;
+            return time >= t && time < (t + d);
+        }) || events.filter(e => (Array.isArray(e) ? e[0] : e.time) <= time).pop();
+
+        if (activeEvent) {
+            const px = Array.isArray(activeEvent) ? activeEvent[4] : activeEvent.sourceBlock?.position.x;
+            const py = Array.isArray(activeEvent) ? activeEvent[5] : activeEvent.sourceBlock?.position.y;
+
+            // Assuming 32x32 grid if not specified
+            const gridSize = 32;
+            const cx = zDx + (px / gridSize) * zDw + (zDw / gridSize / 2);
+            const cy = zDy + (py / gridSize) * zDh + (zDh / gridSize / 2);
+
+            ctx.shadowColor = 'white';
+            ctx.shadowBlur = 15;
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.8)';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(cx - (zDw / gridSize / 2), cy - (zDh / gridSize / 2), zDw / gridSize, zDh / gridSize);
+
+            ctx.fillStyle = 'rgba(0, 255, 255, 0.2)';
+            ctx.fillRect(cx - (zDw / gridSize / 2), cy - (zDh / gridSize / 2), zDw / gridSize, zDh / gridSize);
+        }
+    } else if (type === 'vertical') {
+        const scanStart = (visualBounds.minX - dx) * scale + zDx;
+        const scanEnd = (visualBounds.maxX - dx) * scale + zDx;
+        const scanWidth = scanEnd - scanStart;
+        const scanX = Math.floor(scanStart + (progress * scanWidth));
+
+        const grad = ctx.createLinearGradient(0, 0, 0, VideoH);
+        grad.addColorStop(0, 'rgba(0, 255, 255, 0)');
+        grad.addColorStop(0.5, 'rgba(0, 255, 255, 0.7)');
+        grad.addColorStop(1, 'rgba(0, 255, 255, 0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(scanX - 1, zDy, 3, zDh);
+    } else if (type === 'horizontal') {
+        const scanY = zDy + (progress * zDh);
+        const grad = ctx.createLinearGradient(0, 0, W, 0);
+        grad.addColorStop(0, 'rgba(0, 255, 255, 0)');
+        grad.addColorStop(0.5, 'rgba(0, 255, 255, 0.7)');
+        grad.addColorStop(1, 'rgba(0, 255, 255, 0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(zDx, scanY - 1, zDw, 3);
+    } else if (type === 'crosshair') {
+        const activeEvent = events && events.length > 0 ? (events.find(e => (Array.isArray(e) ? e[0] : e.time) >= time) || events[events.length - 1]) : null;
+        const px = activeEvent ? (Array.isArray(activeEvent) ? activeEvent[4] : activeEvent.sourceBlock?.position.x) : 16;
+        const py = activeEvent ? (Array.isArray(activeEvent) ? activeEvent[5] : activeEvent.sourceBlock?.position.y) : 16;
+        const cx = zDx + (px / 32) * zDw + (zDw / 64);
+        const cy = zDy + (py / 32) * zDh + (zDh / 64);
+
+        ctx.strokeStyle = 'rgba(0, 255, 255, 0.6)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(zDx, cy); ctx.lineTo(zDx + zDw, cy);
+        ctx.moveTo(cx, zDy); ctx.lineTo(cx, zDy + zDh);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, 20, 0, Math.PI * 2);
+        ctx.stroke();
+    }
 
     // B. Pixel Viz (Interactive Particles)
     if (pixelData) {
+        // ... (existing pixel viz logic remains but could be adapted to follow cx/cy)
+        const scanStart = (visualBounds.minX - dx) * scale + zDx;
+        const scanEnd = (visualBounds.maxX - dx) * scale + zDx;
+        const scanWidth = scanEnd - scanStart;
+        const scanX = Math.floor(scanStart + (progress * scanWidth));
+
         const sampleStep = 18;
         const vizWidth = 100;
         ctx.lineWidth = 2.5;
@@ -169,7 +231,6 @@ function drawFrame(
         for (let y = zDy; y < zDy + zDh; y += sampleStep) {
             const sy = Math.floor(y);
             if (sy < 0 || sy >= VideoH) continue;
-            // Use W for pixelData indexing as it was grabbed from current canvas width
             const idx = (sy * W + scanX) * 4;
             if (idx < 0 || idx >= pixelData.length - 4) continue;
 
@@ -367,7 +428,7 @@ function decodeAudio(blob: Blob): Promise<AudioBuffer> {
 
 export const VideoGenService = {
     generateVideo: async (options: VideoGenOptions): Promise<Blob> => {
-        const { audioUrl, imageUrl, title, author, subtitle, date, description, onProgress } = options;
+        const { audioUrl, imageUrl, title, author, subtitle, date, description, events, cursorType, onProgress } = options;
         console.log("🚀 Starting Turbo Video Generation (Logo + New Viz)...");
 
         // 1. Load Resources
@@ -508,7 +569,8 @@ export const VideoGenService = {
                 ctx!, imageBitmap, logoBitmap, pixelData, freqData, time, duration,
                 WIDTH, HEIGHT, VIDEO_H, FOOTER_H, TOP_SAFE_AREA,
                 visualBounds,
-                title, author, subtitle, date, description
+                title, author, subtitle, date, description,
+                cursorType, events
             );
 
             const frameBitmap = await createImageBitmap(canvas);

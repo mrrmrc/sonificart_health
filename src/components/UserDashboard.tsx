@@ -39,6 +39,7 @@ const PublishModal: React.FC<{
     // STATE: Video
     const [activeVideoUrl, setActiveVideoUrl] = useState<string | null>(entry.videoUrl || null);
     const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+    const [cursorType, setCursorType] = useState<'vertical' | 'horizontal' | 'original' | 'crosshair'>('vertical');
 
     // STATE: Actions
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -161,6 +162,8 @@ const PublishModal: React.FC<{
                 description: description,
                 date: new Date(entry.timestamp).toLocaleDateString('it-IT'),
                 author: user?.name,
+                events: entry.events,
+                cursorType: cursorType,
                 onProgress: (p: number) => setUploadProgress(Math.floor(p))
             });
 
@@ -452,12 +455,32 @@ const PublishModal: React.FC<{
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <>
-                                                        <i className="fas fa-film text-2xl text-gray-700 mb-2 block"></i>
-                                                        <button onClick={handleGenerateVideo} className="px-4 py-1.5 bg-[#2dd4bf] text-black font-bold rounded-full shadow-lg hover:scale-105 transition-transform text-[10px] uppercase tracking-wide">
-                                                            Genera Video
+                                                    <div className="flex flex-col items-center gap-4">
+                                                        <div className="grid grid-cols-4 gap-2 mb-2 p-2 bg-white/5 rounded-xl border border-white/5">
+                                                            {[
+                                                                { id: 'vertical', icon: 'fa-arrows-left-right', label: 'Verticale' },
+                                                                { id: 'horizontal', icon: 'fa-arrows-up-down', label: 'Orizzontale' },
+                                                                { id: 'original', icon: 'fa-cube', label: 'Originale' },
+                                                                { id: 'crosshair', icon: 'fa-crosshairs', label: 'Mirino' }
+                                                            ].map(opt => (
+                                                                <button
+                                                                    key={opt.id}
+                                                                    onClick={() => setCursorType(opt.id as any)}
+                                                                    className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-all ${cursorType === opt.id ? 'bg-brand-accent text-brand-primary shadow-[0_0_15px_rgba(45,212,191,0.4)]' : 'hover:bg-white/10 text-gray-500'}`}
+                                                                    title={opt.label}
+                                                                >
+                                                                    <i className={`fas ${opt.icon} text-sm`}></i>
+                                                                    <span className="text-[7px] font-bold uppercase">{opt.label}</span>
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                        <button
+                                                            onClick={handleGenerateVideo}
+                                                            className="px-6 py-2 bg-[#2dd4bf] text-black font-black rounded-full shadow-lg hover:scale-105 transition-transform text-[11px] uppercase tracking-widest flex items-center gap-2"
+                                                        >
+                                                            <i className="fas fa-video"></i> Genera Video
                                                         </button>
-                                                    </>
+                                                    </div>
                                                 )}
                                             </div>
                                         )}
@@ -567,8 +590,11 @@ const HistoryItem: React.FC<{ item: DashboardEntry; onView: () => void; onPublis
                     decoding="async"
                 />
                 {item.videoUrl && (
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded">
-                        <span className="bg-brand-accent text-brand-primary text-[7px] font-bold px-1 py-0.5 rounded flex items-center gap-1">
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded group-hover:bg-black/20 transition-colors">
+                        <div className="w-8 h-8 rounded-full bg-brand-accent/80 flex items-center justify-center shadow-lg">
+                            <i className="fas fa-play text-brand-primary text-[10px] ml-0.5"></i>
+                        </div>
+                        <span className="absolute bottom-1 right-1 bg-brand-accent text-brand-primary text-[6px] font-black px-1 py-0.5 rounded flex items-center gap-1 uppercase">
                             <i className="fas fa-video text-[6px]"></i> VIDEO
                         </span>
                     </div>

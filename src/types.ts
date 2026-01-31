@@ -229,6 +229,7 @@ export interface SonificationResult {
     acquisitionMetadata?: AcquisitionMetadata;
     title?: string | null;
     description?: string | null;
+    videoUrl?: string | null;
 }
 
 export interface SacVerificationDetails {

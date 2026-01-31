@@ -25,7 +25,15 @@ function getSupportedMimeType(): string {
 export async function generateSonificationVideo(
     result: SonificationResult,
     onProgress: (progress: number) => void,
-    options?: { title?: string, author?: string, description?: string, overrideAudioBlob?: Blob, useWebcam?: boolean }
+    options?: {
+        title?: string,
+        author?: string,
+        description?: string,
+        overrideAudioBlob?: Blob,
+        useWebcam?: boolean,
+        cursorType?: 'vertical' | 'horizontal' | 'original' | 'crosshair',
+        events?: any[]
+    }
 ): Promise<Blob> {
     const metadata = options;
     const isSyncMode = !!options?.overrideAudioBlob;
@@ -332,7 +340,6 @@ export async function generateSonificationVideo(
             let cursorY = height / 2;
             let targetX = cursorX;
             let targetY = cursorY;
-            const particles: any[] = [];
 
             const blocks = result.blockAnalysisResult.blocks;
             const gridSize = result.blockAnalysisResult.gridSize;
@@ -356,7 +363,7 @@ export async function generateSonificationVideo(
                     const progress = Math.min(1, Math.max(0, elapsed / duration));
                     onProgress(progress * 100);
 
-                    if (elapsed >= duration) {
+                    if (elapsed >= duration + 0.1) {
                         if (recorder && recorder.state === 'recording') recorder.stop();
                         if (animationFrameId) cancelAnimationFrame(animationFrameId);
                         return;
@@ -493,80 +500,90 @@ export async function generateSonificationVideo(
                                 const nY = (active.sourceBlock.position.y / gridSize) - 0.5;
                                 targetX = centerX + (nX * effW);
                                 targetY = centerY + (nY * effH);
-                            } else if (videoEvents.length > 0) {
-                                const last = videoEvents[videoEvents.length - 1];
-                                if (normalizedTime >= last.time) {
-                                    const b = last.sourceBlock;
-                                    targetX = centerX + ((b.position.x / gridSize - 0.5) * effW);
-                                    targetY = centerY + ((b.position.y / gridSize - 0.5) * effH);
-                                }
-                            }
-                        } else {
-                            const active = videoEvents.find(e => e.time <= elapsed && (e.time + e.duration) > elapsed);
-                            if (active && active.sourceBlock) {
-                                targetX = centerX + ((active.sourceBlock.position.x / gridSize) - 0.5) * effW;
-                                targetY = centerY + ((active.sourceBlock.position.y / gridSize) - 0.5) * effH;
                             }
                         }
+                    }
+
+                    // --- CURSOR & SCAN LOGIC ---
+                    const type = options?.cursorType || 'original';
+
+                    if (type === 'original') {
+                        // Deterministic path from sonification
+                        const normalizedTime = isSyncMode ? ((elapsed / duration) * originalDuration) : elapsed;
+                        let active = (options?.events || videoEvents).find(e => e.time <= normalizedTime && (e.time + e.duration) > normalizedTime);
+                        if (!active) {
+                            active = (options?.events || videoEvents).filter(e => e.time <= normalizedTime).pop();
+                        }
+
+                        if (active && active.sourceBlock) {
+                            const nX = (active.sourceBlock.position.x / gridSize) - 0.5;
+                            const nY = (active.sourceBlock.position.y / gridSize) - 0.5;
+                            targetX = centerX + (nX * effW);
+                            targetY = centerY + (nY * effH);
+                        }
+
+                        // Smooth follow
                         cursorX += (targetX - cursorX) * 0.15;
                         cursorY += (targetY - cursorY) * 0.15;
+
+                        // Draw Square
+                        ctx.save();
+                        ctx.translate(cursorX, cursorY);
+                        const blockW = effW / gridSize;
+                        const blockH = effH / gridSize;
+                        ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
+                        ctx.shadowBlur = 10 + avgVol * 20;
+                        ctx.strokeStyle = '#fff';
+                        ctx.lineWidth = 3;
+                        ctx.strokeRect(-blockW / 2, -blockH / 2, blockW, blockH);
+                        ctx.fillStyle = `rgba(255, 255, 255, ${0.2 + avgVol * 0.4})`;
+                        ctx.fillRect(-blockW / 2, -blockH / 2, blockW, blockH);
+                        ctx.restore();
                     }
-
-                    // --- PARTICLES ---
-                    const aweFactor = useWebcam ? metrics.mouthOpen : 0;
-                    if ((normalizedBass > 0.05 || aweFactor > 0.2) && particles.length < 50) {
-                        const count = 1 + Math.floor(aweFactor * 5); // Burst if awe
-                        for (let i = 0; i < count; i++) {
-                            particles.push({
-                                x: cursorX, y: cursorY,
-                                vx: (Math.random() - 0.5) * (2 + normalizedBass * 8 + aweFactor * 10),
-                                vy: (Math.random() - 0.5) * (2 + normalizedBass * 8 + aweFactor * 10),
-                                life: 1.0,
-                                size: 10 + Math.random() * 20,
-                                color: (useWebcam && metrics.smile > 0.5) ? '#ffd700' : '#ffffff' // Gold particles if smiling
-                            });
-                        }
+                    else if (type === 'vertical') {
+                        const scanX = (centerX - effW / 2) + (progress * effW);
+                        const grad = ctx.createLinearGradient(0, centerY - effH / 2, 0, centerY + effH / 2);
+                        grad.addColorStop(0, 'rgba(0, 255, 255, 0)');
+                        grad.addColorStop(0.5, 'rgba(0, 255, 255, 0.7)');
+                        grad.addColorStop(1, 'rgba(0, 255, 255, 0)');
+                        ctx.fillStyle = grad;
+                        ctx.fillRect(scanX - 1, centerY - effH / 2, 3, effH);
                     }
-
-                    particles.forEach(p => {
-                        p.x += p.vx || (Math.random() - 0.5) * 2;
-                        p.y += p.vy || (Math.random() - 0.5) * 2;
-                        p.life -= 0.02;
-                        if (p.life > 0) {
-                            ctx.globalAlpha = p.life * 0.7;
-                            ctx.fillStyle = p.color || '#fff';
-                            ctx.beginPath();
-                            ctx.arc(p.x, p.y, p.size * (0.5 + p.life * 0.5), 0, Math.PI * 2);
-                            ctx.fill();
+                    else if (type === 'horizontal') {
+                        const scanY = (centerY - effH / 2) + (progress * effH);
+                        const grad = ctx.createLinearGradient(centerX - effW / 2, 0, centerX + effW / 2, 0);
+                        grad.addColorStop(0, 'rgba(0, 255, 255, 0)');
+                        grad.addColorStop(0.5, 'rgba(0, 255, 255, 0.7)');
+                        grad.addColorStop(1, 'rgba(0, 255, 255, 0)');
+                        ctx.fillStyle = grad;
+                        ctx.fillRect(centerX - effW / 2, scanY - 1, effW, 3);
+                    }
+                    else if (type === 'crosshair') {
+                        const normalizedTime = isSyncMode ? ((elapsed / duration) * originalDuration) : elapsed;
+                        const active = (options?.events || videoEvents).find(e => e.time >= normalizedTime) || videoEvents[videoEvents.length - 1];
+                        if (active && active.sourceBlock) {
+                            const tX = (centerX - effW / 2) + (active.sourceBlock.position.x / gridSize) * effW + (effW / gridSize / 2);
+                            const tY = (centerY - effH / 2) + (active.sourceBlock.position.y / gridSize) * effH + (effH / gridSize / 2);
+                            cursorX += (tX - cursorX) * 0.2;
+                            cursorY += (tY - cursorY) * 0.2;
                         }
-                    });
-                    while (particles.length > 0 && particles[0].life <= 0) particles.shift();
 
-                    // Draw Cursor
-                    ctx.globalAlpha = 1.0;
-                    ctx.save();
-                    ctx.translate(cursorX, cursorY);
-                    const cursorSize = 12 + (normalizedBass * 25) + (aweFactor * 20);
-                    ctx.shadowColor = 'white';
-                    ctx.shadowBlur = 15 + avgVol * 30;
-                    ctx.strokeStyle = '#fff';
-                    ctx.lineWidth = 2.5;
-                    ctx.beginPath();
-                    ctx.arc(0, 0, cursorSize, 0, Math.PI * 2);
-                    ctx.stroke();
-                    ctx.fillStyle = `rgba(255,255,255, ${0.4 + avgVol * 0.5})`;
-                    ctx.beginPath();
-                    ctx.arc(0, 0, cursorSize * 0.3, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.restore();
+                        ctx.strokeStyle = 'rgba(0, 255, 255, 0.6)';
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.moveTo(centerX - effW / 2, cursorY); ctx.lineTo(centerX + effW / 2, cursorY);
+                        ctx.moveTo(cursorX, centerY - effH / 2); ctx.lineTo(cursorX, centerY + effH / 2);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.arc(cursorX, cursorY, 20, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
 
                     // ═══════════════════════════════════════════════════════════════════════════════════════
                     // SONIFICART PREMIUM VIDEO LAYOUT V2 - Redesigned 3-Column Footer
                     // Left: Title, Description, Author/Date | Center: Compact Audio Bars | Right: Logo
                     // ═══════════════════════════════════════════════════════════════════════════════════════
 
-
-                    // --- FOOTER BACKGROUND (Premium Dark Gradient) ---
                     const footerY = height - 200;
                     const footerH = 200;
                     const footerGrad = ctx.createLinearGradient(0, footerY, 0, height);
