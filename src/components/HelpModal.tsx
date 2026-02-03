@@ -7,7 +7,7 @@ interface HelpModalProps {
     initialSection?: string;
 }
 
-type HelpTab = 'platform' | 'guide' | 'interface' | 'faq' | 'scientific';
+type HelpTab = 'platform' | 'guide' | 'flowchart' | 'interface' | 'faq' | 'scientific';
 
 export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSection }) => {
     const [activeTab, setActiveTab] = useState<HelpTab>('platform');
@@ -72,9 +72,9 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
                                     <i className="fas fa-universal-access"></i>
                                 </div>
                                 <h3 className="text-xl font-bold text-white mb-2">Accessibilità Museale 2.0</h3>
-                                <p className="text-sm text-gray-400 leading-relaxed">
+                                <p className="text-sm text-gray-300 leading-relaxed">
                                     Rende l'arte visibile accessibile a non vedenti e ipovedenti. Non una semplice descrizione vocale,
-                                    ma una <strong>traduzione sensoriale diretta</strong>: la luce diventa volume, il colore diventa timbro,
+                                    ma una <strong className="text-white">traduzione sensoriale diretta</strong>: la luce diventa volume, il colore diventa timbro,
                                     la composizione diventa ritmo. Permette a chiunque di "ascoltare" un quadro.
                                 </p>
                             </div>
@@ -84,8 +84,8 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
                                     <i className="fas fa-fingerprint"></i>
                                 </div>
                                 <h3 className="text-xl font-bold text-white mb-2">Certificazione Forense (SAC)</h3>
-                                <p className="text-sm text-gray-400 leading-relaxed">
-                                    Ogni opera generata è un asset digitale unico. Il formato proprietario <strong>.SAC (Sonified Art Container)</strong>
+                                <p className="text-sm text-gray-300 leading-relaxed">
+                                    Ogni opera generata è un asset digitale unico. Il formato proprietario <strong className="text-white">.SAC (Sonified Art Container)</strong>
                                     include una prova crittografica che lega indissolubilmente i pixel dell'immagine alle note generate,
                                     garantendo l'autenticità e l'unicità dell'opera derivata per il mercato dell'arte digitale.
                                 </p>
@@ -96,8 +96,8 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
                                     <i className="fas fa-globe-americas"></i>
                                 </div>
                                 <h3 className="text-xl font-bold text-white mb-2">Consapevolezza Culturale</h3>
-                                <p className="text-sm text-gray-400 leading-relaxed">
-                                    L'unico sistema al mondo con un database di <strong>48 tradizioni musicali globali</strong>.
+                                <p className="text-sm text-gray-300 leading-relaxed">
+                                    L'unico sistema al mondo con un database di <strong className="text-white">48 tradizioni musicali globali</strong>.
                                     SonificART non impone la musica occidentale: rispetta l'origine geografica e storica dell'opera,
                                     usando scale, strumenti e microtoni appropriati (es. Maqam arabo per un mosaico andaluso).
                                 </p>
@@ -107,12 +107,15 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
                                 <div className="w-12 h-12 rounded-full bg-yellow-500/20 flex items-center justify-center text-yellow-400 text-2xl mb-4">
                                     <i className="fas fa-theater-masks"></i>
                                 </div>
-                                <h3 className="text-xl font-bold text-white mb-2">Nuovi Linguaggi Creativi</h3>
-                                <p className="text-sm text-gray-400 leading-relaxed">
-                                    Uno strumento potente per artisti digitali, musicisti e performer.
-                                    Usa la modalità "Ibrida" per collaborare con l'IA, oppure la "Live Performance"
-                                    per trasformare il tuo corpo e la tua webcam in un controller musicale che suona l'opera in tempo reale.
+                                <h3 className="text-xl font-bold text-white mb-2">🎭 Live Performance Interattiva</h3>
+                                <p className="text-sm text-gray-300 leading-relaxed">
+                                    <strong className="text-pink-400">Trasforma il tuo corpo in strumento!</strong> La modalità Live Performance usa la webcam per tracciare:
                                 </p>
+                                <ul className="text-xs text-gray-300 mt-2 space-y-1">
+                                    <li>👁️ <strong>Eye Tracking</strong> → Panneggio stereo, filtri</li>
+                                    <li>🗣️ <strong>Head Movement</strong> → Transpose, delay, chorus</li>
+                                    <li>😊 <strong>Espressioni Facciali</strong> → Modo, tensione, volume</li>
+                                </ul>
                             </div>
                         </div>
 
@@ -122,15 +125,15 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
                                 <div className="p-4 rounded-lg bg-black/20">
                                     <h4 className="font-bold text-white mb-1">🏛️ Istituzioni Culturali</h4>
-                                    <p className="text-xs text-gray-400">Musei, Gallerie, Fondazioni che vogliono innovare l'esperienza dei visitatori.</p>
+                                    <p className="text-xs text-gray-300">Musei, Gallerie, Fondazioni che vogliono innovare l'esperienza dei visitatori.</p>
                                 </div>
                                 <div className="p-4 rounded-lg bg-black/20">
                                     <h4 className="font-bold text-white mb-1">🎨 Digital Artists</h4>
-                                    <p className="text-xs text-gray-400">Creativi che cercano nuovi medium espressivi cross-modali.</p>
+                                    <p className="text-xs text-gray-300">Creativi che cercano nuovi medium espressivi cross-modali.</p>
                                 </div>
                                 <div className="p-4 rounded-lg bg-black/20">
                                     <h4 className="font-bold text-white mb-1">🔬 Ricercatori & Edu</h4>
-                                    <p className="text-xs text-gray-400">Scuole e università per lo studio della sinestesia e percezione.</p>
+                                    <p className="text-xs text-gray-300">Scuole e università per lo studio della sinestesia e percezione.</p>
                                 </div>
                             </div>
                         </div>
@@ -191,6 +194,239 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
                     </div>
                 );
 
+            case 'flowchart':
+                return (
+                    <div className="space-y-6 animate-fade-in pb-10">
+                        {/* HEADER */}
+                        <div className="bg-gradient-to-r from-blue-900/50 to-purple-900/50 p-6 rounded-xl border border-blue-500/30">
+                            <h2 className="text-2xl font-bold text-white mb-2 flex items-center gap-3">
+                                <i className="fas fa-project-diagram text-blue-400"></i>
+                                Architettura Tecnica del Flusso
+                            </h2>
+                            <p className="text-gray-300 text-sm">
+                                Documentazione completa del processo di sonificazione end-to-end.
+                            </p>
+                        </div>
+
+                        {/* FLOW DIAGRAM */}
+                        <div className="bg-black/40 p-6 rounded-xl border border-white/10">
+                            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                                <i className="fas fa-stream text-brand-accent"></i>
+                                Pipeline di Elaborazione
+                            </h3>
+
+                            {/* VISUAL FLOW */}
+                            <div className="flex flex-col gap-4">
+                                {/* Step 1 */}
+                                <div className="flex items-start gap-4 p-4 bg-white/5 rounded-lg border-l-4 border-blue-500">
+                                    <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold shrink-0">1</div>
+                                    <div>
+                                        <h4 className="font-bold text-white">📥 INPUT: Acquisizione Immagine</h4>
+                                        <p className="text-sm text-gray-400 mt-1">L'utente carica un'immagine (JPG, PNG, WebP). Limiti: max 10MB, risoluzioni supportate fino a 4096x4096px.</p>
+                                        <code className="text-xs text-green-400 mt-2 block bg-black/40 p-2 rounded">FileReader API → ArrayBuffer → Canvas Context</code>
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-center"><i className="fas fa-arrow-down text-white/30 text-2xl"></i></div>
+
+                                {/* Step 2 */}
+                                <div className="flex items-start gap-4 p-4 bg-white/5 rounded-lg border-l-4 border-teal-500">
+                                    <div className="w-10 h-10 rounded-full bg-teal-500 flex items-center justify-center text-white font-bold shrink-0">2</div>
+                                    <div>
+                                        <h4 className="font-bold text-white">📐 STANDARDIZZAZIONE</h4>
+                                        <p className="text-sm text-gray-400 mt-1">Resize a 512x512px per coerenza matriciale. Normalizzazione del colore e calcolo hash SHA-256.</p>
+                                        <code className="text-xs text-green-400 mt-2 block bg-black/40 p-2 rounded">Canvas.resize(512,512) → getImageData() → SHA-256(pixelData + config)</code>
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-center"><i className="fas fa-arrow-down text-white/30 text-2xl"></i></div>
+
+                                {/* Step 3 */}
+                                <div className="flex items-start gap-4 p-4 bg-white/5 rounded-lg border-l-4 border-purple-500">
+                                    <div className="w-10 h-10 rounded-full bg-purple-500 flex items-center justify-center text-white font-bold shrink-0">3</div>
+                                    <div>
+                                        <h4 className="font-bold text-white">🔬 ANALISI CIE LAB D65</h4>
+                                        <p className="text-sm text-gray-400 mt-1">Conversione RGB → XYZ → CIE L*a*b* con illuminante D65. Divisione in griglia (es. 32x32 blocchi) e calcolo media colore per blocco.</p>
+                                        <code className="text-xs text-green-400 mt-2 block bg-black/40 p-2 rounded">L* → Dinamica/Volume | a*b* → Tonalità/Timbro | Chroma → Intensità</code>
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-center"><i className="fas fa-arrow-down text-white/30 text-2xl"></i></div>
+
+                                {/* Step 4 */}
+                                <div className="flex items-start gap-4 p-4 bg-white/5 rounded-lg border-l-4 border-yellow-500">
+                                    <div className="w-10 h-10 rounded-full bg-yellow-500 flex items-center justify-center text-white font-bold shrink-0">4</div>
+                                    <div>
+                                        <h4 className="font-bold text-white">🌍 SELEZIONE TRADIZIONE MUSICALE</h4>
+                                        <p className="text-sm text-gray-400 mt-1">Match automatico contro database di 48 tradizioni. L'algoritmo analizza palette cromatica e suggerisce la scala più appropriata.</p>
+                                        <code className="text-xs text-green-400 mt-2 block bg-black/40 p-2 rounded">dominantHue → cultureMatcher(traditions.json) → {`{scale, instruments, ornaments}`}</code>
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-center"><i className="fas fa-arrow-down text-white/30 text-2xl"></i></div>
+
+                                {/* Step 5 */}
+                                <div className="flex items-start gap-4 p-4 bg-white/5 rounded-lg border-l-4 border-pink-500">
+                                    <div className="w-10 h-10 rounded-full bg-pink-500 flex items-center justify-center text-white font-bold shrink-0">5</div>
+                                    <div>
+                                        <h4 className="font-bold text-white">🎵 MAPPING UNIVERSALE</h4>
+                                        <p className="text-sm text-gray-400 mt-1">Conversione colore → nota base (0-11 semitoni), ottava (1-7), durata, velocity. Applicazione scala culturale e microtoni.</p>
+                                        <code className="text-xs text-green-400 mt-2 block bg-black/40 p-2 rounded">hue → pitch | L* → velocity | saturation → duration | a*b* → detune</code>
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-center"><i className="fas fa-arrow-down text-white/30 text-2xl"></i></div>
+
+                                {/* Step 6 */}
+                                <div className="flex items-start gap-4 p-4 bg-white/5 rounded-lg border-l-4 border-orange-500">
+                                    <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center text-white font-bold shrink-0">6</div>
+                                    <div>
+                                        <h4 className="font-bold text-white">🎹 SINTESI AUDIO</h4>
+                                        <p className="text-sm text-gray-400 mt-1">Generazione audio via Web Audio API. Oscillatori, filtri, effetti applicati in real-time. Output PCM 44.1kHz 16-bit.</p>
+                                        <code className="text-xs text-green-400 mt-2 block bg-black/40 p-2 rounded">AudioContext → OscillatorNode → GainNode → OfflineAudioContext → WAV</code>
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-center"><i className="fas fa-arrow-down text-white/30 text-2xl"></i></div>
+
+                                {/* Step 7 */}
+                                <div className="flex items-start gap-4 p-4 bg-white/5 rounded-lg border-l-4 border-green-500">
+                                    <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-white font-bold shrink-0">7</div>
+                                    <div>
+                                        <h4 className="font-bold text-white">📦 OUTPUT: Export SAC</h4>
+                                        <p className="text-sm text-gray-400 mt-1">Generazione container .SAC (ZIP) con: immagine originale, audio WAV, MIDI, JSON metadati, video prova cinetica, manifest hash.</p>
+                                        <code className="text-xs text-green-400 mt-2 block bg-black/40 p-2 rounded">JSZip.generate() → .sac {`{image, audio, midi, json, video, manifest}`}</code>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* PARADIGMS */}
+                        <div className="bg-black/40 p-6 rounded-xl border border-white/10">
+                            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                                <i className="fas fa-brain text-purple-400"></i>
+                                I Tre Paradigmi di Sonificazione
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="p-4 bg-blue-500/10 rounded-lg border border-blue-500/30">
+                                    <h4 className="font-bold text-blue-400 mb-2">🔬 Scientifico</h4>
+                                    <p className="text-xs text-gray-400">100% deterministico. Nessun intervento IA. Output identico per input identico. Ideale per ricerca e comparazione.</p>
+                                </div>
+                                <div className="p-4 bg-purple-500/10 rounded-lg border border-purple-500/30">
+                                    <h4 className="font-bold text-purple-400 mb-2">🎨 Artistico</h4>
+                                    <p className="text-xs text-gray-400">"Traduttore Cieco": l'IA riceve solo dati numerici, non vede l'immagine. Traduzione pura senza bias visivo.</p>
+                                </div>
+                                <div className="p-4 bg-teal-500/10 rounded-lg border border-teal-500/30">
+                                    <h4 className="font-bold text-teal-400 mb-2">🎭 Ibrido</h4>
+                                    <p className="text-xs text-gray-400">"Produttore Creativo": l'IA vede immagine + dati. Concilia contesto visivo con vincoli tecnici per massima espressività.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* LIVE PERFORMANCE MODE */}
+                        <div className="bg-gradient-to-r from-pink-900/40 to-purple-900/40 p-6 rounded-xl border border-pink-500/30">
+                            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                                <i className="fas fa-broadcast-tower text-pink-400"></i>
+                                Modalità Live Performance
+                            </h3>
+                            <p className="text-sm text-gray-300 mb-4">
+                                Trasforma il tuo corpo in un controller musicale. Il sistema utilizza la webcam per tracciare movimenti e modularli sull'esperienza audio in tempo reale.
+                            </p>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                                {/* Eye Tracking */}
+                                <div className="p-4 bg-black/30 rounded-lg border border-white/10">
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
+                                            <i className="fas fa-eye text-blue-400"></i>
+                                        </div>
+                                        <h4 className="font-bold text-white">Eye Tracking</h4>
+                                    </div>
+                                    <p className="text-xs text-gray-400 mb-2">La posizione dello sguardo controlla:</p>
+                                    <ul className="text-xs text-gray-500 space-y-1">
+                                        <li>• <strong className="text-blue-300">X:</strong> Panneggio stereo (L/R)</li>
+                                        <li>• <strong className="text-blue-300">Y:</strong> Frequenza filtro passa-banda</li>
+                                        <li>• <strong className="text-blue-300">Velocità:</strong> Arpeggio rate</li>
+                                    </ul>
+                                </div>
+
+                                {/* Head Movement */}
+                                <div className="p-4 bg-black/30 rounded-lg border border-white/10">
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                                            <i className="fas fa-head-side text-green-400"></i>
+                                        </div>
+                                        <h4 className="font-bold text-white">Head Movement</h4>
+                                    </div>
+                                    <p className="text-xs text-gray-400 mb-2">L'orientamento della testa modula:</p>
+                                    <ul className="text-xs text-gray-500 space-y-1">
+                                        <li>• <strong className="text-green-300">Pitch (su/giù):</strong> Transpose ottava</li>
+                                        <li>• <strong className="text-green-300">Yaw (dx/sx):</strong> Delay feedback</li>
+                                        <li>• <strong className="text-green-300">Roll (inclin.):</strong> Detune/Chorus</li>
+                                    </ul>
+                                </div>
+
+                                {/* Facial Expressions */}
+                                <div className="p-4 bg-black/30 rounded-lg border border-white/10">
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center">
+                                            <i className="fas fa-smile text-yellow-400"></i>
+                                        </div>
+                                        <h4 className="font-bold text-white">Facial Expressions</h4>
+                                    </div>
+                                    <p className="text-xs text-gray-400 mb-2">Le espressioni facciali impattano:</p>
+                                    <ul className="text-xs text-gray-500 space-y-1">
+                                        <li>• <strong className="text-yellow-300">Sorriso:</strong> Major/Minor mode</li>
+                                        <li>• <strong className="text-yellow-300">Sopracciglia:</strong> Tensione armonica</li>
+                                        <li>• <strong className="text-yellow-300">Bocca aperta:</strong> Volume/Dynamics</li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            {/* Technical Note */}
+                            <div className="bg-black/40 p-4 rounded-lg border border-white/10">
+                                <h4 className="font-bold text-white text-sm mb-2 flex items-center gap-2">
+                                    <i className="fas fa-cogs text-gray-400"></i>
+                                    Tecnologia Utilizzata
+                                </h4>
+                                <p className="text-xs text-gray-400 mb-2">
+                                    Il sistema sfrutta <strong className="text-pink-300">MediaPipe Face Mesh</strong> di Google per il rilevamento real-time di 468 landmark facciali.
+                                    L'elaborazione avviene interamente nel browser (client-side) senza invio di dati video a server esterni.
+                                </p>
+                                <code className="text-xs text-green-400 block bg-black/40 p-2 rounded">
+                                    navigator.mediaDevices.getUserMedia() → MediaPipe FaceMesh → 468 landmarks → Audio Modulation → Web Audio API
+                                </code>
+                            </div>
+                        </div>
+
+                        {/* TECH STACK */}
+                        <div className="bg-black/40 p-6 rounded-xl border border-white/10">
+                            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                                <i className="fas fa-code text-green-400"></i>
+                                Stack Tecnologico
+                            </h3>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+                                <div className="p-3 bg-white/5 rounded-lg">
+                                    <i className="fab fa-react text-2xl text-cyan-400 mb-2"></i>
+                                    <p className="text-xs text-gray-400">React 18 + TypeScript</p>
+                                </div>
+                                <div className="p-3 bg-white/5 rounded-lg">
+                                    <i className="fas fa-database text-2xl text-green-400 mb-2"></i>
+                                    <p className="text-xs text-gray-400">Supabase PostgreSQL</p>
+                                </div>
+                                <div className="p-3 bg-white/5 rounded-lg">
+                                    <i className="fas fa-volume-up text-2xl text-yellow-400 mb-2"></i>
+                                    <p className="text-xs text-gray-400">Web Audio API</p>
+                                </div>
+                                <div className="p-3 bg-white/5 rounded-lg">
+                                    <i className="fas fa-robot text-2xl text-purple-400 mb-2"></i>
+                                    <p className="text-xs text-gray-400">Google Gemini AI</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+
             case 'interface':
                 return (
                     <div className="space-y-8 animate-fade-in">
@@ -235,7 +471,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
 
                         <div className="space-y-4">
                             {/* DOMANDA 1 */}
-                            <details className="bg-black/30 rounded-lg p-4 open:bg-black/50 transition-colors">
+                            <details open className="bg-black/30 rounded-lg p-4 open:bg-black/50 transition-colors">
                                 <summary className="font-bold text-white cursor-pointer flex justify-between items-center">
                                     {t('help.faq.q1')}
                                     <i className="fas fa-chevron-down text-xs"></i>
@@ -247,7 +483,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
                             </details>
 
                             {/* DOMANDA 2 */}
-                            <details className="bg-black/30 rounded-lg p-4 open:bg-black/50 transition-colors">
+                            <details open className="bg-black/30 rounded-lg p-4 open:bg-black/50 transition-colors">
                                 <summary className="font-bold text-white cursor-pointer flex justify-between items-center">
                                     {t('help.faq.q2')}
                                     <i className="fas fa-chevron-down text-xs"></i>
@@ -259,7 +495,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
                             </details>
 
                             {/* DOMANDA 3 */}
-                            <details className="bg-black/30 rounded-lg p-4 open:bg-black/50 transition-colors">
+                            <details open className="bg-black/30 rounded-lg p-4 open:bg-black/50 transition-colors">
                                 <summary className="font-bold text-white cursor-pointer flex justify-between items-center">
                                     {t('help.faq.q3')}
                                     <i className="fas fa-chevron-down text-xs"></i>
@@ -454,55 +690,65 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, initialSe
             onClick={onClose}
         >
             <div
-                className="relative w-full max-w-4xl bg-[#0f172a] rounded-xl shadow-2xl border border-white/10 animate-zoom-in flex flex-col max-h-[85vh]"
+                className="relative w-full max-w-4xl bg-[#0f172a] rounded-xl shadow-2xl border border-white/10 animate-zoom-in flex flex-col max-h-[90vh]"
                 onClick={e => e.stopPropagation()}
             >
-                <div className="flex justify-between items-center p-6 border-b border-white/10">
-                    <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+                {/* HEADER - Fixed */}
+                <div className="flex justify-between items-center p-4 md:p-6 border-b border-white/10 shrink-0">
+                    <h2 className="text-xl md:text-2xl font-bold text-white flex items-center gap-3">
                         <i className="fas fa-book-reader text-brand-accent"></i>
                         {t('help.title')}
                     </h2>
                     <button onClick={onClose} className="text-white/50 hover:text-white text-2xl transition-colors">&times;</button>
                 </div>
 
-                <div className="flex border-b border-white/10 bg-white/5 px-6 overflow-x-auto">
+                {/* TAB BAR - Fixed, never shrinks */}
+                <div className="flex border-b border-white/10 bg-white/5 px-2 md:px-6 overflow-x-auto shrink-0 scrollbar-hide">
                     <button
                         onClick={() => setActiveTab('platform')}
-                        className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'platform' ? 'border-brand-accent text-white' : 'border-transparent text-brand-text-secondary hover:text-white'}`}
+                        className={`px-3 md:px-4 py-3 text-xs md:text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'platform' ? 'border-brand-accent text-white' : 'border-transparent text-brand-text-secondary hover:text-white'}`}
                     >
                         {t('help.tabs.platform')}
                     </button>
                     <button
                         onClick={() => setActiveTab('guide')}
-                        className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'guide' ? 'border-brand-accent text-white' : 'border-transparent text-brand-text-secondary hover:text-white'}`}
+                        className={`px-3 md:px-4 py-3 text-xs md:text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'guide' ? 'border-brand-accent text-white' : 'border-transparent text-brand-text-secondary hover:text-white'}`}
                     >
                         {t('help.tabs.guide')}
                     </button>
                     <button
+                        onClick={() => setActiveTab('flowchart')}
+                        className={`px-3 md:px-4 py-3 text-xs md:text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'flowchart' ? 'border-brand-accent text-white' : 'border-transparent text-brand-text-secondary hover:text-white'}`}
+                    >
+                        <i className="fas fa-project-diagram mr-1"></i> Flusso
+                    </button>
+                    <button
                         onClick={() => setActiveTab('interface')}
-                        className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'interface' ? 'border-brand-accent text-white' : 'border-transparent text-brand-text-secondary hover:text-white'}`}
+                        className={`px-3 md:px-4 py-3 text-xs md:text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'interface' ? 'border-brand-accent text-white' : 'border-transparent text-brand-text-secondary hover:text-white'}`}
                     >
                         {t('help.tabs.glossary')}
                     </button>
                     <button
                         onClick={() => setActiveTab('faq')}
-                        className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'faq' ? 'border-brand-accent text-white' : 'border-transparent text-brand-text-secondary hover:text-white'}`}
+                        className={`px-3 md:px-4 py-3 text-xs md:text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'faq' ? 'border-brand-accent text-white' : 'border-transparent text-brand-text-secondary hover:text-white'}`}
                     >
-                        {t('help.tabs.faq')}
+                        FAQ
                     </button>
                     <button
                         onClick={() => setActiveTab('scientific')}
-                        className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'scientific' ? 'border-brand-accent text-white' : 'border-transparent text-brand-text-secondary hover:text-white'}`}
+                        className={`px-3 md:px-4 py-3 text-xs md:text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'scientific' ? 'border-brand-accent text-white' : 'border-transparent text-brand-text-secondary hover:text-white'}`}
                     >
                         {t('help.tabs.science')}
                     </button>
                 </div>
 
-                <div className="p-8 overflow-y-auto custom-scrollbar bg-[#0f172a]">
+                {/* CONTENT - Scrollable area */}
+                <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-8 custom-scrollbar bg-[#0f172a]">
                     {renderContent()}
                 </div>
 
-                <div className="p-6 border-t border-white/10 bg-white/5 flex justify-end">
+                {/* FOOTER - Fixed */}
+                <div className="p-4 md:p-6 border-t border-white/10 bg-white/5 flex justify-end shrink-0">
                     <button onClick={onClose} className="px-6 py-2 bg-white/10 hover:bg-white/20 text-white font-bold rounded-lg transition-colors">
                         {t('help.close')}
                     </button>

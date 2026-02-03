@@ -46,7 +46,7 @@ const getVisibleBounds = (pixelData: Uint8ClampedArray, width: number, height: n
     let minX = width;
     let maxX = 0;
 
-    for (let y = 0; y < height; y += 4) { // Scan every 4th line for speed
+    for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
             const idx = (y * width + x) * 4;
             const r = pixelData[idx];
@@ -54,7 +54,7 @@ const getVisibleBounds = (pixelData: Uint8ClampedArray, width: number, height: n
             const b = pixelData[idx + 2];
             const a = pixelData[idx + 3];
 
-            if (a > 20 && (r + g + b) > minBrightness) { // Ignore fully transparent or pitch black
+            if (a > 10 && (r + g + b) > minBrightness) {
                 if (x < minX) minX = x;
                 if (x > maxX) maxX = x;
             }
@@ -109,29 +109,30 @@ function drawFrame(
     ctx.restore();
 
     // 2. MAIN IMAGE (Floating with Shadow)
+    const currentImgRatio = img.width / img.height;
+    const canvasRatio = W / VideoH;
     let dw = W;
     let dh = VideoH;
-    let dx = 0;
-    let dy = 0;
 
-    const canvasRatio = W / VideoH;
-    if (imgRatio > canvasRatio) {
-        dh = W / imgRatio;
-        dy = (VideoH - dh) / 2;
+    // Contain logic: ensure the whole image is visible within VideoH
+    if (currentImgRatio > canvasRatio) {
+        dw = W;
+        dh = W / currentImgRatio;
     } else {
-        dw = VideoH * imgRatio;
-        dx = (W - dw) / 2;
+        dh = VideoH;
+        dw = VideoH * currentImgRatio;
     }
 
-    ctx.save();
-    // Neutral glow for floating effect (no offset to maintain centering)
-    ctx.shadowColor = 'rgba(0,0,0,0.9)';
-    ctx.shadowBlur = 50;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
+    // Centering within the VideoH area
+    const dx = (W - dw) / 2;
+    const dy = (VideoH - dh) / 2;
 
-    // Draw the image - Slightly larger for better impact (0.98 scale)
-    const scale = 0.98;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.shadowBlur = 40;
+
+    // Apply 2% safe margin
+    const scale = 0.96;
     const zDw = dw * scale;
     const zDh = dh * scale;
     const zDx = dx + (dw * (1 - scale) / 2);
@@ -142,7 +143,8 @@ function drawFrame(
 
     // 3. Synced Scanning Effect & Pixel Sonification
     // 3. Synced Scanning Effect & Pixel Sonification
-    const progress = Math.min(1, Math.max(0, time / duration));
+    // 3. Synced Scanning Effect & Pixel Sonification
+    const progress = Math.min(1.0, Math.max(0, time / duration));
 
     ctx.save();
     ctx.beginPath();
@@ -152,43 +154,49 @@ function drawFrame(
     const type = cursorType || 'vertical';
 
     if (type === 'original' && events && events.length > 0) {
-        // Deterministic path following
+        // Find the event corresponding to the current time
         const activeEvent = events.find(e => {
-            const t = Array.isArray(e) ? e[0] : e.time;
-            const d = Array.isArray(e) ? e[1] : e.duration;
+            const t = Array.isArray(e) ? e[0] : (e.time || 0);
+            const d = Array.isArray(e) ? e[1] : (e.duration || 0.1);
             return time >= t && time < (t + d);
-        }) || events.filter(e => (Array.isArray(e) ? e[0] : e.time) <= time).pop();
+        }) || events.filter(e => (Array.isArray(e) ? e[0] : (e.time || 0)) <= time).pop();
 
         if (activeEvent) {
-            const px = Array.isArray(activeEvent) ? activeEvent[4] : activeEvent.sourceBlock?.position.x;
-            const py = Array.isArray(activeEvent) ? activeEvent[5] : activeEvent.sourceBlock?.position.y;
+            // Support both compressed array and object formats
+            const px = Array.isArray(activeEvent) ? activeEvent[4] : (activeEvent.sourceBlock?.position.x ?? 0);
+            const py = Array.isArray(activeEvent) ? activeEvent[5] : (activeEvent.sourceBlock?.position.y ?? 0);
 
-            // Assuming 32x32 grid if not specified
+            // SonificART uses a normalized 32-block grid or 512px analysis
+            // We scale the cursor to the current displayed image size
             const gridSize = 32;
-            const cx = zDx + (px / gridSize) * zDw + (zDw / gridSize / 2);
-            const cy = zDy + (py / gridSize) * zDh + (zDh / gridSize / 2);
+            const unitW = zDw / gridSize;
+            const unitH = zDh / gridSize;
+            const cx = zDx + (px * unitW);
+            const cy = zDy + (py * unitH);
 
-            ctx.shadowColor = 'white';
+            ctx.shadowColor = '#2dd4bf';
             ctx.shadowBlur = 15;
-            ctx.strokeStyle = 'rgba(0, 255, 255, 0.8)';
-            ctx.lineWidth = 3;
-            ctx.strokeRect(cx - (zDw / gridSize / 2), cy - (zDh / gridSize / 2), zDw / gridSize, zDh / gridSize);
+            ctx.strokeStyle = '#2dd4bf';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(cx, cy, unitW, unitH);
 
-            ctx.fillStyle = 'rgba(0, 255, 255, 0.2)';
-            ctx.fillRect(cx - (zDw / gridSize / 2), cy - (zDh / gridSize / 2), zDw / gridSize, zDh / gridSize);
+            ctx.fillStyle = 'rgba(45, 212, 191, 0.2)';
+            ctx.fillRect(cx, cy, unitW, unitH);
         }
     } else if (type === 'vertical') {
-        const scanStart = (visualBounds.minX - dx) * scale + zDx;
-        const scanEnd = (visualBounds.maxX - dx) * scale + zDx;
-        const scanWidth = scanEnd - scanStart;
-        const scanX = Math.floor(scanStart + (progress * scanWidth));
+        const scanStart = visualBounds.minX;
+        const scanEnd = visualBounds.maxX;
+        // Adjust for the scaling applied in drawing
+        const adjStart = (scanStart - dx) * scale + zDx;
+        const adjEnd = (scanEnd - dx) * scale + zDx;
+        const scanX = adjStart + (progress * (adjEnd - adjStart));
 
         const grad = ctx.createLinearGradient(0, 0, 0, VideoH);
-        grad.addColorStop(0, 'rgba(0, 255, 255, 0)');
-        grad.addColorStop(0.5, 'rgba(0, 255, 255, 0.7)');
-        grad.addColorStop(1, 'rgba(0, 255, 255, 0)');
+        grad.addColorStop(0, 'rgba(45, 212, 191, 0)');
+        grad.addColorStop(0.5, 'rgba(45, 212, 191, 0.8)');
+        grad.addColorStop(1, 'rgba(45, 212, 191, 0)');
         ctx.fillStyle = grad;
-        ctx.fillRect(scanX - 1, zDy, 3, zDh);
+        ctx.fillRect(scanX - 1, zDy, 2, zDh);
     } else if (type === 'horizontal') {
         const scanY = zDy + (progress * zDh);
         const grad = ctx.createLinearGradient(0, 0, W, 0);
@@ -216,43 +224,6 @@ function drawFrame(
         ctx.stroke();
     }
 
-    // B. Pixel Viz (Interactive Particles)
-    if (pixelData) {
-        // ... (existing pixel viz logic remains but could be adapted to follow cx/cy)
-        const scanStart = (visualBounds.minX - dx) * scale + zDx;
-        const scanEnd = (visualBounds.maxX - dx) * scale + zDx;
-        const scanWidth = scanEnd - scanStart;
-        const scanX = Math.floor(scanStart + (progress * scanWidth));
-
-        const sampleStep = 18;
-        const vizWidth = 100;
-        ctx.lineWidth = 2.5;
-
-        for (let y = zDy; y < zDy + zDh; y += sampleStep) {
-            const sy = Math.floor(y);
-            if (sy < 0 || sy >= VideoH) continue;
-            const idx = (sy * W + scanX) * 4;
-            if (idx < 0 || idx >= pixelData.length - 4) continue;
-
-            const r = pixelData[idx];
-            const g = pixelData[idx + 1];
-            const b = pixelData[idx + 2];
-            const brightness = (r + g + b) / 3;
-
-            if (brightness > 40) {
-                const fIdx = Math.floor(((y - zDy) / zDh) * (freqData.length / 2));
-                const amp = freqData[fIdx] || 0;
-                if (amp > 15) {
-                    const size = (amp / 255) * vizWidth * (brightness / 255);
-                    ctx.strokeStyle = `rgba(${r},${g},${b}, ${amp / 180})`;
-                    ctx.beginPath();
-                    ctx.moveTo(scanX - size, y);
-                    ctx.lineTo(scanX + size, y);
-                    ctx.stroke();
-                }
-            }
-        }
-    }
     ctx.restore();
 
     // ═══════════════════════════════════════════════════════════════════════════════════
@@ -453,7 +424,7 @@ export const VideoGenService = {
 
         // 2. Constants
         const FPS = 24;
-        const TOTAL_FRAMES = Math.floor(duration * FPS);
+        const TOTAL_FRAMES = Math.ceil(duration * FPS);
         const WIDTH = 1280;
         const HEIGHT = 720 + 200; // Increased Footer based on user feedback
         const VIDEO_W = 1280;
@@ -561,8 +532,29 @@ export const VideoGenService = {
         let frameIndex = 0;
         const timeStep = 1 / FPS;
 
+        // Prepare Events (Normalization / Stretching)
+        let stretchedEvents = options.events;
+        if (stretchedEvents && stretchedEvents.length > 0) {
+            const lastEvt = stretchedEvents[stretchedEvents.length - 1];
+            const sourceDuration = (Array.isArray(lastEvt) ? lastEvt[0] : lastEvt.time) + (Array.isArray(lastEvt) ? lastEvt[1] : lastEvt.duration);
+            if (sourceDuration > 0 && Math.abs(sourceDuration - duration) > 0.1) {
+                const ratio = duration / sourceDuration;
+                console.log(`📏 Stretching events: ratio ${ratio.toFixed(2)} (${sourceDuration.toFixed(1)}s -> ${duration.toFixed(1)}s)`);
+                stretchedEvents = stretchedEvents.map(e => {
+                    if (Array.isArray(e)) {
+                        const copy = [...e];
+                        copy[0] *= ratio; // time
+                        copy[1] *= ratio; // duration
+                        return copy;
+                    } else {
+                        return { ...e, time: e.time * ratio, duration: e.duration * ratio };
+                    }
+                });
+            }
+        }
+
         const processFrame = async () => {
-            const time = frameIndex * timeStep;
+            const time = Math.min(duration, frameIndex * timeStep);
             analyser.getByteFrequencyData(freqData);
 
             drawFrame(
@@ -570,7 +562,7 @@ export const VideoGenService = {
                 WIDTH, HEIGHT, VIDEO_H, FOOTER_H, TOP_SAFE_AREA,
                 visualBounds,
                 title, author, subtitle, date, description,
-                cursorType, events
+                cursorType, stretchedEvents
             );
 
             const frameBitmap = await createImageBitmap(canvas);

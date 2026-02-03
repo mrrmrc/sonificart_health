@@ -1,6 +1,6 @@
 export type Language = 'it' | 'en' | 'fr' | 'es';
 
-export const translations = {
+export const translations: Record<Language, any> = {
   it: {
     paradigm: {
       what_happens: "Cosa accadrà",
@@ -94,12 +94,12 @@ export const translations = {
       profile: "PROFILO"
     },
     landing: {
-      badge: "Framework v1.0 Stable",
-      title_start: "Il suono",
-      title_end: "delle immagini",
-      subtitle: "Non una semplice interpretazione, ma un'architettura acustica oggettiva. SonificA.R.T. è il framework deterministico per la trasduzione rigorosa dei dati visivi in frequenze sonore, validato da protocolli di ricerca scientifica (<a href=\"https://zenodo.org/records/17622067\" target=\"_blank\" class=\"underline text-brand-accent hover:text-white transition-colors\">Zenodo DOI: 17622067</a>). Trasforma ogni pixel in un evento sonoro matematicamente certificato.",
-      cta_start: "INIZIA A CREARE",
-      cta_explore: "ESPLORA GALLERIA",
+      badge: "MARCATURA FORENSE AUDIO",
+      title_start: "L'impronta sonora",
+      title_end: "unica e verificabile",
+      subtitle: "<strong>SonificA.R.T. non è una AI che genera musica.</strong> È un sistema di <em>marcatura forense</em> che traduce matematicamente i pixel in frequenze sonore. Ogni immagine produce un'<strong>impronta audio univoca</strong>, verificabile e riproducibile. Come un'impronta digitale, ma sonora. Validato scientificamente (<a href=\"https://zenodo.org/records/17622067\" target=\"_blank\" class=\"underline text-brand-accent hover:text-white transition-colors\">Zenodo DOI: 17622067</a>).",
+      cta_start: "PROVA GRATIS",
+      cta_explore: "VEDI COME FUNZIONA",
       features: {
         color: "Colorimetria CIE LAB D65",
         color_desc: "Analisi percettivamente uniforme e scientificamente validata.",
@@ -107,6 +107,45 @@ export const translations = {
         culture_desc: "48 tradizioni musicali mondiali per un matching culturale preciso.",
         deter: "Determinismo Bit-Perfect",
         deter_desc: "Output sempre identico e certificato su blockchain simulata."
+      },
+      vs_ai: {
+        title: "Perché NON è una AI Generativa",
+        subtitle: "La differenza fondamentale che cambia tutto.",
+        intro: "Quando carichi un'immagine su una AI generativa (Suno, Udio, ecc.), ottieni musica 'ispirata' all'immagine. È creativa, ma arbitraria. Con SonificA.R.T. ottieni la TRADUZIONE MATEMATICA dell'immagine stessa.",
+        col_ai: "AI Generativa (Suno, Udio...)",
+        col_sonificart: "SonificA.R.T.",
+        row1_ai: "Genera musica 'ispirata' all'immagine",
+        row1_sart: "TRADUCE i pixel in note (1:1)",
+        row2_ai: "Output diverso ad ogni esecuzione",
+        row2_sart: "Output IDENTICO ogni volta (determinismo)",
+        row3_ai: "Nessuna relazione verificabile",
+        row3_sart: "Relazione MATEMATICA certificata",
+        row4_ai: "Creazione artistica soggettiva",
+        row4_sart: "Marcatura forense oggettiva",
+        row5_ai: "Non utilizzabile come prova",
+        row5_sart: "Container .SAC = prova legale",
+        conclusion: "SonificA.R.T. trasforma l'immagine in un CODICE A BARRE SONORO unico. Come per le impronte digitali, due immagini diverse produrranno sempre suoni diversi. La stessa immagine produrrà sempre lo stesso suono."
+      },
+      use_cases: {
+        title: "A Cosa Serve Davvero",
+        case1_title: "Certificazione Immagine Master",
+        case1_desc: "L'artista o il museo crea UN'immagine digitale ufficiale. SonificA.R.T. genera l'impronta audio da quella. Qualsiasi modifica al file digitale sarà rilevabile.",
+        case2_title: "Accessibilità Museale",
+        case2_desc: "I non vedenti possono 'percepire' un'opera attraverso il suono. Non una descrizione vocale, ma la traduzione matematica diretta della luce e del colore.",
+        case3_title: "Installazioni Multimediali",
+        case3_desc: "Mostre esperienziali, eventi artistici, performance. Aggiungi una dimensione sonora alle opere visive per un'esperienza immersiva.",
+        case4_title: "Ricerca Scientifica",
+        case4_desc: "Studio della sinestesia, percezione cross-modale, neuroscienze cognitive. Un medium oggettivo e riproducibile."
+      },
+      process: {
+        title: "Come Funziona la Marcatura",
+        subtitle: "Non generazione. Traduzione deterministica.",
+        step1_title: "1. Estrazione Dati Pixel",
+        step1_desc: "Ogni pixel viene analizzato nello spazio colore CIE LAB (D65). La luminosità (L*) diventa volume. La cromaticità (a*, b*) diventa frequenza. NESSUNA interpretazione. Solo matematica.",
+        step2_title: "2. Mapping Deterministico",
+        step2_desc: "I valori colorimetrici vengono tradotti in note MIDI attraverso funzioni matematiche fisse. 100 esecuzioni = 100 risultati identici. Questo è DETERMINISMO.",
+        step3_title: "3. Certificazione .SAC",
+        step3_desc: "Il container .SAC sigilla immagine, audio e hash crittografici. Qualsiasi modifica invalida la firma. Prova forense utilizzabile."
       },
       pricing: {
         title: "Piani di Accesso",
@@ -409,12 +448,38 @@ export const translations = {
         sac_title: "5. Certificazione e Verifica (SAC)"
       },
       faq: {
-        q1: "Posso usare la musica generata per i miei video?",
-        a1: "Sì. Se hai un account <strong>PRO</strong>, possiedi i diritti commerciali sull'output generato. Con l'account Free, puoi usarla per scopi personali o educativi citando 'Generato con SonificA.R.T.'.",
-        q2: "Perché il video non si scarica subito?",
-        a2: "La 'Prova Cinetica' viene renderizzata in tempo reale dal browser frame-per-frame per garantire la sincronia perfetta. Per un audio di 3 minuti, il rendering può richiedere circa 30-60 secondi a seconda della potenza del tuo computer.",
-        q3: "Come funziona la verifica .SAC?",
-        a3: "Vai nella sezione 'Verifica' del menu. Trascina un file .SAC. Il sistema ricalcolerà gli hash di tutti i file interni e ti dirà se il pacchetto è integro o se è stato manomesso."
+        title: "Domande Frequenti (FAQ)",
+        subtitle: "Risposte oneste su cosa SonificA.R.T. fa e cosa NON fa.",
+
+        q1: "SonificA.R.T. è una AI che genera musica?",
+        a1: "<strong>NO.</strong> SonificA.R.T. non è una AI generativa. È un sistema di <em>traduzione deterministica</em>: converte i valori colorimetrici dei pixel in note musicali attraverso funzioni matematiche fisse. Non c'è creatività, non c'è interpretazione. Solo matematica. La stessa immagine produrrà SEMPRE lo stesso audio.",
+
+        q2: "Che differenza c'è con Suno, Udio o altre AI?",
+        a2: "Le AI generative creano musica 'ispirata' all'immagine, diversa ogni volta. SonificA.R.T. TRADUCE l'immagine in suono con una relazione 1:1 verificabile. Se carichi la stessa immagine 100 volte, ottieni 100 audio identici. Con le AI, ottieni 100 risultati diversi.",
+
+        q3: "Può autenticare un quadro fisico?",
+        a3: "<strong>NO.</strong> SonificA.R.T. lavora sui PIXEL del file digitale, non sull'opera fisica. Se fai due foto diverse dello stesso quadro (luce diversa, distanza diversa, fotocamera diversa), otterrai due audio DIVERSI. Non può certificare 'il quadro', solo 'quel file specifico'.",
+
+        q4: "Allora cosa certifica esattamente?",
+        a4: "Certifica <strong>l'integrità di un file digitale specifico</strong>. Se hai un'immagine master (es. uno scan ufficiale), puoi generare la sua 'impronta audio'. Se quel file viene modificato anche di 1 pixel, l'audio sarà diverso. È un checksum sonoro.",
+
+        q5: "A cosa serve nella pratica?",
+        a5: "Principalmente a: <strong>1)</strong> Verificare che un file digitale non sia stato alterato. <strong>2)</strong> Accessibilità per non vedenti (la traduzione matematica è coerente). <strong>3)</strong> Ricerca scientifica (output riproducibile). <strong>4)</strong> Installazioni artistiche/esperienziali.",
+
+        q6: "L'audio generato è 'bello' da ascoltare?",
+        a6: "L'audio raw è una traduzione matematica fedele, non una composizione musicale pensata per essere 'bella'. È utile come base o scheletro melodico, che può poi essere elaborato con strumenti di produzione musicale o AI per renderlo più gradevole.",
+
+        q7: "Usate blockchain o NFT?",
+        a7: "<strong>NO.</strong> Il container .SAC contiene hash SHA-256 per verificare l'integrità, ma non è registrato su nessuna blockchain. È una certificazione locale, non distribuita.",
+
+        q8: "Perché dovrei usare SonificA.R.T. invece di una AI?",
+        a8: "Se hai bisogno di <strong>riproducibilità</strong> (ricerca scientifica), <strong>coerenza nel tempo</strong> (accessibilità), o <strong>verificabilità matematica</strong> (archivi digitali), SonificA.R.T. è l'unico che lo garantisce. Se vuoi solo 'musica carina dalla foto', usa una AI.",
+
+        q9: "Come funziona la verifica .SAC?",
+        a9: "Vai nella sezione 'Verifica' del menu. Trascina un file .SAC. Il sistema ricalcolerà gli hash di tutti i file interni e ti dirà se il pacchetto è integro o se è stato manomesso.",
+
+        q10: "Posso usare la musica generata commercialmente?",
+        a10: "Sì, con account <strong>PRO</strong> hai licenza commerciale completa. Con account Free, solo uso personale/educativo citando 'Generato con SonificA.R.T.'."
       },
       guide: {
         title: "Come usare SonificA.R.T.",
@@ -438,39 +503,72 @@ export const translations = {
         hash: "Hash SHA-256",
         hash_desc: "Impronta digitale unica dell'immagine per la verifica forense."
       },
-      close: "Chiudi Manuale"
-    },
-    admin: {
-      title: "Pannello Amministratore",
-      tabs: {
-        overview: "Panoramica",
-        requests: "Richieste",
-        users: "Utenti",
-        showcase: "Vetrina",
-        logs: "Logs"
-      },
-      stats: {
-        users: "Utenti Totali",
-        works: "Opere Generate",
-        requests: "In Attesa",
-        status: "Stato Sistema"
-      },
-      table: {
-        date: "Data",
-        name: "Nome",
-        email: "Email",
-        plan: "Piano",
-        notes: "Note",
-        actions: "Azioni",
-        role: "Ruolo"
-      },
-      actions: {
-        approve: "Approva",
-        reject: "Rifiuta",
-        delete: "Elimina",
-        edit: "Modifica",
-        new_user: "Nuovo Utente"
+      framework: {
+        title: "Capire il Framework SonificA.R.T.",
+        subtitle: "Perché è DIVERSO da qualsiasi altra soluzione sul mercato.",
+        section1_title: "🎯 IL PROBLEMA CHE RISOLVE",
+        section1_text: "Quando chiedi a una AI di creare musica da un immagine, ottieni una composizione creativa. Bella, forse. Ma ARBITRARIA. Se ripeti la richiesta, ottieni un risultato diverso. Non c'è nessuna relazione verificabile tra immagine e audio generato. SonificA.R.T. risolve questo problema con la TRASDUZIONE DETERMINISTICA.",
+        section2_title: "⚙️ COME FUNZIONA (Schema)",
+        pipeline_step1: "IMMAGINE → Standardizzazione a 512×512px (preservazione bit-perfect)",
+        pipeline_step2: "PIXEL → Analisi colorimetrica CIE LAB D65 (spazio percettivamente uniforme)",
+        pipeline_step3: "COLORE → Mapping matematico: L* = Volume, a*b* = Frequenza/Timbro",
+        pipeline_step4: "CULTURA → Match con database di 48 tradizioni musicali globali",
+        pipeline_step5: "SINTESI → Generazione audio deterministica (1 Pixel = 1 Nota)",
+        pipeline_step6: "CERTIFICAZIONE → Container .SAC con hash SHA-256 di tutti i componenti",
+        section3_title: "📊 CONFRONTO CON AI GENERATIVA",
+        compare_header_feature: "Caratteristica",
+        compare_header_ai: "AI Generativa (Suno, Udio)",
+        compare_header_sart: "SonificA.R.T.",
+        compare_row1_feature: "Tipo di output",
+        compare_row1_ai: "Musica ispirata alla immagine",
+        compare_row1_sart: "Traduzione matematica della immagine",
+        compare_row2_feature: "Riproducibilità",
+        compare_row2_ai: "Mai identico (stocastico)",
+        compare_row2_sart: "Sempre identico (deterministico)",
+        compare_row3_feature: "Relazione verificabile",
+        compare_row3_ai: "Impossibile da provare",
+        compare_row3_sart: "Matematicamente dimostrabile",
+        compare_row4_feature: "Uso forense",
+        compare_row4_ai: "Nessuno",
+        compare_row4_sart: "Container .SAC = prova legale",
+        compare_row5_feature: "Accessibilità",
+        compare_row5_ai: "Non progettata per questo",
+        compare_row5_sart: "Core use case (musei, non vedenti)",
+        section4_title: "🏛️ CASI D'USO REALI",
+        usecase1_title: "Certificazione Immagine Master",
+        usecase1_desc: "L'artista o il museo crea UN'immagine digitale ufficiale in condizioni controllate. SonificA.R.T. genera l'impronta da quella. NOTA: certifica il file digitale, non l'opera fisica.",
+        usecase2_title: "Accessibilità Museale",
+        usecase2_desc: "I visitatori non vedenti possono percepire un dipinto attraverso il suono. Non una descrizione vocale, ma la TRADUZIONE DIRETTA di luce, colore e composizione.",
+        usecase3_title: "Installazioni Multimediali",
+        usecase3_desc: "Mostre esperienziali, eventi artistici, performance. Una dimensione sonora per l'arte visiva.",
+        usecase4_title: "Ricerca Scientifica",
+        usecase4_desc: "Studi sulla sinestesia, percezione cross-modale, neuroscienze cognitive. Un medium oggettivo e riproducibile.",
+        section5_title: "💎 PERCHÉ ACQUISTARE PRO",
+        pro_reason1: "Crediti illimitati per generazioni infinite",
+        pro_reason2: "Accesso a tutti e 3 i paradigmi (Scientifico, Ibrido, Artistico)",
+        pro_reason3: "Export WAV 24-bit e MIDI per produzione professionale",
+        pro_reason4: "Licenza commerciale completa",
+        pro_reason5: "Generazione video 4K con prova cinetica",
+        pro_reason6: "Priorità di calcolo sui server",
+        cta: "RICHIEDI ACCESSO PRO"
       }
+    },
+    white_paper: {
+      title: "White Paper Tecnico",
+      subtitle: "Architettura Deterministica e Protocolli di Sonificazione v1.0",
+      intro_title: "Oltre la Generazione: La Trasduzione Forense",
+      intro_text: "SonificA.R.T. non è un giochetto creativo, ma uno strumento scientifico progettato per trasformare i dati visivi in architetture acustiche oggettive. Il framework risolve il problema della soggettività nell'arte musicale assistita da AI attraverso il rigore matematico.",
+      pillar1_title: "Accessibilità Museale",
+      pillar1_text: "Uno strumento vitale per l'inclusione. Permette a non vedenti e ipovedenti di percepire la spazialità e il colore di un'opera attraverso il suono, superando i limiti della sola audiodescrizione verbale.",
+      pillar2_title: "Certificazione Forense",
+      pillar2_text: "Ogni pixel ha una conseguenza sonora specifica. Il container .SAC garantisce la causalità tra immagine e audio, proteggendo l'integrità dei dati e la paternità dell'opera.",
+      pillar3_title: "Ricerca Scientifica",
+      pillar3_text: "Utilizzando lo spazio colore CIE LAB, SonificART mappa la luce in volume e il colore in frequenza, fornendo un medium di indagine oggettivo per lo studio della sinestesia.",
+      arch_title: "L'Architettura Interna",
+      arch_step1: "Standardizzazione Bit-Perfect",
+      arch_step2: "Analisi Colorimetrica CIE LAB (D65)",
+      arch_step3: "Matching Culturale Etnomusicologico",
+      arch_step4: "Sintesi Deterministica 1:1"
     }
   },
   en: {
@@ -579,6 +677,16 @@ export const translations = {
         culture_desc: "48 world musical traditions for precise cultural matching.",
         deter: "Bit-Perfect Determinism",
         deter_desc: "Output always identical and certified on simulated blockchain."
+      },
+      process: {
+        title: "From Image to Audio Footprint",
+        subtitle: "The heart of sonification: data before melody.",
+        step1_title: "Forensic Audio Footprint",
+        step1_desc: "Everything starts by extracting pure data from pixels. We generate a .SAC file representing the image's objective acoustic architecture: a true sonic 'fingerprint'.",
+        step2_title: "Data-Driven AI",
+        step2_desc: "The AI doesn't create random melodies. It acts as a refined orchestrator that is strictly based on the data footprint extracted in the previous phase.",
+        step3_title: "Translation, Not Generation",
+        step3_desc: "The result is a certified mathematical transduction. Every note has a physical reason in the corresponding pixel, ensuring an unbreakable bond between sight and sound."
       },
       pricing: {
         title: "Access Plans",
@@ -916,28 +1024,22 @@ export const translations = {
       has_account: "Already have an account?",
       back_to_login: "Back to Login"
     },
-    request_access: {
-      title: "PRO Service Activation",
-      subtitle: "Fill in the details for the issuance of the invoice related to the chosen service.",
-      legal_disclaimer: "The service offered consists of specialized consultancy activities. The digital tools used do not constitute a sold software product nor a hosting service.",
-      activation_note: "Service activated upon payment.",
-      plan: "Chosen Plan",
-      plan_monthly: "PRO Monthly",
-      plan_monthly_price: "12 €",
-      plan_annual: "PRO Annual",
-      plan_annual_price: "120 €",
-      plan_enterprise: "Custom / Institutions",
-      plan_enterprise_price: "To be agreed",
-      company_name: "Company / Name",
-      billing_email: "Billing Email",
-      address: "Full Address",
-      address_placeholder: "Street, City, ZIP, State",
-      vat_number: "VAT / Tax ID",
-      sdi_code: "SDI Code",
-      submit: "Request Invoice",
-      success: "Request sent! Check your email.",
-      error: "Send error. Please try again later.",
-      sending: "Sending..."
+    white_paper: {
+      title: "Technical White Paper",
+      subtitle: "Deterministic Architecture and Sonification Protocols v1.0",
+      intro_title: "Beyond Generation: Forensic Transduction",
+      intro_text: "SonificA.R.T. is not a creative game, but a scientific instrument designed to transform visual data into objective acoustic architectures.",
+      pillar1_title: "Museum Accessibility",
+      pillar1_text: "A vital tool for inclusion. It allows the blind and visually impaired to perceive an artwork's spatiality and color through sound.",
+      pillar2_title: "Forensic Certification",
+      pillar2_text: "Every pixel has a specific sonic consequence. The .SAC container guarantees causality between image and audio.",
+      pillar3_title: "Scientific Research",
+      pillar3_text: "Using CIE LAB color space, SonificART maps light to volume and color to frequency.",
+      arch_title: "Internal Architecture",
+      arch_step1: "Bit-Perfect Standardization",
+      arch_step2: "CIE LAB Colorimetric Analysis",
+      arch_step3: "Ethnomusicological Cultural Matching",
+      arch_step4: "1:1 Determinist Synthesis"
     }
   },
   fr: {
@@ -1027,6 +1129,16 @@ export const translations = {
       subtitle: "Bien plus qu'une synthèse créative : l'unique framework déterministe accrédité pour la transduction rigoureuse des données visuelles en fréquences sonores. Basé sur des protocoles de recherche scientifique (<a href=\"https://zenodo.org/records/17622067\" target=\"_blank\" class=\"underline text-brand-accent hover:text-white transition-colors\">Zenodo DOI: 17622067</a>), SonificA.R.T. transforme l'image en une architecture acoustique objective et reproductible.",
       cta_start: "COMMENCER", cta_explore: "EXPLORER",
       features: { color: "Colorimétrie", color_desc: "Analyse perceptivement uniforme.", culture: "Base de données", culture_desc: "48 traditions musicales.", deter: "Déterminisme", deter_desc: "Sortie toujours identique." },
+      process: {
+        title: "De l'Image à l'Empreinte Audio",
+        subtitle: "Le cœur de la sonification : les données avant la mélodie.",
+        step1_title: "Empreinte Audio Forensique",
+        step1_desc: "Tout commence par l'extraction des données pures des pixels. Nous générons un fichier .SAC représentant l'architecture acoustique objective de l'image.",
+        step2_title: "IA Basée sur les Données",
+        step2_desc: "L'IA ne crée pas de mélodies au hasard. Elle agit comme un orchestrateur raffiné basé strictement sur l'empreinte de données extraite.",
+        step3_title: "Traduction, pas Génération",
+        step3_desc: "Le résultat est une transduction mathématique certifiée. Chaque note a une raison physique dans le pixel correspondant."
+      },
       pricing: {
         title: "Tarifs", subtitle: "Choisissez la puissance de calcul.", monthly: "Mensuel", annual: "Annuel", month: "mois", year: "an", recommended: "Recommandé",
         free: { title: "Gratuit", price: "0 €", desc: "Pour expérimenter", btn: "Créer un compte", f1: "5 Crédits", f2: "Scientifique", f3: "MP3", f4: "Communauté", f5: "Visu 2D" },
@@ -1131,8 +1243,23 @@ export const translations = {
       framework_ver: "Framework Ver.",
       unsaved: "À SAUVEGARDER"
     },
-    login: { login: "Connexion", register: "S'inscrire", email: "Email", password: "Mot de passe" },
-    request_access: { title: "Accès PRO", submit: "Envoyer" }
+    white_paper: {
+      title: "Livre Blanc Technique",
+      subtitle: "Architecture Déterministe et Protocoles de Sonification v1.0",
+      intro_title: "Au-delà de la Génération: Transduction Forensique",
+      intro_text: "SonificA.R.T. n'est pas un jeu créatif, mais un instrument scientifique conçu pour transformer les données visuelles en architectures acoustiques objectives.",
+      pillar1_title: "Accessibilité Musée",
+      pillar1_text: "Un outil vital pour l'inclusion. Il permet aux aveugles et malvoyants de percevoir la spatialité et la couleur d'une œuvre par le son.",
+      pillar2_title: "Certification Forensique",
+      pillar2_text: "Chaque pixel a une conséquence sonore spécifique. Le container .SAC garantit la causalité.",
+      pillar3_title: "Recherche Scientifique",
+      pillar3_text: "En utilisant l'espace CIE LAB, SonificART mappe la lumière en volume et la couleur en fréquence.",
+      arch_title: "Architecture Interne",
+      arch_step1: "Standardisation Bit-Perfect",
+      arch_step2: "Analyse CIE LAB",
+      arch_step3: "Appariement Culturel",
+      arch_step4: "Synthèse Déterministe 1:1"
+    }
   },
   es: {
     paradigm: {
@@ -1146,7 +1273,7 @@ export const translations = {
         step1_title: "Estandarización",
         step1_desc: "Imagen a 512px para preservar los píxeles.",
         step2_title: "Escaneo CIE LAB",
-        step2_desc: "Análisis de color similar a la percepción humana (Luminosidad = Volumen, Color = Tono).",
+        step2_desc: "Análisis de color similar a la percepción humana (Luminosidad = Volumen, Color = Tono icon).",
         step3_title: "Emparejamiento Cultural",
         step3_desc: "Coincidencia matemática con 48 tradiciones musicales.",
         step4_title: "Síntesis Pura",
@@ -1162,7 +1289,7 @@ export const translations = {
         subtitle: "El Director Virtual",
         step1_title: "Visión por Computador",
         step1_desc: "IA analiza el contenido semántico.",
-        step2_title: "Fusión de Datos",
+        step2_title: "Fusion de Datos",
         step2_desc: "Los datos de color guían la emoción de la IA.",
         step3_title: "Arreglo",
         step3_desc: "Estructura musical compleja (Melodía + Armonía).",
@@ -1216,19 +1343,49 @@ export const translations = {
       credits_question: "¿Tienes suficientes créditos para esta ejecución?"
     },
     nav: { home: "INICIO", access: "SOLICITAR ACCESO", sonify: "CREAR MÚSICA", showcase: "GALERÍA", verify: "VERIFICAR", dashboard: "TUS OBRAS", admin: "ADMIN", login: "ACCESO" },
-    landing: { badge: "Framework v1.0", title_start: "El sonido", title_end: "de las imágenes", subtitle: "Más que una simple interpretación, una arquitectura acústica objetiva. SonificA.R.T. es el único framework determinista acreditado para la transducción rigurosa de datos visuales en frecuencias sonoras, validado por protocolos de investigación científica (<a href=\"https://zenodo.org/records/17622067\" target=\"_blank\" class=\"underline text-brand-accent hover:text-white transition-colors\">Zenodo DOI: 17622067</a>). Transforma cada píxel en un evento sonoro matemáticamente certificado.", cta_start: "EMPEZAR", cta_explore: "EXPLORAR", features: { color: "Colorimetría", color_desc: "...", culture: "Base de datos", culture_desc: "...", deter: "Determinismo", deter_desc: "..." }, pricing: { title: "Precios", subtitle: "...", monthly: "Mensual", annual: "Anual", month: "mes", year: "año", recommended: "Recomendado", free: { title: "Gratis", price: "0 €", desc: "...", btn: "Crear cuenta", f1: "5 Créditos", f2: "...", f3: "...", f4: "...", f5: "..." }, pro: { title: "Pro", price_monthly: "8.80 €", price_annual: "88.00 €", desc: "...", btn: "Solicitar", f1: "Ilimitado", f2: "...", f3: "...", f4: "...", f5: "...", f6: "..." }, custom: { title: "Instituciones", subtitle: "A medida", desc: "...", btn: "Contacto", f1: "...", f2: "...", f3: "...", f4: "...", f5: "..." } } },
+    landing: {
+      badge: "Framework v1.0",
+      title_start: "El sonido",
+      title_end: "de las imágenes",
+      subtitle: "Más que una simple interpretación, una arquitectura acústica objetiva. SonificA.R.T. es el único framework determinista acreditado para la transducción rigurosa de datos visuales en frecuencias sonoras, validado por protocolos de investigación científica (<a href=\"https://zenodo.org/records/17622067\" target=\"_blank\" class=\"underline text-brand-accent hover:text-white transition-colors\">Zenodo DOI: 17622067</a>). Transforma cada píxel en un evento sonoro matematically certificado.",
+      cta_start: "EMPEZAR",
+      cta_explore: "EXPLORAR",
+      features: { color: "Colorimetría", color_desc: "...", culture: "Base de datos", culture_desc: "...", deter: "Determinismo", deter_desc: "..." }
+    },
+    process: {
+      title: "De la Imagen a la Huella de Audio",
+      subtitle: "El corazón de la sonificación: los datos antes que la melodía.",
+      step1_title: "Huella de Audio Forense",
+      step1_desc: "Todo comienza con la extracción de datos puros de los píxeles. Generamos un archivo .SAC que representa la arquitectura acústica objetiva de la imagen.",
+      step2_title: "IA Basada en Datos",
+      step2_desc: "La IA no crea melodías al azar. Actúa como un orquestador refinado basado estrictamente en la huella de datos extraída.",
+      step3_title: "Traducción, no Generación",
+      step3_desc: "El resultado es una transducción matemática certificada. Cada nota tiene una razón física en el píxel correspondiente."
+    },
+    pricing: {
+      title: "Precios",
+      subtitle: "...",
+      monthly: "Mensual",
+      annual: "Anual",
+      month: "mes",
+      year: "año",
+      recommended: "Recomendado",
+      free: { title: "Gratis", price: "0 €", desc: "...", btn: "Crear cuenta", f1: "5 Créditos", f2: "...", f3: "...", f4: "...", f5: "..." },
+      pro: { title: "Pro", price_monthly: "8.80 €", price_annual: "88.00 €", desc: "...", btn: "Solicitar", f1: "Ilimitado", f2: "...", f3: "...", f4: "...", f5: "...", f6: "..." },
+      custom: { title: "Instituciones", subtitle: "A medida", desc: "...", btn: "Contacto", f1: "...", f2: "...", f3: "...", f4: "...", f5: "..." }
+    },
     help: {
       title: "Manual de Usuario",
       tabs: { platform: "Plataforma", guide: "Guía", glossary: "Glosario", faq: "FAQ", science: "Ciencia" },
       platform: {
         title: "SonificA.R.T. Framework",
-        subtitle: "La primera plataforma profesional para Sonificación Cultural Determinista.",
+        subtitle: "La primera plataforma profesional para Sonification Cultural Determinista.",
         accessibility_title: "Accesibilidad Museística 2.0",
         accessibility_desc: "Hace accesible el arte visual a personas ciegas y con baja visión. Una traducción sensorial directa.",
         sac_title: "Certificación Forense (SAC)",
         sac_desc: "Cada obra es un activo digital único con prueba criptográfica.",
         culture_title: "Conciencia Cultural",
-        culture_desc: "El único sistema con 48 tradiciones musicales mundiales.",
+        culture_desc: "El único sistema con 48 traditions musicales mundiales.",
         creative_title: "Nuevos Lenguajes Creativos",
         creative_desc: "Una herramienta poderosa para artistas digitales, músicos y performers.",
         audience_title: "¿Para quién?",
@@ -1247,7 +1404,7 @@ export const translations = {
         methodology_title: "2. Fundamentos Metodológicos (CIE LAB & Determinismo)",
         paradigms_title: "3. Los Tres Paradigmas de Sonificación",
         pipeline_title: "4. Arquitectura: Pipeline de 7 Fases",
-        sac_title: "5. Certificación y Verificación (SAC)"
+        sac_title: "5. Certification y Verificación (SAC)"
       },
       faq: {
         q1: "¿Puedo usar la música generada para mis videos?",
@@ -1284,7 +1441,6 @@ export const translations = {
     admin: { title: "Admin", tabs: { overview: "Resumen", requests: "Solicitudes", users: "Usuarios", showcase: "Escaparate", logs: "Registros" }, stats: { users: "Usuarios", works: "Obras", requests: "Pendientes", status: "Estado" }, table: { date: "Fecha", name: "Nombre", email: "Email", plan: "Plan", notes: "Notas", actions: "Acciones", role: "Rol" }, actions: { approve: "Aprobar", reject: "Rechazar", delete: "Eliminar", edit: "Editar", new_user: "Nuevo Usuario" } },
     dashboard: { title: "Obras", subtitle: "Gestiona tus creaciones.", sonification: "Sonificación", gallery: "Galería", no_works: "No hay obras.", publish_title: "Publicar", upload_media: "Subir Media", replace_file: "Reemplazar archivo", description_placeholder: "Descripción...", uploading: "Cargando...", cancel: "Cancelar", loading: "Cargando...", confirm: "OK", publish_success: "Publicación completa", download_qr: "Descargar QR", copy_link: "Copiar enlace", close: "Cerrar", sonify_btn: "Sonificar", gallery_btn: "Galería", confirm_delete: "¿Eliminar definitivamente esta obra?", error_delete: "Error al eliminar.", error_publish: "Error al publicar.", work_of: "Obra de" },
     showcase: { title: "Galería", subtitle: "Explora las obras de la comunidad.", all: "Todos", scientific: "Científico", artistic: "Artístico", hybrid: "Híbrido", newest: "Más recientes", oldest: "Menos recientes", scan_qr: "Escanear QR", close: "Cerrar", description: "Descripción", no_description: "Sin descripción.", tradition: "Tradición", paradigm: "Paradigma", share_work: "Compartir obra", copy_link: "Copiar enlace", audio_track: "Pista de Audio", multimedia: "Obra Multimedia", video_active: "Reproducción de video activa", cancel: "Cancelar", saving: "Guardando...", save: "Guardar", edit: "Editar", remove: "Eliminar", confirm_delete: "¿Eliminar?", error_save: "Error", link_copied: "Copiado", loading: "Cargando obras...", error_delete: "Error", by: "por", sort: "Ordenar", multimedia_label: "Obra Multimedia" },
-    verification: { title: "Verificación", subtitle: "...", upload_title: "Cargar SAC", upload_subtitle: "...", scanning: "...", valid: "Válido", invalid: "Inválido", retry: "Reintentar" },
     results: {
       chromatic: "Cromático",
       sound: "Sonoro",
@@ -1307,11 +1463,28 @@ export const translations = {
       download_artifacts: "Descargar Artefactos",
       acquisition_details: "Detalles de Adquisición",
       method: "Método",
-      audio_quality: "Calidad de Audio",
+      audio_quality: "Qualidad de Audio",
       framework_ver: "Framework Ver.",
       unsaved: "SIN GUARDAR"
     },
     login: { login: "Acceso", register: "Registro", email: "Email", password: "Clave" },
-    request_access: { title: "Acceso PRO", submit: "Enviar" }
+    request_access: { title: "Acceso PRO", submit: "Enviar" },
+    white_paper: {
+      title: "Libro Blanco Técnico",
+      subtitle: "Arquitectura Determinista y Protocolos de Sonificación v1.0",
+      intro_title: "Más allá de la Generación: Transduction Forense",
+      intro_text: "SonificA.R.T. no es un juego, sino un instrumento científico diseñado para transformar datos visuales in arquitecturas acústicas objetivas.",
+      pillar1_title: "Accesibilidad",
+      pillar1_text: "Herramienta vital para la inclusión de personas con discapacidad visual.",
+      pillar2_title: "Certificación Forense",
+      pillar2_text: "Garantiza la causalidad entre imagen y audio mediante el contenedor .SAC.",
+      pillar3_title: "Investigación",
+      pillar3_text: "Mapeo objetivo de luz y color para el estudio de la sinestesia.",
+      arch_title: "Arquitectura",
+      arch_step1: "Estandarización Bit-Perfect",
+      arch_step2: "Análisis CIE LAB",
+      arch_step3: "Matching Cultural",
+      arch_step4: "Síntesis 1:1"
+    }
   }
 };

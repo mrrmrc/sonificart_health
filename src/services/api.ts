@@ -843,5 +843,24 @@ export const api = {
     cleanAuthSession: () => {
         clearAuthToken();
         window.location.reload();
+    },
+
+    logCookieConsent: async (prefs: { analytics: boolean, marketing: boolean }, uuid: string) => {
+        const token = getToken();
+        await fetch(`${API_BASE_URL}/index.php?action=log_cookie_consent`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...prefs, uuid, auth_token: token })
+        }).catch(err => console.error("Cookie log error", err));
+    },
+
+    getCookieLogs: async (): Promise<any[]> => {
+        const token = getToken();
+        const response = await fetch(`${API_BASE_URL}/index.php?action=get_cookie_logs`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ auth_token: token })
+        });
+        return await handleResponse(response);
     }
 };

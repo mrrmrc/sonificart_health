@@ -34,7 +34,7 @@ export const LandingPageWrapper: React.FC = () => {
     const loadProjects = async () => {
         try {
             const data = await api.getShowcase();
-            if (Array.isArray(data)) setLatestProjects(data.slice(0, 4));
+            if (Array.isArray(data)) setLatestProjects(data.slice(0, 8));
         } catch (e) { console.error("Failed to load showcase preview", e); }
     };
 

@@ -35,7 +35,7 @@ const emptyProject: Omit<ShowcaseProject, 'id'> = {
     videoUrl: ''
 };
 
-type AdminTab = 'overview' | 'requests' | 'users' | 'showcase' | 'logs' | 'database' | 'settings';
+type AdminTab = 'overview' | 'requests' | 'users' | 'showcase' | 'logs' | 'database' | 'settings' | 'cookies';
 
 const StatCard: React.FC<{ title: string; value: string | number; subtext: string; icon: string; color: string }> = ({ title, value, subtext, icon, color }) => (
     <div className="bg-brand-secondary/40 p-6 rounded-xl border border-brand-secondary flex items-center gap-4 hover:bg-brand-secondary/60 transition-colors">
@@ -218,6 +218,7 @@ export const AdminPanel: React.FC = () => {
     const [dbTables, setDbTables] = useState<string[]>([]);
     const [selectedTable, setSelectedTable] = useState<string>('');
     const [tableData, setTableData] = useState<{ columns: string[], rows: any[] } | null>(null);
+    const [cookieLogs, setCookieLogs] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(false);
 
     // Settings State
@@ -227,6 +228,7 @@ export const AdminPanel: React.FC = () => {
     const SETTING_KEYS: { [key: string]: string } = {
         'privacy_policy': 'Informativa Privacy',
         'terms_of_service': 'Termini di Servizio',
+        'cookie_policy': 'Cookie Policy',
         'image_upload_policy': 'Informativa Upload Immagini',
         'notice_and_takedown': 'Notice & Takedown',
         'upload_disclaimer': 'Disclaimer Upload'
@@ -260,6 +262,9 @@ export const AdminPanel: React.FC = () => {
             }
             if (activeTab === 'settings') {
                 setSettingsContent(await api.getAppSetting(settingKey));
+            }
+            if (activeTab === 'cookies') {
+                setCookieLogs(await api.getCookieLogs());
             }
         } catch (e) { console.error(e); }
         finally { setIsLoading(false); }
@@ -434,9 +439,9 @@ export const AdminPanel: React.FC = () => {
             <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
                 <h2 className="text-3xl font-bold text-white flex items-center gap-3"><i className="fas fa-user-shield text-brand-accent"></i> Admin Dashboard</h2>
                 <div className="bg-brand-secondary/50 p-1 rounded-lg flex overflow-x-auto">
-                    {['overview', 'requests', 'users', 'showcase', 'logs', 'database', 'settings'].map(tab => (
+                    {['overview', 'requests', 'users', 'showcase', 'logs', 'cookies', 'database', 'settings'].map(tab => (
                         <button key={tab} onClick={() => setActiveTab(tab as AdminTab)} className={`px-4 py-2 rounded text-sm font-bold capitalize whitespace-nowrap ${activeTab === tab ? 'bg-brand-accent text-black' : 'text-white hover:bg-white/10'}`}>
-                            {tab === 'settings' ? 'Impostazioni' : tab} {tab === 'requests' && requests.length > 0 && `(${requests.length})`}
+                            {tab === 'settings' ? 'Impostazioni' : (tab === 'cookies' ? 'Cookie Consent' : tab)} {tab === 'requests' && requests.length > 0 && `(${requests.length})`}
                         </button>
                     ))}
                 </div>
@@ -752,6 +757,50 @@ export const AdminPanel: React.FC = () => {
                         >
                             {isLoading ? 'Salvataggio...' : 'Salva Modifiche'}
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'cookies' && (
+                <div className="bg-[#1e1e2e] rounded-xl border border-white/10 overflow-hidden">
+                    <div className="p-4 border-b border-white/10 flex justify-between items-center">
+                        <h3 className="font-bold text-white">Registro Consensi Cookie (GDPR)</h3>
+                        <div className="text-[10px] text-gray-500 font-mono">Last 500 entries</div>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-[11px] font-mono whitespace-nowrap">
+                            <thead className="bg-black/30 text-gray-400 uppercase">
+                                <tr>
+                                    <th className="p-3">Timestamp</th>
+                                    <th className="p-3">UUID</th>
+                                    <th className="p-3">IP</th>
+                                    <th className="p-3">A (Analitici)</th>
+                                    <th className="p-3">M (Marketing)</th>
+                                    <th className="p-3">User Agent</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5 text-gray-300">
+                                {cookieLogs.map((log: any) => (
+                                    <tr key={log.id} className="hover:bg-white/5 transition-colors">
+                                        <td className="p-3 text-white">{log.timestamp}</td>
+                                        <td className="p-3 text-brand-accent" title={log.consent_uuid}>{log.consent_uuid?.substring(0, 8)}...</td>
+                                        <td className="p-3">{log.ip_address}</td>
+                                        <td className="p-3">
+                                            <span className={log.analytics ? 'text-green-400' : 'text-red-400'}>
+                                                {log.analytics ? 'SI' : 'NO'}
+                                            </span>
+                                        </td>
+                                        <td className="p-3">
+                                            <span className={log.marketing ? 'text-green-400' : 'text-red-400'}>
+                                                {log.marketing ? 'SI' : 'NO'}
+                                            </span>
+                                        </td>
+                                        <td className="p-3 max-w-[200px] truncate" title={log.user_agent}>{log.user_agent}</td>
+                                    </tr>
+                                ))}
+                                {cookieLogs.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-gray-500 italic">Nessun log consensi registrato.</td></tr>}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             )}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { api } from '../services/api';
 
 interface CookiePreferences {
     essential: boolean;
@@ -11,6 +12,7 @@ export const CookieConsent: React.FC = () => {
     const { t, language } = useLanguage();
     const [isVisible, setIsVisible] = useState(false);
     const [showPreferences, setShowPreferences] = useState(false);
+    const [consentUuid, setConsentUuid] = useState<string>('');
     const [prefs, setPrefs] = useState<CookiePreferences>({
         essential: true,
         analytics: false,
@@ -18,6 +20,13 @@ export const CookieConsent: React.FC = () => {
     });
 
     useEffect(() => {
+        let uuid = localStorage.getItem('sonificart_cookie_uuid');
+        if (!uuid) {
+            uuid = crypto.randomUUID();
+            localStorage.setItem('sonificart_cookie_uuid', uuid);
+        }
+        setConsentUuid(uuid);
+
         const savedConsent = localStorage.getItem('sonificart_cookie_consent');
         if (!savedConsent) {
             setIsVisible(true);
@@ -40,6 +49,10 @@ export const CookieConsent: React.FC = () => {
         setPrefs(newPrefs);
         setIsVisible(false);
         setShowPreferences(false);
+
+        // Log consent to backend for legal compliance
+        api.logCookieConsent({ analytics: newPrefs.analytics, marketing: newPrefs.marketing }, consentUuid);
+
         if (newPrefs.analytics) {
             enableAnalytics();
         } else {

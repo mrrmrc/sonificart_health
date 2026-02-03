@@ -87,6 +87,19 @@ try {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )");
 
+    // COOKIE CONSENT LOGS (GDPR Compliance)
+    $pdo->exec("CREATE TABLE IF NOT EXISTS cookie_consents (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NULL,
+        consent_uuid VARCHAR(50),
+        essential TINYINT(1) DEFAULT 1,
+        analytics TINYINT(1) DEFAULT 0,
+        marketing TINYINT(1) DEFAULT 0,
+        ip_address VARCHAR(45),
+        user_agent TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    )");
+
     try {
         // Force add title/subtitle/description if not exists
         $pdo->exec("ALTER TABLE history ADD COLUMN IF NOT EXISTS title VARCHAR(255) DEFAULT NULL");
@@ -359,7 +372,7 @@ if (strpos($_SERVER['CONTENT_TYPE'] ?? '', 'multipart/form-data') !== false) {
 
 // AUTH MIDDLEWARE
 $userId = getUserIdFromToken($input);
-$publicActions = ['login', 'register', 'get_showcase', 'reset_password', 'upload_media', 'request_access', 'admin_get_requests', 'check_info', 'upload_chunk', 'get_privacy_policy', 'get_app_setting'];
+$publicActions = ['login', 'register', 'get_showcase', 'reset_password', 'upload_media', 'request_access', 'admin_get_requests', 'check_info', 'upload_chunk', 'get_privacy_policy', 'get_app_setting', 'log_cookie_consent'];
 
 if (!$userId && !in_array($action, $publicActions) && $action !== 'log_event') { // Allow log_event to be public
     if ($action)
@@ -375,6 +388,32 @@ if ($action === 'log_event' && $method === 'POST') {
     // If not logged in, user_id is null. helper handles session/ip
     log_activity($pdo, $userId, $evtAction, $evtDetails, 'INFO');
     sendResponse(["success" => true]);
+}
+
+// --- LOG COOKIE CONSENT (Public) ---
+if ($action === 'log_cookie_consent' && $method === 'POST') {
+    $uuid = $input['uuid'] ?? null;
+    $essential = 1;
+    $analytics = (isset($input['analytics']) && $input['analytics']) ? 1 : 0;
+    $marketing = (isset($input['marketing']) && $input['marketing']) ? 1 : 0;
+    $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? 'UNKNOWN';
+    $ip = $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
+
+    $stmt = $pdo->prepare("INSERT INTO cookie_consents (user_id, consent_uuid, essential, analytics, marketing, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    $stmt->execute([$userId, $uuid, $essential, $analytics, $marketing, $ip, $userAgent]);
+    sendResponse(["success" => true]);
+}
+
+// --- GET COOKIE LOGS (Admin) ---
+if ($action === 'get_cookie_logs' && $method === 'POST') {
+    // Verify admin
+    $stmt = $pdo->prepare("SELECT is_admin FROM users WHERE id = ?");
+    $stmt->execute([$userId]);
+    if (!$stmt->fetchColumn())
+        sendResponse(["error" => "Forbidden"], 403);
+
+    $stmt = $pdo->query("SELECT * FROM cookie_consents ORDER BY timestamp DESC LIMIT 500");
+    sendResponse($stmt->fetchAll());
 }
 
 // --- GET LOGS (Admin Only) ---
