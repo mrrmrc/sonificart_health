@@ -682,12 +682,27 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
 
 
     // Framework v1.0 standard: Fixed 512x512 container
-    const imageAspectRatio = 1;
-
-    // Bounds in v1.0 are the full 512x512 canvas
+    // But imageBounds should reflect the ACTUAL image area within the canvas (excluding letterbox)
     const imageBounds = useMemo(() => {
-        return { x: 0, y: 0, width: 512, height: 512 };
-    }, []);
+        // Use original aspect ratio if available
+        let aspectRatio = originalAspectRatio || 1;
+        if (!originalAspectRatio && imageRef.current && imageRef.current.naturalWidth) {
+            aspectRatio = imageRef.current.naturalWidth / imageRef.current.naturalHeight;
+        }
+
+        let dw = 512, dh = 512;
+        if (aspectRatio > 1) {
+            // Landscape: height is smaller
+            dh = 512 / aspectRatio;
+        } else if (aspectRatio < 1) {
+            // Portrait: width is smaller
+            dw = 512 * aspectRatio;
+        }
+
+        const dx = (512 - dw) / 2;
+        const dy = (512 - dh) / 2;
+        return { x: dx, y: dy, width: dw, height: dh };
+    }, [originalAspectRatio]);
 
     // Content bounds (actual image area inside the black box)
     // Used for rendering overlays correctly if needed, though scan covers all.
@@ -879,7 +894,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md notranslate">
                         <div className="bg-brand-secondary p-8 rounded-xl shadow-2xl border border-brand-accent/30 max-w-md w-full text-center">
                             <div className="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-brand-accent mx-auto mb-6"></div>
-                            <h3 className="text-2xl font-bold text-white mb-2">{t('results.video_audit') || "Audit Forense..."}</h3>
+                            <h3 className="text-2xl font-bold text-white mb-2">{t('results.video_audit') || "Video Forense..."}</h3>
                             <p className="text-brand-text-secondary text-sm mb-6">{t('results.video_time_est') || "Tempo stimato"}: <span className="notranslate">{(safeDuration / 60).toFixed(1)} min.</span></p>
                             <div className="w-full bg-brand-primary rounded-full h-4 border border-brand-secondary overflow-hidden">
                                 <div className="bg-brand-accent h-full transition-all duration-200 ease-linear" style={{ width: `${videoProgress}%` }}></div>
@@ -977,35 +992,6 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                         <StatBar label={t('results.low')} value={audioProfile.pitch.low} colorClass="bg-teal-700" />
                                         <StatBar label={t('results.mid')} value={audioProfile.pitch.mid} colorClass="bg-teal-500" />
                                         <StatBar label={t('results.high')} value={audioProfile.pitch.high} colorClass="bg-teal-300" />
-                                    </div>
-                                    <div className="flex flex-col gap-4">
-                                        <div className="bg-black/20 p-3 rounded-lg border border-white/5">
-                                            <label className="block text-[10px] font-bold text-brand-accent uppercase mb-3 text-center">Stile Scansione Video</label>
-                                            <div className="grid grid-cols-4 gap-2">
-                                                {[
-                                                    { id: 'vertical', icon: 'fa-arrows-left-right', label: 'Verticale' },
-                                                    { id: 'horizontal', icon: 'fa-arrows-up-down', label: 'Orizzontale' },
-                                                    { id: 'original', icon: 'fa-cube', label: 'Originale' },
-                                                    { id: 'crosshair', icon: 'fa-crosshairs', label: 'Mirino' }
-                                                ].map(opt => (
-                                                    <button
-                                                        key={opt.id}
-                                                        onClick={() => setCursorType(opt.id as any)}
-                                                        className={`flex flex-col items-center gap-1.5 p-2.5 rounded-xl transition-all ${cursorType === opt.id ? 'bg-brand-accent text-brand-primary shadow-[0_0_15px_rgba(45,212,191,0.3)]' : 'bg-white/5 hover:bg-white/10 text-gray-400'}`}
-                                                    >
-                                                        <i className={`fas ${opt.icon} text-sm`}></i>
-                                                        <span className="text-[8px] font-bold uppercase">{opt.label}</span>
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        <button
-                                            onClick={startVideoGeneration}
-                                            className="w-full bg-brand-accent text-brand-primary font-black py-4 rounded-xl shadow-2xl hover:scale-[1.02] transition-transform text-xs uppercase tracking-widest"
-                                        >
-                                            <i className="fas fa-play mr-2"></i> Avvia Renderizzazione
-                                        </button>
                                     </div>
                                 </div>
                                 <div className="bg-brand-primary/30 p-3 rounded-lg border border-brand-secondary">

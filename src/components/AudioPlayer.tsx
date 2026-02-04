@@ -24,6 +24,8 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
     const [progress, setProgress] = useState(0);
     const [duration, setDuration] = useState(0);
     const [currentTime, setCurrentTime] = useState(0);
+    const [volume, setVolume] = useState(1); // 0 to 1
+    const [isMuted, setIsMuted] = useState(false);
 
     const progressRef = useRef<HTMLDivElement>(null);
 
@@ -73,6 +75,13 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
         setDuration(0);
     }, [audioUrl, audioRef])
 
+    // Sync volume with audio element
+    useEffect(() => {
+        if (audioRef.current) {
+            audioRef.current.volume = isMuted ? 0 : volume;
+        }
+    }, [volume, isMuted, audioRef]);
+
     const togglePlayPause = () => {
         const audio = audioRef.current;
         if (!audio) return;
@@ -100,24 +109,62 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
         audio.currentTime = (clickX / width) * duration;
     };
 
+    const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newVolume = parseFloat(e.target.value);
+        setVolume(newVolume);
+        if (newVolume > 0) setIsMuted(false);
+    };
+
+    const toggleMute = () => {
+        setIsMuted(!isMuted);
+    };
+
     const formatTime = (time: number) => {
         const minutes = Math.floor(time / 60);
         const seconds = Math.floor(time % 60);
         return `${minutes}:${seconds.toString().padStart(2, '0')}`;
     }
 
+    const getVolumeIcon = () => {
+        if (isMuted || volume === 0) return 'fa-volume-mute';
+        if (volume < 0.5) return 'fa-volume-low';
+        return 'fa-volume-high';
+    };
+
     return (
-        <div className="mt-4 w-full flex items-center gap-3 bg-brand-primary/50 p-3 rounded-lg border border-brand-secondary">
+        <div className="mt-4 w-full bg-brand-primary/50 p-3 rounded-lg border border-brand-secondary">
             <audio ref={audioRef} preload="auto"></audio>
-            <button onClick={togglePlayPause} className="text-brand-accent text-2xl w-10 h-10 flex items-center justify-center flex-shrink-0">
-                <i className={`fas ${isPlaying ? 'fa-pause-circle' : 'fa-play-circle'}`}></i>
-            </button>
-            <div className="flex items-center gap-2 w-full">
-                <span className="text-xs text-brand-text-secondary font-mono w-10 text-center">{formatTime(currentTime)}</span>
-                <div ref={progressRef} onClick={handleProgressClick} className="w-full h-2 bg-brand-secondary rounded-full cursor-pointer">
-                    <div style={{ width: `${progress}%` }} className="h-full bg-brand-accent rounded-full transition-all duration-150"></div>
+            {/* Main Row: Play + Progress */}
+            <div className="flex items-center gap-3">
+                <button onClick={togglePlayPause} className="text-brand-accent text-2xl w-10 h-10 flex items-center justify-center flex-shrink-0 hover:scale-110 transition-transform">
+                    <i className={`fas ${isPlaying ? 'fa-pause-circle' : 'fa-play-circle'}`}></i>
+                </button>
+                <div className="flex items-center gap-2 w-full">
+                    <span className="text-xs text-brand-text-secondary font-mono w-10 text-center">{formatTime(currentTime)}</span>
+                    <div ref={progressRef} onClick={handleProgressClick} className="w-full h-2 bg-brand-secondary rounded-full cursor-pointer">
+                        <div style={{ width: `${progress}%` }} className="h-full bg-brand-accent rounded-full transition-all duration-150"></div>
+                    </div>
+                    <span className="text-xs text-brand-text-secondary font-mono w-10 text-center">{formatTime(duration)}</span>
                 </div>
-                <span className="text-xs text-brand-text-secondary font-mono w-10 text-center">{formatTime(duration)}</span>
+            </div>
+            {/* Volume Row */}
+            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-brand-secondary/30">
+                <button onClick={toggleMute} className="text-brand-text-secondary hover:text-brand-accent transition-colors w-6 flex items-center justify-center">
+                    <i className={`fas ${getVolumeIcon()}`}></i>
+                </button>
+                <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={isMuted ? 0 : volume}
+                    onChange={handleVolumeChange}
+                    className="w-24 h-1 bg-brand-secondary rounded-full appearance-none cursor-pointer accent-brand-accent"
+                    style={{
+                        background: `linear-gradient(to right, var(--color-brand-accent) ${(isMuted ? 0 : volume) * 100}%, var(--color-brand-secondary) ${(isMuted ? 0 : volume) * 100}%)`
+                    }}
+                />
+                <span className="text-[10px] text-brand-text-secondary font-mono w-8">{Math.round((isMuted ? 0 : volume) * 100)}%</span>
             </div>
         </div>
     );

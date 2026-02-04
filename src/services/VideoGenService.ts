@@ -151,7 +151,7 @@ function drawFrame(
     ctx.rect(zDx, zDy, zDw, zDh);
     ctx.clip();
 
-    const type = cursorType || 'vertical';
+    const type = cursorType || 'original';
 
     if (type === 'original' && events && events.length > 0) {
         // Find the event corresponding to the current time
