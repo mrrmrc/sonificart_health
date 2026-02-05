@@ -8,6 +8,7 @@ import { MusicSheet } from './MusicSheet';
 import saveAs from 'file-saver';
 import { generateSonificationVideo } from '../services/videoService';
 import { createSacContainer } from '../services/sacService';
+import { createForensicPackage } from '../services/forensicPackageService';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ConfirmationModal } from './ConfirmationModal';
 import { api } from '../services/api';
@@ -654,6 +655,58 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                 title: "Download",
                 message: "Audio non disponibile per il download.",
                 type: 'warning',
+                singleButton: true,
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            });
+        }
+    };
+
+    // *** FORENSIC PACKAGE DOWNLOAD ***
+    const handleDownloadForensicPackage = async () => {
+        try {
+            // Check if original file metadata is available
+            if (!correctedResult.originalFileMetadata) {
+                setConfirmModal({
+                    isOpen: true,
+                    title: "Metadati Mancanti",
+                    message: "I metadati del file originale non sono disponibili. Questa funzionalità richiede una nuova sonificazione.",
+                    type: 'warning',
+                    singleButton: true,
+                    onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+                });
+                return;
+            }
+
+            // Get all required blobs
+            const audioBlob = await fetchBlobIfMissing(correctedResult.audioOutput.audioWavBlob, correctedResult.audioOutput.audioUrl || "");
+
+            // Create the forensic package
+            const packageBlob = await createForensicPackage({
+                originalBlob: correctedResult.originalFileMetadata.originalBlob!,
+                originalMetadata: correctedResult.originalFileMetadata,
+                result: correctedResult,
+                title: workTitle
+            });
+
+            const cleanTitle = workTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            saveAs(packageBlob, `${cleanTitle}.sac`);
+
+            setConfirmModal({
+                isOpen: true,
+                title: "🛡️ Pacchetto Forense Creato",
+                message: "Il pacchetto .sac contiene il file originale certificato e tutti i dati per la verifica futura dell'autenticità.",
+                type: 'success',
+                singleButton: true,
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            });
+
+        } catch (e) {
+            console.error("Forensic package creation failed:", e);
+            setConfirmModal({
+                isOpen: true,
+                title: "Errore Pacchetto Forense",
+                message: `Errore durante la creazione del pacchetto: ${e instanceof Error ? e.message : 'Errore sconosciuto'}`,
+                type: 'danger',
                 singleButton: true,
                 onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
             });
@@ -1342,16 +1395,19 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                 <i className="fas fa-music mr-2"></i> MIDI
                             </button>
                         </div>
-                        <button disabled={!isPro && (user?.credits || 0) <= 0} onClick={() => {
-                            const cleanTitle = workTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-                            if (generatedVideoBlob) saveAs(generatedVideoBlob, `${cleanTitle}_video.mp4`);
-                            else if ((result as any).videoUrl) saveAs((result as any).videoUrl, `${cleanTitle}_video.mp4`);
-                            else handleVideoAction();
-                        }} className="w-full bg-purple-600/10 text-purple-300 py-2 rounded hover:bg-purple-600/20 border border-purple-500/20 text-xs font-bold">
-                            <i className="fas fa-video mr-2"></i> {(generatedVideoBlob || (result as any).videoUrl) ? t('results.download_video') : t('results.generate_video')}
-                        </button>
-                        <button disabled={!isPro && (user?.credits || 0) <= 0} onClick={handleDownloadSac} className="w-full bg-brand-accent font-black text-brand-primary py-3 rounded hover:bg-brand-accent-light mt-1 shadow-lg disabled:opacity-50 text-[10px] uppercase tracking-widest">
-                            <i className="fas fa-box mr-2"></i> {t('results.download_sac')}
+
+
+                        {/* UNIFIED PRIMARY DOWNLOAD BUTTON (.SAC) */}
+                        <button
+                            disabled={!isPro && (user?.credits || 0) <= 0}
+                            onClick={correctedResult.originalFileMetadata ? handleDownloadForensicPackage : handleDownloadSac}
+                            className={`w-full py-3 rounded mt-2 shadow-lg disabled:opacity-50 text-[10px] uppercase tracking-widest border font-black text-white ${correctedResult.originalFileMetadata ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 border-emerald-400/30 shadow-emerald-500/20' : 'bg-brand-accent hover:bg-brand-accent-light border-transparent'}`}
+                        >
+                            <i className="fas fa-box-open mr-2"></i>
+                            SCARICA ARCHIVIO COMPLETO (.SAC)
+                            {correctedResult.originalFileMetadata && (
+                                <span className="ml-2 text-[8px] bg-white/20 px-1.5 py-0.5 rounded">ORIGINALE CERTIFICATO</span>
+                            )}
                         </button>
                     </div>
                 </InfoCard>

@@ -5,7 +5,7 @@ import { normalizeImage, NormalizationReport, NormalizationOptions } from '../se
 import { AcquisitionMetadata } from '../types';
 
 interface PhotoStandardizationModalProps {
-    onImageReady: (file: File, report: NormalizationReport | null, acquisitionMetadata?: AcquisitionMetadata) => void;
+    onImageReady: (file: File, report: NormalizationReport | null, acquisitionMetadata?: AcquisitionMetadata, originalFile?: File) => void;
     onClose: () => void;
 }
 
@@ -94,7 +94,12 @@ export const PhotoStandardizationModal: React.FC<PhotoStandardizationModalProps>
 
     const handleConfirm = () => {
         if (normalizedFile && normalizationReport) {
-            onImageReady(normalizedFile, normalizationReport, acquisitionMetadata);
+            // Ensure originalFile is present
+            if (!originalFile) {
+                console.error('[StandardizationModal] Critical: Original file is missing during confirm!');
+                // Fallback: use normalized if strictly necessary but this shouldn't happen
+            }
+            onImageReady(normalizedFile, normalizationReport, acquisitionMetadata, originalFile || undefined);
         }
     };
 

@@ -34,6 +34,7 @@ export const SonificationPage: React.FC = () => {
     const location = useLocation();
 
     const [imageFile, setImageFile] = useState<File | null>(null);
+    const [originalImageFile, setOriginalImageFile] = useState<File | null>(null);
     const [imageUrl, setImageUrl] = useState<string | null>(null);
     const [config, setConfig] = useState<ConfigSettings>(initialSettings);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -148,8 +149,29 @@ export const SonificationPage: React.FC = () => {
         }
     }, [location.state]);
 
-    const handleFileSelect = (file: File | null, report?: NormalizationReport | null, acqMetadata?: SonificationResult['acquisitionMetadata']) => {
+    const handleFileSelect = (file: File | null, report?: NormalizationReport | null, acqMetadata?: SonificationResult['acquisitionMetadata'], originalFile?: File) => {
         setImageFile(file);
+
+        // Logic refined:
+        // 1. If explicit originalFile is provided, use it.
+        // 2. If NO report is provided, 'file' is the original (direct upload/restore without normalization).
+        // 3. If report IS provided, 'file' is the processed version. 
+        //    In this case, if originalFile is missing, do NOT fallback to 'file' as it would create a false "original" seal.
+        if (originalFile) {
+            setOriginalImageFile(originalFile);
+        } else if (!report && file) {
+            // No normalization happened, so the file is the original
+            setOriginalImageFile(file);
+        } else {
+            // Normalization happened but original is missing.
+            // Do NOT set 'file' as originalImageFile. Leave it null/undefined.
+            // This prevents creating a forensic package with a "fake" original.
+            setOriginalImageFile(null);
+            if (file && report) {
+                console.warn("SonificationPage: Normalized file selected but original is missing. Forensic package will be incomplete.");
+            }
+        }
+
         setNormalizationReport(report || null);
         setAcquisitionMetadata(acqMetadata);
         if (file) { const url = URL.createObjectURL(file); setImageUrl(url); setResult(null); setIsViewingHistory(false); }
@@ -210,9 +232,9 @@ export const SonificationPage: React.FC = () => {
             let res: SonificationResult;
             const progressCb = (stepIndex: number, status: 'active' | 'completed') => updateProcessingStep(stepIndex, status);
 
-            if (paradigm === 'scientific') res = await sonifyImage(imageFile, config, progressCb, oscClient, scanPatternOverride, normalizationReport, acquisitionMetadata);
-            else if (paradigm === 'artistic') res = await sonifyImageArtistic(imageFile, config, progressCb, oscClient, scanPatternOverride, acquisitionMetadata);
-            else res = await sonifyImageHybrid(imageFile, config, progressCb, oscClient, scanPatternOverride, acquisitionMetadata);
+            if (paradigm === 'scientific') res = await sonifyImage(imageFile, config, progressCb, oscClient, scanPatternOverride, normalizationReport, acquisitionMetadata, originalImageFile || undefined);
+            else if (paradigm === 'artistic') res = await sonifyImageArtistic(imageFile, config, progressCb, oscClient, scanPatternOverride, acquisitionMetadata, originalImageFile || undefined);
+            else res = await sonifyImageHybrid(imageFile, config, progressCb, oscClient, scanPatternOverride, acquisitionMetadata, originalImageFile || undefined);
 
             // setResult(res);
             setResult(res);
@@ -322,8 +344,8 @@ export const SonificationPage: React.FC = () => {
 
             {showStandardizationModal && (
                 <PhotoStandardizationModal
-                    onImageReady={(file, report, acqMetadata) => {
-                        handleFileSelect(file, report, acqMetadata);
+                    onImageReady={(file, report, acqMetadata, originalFile) => {
+                        handleFileSelect(file, report, acqMetadata, originalFile);
                         setShowStandardizationModal(false);
                     }}
                     onClose={() => setShowStandardizationModal(false)}

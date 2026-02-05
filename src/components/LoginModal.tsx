@@ -216,11 +216,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
 
                         {/* FOOTER SWITCHER */}
                         <div className="mt-6 text-center pt-4 border-t border-brand-secondary/30">
+                            {/* REGISTRATION DISABLED TEMPORARILY
                             {view === 'login' && (
                                 <p className="text-sm text-brand-text-secondary">
                                     Non hai un account? <button onClick={() => { setView('register'); setError(null); }} className="text-brand-accent hover:underline font-bold">Registrati</button>
                                 </p>
                             )}
+                            */}
                             {view === 'register' && (
                                 <p className="text-sm text-brand-text-secondary">
                                     Hai già un account? <button onClick={() => { setView('login'); setError(null); }} className="text-brand-accent hover:underline font-bold">Accedi</button>

@@ -205,12 +205,25 @@ export interface AcquisitionMetadata {
     timestamp: string;
 }
 
+// Original file metadata for forensic verification
+export interface OriginalFileMetadata {
+    hash: string;           // SHA-256 of the original untouched file
+    size: number;           // Size in bytes
+    name: string;           // Original filename
+    dimensions: { width: number; height: number };  // Original dimensions
+    type: string;           // MIME type (e.g., "image/jpeg")
+    originalBlob?: Blob;    // The original file as a Blob (for creating forensic packages)
+}
+
 export interface SonificationResult {
     imageHash: string;
     audioHash: string;
     configUsed: ConfigSettings;
     standardizedImageUrl: string;
     paradigm: Paradigm;
+
+    // NEW: Original file metadata for forensic package
+    originalFileMetadata?: OriginalFileMetadata;
 
     blockAnalysisResult: BlockAnalysisResult;
     culturalSelectionResult: CulturalSelectionResult;

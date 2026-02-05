@@ -196,9 +196,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onExplor
                 <div className="text-center mb-12">
                     <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 backdrop-blur-md mb-4">
                         <i className="fas fa-flask text-brand-accent text-xs"></i>
-                        <span className="text-[10px] font-bold tracking-[0.2em] text-gray-400 uppercase">Tecnologia Brevettata</span>
+                        <span className="text-[10px] font-bold tracking-[0.2em] text-gray-400 uppercase">Tecnologia Proprietaria</span>
                     </div>
-                    <h2 className="text-3xl md:text-4xl font-display font-black text-white mb-3">I Pilastri Scientifici</h2>
+                    <h2 className="text-3xl md:text-4xl font-display font-black text-white mb-3">I Pilastri del Metodo</h2>
                     <p className="text-gray-400 max-w-xl mx-auto">Tre innovazioni che rendono SonificA.R.T. unico al mondo.</p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -378,7 +378,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onExplor
                     <div className="text-center mb-20">
                         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 backdrop-blur-md mb-6">
                             <i className="fas fa-microscope text-brand-accent text-xs"></i>
-                            <span className="text-[10px] font-bold tracking-[0.2em] text-gray-400 uppercase">Metodologia Scientifica</span>
+                            <span className="text-[10px] font-bold tracking-[0.2em] text-gray-400 uppercase">Metodologia Analitica</span>
                         </div>
                         <h2 className="text-4xl md:text-6xl font-display font-black text-white mb-6 uppercase tracking-tighter">
                             {t('landing.process.title')}

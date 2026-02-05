@@ -1,8 +1,10 @@
 import {
     SonificationResult, Tradition, ConfigSettings, BlockAnalysisResult, MappedBlock,
     UniversalMapping, TransformedNoteEvent, CulturalSelectionResult, ScoreBreakdown, BlockData,
-    PerformanceMetrics, MusicGenerationPrompt, InstrumentType, ScanPattern, ScanPatternOverride, AudioOutputResult
+    PerformanceMetrics, MusicGenerationPrompt, InstrumentType, ScanPattern, ScanPatternOverride, AudioOutputResult,
+    OriginalFileMetadata
 } from '../types';
+import { analyzeOriginalFile } from './forensicPackageService';
 import { NormalizationReport } from './imageNormalizationService';
 
 import { generateMusicPromptFromAnalysis, generateMusicPromptFromAnalysisHybrid, describeImageContent } from './geminiService';
@@ -634,7 +636,7 @@ export async function synthesizeAudio(events: TransformedNoteEvent[], totalDurat
             let phase = 0;
 
             // Optimization: Pre-calculate constants
-            const volBase = velocity * 0.2; // Master gain scaling to prevent clip
+            const volBase = velocity * 0.6; // Increased master gain for better audibility
 
             // Render loop for this single note
             for (let j = 0; j < durationSamples + releaseSamples; j++) {
@@ -697,7 +699,8 @@ export async function sonifyImage(
     oscClient: OSC | null = null,
     scanPatternOverride: ScanPatternOverride,
     normalizationReport?: NormalizationReport | null,
-    acquisitionMetadata?: SonificationResult['acquisitionMetadata']
+    acquisitionMetadata?: SonificationResult['acquisitionMetadata'],
+    originalFileOverride?: File
 ): Promise<SonificationResult> {
     const timings: PerformanceMetrics = { totalProcessingTime: 0 };
     let t = performance.now();
@@ -705,13 +708,20 @@ export async function sonifyImage(
     const traditions = await getCulturalTraditions();
 
     progressCallback(0, 'active');
+
+    // *** FORENSIC: Calculate hash of ORIGINAL file BEFORE any processing ***
+    // This is the TRUE SEAL of the master file
+    // Use override if provided (e.g. from normalization process), otherwise use the input file
+    const originalFileMetadata: OriginalFileMetadata = await analyzeOriginalFile(originalFileOverride || file);
+    timings.originalFileAnalysis = performance.now() - t; t = performance.now();
+
     const imageDescription = await describeImageContent(file);
     const { canvas, imageData, imageBounds } = await standardizeImage(file);
     // Generate the exact Blob that will be used in the SAC for hash consistency
     const standardizedImageBlob = await canvasToBlob(canvas, 'image/jpeg', 0.9);
     const standardizedImageUrl = URL.createObjectURL(standardizedImageBlob);
 
-    // Calculate Image File Hash (physical)
+    // Calculate Image File Hash (physical) - this is the PROCESSED hash, not the original
     const imageFileHash = bufferToHex(await calculateSHA256(await standardizedImageBlob.arrayBuffer()));
 
     timings.standardization = performance.now() - t; t = performance.now();
@@ -873,6 +883,8 @@ export async function sonifyImage(
             imageDescription
         ),
         acquisitionMetadata,
+        // *** FORENSIC: Include original file metadata for verification ***
+        originalFileMetadata,
     };
 }
 
@@ -886,7 +898,8 @@ async function sonifyImageArtisticOrHybrid(
     oscClient: OSC | null,
     paradigm: 'artistic' | 'hybrid',
     scanPatternOverride: ScanPatternOverride,
-    acquisitionMetadata?: SonificationResult['acquisitionMetadata']
+    acquisitionMetadata?: SonificationResult['acquisitionMetadata'],
+    originalFileOverride?: File
 ): Promise<SonificationResult> {
     const timings: PerformanceMetrics = { totalProcessingTime: 0 };
     let t = performance.now();
@@ -905,6 +918,11 @@ async function sonifyImageArtisticOrHybrid(
 
     // Standard Processing Steps
     progressCallback(0 + stepOffset, 'active');
+
+    // *** FORENSIC: Calculate hash of ORIGINAL file BEFORE any processing ***
+    const originalFileMetadata: OriginalFileMetadata = await analyzeOriginalFile(originalFileOverride || file);
+    timings.originalFileAnalysis = performance.now() - t; t = performance.now();
+
     const { canvas, imageData, imageBounds } = await standardizeImage(file);
     const standardizedImageBlob = await canvasToBlob(canvas, 'image/jpeg', 0.9);
     const standardizedImageUrl = URL.createObjectURL(standardizedImageBlob);
@@ -1057,11 +1075,13 @@ async function sonifyImageArtisticOrHybrid(
         musicGenerationPrompt: musicPrompt,
         paradigm: paradigm,
         acquisitionMetadata,
+        // *** FORENSIC: Include original file metadata for verification ***
+        originalFileMetadata,
     };
 }
 
-export const sonifyImageArtistic = (file: File, config: ConfigSettings, progressCallback: (stepIndex: number, status: 'active' | 'completed') => void, oscClient: OSC | null, scanPatternOverride: ScanPatternOverride, acquisitionMetadata?: SonificationResult['acquisitionMetadata']) =>
-    sonifyImageArtisticOrHybrid(file, config, progressCallback, oscClient, 'artistic', scanPatternOverride, acquisitionMetadata);
+export const sonifyImageArtistic = (file: File, config: ConfigSettings, progressCallback: (stepIndex: number, status: 'active' | 'completed') => void, oscClient: OSC | null, scanPatternOverride: ScanPatternOverride, acquisitionMetadata?: SonificationResult['acquisitionMetadata'], originalFileOverride?: File) =>
+    sonifyImageArtisticOrHybrid(file, config, progressCallback, oscClient, 'artistic', scanPatternOverride, acquisitionMetadata, originalFileOverride);
 
-export const sonifyImageHybrid = (file: File, config: ConfigSettings, progressCallback: (stepIndex: number, status: 'active' | 'completed') => void, oscClient: OSC | null, scanPatternOverride: ScanPatternOverride, acquisitionMetadata?: SonificationResult['acquisitionMetadata']) =>
-    sonifyImageArtisticOrHybrid(file, config, progressCallback, oscClient, 'hybrid', scanPatternOverride, acquisitionMetadata);
+export const sonifyImageHybrid = (file: File, config: ConfigSettings, progressCallback: (stepIndex: number, status: 'active' | 'completed') => void, oscClient: OSC | null, scanPatternOverride: ScanPatternOverride, acquisitionMetadata?: SonificationResult['acquisitionMetadata'], originalFileOverride?: File) =>
+    sonifyImageArtisticOrHybrid(file, config, progressCallback, oscClient, 'hybrid', scanPatternOverride, acquisitionMetadata, originalFileOverride);
