@@ -67,7 +67,7 @@ const PublishModal: React.FC<{
     const handleSaveMetadata = async () => {
         setIsSubmitting(true);
         try {
-            await api.updateMetadata(entry.id, title, subtitle, description);
+            await api.updateHistoryItemMetadata(entry.id, title, subtitle, description);
             // Silent success or optional toast
             // onShowMessage("Salvataggio", "Dati salvati con successo!", 'success'); 
             entry.title = title;
@@ -216,8 +216,8 @@ const PublishModal: React.FC<{
 
         setIsSubmitting(true);
         try {
-            // 1. First, SAVE METADATA
-            await api.updateMetadata(entry.id, title, subtitle, description);
+            // 1. First, SAVE METADATA (using PRO-safe endpoint, NOT admin-only updateMetadata)
+            await api.updateHistoryItemMetadata(entry.id, title, subtitle, description);
 
             // Update local entry ref
             entry.title = title;

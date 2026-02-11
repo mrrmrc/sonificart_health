@@ -75,9 +75,9 @@ export const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, isAdmin, userCredits
                                 {t('nav.sonify')}
                                 <ActiveIndicator isActive={currentView === 'sonification'} />
                             </button>
-                            <button onClick={() => navigate('/showcase')} className={navLinkClass('showcase')}>
+                            <button onClick={() => navigate(isLoggedIn ? '/profile' : '/showcase')} className={navLinkClass(isLoggedIn ? 'profile' : 'showcase')}>
                                 {t('nav.showcase')}
-                                <ActiveIndicator isActive={currentView === 'showcase'} />
+                                <ActiveIndicator isActive={currentView === (isLoggedIn ? 'profile' : 'showcase')} />
                             </button>
                             <button onClick={() => navigate('/verification')} className={navLinkClass('verification')}>
                                 {t('nav.verify')}

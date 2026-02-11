@@ -165,7 +165,10 @@ export const api = {
         const url = `${API_BASE_URL}/index.php?action=consume_credits&auth_token=${encodeURIComponent(token || '')}`;
         const response = await fetch(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Authorization': `Bearer ${token}`
+            },
             body: params
         });
         const data = await handleResponse(response);
@@ -410,6 +413,29 @@ export const api = {
         return data.success;
     },
 
+    // Update title/description for a history item (accessible to PRO users, unlike admin-only updateMetadata)
+    updateHistoryItemMetadata: async (id: string, title: string, subtitle: string, description: string): Promise<boolean> => {
+        const token = getToken();
+        if (!token) throw new Error("Unauthorized");
+
+        const formData = new FormData();
+        formData.append('auth_token', token);
+        formData.append('id', id);
+        formData.append('title', title);
+        formData.append('subtitle', subtitle);
+        formData.append('description', description);
+
+        const response = await fetch(`${API_BASE_URL}/index.php?action=update_history_item`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            body: formData
+        });
+        const data = await handleResponse(response);
+        return data.success;
+    },
+
     attachAudioToHistory: async (entryId: string, audioBlob: Blob, fileName: string = "uploaded_audio.mp3", onProgress?: (p: number) => void): Promise<string> => {
         const token = getToken();
         if (!token) throw new Error("Unauthorized");
@@ -494,7 +520,10 @@ export const api = {
 
         const response = await fetch(`${API_BASE_URL}/index.php?action=update_profile`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Authorization': `Bearer ${token}`
+            },
             body: params
         });
         return await handleResponse(response);
@@ -552,7 +581,10 @@ export const api = {
         const token = getToken();
         const response = await fetch(`${API_BASE_URL}/index.php?action=delete_history_item`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
             body: JSON.stringify({ id, auth_token: token })
         });
         await handleResponse(response);
@@ -674,6 +706,9 @@ export const api = {
 
         const response = await fetch(`${API_BASE_URL}/index.php?action=update_metadata`, {
             method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
             body: data
         });
         await handleResponse(response);
