@@ -14,6 +14,7 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { SonificationResult, OriginalFileMetadata } from '../types';
 import { calculateSHA256, bufferToHex } from '../utils/cryptoUtils';
+import { createSacContainer } from './sacService';
 
 export interface ForensicPackageManifest {
     version: string;
@@ -104,30 +105,46 @@ export interface CreateForensicPackageInput {
 
 /**
  * Create a forensic package (.sac) that includes the original file
+ * implementation: Surperset of Standard SAC
  */
 export async function createForensicPackage(
     input: CreateForensicPackageInput
 ): Promise<Blob> {
     const { originalBlob, originalMetadata, result, title } = input;
-    const zip = new JSZip();
     const timestamp = new Date().toISOString();
 
-    // 1. Store the ORIGINAL untouched file
+    // 1. Prepare data for Base SAC
+    // We need to fetch the image blob since 'result' usually has it as a URL
+    const imageResponse = await fetch(result.standardizedImageUrl);
+    const imageBlob = await imageResponse.blob();
+
+    // 2. Create the Base Standard SAC
+    // This ensures all root files (generated_audio, block_analysis, etc.) are present
+    const baseSac = await createSacContainer({
+        imageHash: result.imageHash || 'unknown',
+        audioHash: result.audioHash || 'unknown',
+        config: result.configUsed,
+        blockAnalysisResult: result.blockAnalysisResult,
+        culturalSelectionResult: result.culturalSelectionResult,
+        transformedEvents: result.audioOutput.events.filter(e => !e.isAccompaniment),
+        totalDuration: result.audioOutput.duration,
+        canvas: null, // Not needed if we provide imageJpegBlob
+        imageJpegBlob: imageBlob,
+        audioWavBlob: result.audioOutput.audioWavBlob,
+        midiBlob: result.audioOutput.midiBlob,
+        scanPattern: result.scanPattern,
+        title: title || result.title,
+        acquisitionMetadata: result.acquisitionMetadata
+    });
+
+    // 3. Load the Base SAC into JSZip to add Forensic Extras
+    const zip = await JSZip.loadAsync(baseSac.blob);
+
+    // 4. Add Forensic Extras: The Original "Seal"
     const originalFileBuffer = await originalBlob.arrayBuffer();
     zip.file(`original/${originalMetadata.name}`, originalFileBuffer);
 
-    // 2. Store the sonification audio
-    zip.file('audio/sonification.wav', result.audioOutput.audioWavBlob);
-
-    // 3. Store the processed thumbnail (512x512)
-    const thumbnailResponse = await fetch(result.standardizedImageUrl);
-    const thumbnailBlob = await thumbnailResponse.blob();
-    zip.file('thumbnail/preview.jpg', thumbnailBlob);
-
-    // 4. Store MIDI file
-    zip.file('audio/notation.mid', result.audioOutput.midiBlob);
-
-    // 5. Create the forensic manifest
+    // 5. Create the Forensic Manifest (Specialized metadata)
     const manifest: ForensicPackageManifest = {
         version: '1.0.0',
         created_at: timestamp,
@@ -161,14 +178,53 @@ export async function createForensicPackage(
         }
     };
 
-    zip.file('manifest.json', JSON.stringify(manifest, null, 2));
+    // Use TextEncoder to ensure identical bytes for both Hashing and Zipping
+    const manifestString = JSON.stringify(manifest, null, 2);
+    const encoder = new TextEncoder();
+    const manifestBuffer = encoder.encode(manifestString);
 
-    // 6. Also include the full SAC for backwards compatibility
-    if (result.sacContainer?.blob) {
-        zip.file('sac/original.sac', result.sacContainer.blob);
+    zip.file('manifest.json', manifestBuffer);
+
+    // 6. UPDATE Integrity Manifest
+    // The base SAC has an integrity_manifest.json, but it doesn't know about our new files.
+    // We must update it to include the hash of 'original/...' and 'manifest.json'
+    // so that the Verification Portal accepts them as valid parts of the container.
+
+    const integrityFile = zip.file("integrity_manifest.json");
+    let integrityManifest: any = {};
+
+    if (integrityFile) {
+        const integrityContent = await integrityFile.async('string');
+        integrityManifest = JSON.parse(integrityContent);
+    } else {
+        // Should not happen if createSacContainer works, but fallback:
+        integrityManifest = { integrity: { file_hashes: {} } };
     }
 
-    // Generate the package
+    // Hash the new inclusions using the exact buffers we put in the zip
+    const manifestHash = await calculateSHA256(manifestBuffer.buffer);
+
+    // We already have originalFileBuffer (ArrayBuffer)
+    const originalHash = await calculateSHA256(originalFileBuffer);
+
+    // Update hashes in manifest
+    integrityManifest.integrity.file_hashes['manifest.json'] = {
+        sha256: bufferToHex(manifestHash),
+        size_bytes: manifestBuffer.byteLength
+    };
+
+    integrityManifest.integrity.file_hashes[`original/${originalMetadata.name}`] = {
+        sha256: bufferToHex(originalHash),
+        size_bytes: originalFileBuffer.byteLength
+    };
+
+    // Update container version to denote Forensic
+    integrityManifest.integrity.container_version = "SAC-FORENSIC-1.1";
+
+    // Write back updated integrity manifest (using TextEncoder here too for consistency, though less critical since it's not hashed itself)
+    zip.file("integrity_manifest.json", JSON.stringify(integrityManifest, null, 2));
+
+    // 7. Generate Final Package
     const packageBlob = await zip.generateAsync({
         type: 'blob',
         compression: 'DEFLATE',

@@ -452,14 +452,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onExplor
 
                         {/* Video Player */}
                         <div className="aspect-video w-full bg-black">
-                            <video
-                                className="w-full h-full"
-                                controls
-                                autoPlay
-                                src="/videos/presentasonificart.mp4"
-                            >
-                                Il tuo browser non supporta il tag video.
-                            </video>
+                            <iframe
+                                width="100%"
+                                height="100%"
+                                src="https://www.youtube.com/embed/AbngMlode4Q?autoplay=1"
+                                title="YouTube video player"
+                                frameBorder="0"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                allowFullScreen
+                            ></iframe>
                         </div>
 
                         {/* Modal Footer */}

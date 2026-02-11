@@ -53,10 +53,11 @@ interface ResultsDashboardProps {
     onRequestAccess: () => void;
     isHistoryView?: boolean;
     onVideoGenerated?: (blob: Blob) => void;
+    isOwner?: boolean;
 }
 
 export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
-    result, imageUrl, onReset, onSave, user, setUser, onRequestAccess, isHistoryView = false, onVideoGenerated
+    result, imageUrl, onReset, onSave, user, setUser, onRequestAccess, isHistoryView = false, onVideoGenerated, isOwner = false
 }) => {
     const { t } = useLanguage();
 
@@ -600,6 +601,17 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
     };
 
     const handleDownloadSac = async () => {
+        if (!isOwner && !user?.isAdmin) {
+            setConfirmModal({
+                isOpen: true,
+                title: "Accesso Negato",
+                message: "Solo l'autore può scaricare i file sorgente di questa opera.",
+                type: 'danger',
+                singleButton: true,
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            });
+            return;
+        }
         try {
             const canvas = new OffscreenCanvas(512, 512); const ctx = canvas.getContext('2d', { willReadFrequently: true });
             const img = new Image(); img.src = correctedResult.standardizedImageUrl; await new Promise(r => { img.onload = r; });
@@ -645,6 +657,17 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
     };
 
     const handleDownloadWav = async () => {
+        if (!isOwner && !user?.isAdmin) {
+            setConfirmModal({
+                isOpen: true,
+                title: "Accesso Negato",
+                message: "Solo l'autore può scaricare i file audio originali.",
+                type: 'danger',
+                singleButton: true,
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            });
+            return;
+        }
         const blob = await fetchBlobIfMissing(correctedResult.audioOutput.audioWavBlob, correctedResult.audioOutput.audioUrl || "");
         if (blob.size > 0) {
             const cleanTitle = workTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
@@ -663,6 +686,17 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
 
     // *** FORENSIC PACKAGE DOWNLOAD ***
     const handleDownloadForensicPackage = async () => {
+        if (!isOwner && !user?.isAdmin) {
+            setConfirmModal({
+                isOpen: true,
+                title: "Accesso Negato",
+                message: "Solo l'autore può generare e scaricare il pacchetto forense.",
+                type: 'danger',
+                singleButton: true,
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            });
+            return;
+        }
         try {
             // Check if original file metadata is available
             if (!correctedResult.originalFileMetadata) {
@@ -1388,22 +1422,39 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                             </div>
                         )}
                         <div className="grid grid-cols-2 gap-2">
-                            <button disabled={!isPro && (user?.credits || 0) <= 0} onClick={handleDownloadWav} className="bg-brand-accent/10 text-brand-accent py-2 rounded hover:bg-brand-accent/20 text-xs font-bold border border-brand-accent/20">
-                                <i className="fas fa-file-audio mr-2"></i> WAV
+                            <button
+                                disabled={(!isPro && (user?.credits || 0) <= 0) || (!isOwner && !user?.isAdmin)}
+                                onClick={handleDownloadWav}
+                                className={`py-2 rounded text-xs font-bold border ${(!isOwner && !user?.isAdmin) ? 'bg-gray-800 text-gray-500 border-gray-700 cursor-not-allowed' : 'bg-brand-accent/10 text-brand-accent hover:bg-brand-accent/20 border-brand-accent/20'}`}
+                                title={(!isOwner && !user?.isAdmin) ? "Solo l'autore può scaricare questo file" : "Scarica Audio WAV"}
+                            >
+                                <i className={`fas ${(!isOwner && !user?.isAdmin) ? 'fa-lock' : 'fa-file-audio'} mr-2`}></i> WAV
                             </button>
-                            <button disabled={!isPro && (user?.credits || 0) <= 0} onClick={() => saveAs(correctedResult.audioOutput.midiBlob, 'musical_notation.mid')} className="bg-brand-accent/10 text-brand-accent py-2 rounded hover:bg-brand-accent/20 text-xs font-bold border border-brand-accent/20">
-                                <i className="fas fa-music mr-2"></i> MIDI
+                            <button
+                                disabled={(!isPro && (user?.credits || 0) <= 0) || (!isOwner && !user?.isAdmin)}
+                                onClick={() => {
+                                    if (!isOwner && !user?.isAdmin) {
+                                        setConfirmModal({ isOpen: true, title: "Accesso Negato", message: "Solo l'autore può scaricare la notazione MIDI.", type: 'danger', singleButton: true, onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })) });
+                                        return;
+                                    }
+                                    saveAs(correctedResult.audioOutput.midiBlob, 'musical_notation.mid');
+                                }}
+                                className={`py-2 rounded text-xs font-bold border ${(!isOwner && !user?.isAdmin) ? 'bg-gray-800 text-gray-500 border-gray-700 cursor-not-allowed' : 'bg-brand-accent/10 text-brand-accent hover:bg-brand-accent/20 border-brand-accent/20'}`}
+                                title={(!isOwner && !user?.isAdmin) ? "Solo l'autore può scaricare questo file" : "Scarica MIDI"}
+                            >
+                                <i className={`fas ${(!isOwner && !user?.isAdmin) ? 'fa-lock' : 'fa-music'} mr-2`}></i> MIDI
                             </button>
                         </div>
 
 
                         {/* UNIFIED PRIMARY DOWNLOAD BUTTON (.SAC) */}
                         <button
-                            disabled={!isPro && (user?.credits || 0) <= 0}
+                            disabled={(!isPro && (user?.credits || 0) <= 0) || (!isOwner && !user?.isAdmin)}
                             onClick={correctedResult.originalFileMetadata ? handleDownloadForensicPackage : handleDownloadSac}
-                            className={`w-full py-3 rounded mt-2 shadow-lg disabled:opacity-50 text-[10px] uppercase tracking-widest border font-black text-white ${correctedResult.originalFileMetadata ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 border-emerald-400/30 shadow-emerald-500/20' : 'bg-brand-accent hover:bg-brand-accent-light border-transparent'}`}
+                            className={`w-full py-3 rounded mt-2 shadow-lg disabled:opacity-50 text-[10px] uppercase tracking-widest border font-black text-white ${(!isOwner && !user?.isAdmin) ? 'bg-gray-700 border-gray-600 cursor-not-allowed' : (correctedResult.originalFileMetadata ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 border-emerald-400/30 shadow-emerald-500/20' : 'bg-brand-accent hover:bg-brand-accent-light border-transparent')}`}
+                            title={(!isOwner && !user?.isAdmin) ? "Solo l'autore può scaricare l'archivio completo" : "Scarica Archivio SAC"}
                         >
-                            <i className="fas fa-box-open mr-2"></i>
+                            <i className={`fas ${(!isOwner && !user?.isAdmin) ? 'fa-lock' : 'fa-box-open'} mr-2`}></i>
                             SCARICA ARCHIVIO COMPLETO (.SAC)
                             {correctedResult.originalFileMetadata && (
                                 <span className="ml-2 text-[8px] bg-white/20 px-1.5 py-0.5 rounded">ORIGINALE CERTIFICATO</span>

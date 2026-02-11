@@ -338,6 +338,7 @@ export const SonificationPage: React.FC = () => {
                         onVideoGenerated={(blob) => {
                             setResult(prev => prev ? { ...prev, generatedVideoBlob: blob } : null);
                         }}
+                        isOwner={true}
                     />
                 </div>
             )}

@@ -36,6 +36,9 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, us
     const isGuest = !user;
     const { t } = useLanguage();
 
+    const isOwner = user && project.ownerId && user.id === project.ownerId;
+    const canDownload = isOwner || !!user?.isAdmin;
+
     // Helpers
     const getAbsoluteUrl = (url: string | undefined) => {
         if (!url) return null;
@@ -49,7 +52,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, us
 
         return (
             <div className="flex flex-wrap gap-1.5 items-center">
-                {type !== 'live' && (
+                {type !== 'live' && canDownload && (
                     <button onClick={(e) => {
                         e.stopPropagation();
                         const link = document.createElement('a');

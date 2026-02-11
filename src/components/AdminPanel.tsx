@@ -121,8 +121,7 @@ const UserEditModal: React.FC<UserEditModalProps> = ({ user, onClose, onSave, on
 
     const handleDelete = () => {
         if (user && onDelete) {
-            onSave({ ...user, id: user.id }, false); // This is just dummy to show modal
-            // In reality, the parent should handle the confirm logic
+            onDelete(user.id);
         }
     };
 
