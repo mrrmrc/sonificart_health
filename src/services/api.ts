@@ -477,7 +477,10 @@ export const api = {
 
         const response = await fetch(`${API_BASE_URL}/index.php?action=publish_history&auth_token=${encodeURIComponent(token || '')}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
             body: JSON.stringify(body)
         });
         return await handleResponse(response);

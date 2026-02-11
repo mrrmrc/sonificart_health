@@ -285,6 +285,7 @@ export interface DashboardEntry {
     validationHashes?: ValidationHashes;
     musicGenerationPrompt?: MusicGenerationPrompt | null;
     // Extended fields from backend
+    ownerId?: string; // Added for filtering
     configUsed?: ConfigSettings;
     events?: any[]; // Compressed format from backend
     blockData?: BlockAnalysisResult;

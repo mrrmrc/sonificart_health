@@ -655,7 +655,9 @@ export const UserDashboard: React.FC<{ user: User, onLoadEntry: (entry: Dashboar
         setError(null);
         try {
             const data = await api.getHistory();
-            setHistory(Array.isArray(data) ? data : []);
+            // Filter by ownerId if present to avoid showing other users' works (e.g. admin)
+            const userHistory = (Array.isArray(data) ? data : []).filter(item => !item.ownerId || item.ownerId === user.id);
+            setHistory(userHistory);
         } catch (err) {
             console.error(err);
             const msg = err instanceof Error ? err.message : String(err);
@@ -708,6 +710,9 @@ export const UserDashboard: React.FC<{ user: User, onLoadEntry: (entry: Dashboar
         <div className="max-w-5xl mx-auto pb-20 notranslate">
             <div className="flex justify-between items-end mb-8 border-b border-white/10 pb-6">
                 <div><h2 className="text-3xl font-display font-bold text-white mb-2">Archivio Opere</h2><p className="text-brand-text-secondary">Gestisci le tue creazioni.</p></div>
+                <a href="/profile" className="bg-white/5 hover:bg-white/10 text-brand-accent px-4 py-2 rounded-lg border border-brand-accent/20 flex items-center gap-2 transition-all hover:scale-105 shadow-lg group">
+                    <i className="fas fa-external-link-alt group-hover:rotate-45 transition-transform"></i> Vai alla tua Galleria Pubblica
+                </a>
             </div>
             {isLoading ? (
                 <div className="flex flex-col items-center justify-center py-20 text-brand-text-secondary">
