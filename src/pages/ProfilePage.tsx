@@ -1,7 +1,6 @@
-
 // src/pages/ProfilePage.tsx
 import React from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useParams } from 'react-router-dom';
 import { PublicProfile } from '../components/PublicProfile';
 import { User } from '../types';
 
@@ -10,9 +9,17 @@ interface OutletContextType {
 }
 
 export const ProfilePage: React.FC = () => {
-    const { user } = useOutletContext<OutletContextType>();
+    const context = useOutletContext<OutletContextType>();
+    const user = context?.user || null;
+    const { id } = useParams();
 
-    if (!user) return <div className="text-center text-white pt-20">Utente non loggato.</div>;
+    // If viewing a specific artist (public link)
+    if (id) {
+        return <PublicProfile user={user} targetUserId={id} />;
+    }
+
+    // If viewing own private profile
+    if (!user) return <div className="text-center text-white/50 pt-32 italic">Accedi per visualizzare il tuo profilo o creare la tua galleria.</div>;
 
     return <PublicProfile user={user} />;
 };

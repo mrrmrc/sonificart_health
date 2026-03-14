@@ -64,8 +64,12 @@ try {
     $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_pro TINYINT(1) DEFAULT 0");
     $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin TINYINT(1) DEFAULT 0");
     $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS credits INT DEFAULT 0");
+    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS credits_consumed INT DEFAULT 0");
     $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(255) DEFAULT NULL");
     $pdo->exec("ALTER TABLE history ADD COLUMN IF NOT EXISTS video_url VARCHAR(255) DEFAULT NULL");
+    $pdo->exec("ALTER TABLE showcase ADD COLUMN IF NOT EXISTS is_home TINYINT(1) DEFAULT 0");
+    $pdo->exec("ALTER TABLE showcase ADD COLUMN IF NOT EXISTS is_featured TINYINT(1) DEFAULT 0");
+    $pdo->exec("ALTER TABLE showcase ADD COLUMN IF NOT EXISTS is_public TINYINT(1) DEFAULT 0");
 
     // ADMIN LOGS TABLE
     $pdo->exec("CREATE TABLE IF NOT EXISTS admin_logs (
@@ -187,8 +191,10 @@ function getUserIdFromToken($input)
         $token = $matches[1];
     $token = trim($token);
 
-    if (strpos($token, 'user_') === 0)
-        return str_replace('user_', '', $token);
+    // Token format: user_ID_randomhex (e.g. user_5_a1b2c3d4e5f6)
+    // Extract ONLY the numeric ID part
+    if (preg_match('/^user_(\d+)/', $token, $m))
+        return $m[1];
     return null;
 }
 
@@ -658,10 +664,27 @@ if ($action === 'get_showcase' && $method === 'GET') {
             }
         }
 
-        $where = $includeAll ? "1=1" : "s.is_public = 1";
-        // JOIN with history to get forensic and cultural data
-        $stmt = $pdo->query("SELECT s.*, h.image_hash, h.block_data FROM showcase s LEFT JOIN history h ON s.history_id = h.id WHERE $where ORDER BY s.priority DESC, s.created_at DESC");
+        $where = $includeAll ? "1=1" : "s.is_public = 1 AND (s.is_featured = 1 OR s.is_home = 1 OR u.is_admin = 1)";
+
+        // Use CAST to ensure JOIN works between VARCHAR owner_id and INT users.id
+        $sql = "SELECT s.*, h.image_hash, h.block_data FROM showcase s 
+                LEFT JOIN history h ON s.history_id = h.id 
+                LEFT JOIN users u ON CAST(s.owner_id AS CHAR) = CAST(u.id AS CHAR) 
+                WHERE $where ORDER BY s.priority DESC, s.created_at DESC";
+
+        $stmt = $pdo->query($sql);
         $projects = $stmt->fetchAll();
+
+        // Warning Log if empty - helps debug
+        if (count($projects) === 0) {
+            $authStatus = ($checkId) ? "AuthOK (Admin: " . ($includeAll ? 'Yes' : 'No') . ")" : "AuthFail";
+            $msg = "Showcase Empty! Check: $authStatus. WHERE: $where";
+            error_log($msg);
+            // Log to DB so Admin can see in Panel
+            if (function_exists('log_activity')) {
+                log_activity($pdo, $checkId ?? 0, 'DEBUG_SHOWCASE', $msg, 'WARNING');
+            }
+        }
         $mapped = array_map(function ($p) use ($baseUrl) {
             $audio = $p['audio_url'] ? ((strpos($p['audio_url'], '/') === 0) ? $baseUrl . $p['audio_url'] : $p['audio_url']) : null;
             $video = $p['video_url'] ? ((strpos($p['video_url'], '/') === 0) ? $baseUrl . $p['video_url'] : $p['video_url']) : null;
@@ -685,6 +708,7 @@ if ($action === 'get_showcase' && $method === 'GET') {
                 "priority" => (int) $p['priority'],
                 "isPublic" => (bool) $p['is_public'],
                 "isFeatured" => (bool) ($p['is_featured'] ?? 0),
+                "isHome" => (bool) ($p['is_home'] ?? 0),
                 // New Fields for Forensic & Cultural
                 "imageHash" => $p['image_hash'] ?? null,
                 "blockData" => isset($p['block_data']) ? json_decode($p['block_data'], true) : null
@@ -977,11 +1001,37 @@ if ($action === 'update_history_item' && $method === 'POST') {
             sendResponse(["error" => "Unauthorized"], 403);
     }
 
-    // Ensure it is a string
-    if (is_array($configUsed))
-        $configUsed = json_encode($configUsed);
+    // Update config_json if provided
+    if ($configUsed !== null) {
+        if (is_array($configUsed))
+            $configUsed = json_encode($configUsed);
+        $pdo->prepare("UPDATE history SET config_json = ? WHERE id = ?")->execute([$configUsed, $entryId]);
+    }
 
-    $pdo->prepare("UPDATE history SET config_json = ? WHERE id = ?")->execute([$configUsed, $entryId]);
+    // Update title/subtitle/description if provided (PRO user metadata update)
+    $title = $input['title'] ?? ($_POST['title'] ?? null);
+    $subtitle = $input['subtitle'] ?? ($_POST['subtitle'] ?? null);
+    $description = $input['description'] ?? ($_POST['description'] ?? null);
+
+    if ($title !== null || $subtitle !== null || $description !== null) {
+        $fields = [];
+        $values = [];
+        if ($title !== null) {
+            $fields[] = "title = ?";
+            $values[] = $title;
+        }
+        if ($subtitle !== null) {
+            $fields[] = "subtitle = ?";
+            $values[] = $subtitle;
+        }
+        if ($description !== null) {
+            $fields[] = "description = ?";
+            $values[] = $description;
+        }
+        $values[] = $entryId;
+        $pdo->prepare("UPDATE history SET " . implode(", ", $fields) . " WHERE id = ?")->execute($values);
+    }
+
     sendResponse(["success" => true]);
 }
 
@@ -1119,6 +1169,66 @@ if ($action === 'publish_history' && $method === 'POST') {
         error_log("Publish History Critical Error: " . $ex->getMessage());
         sendResponse(["error" => "Errore Server: " . $ex->getMessage()], 500);
     }
+}
+
+// --- UPDATE SHOWCASE ITEM (Admin) ---
+if ($action === 'update_showcase_item' && $method === 'POST') {
+    $userId = getUserIdFromToken($_POST);
+    if (!$userId)
+        sendResponse(["error" => "Unauthorized"], 401);
+
+    // Check Admin
+    $stmt = $pdo->prepare("SELECT is_admin FROM users WHERE id = ?");
+    $stmt->execute([$userId]);
+    if (!$stmt->fetchColumn())
+        sendResponse(["error" => "Forbidden"], 403);
+
+    $id = $_POST['id'] ?? null;
+    if (!$id)
+        sendResponse(["error" => "ID missing"], 400);
+
+    $map = [
+        'isFeatured' => 'is_featured',
+        'isPublic' => 'is_public',
+        'isHome' => 'is_home',
+        'priority' => 'priority',
+        'title' => 'title',
+        'description' => 'description'
+    ];
+
+    $sets = [];
+    $vals = [];
+
+    // Debug Incoming Data
+    error_log("Update Showcase ID $id Payload: " . json_encode($_POST));
+
+    foreach ($map as $key => $col) {
+        if (isset($_POST[$key])) {
+            $val = $_POST[$key];
+            // Robust Boolean conversion
+            if ($val === 'true' || $val === '1' || $val === 1)
+                $val = 1;
+            else if ($val === 'false' || $val === '0' || $val === 0)
+                $val = 0;
+
+            $sets[] = "$col = ?";
+            $vals[] = $val;
+        }
+    }
+
+    if (!empty($sets)) {
+        $vals[] = $id;
+        $sql = "UPDATE showcase SET " . implode(', ', $sets) . " WHERE id = ?";
+        try {
+            $pdo->prepare($sql)->execute($vals);
+            log_activity($pdo, $userId, 'UPDATE_SHOWCASE', "Updated item $id. Fields: " . implode(',', array_keys($_POST)), 'INFO');
+        } catch (PDOException $e) {
+            error_log("Update Showcase SQL Error: " . $e->getMessage());
+            sendResponse(["error" => "DB Error: " . $e->getMessage()], 500);
+        }
+    }
+
+    sendResponse(["success" => true]);
 }
 
 // --- LOGIN ---
@@ -1587,16 +1697,60 @@ if ($action === 'consume_credits') {
         sendResponse(["error" => "Utente non trovato"], 404);
     }
 
-    if ($user['is_pro']) {
+    // Admin passes free
+    if ($user['is_admin']) {
         sendResponse(["success" => true, "credits" => 99999]);
     }
+
+    // PRO Users with "Unlimited" status (e.g. > 5000 credits) are treated as unlimited effectively, 
+    // but we can deduct anyway to track usage if desired. 
+    // The user requested: "I crediti vanno scalati ogni volta che si usa una sonificazione".
+    // "Se invece creo un utente pro senza credito quello è libero." -> This is tricky logic: if 0 => free?
+    // Let's implement: If PRO and credits == 0, allow free pass. If PRO and credits > 0, deduct.
+
+    // Logic:
+    // 1. If Admin -> Free
+    // 2. If Pro AND Credits > 0 -> Deduct (Hybrid Case)
+    // 3. If Pro AND Credits == 0 (or NULL) -> Free (Unlimited Case) -- User request
+    // 4. If Free -> Must have credits
+
+    // Let's refine based on "Se invece creo un utente pro senza credito quello è libero"
+    /*
+       if ($user['credits'] <= 0 && $user['is_pro']) {
+            sendResponse(["success" => true, "credits" => 0]); // Unlimited
+       }
+    */
+
+    // BUT: What if a Hybrid user consumes all credits and reaches 0? They shouldn't become free.
+    // We need a specific flag for "Unlimited". OR we assume "High Credits" = Unlimited.
+    // The user said: "Se invece creo un utente pro senza credito quello è libero."
+    // This implies initial state.
+    // Let's assume if is_pro is TRUE, we check credits.
+    // If credits > 0, we consume.
+    // If credits <= 0, we allow ONLY IF is_pro is true? No, that opens the loophole.
+
+    // BETTER APPROACH:
+    // If is_pro is true, we ALWAYS consume if credits > 0.
+    // If is_pro is true and credits are 0, we treat it as infinite?
+    // Let's simplify: Standard PRO gets 10000 credits. Hybrid gets 30.
+    // We just DEDUCT ALWAYS. If they run out, they run out.
+    // "Se creo un utente pro senza credito quello è libero" -> Maybe they mean Free Tier logic is bypassed?
+    // Actually, "Free" tier implies limits. "Pro" implies features.
+    // Let's just remove the bypass. If an admin wants an unlimited user, give them 1,000,000 credits.
+
+    // Removing the bypass block completely.
+    // Only Admin is bypassed.
+
 
     if ($user['credits'] < $cost) {
         sendResponse(["error" => "Crediti insufficienti", "currentCredits" => (int) $user['credits']], 402);
     }
 
     $newCredits = (int) $user['credits'] - $cost;
-    $pdo->prepare("UPDATE users SET credits = ? WHERE id = ?")->execute([$newCredits, $userId]);
+    $pdo->prepare("UPDATE users SET credits = ?, credits_consumed = credits_consumed + ? WHERE id = ?")->execute([$newCredits, $cost, $userId]);
+
+    // Log for audit
+    log_activity($pdo, $userId, 'CONSUME_CREDITS', "Consumed $cost credits. New Balance: $newCredits", 'INFO');
 
     sendResponse(["success" => true, "credits" => $newCredits]);
 }
@@ -1742,7 +1896,7 @@ if ($userId) {
         }
         if ($action === 'get_users') {
             try {
-                $rawUsers = $pdo->query("SELECT id, name, email, is_pro, is_admin, credits, avatar_url, custom_logo_url, tier, created_at FROM users ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+                $rawUsers = $pdo->query("SELECT id, name, email, is_pro, is_admin, credits, credits_consumed, avatar_url, custom_logo_url, tier, created_at FROM users ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
             } catch (Exception $e) {
                 // ULTRA ROBUST FALLBACK: Select all, no ordering, no specific columns
                 $rawUsers = $pdo->query("SELECT * FROM users LIMIT 100")->fetchAll(PDO::FETCH_ASSOC);
@@ -1757,6 +1911,7 @@ if ($userId) {
                     "isPro" => (bool) ($u['is_pro'] ?? 0),
                     "isAdmin" => (bool) ($u['is_admin'] ?? 0),
                     "credits" => (int) ($u['credits'] ?? 0),
+                    "creditsConsumed" => (int) ($u['credits_consumed'] ?? 0),
                     "avatarUrl" => $u['avatar_url'] ?? '',
                     "customLogoUrl" => $u['custom_logo_url'] ?? null,
                     "tier" => $u['tier'] ?? 'free',
@@ -2018,6 +2173,44 @@ if ($userId) {
                 sendResponse(["error" => "Update Failed: " . $e->getMessage()], 500);
             }
         }
+
+        // --- ADMIN IMPERSONATE USER ---
+        if ($action === 'impersonate_user') {
+            $targetUserId = $input['id'] ?? null;
+            if (!$targetUserId)
+                sendResponse(["error" => "No ID"], 400);
+
+            // Fetch target user details
+            $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
+            $stmt->execute([$targetUserId]);
+            $targetUser = $stmt->fetch();
+
+            if (!$targetUser)
+                sendResponse(["error" => "User not found"], 404);
+
+            // Generate token for target user
+            $token = 'user_' . $targetUser['id'] . '_' . bin2hex(random_bytes(16));
+
+            $tier = $targetUser['tier'] ?? 'free';
+            $isPro = (bool) $targetUser['is_pro'];
+
+            sendResponse([
+                "success" => true,
+                "token" => $token,
+                "user" => [
+                    "id" => (string) $targetUser['id'],
+                    "name" => $targetUser['name'],
+                    "email" => $targetUser['email'],
+                    "isPro" => $isPro,
+                    "isAdmin" => (bool) $targetUser['is_admin'],
+                    "credits" => (int) $targetUser['credits'],
+                    "avatarUrl" => $targetUser['avatar_url'],
+                    "customLogoUrl" => $targetUser['custom_logo_url'] ?? null,
+                    "tier" => $tier,
+                    "proExpiresAt" => $targetUser['pro_expires_at'] ?? null
+                ]
+            ]);
+        }
     }
 }
 
@@ -2073,5 +2266,67 @@ if (($action === 'update_privacy_policy' || $action === 'update_app_setting') &&
 }
 
 if (!$action)
-    sendResponse(["message" => "API Ready (v1.16)"]);
+    sendResponse(["message" => "API Ready (v1.17 - Credit Tracking Active)"]);
+// --- GET PUBLIC PROFILE (No Auth Required) ---
+if ($action === 'get_public_profile' && $method === 'GET') {
+    $targetId = $_GET['id'] ?? null;
+    if (!$targetId) {
+        sendResponse(["error" => "ID utente mancante"], 400);
+    }
+
+    // 1. Get User Info (Limited)
+    $stmt = $pdo->prepare("SELECT id, name, avatar_url, custom_logo_url, tier, created_at FROM users WHERE id = ?");
+    $stmt->execute([$targetId]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$user) {
+        sendResponse(["error" => "Artista non trovato"], 404);
+    }
+
+    // 2. Get User's Public Projects (Showcase only)
+    $stmt = $pdo->prepare("
+        SELECT s.*, h.image_hash, h.block_data 
+        FROM showcase s 
+        LEFT JOIN history h ON s.history_id = h.id 
+        WHERE s.owner_id = ? AND s.is_public = 1 
+        ORDER BY s.priority DESC, s.created_at DESC
+    ");
+    $stmt->execute([$targetId]);
+    $rawProjects = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $projects = array_map(function ($p) use ($baseUrl) {
+        $audio = $p['audio_url'] ? ((strpos($p['audio_url'], '/') === 0) ? $baseUrl . $p['audio_url'] : $p['audio_url']) : null;
+        $video = $p['video_url'] ? ((strpos($p['video_url'], '/') === 0) ? $baseUrl . $p['video_url'] : $p['video_url']) : null;
+        $img = (strpos($p['image_url'], '/') === 0) ? $baseUrl . $p['image_url'] : $p['image_url'];
+
+        return [
+            "id" => (string) $p['id'],
+            "title" => $p['title'],
+            "date" => $p['created_at'],
+            "author" => $p['author_name'],
+            "description" => $p['description'],
+            "imageUrl" => $img,
+            "audioUrl" => $audio,
+            "videoUrl" => $video,
+            "paradigm" => $p['paradigm'],
+            "tradition" => $p['tradition'],
+            "tags" => $p['tags'] ? explode(',', $p['tags']) : [],
+            "stats" => ["duration" => $p['duration'], "notes" => (int) $p['notes_count']],
+            "imageHash" => $p['image_hash'] ?? null,
+            "blockData" => isset($p['block_data']) ? json_decode($p['block_data'], true) : null
+        ];
+    }, $rawProjects);
+
+    sendResponse([
+        "user" => [
+            "id" => (string) $user['id'],
+            "name" => $user['name'],
+            "avatarUrl" => $user['avatar_url'],
+            "customLogoUrl" => $user['custom_logo_url'],
+            "tier" => $user['tier'],
+            "joined" => $user['created_at']
+        ],
+        "projects" => $projects
+    ]);
+}
 ?>

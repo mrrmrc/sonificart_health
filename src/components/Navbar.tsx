@@ -131,11 +131,12 @@ export const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, isAdmin, userCredits
                                 className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border backdrop-blur-md ${isProUser ? 'bg-gradient-to-r from-yellow-500/20 to-amber-600/20 border-yellow-500/50 shadow-[0_0_10px_rgba(234,179,8,0.2)]' :
                                     (userCredits && userCredits > 0) ? 'bg-green-500/20 border-green-500/50' : 'bg-red-500/20 border-red-500/50'
                                     }`}
-                                title={isProUser ? "Crediti Illimitati" : `Crediti rimanenti: ${userCredits}`}
+                                title={(isProUser && userCredits && userCredits > 5000) ? "Crediti Illimitati" : `Crediti rimanenti: ${userCredits}`}
                             >
-                                <i className={`fas ${isProUser ? 'fa-infinity' : 'fa-coins'} ${isProUser ? 'text-yellow-400' : 'text-white'} text-xs`}></i>
+                                <i className={`fas ${isProUser && (!userCredits || userCredits > 5000) ? 'fa-infinity' : 'fa-coins'} ${isProUser ? 'text-yellow-400' : 'text-white'} text-xs`}></i>
                                 <span className="text-xs font-bold font-mono text-white">
-                                    {isProUser ? 'PRO' : userCredits}
+                                    {(isProUser && (!userCredits || userCredits > 5000)) ? 'PRO' :
+                                        (isProUser ? `${userCredits}` : userCredits)}
                                 </span>
                             </div>
 

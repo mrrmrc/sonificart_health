@@ -386,6 +386,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onExplor
                         <p className="text-xl text-gray-400 max-w-2xl mx-auto font-light leading-relaxed">
                             {t('landing.process.subtitle')}
                         </p>
+
+                        <div className="mt-8 flex justify-center">
+                            <button
+                                onClick={() => setShowVideoModal(true)}
+                                className="group flex items-center gap-3 px-6 py-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-brand-accent/50 transition-all font-bold text-gray-300 hover:text-brand-accent backdrop-blur-md"
+                            >
+                                <span className="w-8 h-8 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent group-hover:scale-110 transition-transform">
+                                    <i className="fas fa-play text-xs"></i>
+                                </span>
+                                Guarda il Video Esplicativo
+                                <i className="fas fa-arrow-right opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all text-xs"></i>
+                            </button>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8 ">
@@ -435,11 +448,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onExplor
             {/* VIDEO MODAL POPUP */}
             {showVideoModal && (
                 <div
-                    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm animate-fade-in"
+                    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm animate-fade-in p-4"
                     onClick={() => setShowVideoModal(false)}
                 >
                     <div
-                        className="relative w-full max-w-5xl mx-4 bg-black rounded-2xl overflow-hidden shadow-2xl border border-white/10 animate-zoom-in"
+                        className="relative w-full max-w-6xl bg-black/50 backdrop-blur-xl rounded-3xl overflow-hidden shadow-2xl border border-white/10 animate-zoom-in"
                         onClick={e => e.stopPropagation()}
                     >
                         {/* Close Button */}
@@ -450,28 +463,60 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onExplor
                             <i className="fas fa-times text-lg"></i>
                         </button>
 
-                        {/* Video Player */}
-                        <div className="aspect-video w-full bg-black">
-                            <iframe
-                                width="100%"
-                                height="100%"
-                                src="https://www.youtube.com/embed/AbngMlode4Q?autoplay=1"
-                                title="YouTube video player"
-                                frameBorder="0"
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                                allowFullScreen
-                            ></iframe>
-                        </div>
-
-                        {/* Modal Footer */}
-                        <div className="p-6 bg-gradient-to-t from-black to-transparent">
-                            <h3 className="text-xl font-bold text-white mb-2">
-                                <i className="fas fa-play-circle text-brand-accent mr-2"></i>
-                                Come Funziona SonificA.R.T.
+                        <div className="p-8 md:p-12 overflow-y-auto max-h-[90vh]">
+                            <h3 className="text-3xl font-display font-black text-white mb-8 text-center tracking-tight">
+                                Scopri <span className="text-brand-accent">SonificA.R.T.</span>
                             </h3>
-                            <p className="text-gray-400 text-sm">
-                                Scopri come trasformiamo le immagini in composizioni musicali uniche e verificabili.
-                            </p>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                {/* Video 1: Vision */}
+                                <div className="group">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center border border-purple-500/30">
+                                            <i className="fas fa-eye text-purple-400"></i>
+                                        </div>
+                                        <h4 className="text-xl font-bold text-white group-hover:text-purple-400 transition-colors">Visione Artistica</h4>
+                                    </div>
+                                    <div className="aspect-video w-full bg-black rounded-2xl overflow-hidden border border-white/10 shadow-lg group-hover:shadow-purple-500/10 group-hover:border-purple-500/30 transition-all duration-500">
+                                        <iframe
+                                            width="100%"
+                                            height="100%"
+                                            src="https://www.youtube.com/embed/AbngMlode4Q"
+                                            title="Visione Artistica"
+                                            frameBorder="0"
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                            allowFullScreen
+                                        ></iframe>
+                                    </div>
+                                    <p className="text-sm text-gray-400 mt-3 leading-relaxed">
+                                        Un viaggio emozionale ed evocativo nell'universo della sonificazione.
+                                    </p>
+                                </div>
+
+                                {/* Video 2: Technical */}
+                                <div className="group">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-10 h-10 rounded-full bg-brand-accent/20 flex items-center justify-center border border-brand-accent/30">
+                                            <i className="fas fa-cogs text-brand-accent"></i>
+                                        </div>
+                                        <h4 className="text-xl font-bold text-white group-hover:text-brand-accent transition-colors">Come Funziona</h4>
+                                    </div>
+                                    <div className="aspect-video w-full bg-black rounded-2xl overflow-hidden border border-white/10 shadow-lg group-hover:shadow-brand-accent/10 group-hover:border-brand-accent/30 transition-all duration-500">
+                                        <iframe
+                                            width="100%"
+                                            height="100%"
+                                            src="https://www.youtube.com/embed/RfIz6ZgqCLA"
+                                            title="Come Funziona"
+                                            frameBorder="0"
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                            allowFullScreen
+                                        ></iframe>
+                                    </div>
+                                    <p className="text-sm text-gray-400 mt-3 leading-relaxed">
+                                        Spiegazione dettagliata del processo di analisi e generazione sonora.
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

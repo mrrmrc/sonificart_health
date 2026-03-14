@@ -34,7 +34,11 @@ export const LandingPageWrapper: React.FC = () => {
     const loadProjects = async () => {
         try {
             const data = await api.getShowcase();
-            if (Array.isArray(data)) setLatestProjects(data.slice(0, 8));
+            if (Array.isArray(data)) {
+                // Filter only Home Page items
+                const homeItems = data.filter(p => p.isHome);
+                setLatestProjects(homeItems.slice(0, 8));
+            }
         } catch (e) { console.error("Failed to load showcase preview", e); }
     };
 

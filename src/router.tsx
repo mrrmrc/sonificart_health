@@ -25,6 +25,7 @@ export const router = createBrowserRouter([
             { path: "compare", element: <ComparePage /> },
             { path: "dashboard", element: <DashboardPage /> },
             { path: "profile", element: <ProfilePage /> },
+            { path: "artist/:id", element: <ProfilePage /> },
             { path: "admin", element: <AdminPage /> },
             { path: "museum", element: <MuseumPage /> },
             { path: "live/:id", element: <PerformancePage /> },

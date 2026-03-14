@@ -316,6 +316,7 @@ export interface User {
     registeredAt: string;
     lastLogin?: string;
     credits: number;
+    creditsConsumed?: number;
 }
 
 export interface SystemStats {
@@ -361,6 +362,7 @@ export interface ShowcaseProject {
     historyId?: string;
     priority?: number;
     isFeatured?: boolean;
+    isHome?: boolean;
     imageHash?: string;
     blockData?: BlockAnalysisResult;
 }

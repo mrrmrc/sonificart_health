@@ -191,8 +191,8 @@ export const SonificationPage: React.FC = () => {
         if (!imageFile || !user) { setIsLoginModalOpen(true); return; }
 
         // Credit check and consumption
-        if (!isUnlimited && user) {
-            const cost = paradigm === 'scientific' ? 1 : 2;
+        if (user && !user.isAdmin) {
+            const cost = 3;
             if ((user.credits || 0) < cost) {
                 setConfirmModal({
                     isOpen: true,

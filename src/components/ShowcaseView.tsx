@@ -52,7 +52,7 @@ export const ShowcaseView: React.FC<ShowcaseViewProps> = ({ user, initialProject
     useEffect(() => { fetchShowcase(); }, [initialProjectId]);
 
     const filteredAndSortedProjects = useMemo(() => {
-        let result = [...projects];
+        let result = projects.filter(p => p.isFeatured);
         if (filter !== 'all') result = result.filter(p => p.paradigm === filter);
         result.sort((a, b) => {
             if (sortOrder === 'newest') return new Date(b.date).getTime() - new Date(a.date).getTime();

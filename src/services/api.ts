@@ -610,7 +610,12 @@ export const api = {
 
 
     getShowcase: async (includeAll: boolean = false) => {
-        const response = await fetch(`${API_BASE_URL}/index.php?action=get_showcase${includeAll ? '&all=1' : ''}&t=${new Date().getTime()}`);
+        const token = getToken();
+        let url = `${API_BASE_URL}/index.php?action=get_showcase${includeAll ? '&all=1' : ''}&t=${new Date().getTime()}`;
+        if (token) {
+            url += `&auth_token=${token}`;
+        }
+        const response = await fetch(url);
         return await handleResponse(response);
     },
 
@@ -846,6 +851,26 @@ export const api = {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: params
         });
+    },
+
+    impersonateUser: async (id: string): Promise<{ token: string, user: User }> => {
+        const token = getToken();
+        if (!token) throw new Error("Unauthorized");
+        const params = new URLSearchParams();
+        params.append('auth_token', token);
+        params.append('id', id);
+
+        const response = await fetch(`${API_BASE_URL}/index.php?action=impersonate_user`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+        });
+        return await handleResponse(response);
+    },
+
+    getPublicProfile: async (id: string) => {
+        const response = await fetch(`${API_BASE_URL}/index.php?action=get_public_profile&id=${id}`);
+        return await handleResponse(response);
     },
 
     getAppSetting: async (key: string): Promise<string> => {

@@ -357,6 +357,20 @@ export const AdminPanel: React.FC = () => {
         });
     };
 
+    const handleImpersonate = async (u: User) => {
+        if (!confirm(`Sei sicuro di voler accedere come ${u.name}?`)) return;
+        try {
+            const data = await api.impersonateUser(u.id);
+            if (data.token) {
+                localStorage.setItem('sonificart_auth_token', data.token);
+                sessionStorage.removeItem('sonificart_token'); // Clear strictly
+                window.location.href = '/dashboard';
+            }
+        } catch (e) {
+            alert("Errore accesso come utente: " + e);
+        }
+    };
+
     const handleUserSave = async (userData: Partial<User>, isNew: boolean) => {
         try {
             if (isNew) await api.adminCreateUser(userData); else await api.updateUser(userData as any);
@@ -576,15 +590,30 @@ export const AdminPanel: React.FC = () => {
                     <div className="p-4 border-b border-white/10 flex justify-between items-center"><h3 className="font-bold text-white">Gestione Utenti</h3><button onClick={() => { setIsCreatingUser(true); setEditingUser(null); }} className="bg-brand-accent hover:bg-brand-accent-light text-brand-primary px-4 py-2 rounded-lg text-xs font-bold shadow-lg transition-all"><i className="fas fa-plus mr-1"></i> Nuovo Utente</button></div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-left text-sm">
-                            <thead className="bg-black/30 text-gray-400 uppercase text-xs"><tr><th className="p-4">Nome</th><th className="p-4">Email</th><th className="p-4">Ruolo</th><th className="p-4 text-right">Crediti</th><th className="p-4 text-right">Azioni</th></tr></thead>
+                            <thead className="bg-black/30 text-gray-400 uppercase text-xs"><tr><th className="p-4">ID</th><th className="p-4">Nome</th><th className="p-4">Email</th><th className="p-4">Ruolo</th><th className="p-4 text-right">Crediti</th><th className="p-4 text-right">Azioni</th></tr></thead>
                             <tbody className="divide-y divide-white/5 text-white">
                                 {users.map(u => (
                                     <tr key={u.id} className="hover:bg-white/5 transition-colors">
+                                        <td className="p-4 text-xs text-gray-500 font-mono">{u.id}</td>
                                         <td className="p-4 font-bold">{u.name}</td>
                                         <td className="p-4 text-gray-400">{u.email}</td>
                                         <td className="p-4"><span className={`px-2 py-1 rounded text-xs font-bold ${u.isAdmin ? 'bg-red-500/20 text-red-400' : (u.isPro ? 'bg-yellow-500/20 text-yellow-400' : (u.credits > 20 ? 'bg-blue-500/20 text-blue-400' : 'bg-gray-700 text-gray-300'))}`}>{u.isAdmin ? 'ADMIN' : (u.isPro ? 'PRO' : (u.credits > 20 ? 'CUSTOM' : 'FREE'))}</span></td>
-                                        <td className="p-4 text-right font-mono">{u.isAdmin || u.isPro ? '∞' : u.credits}</td>
-                                        <td className="p-4 text-right"><button onClick={() => setEditingUser(u)} className="text-white/50 hover:text-white transition-colors bg-white/5 hover:bg-white/10 p-2 rounded"><i className="fas fa-edit"></i></button></td>
+                                        <td className="p-4 text-right font-mono">
+                                            {u.isAdmin ? '∞' : (
+                                                <div className="flex flex-col items-end">
+                                                    <span className="font-bold text-white">{u.credits}</span>
+                                                    {u.creditsConsumed !== undefined && u.creditsConsumed > 0 && (
+                                                        <span className="text-[10px] text-gray-500" title={`Crediti Consumati: ${u.creditsConsumed}`}>
+                                                            (Iniz: {u.credits + u.creditsConsumed})
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td className="p-4 text-right">
+                                            <button onClick={() => handleImpersonate(u)} className="text-white/50 hover:text-white transition-colors bg-white/5 hover:bg-white/10 p-2 rounded mr-2" title="Accedi come utente"><i className="fas fa-sign-in-alt"></i></button>
+                                            <button onClick={() => setEditingUser(u)} className="text-white/50 hover:text-white transition-colors bg-white/5 hover:bg-white/10 p-2 rounded"><i className="fas fa-edit"></i></button>
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -596,7 +625,7 @@ export const AdminPanel: React.FC = () => {
             {activeTab === 'showcase' && (
                 <div className="grid gap-4">
                     <div className="bg-brand-secondary/30 p-4 rounded-xl border border-white/5 mb-4 flex items-center justify-between text-xs text-gray-400">
-                        <p><i className="fas fa-info-circle mr-2"></i> Le opere con "Pubblica" attiva sono visibili nella landing page. La priorità (da 0 a 99) determina l'ordine di apparizione.</p>
+                        <p><i className="fas fa-info-circle mr-2"></i> "Pubblica" rende visibile l'opera nel profilo dell'artista. "Vetrina Globale" la mostra nella Galleria Principale (Home/Gallery).</p>
                     </div>
                     {projects.map(p => (
                         <div key={p.id} className={`bg-white/5 p-4 rounded-xl border transition-all flex flex-col md:flex-row justify-between items-center gap-4 ${p.isPublic ? 'border-brand-accent/20' : 'border-white/5 opacity-60'}`}>
@@ -607,7 +636,8 @@ export const AdminPanel: React.FC = () => {
                                     <p className="text-xs text-brand-text-secondary">{p.author} • {p.date}</p>
                                     <div className="flex gap-2 mt-1">
                                         <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-gray-400 uppercase font-mono">{p.paradigm}</span>
-                                        {p.isFeatured && <span className="text-[10px] bg-yellow-500/20 px-1.5 py-0.5 rounded text-yellow-400 uppercase font-bold"><i className="fas fa-star mr-1"></i>Slider</span>}
+                                        {p.isFeatured && <span className="text-[10px] bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded uppercase font-bold"><i className="fas fa-images mr-1"></i>Galleria</span>}
+                                        {p.isHome && <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded uppercase font-bold"><i className="fas fa-star mr-1"></i>Home</span>}
                                     </div>
                                 </div>
                             </div>
@@ -624,18 +654,29 @@ export const AdminPanel: React.FC = () => {
                                 </div>
 
                                 <div className="flex flex-col items-center gap-1">
-                                    <span className="text-[10px] text-gray-500 uppercase font-bold">Slider</span>
+                                    <span className="text-[10px] text-gray-500 uppercase font-bold">Galleria</span>
                                     <button
                                         onClick={() => handleShowcaseUpdate(p.id, { isFeatured: !p.isFeatured })}
-                                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${p.isFeatured ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/20' : 'bg-white/5 text-gray-600'}`}
-                                        title="Mostra nello slider principale"
+                                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${p.isFeatured ? 'bg-purple-500 text-black shadow-lg shadow-purple-500/20' : 'bg-white/5 text-gray-600'}`}
+                                        title="Mostra nella Galleria Principale"
                                     >
                                         <i className="fas fa-images"></i>
                                     </button>
                                 </div>
 
                                 <div className="flex flex-col items-center gap-1">
-                                    <span className="text-[10px] text-gray-500 uppercase font-bold">Status</span>
+                                    <span className="text-[10px] text-gray-500 uppercase font-bold">Home Page</span>
+                                    <button
+                                        onClick={() => handleShowcaseUpdate(p.id, { isHome: !p.isHome })}
+                                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${p.isHome ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/20' : 'bg-white/5 text-gray-600'}`}
+                                        title="Mostra nella Vetrina Home (Slider)"
+                                    >
+                                        <i className="fas fa-star"></i>
+                                    </button>
+                                </div>
+
+                                <div className="flex flex-col items-center gap-1">
+                                    <span className="text-[10px] text-gray-500 uppercase font-bold">Stato</span>
                                     <button
                                         onClick={() => handleShowcaseUpdate(p.id, { isPublic: !p.isPublic })}
                                         className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${p.isPublic ? 'bg-brand-accent/10 border-brand-accent text-brand-accent' : 'bg-white/5 border-white/10 text-gray-500'}`}
