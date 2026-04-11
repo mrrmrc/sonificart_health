@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useOutletContext } from 'react-router-dom';
 import { GuidedPhotoCapture } from './GuidedPhotoCapture';
 import { normalizeImage, NormalizationReport, NormalizationOptions } from '../services/imageNormalizationService';
@@ -117,7 +118,7 @@ export const PhotoStandardizationModal: React.FC<PhotoStandardizationModalProps>
         setMode('capture');
     };
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-hidden bg-black/80 backdrop-blur-sm shadow-2xl">
             {/* Backdrop explicit */}
             <div
@@ -224,7 +225,8 @@ export const PhotoStandardizationModal: React.FC<PhotoStandardizationModalProps>
                     />
                 )}
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
