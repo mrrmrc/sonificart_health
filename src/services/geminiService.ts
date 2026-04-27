@@ -3,13 +3,34 @@ import { MusicGenerationPrompt, Tradition, BlockAnalysisResult } from "../types"
 import { fileToBase64 } from "../utils/fileUtils";
 
 // --- CONFIGURAZIONE CHIAVE ---
-const GOOGLE_API_KEY = "AIzaSyBtEtAu3W09-UAp7J0mc2x07HwvQt3UqAE";
+import { api as backendApi } from './api';
+
+let cachedApiKey: string | null = null;
+let lastApiKeyFetchTime = 0;
+
+export async function getGeminiApiKey(): Promise<string> {
+    if (cachedApiKey && (Date.now() - lastApiKeyFetchTime < 60000 * 5)) return cachedApiKey;
+    try {
+        const keyRaw = await backendApi.getAppSetting('gemini_api_key');
+        const cleanKey = keyRaw ? keyRaw.replace(/<[^>]*>?/gm, '').trim() : '';
+        if (cleanKey) {
+            cachedApiKey = cleanKey;
+            lastApiKeyFetchTime = Date.now();
+            return cleanKey;
+        }
+    } catch(e) {
+        console.warn("API Key non trovata nel DB, uso fallback o vuota", e);
+    }
+    // Fallback alla vecchia chiave per non rompere il sistema (se ancora attiva) o restituire vuoto
+    return "AIzaSyBtEtAu3W09-UAp7J0mc2x07HwvQt3UqAE"; 
+}
 export async function describeImageContent(imageFile: File): Promise<string> {
-    if (!GOOGLE_API_KEY) {
+    const apiKey = await getGeminiApiKey();
+    if (!apiKey) {
         throw new Error("Chiave API Google mancante.");
     }
 
-    const ai = new GoogleGenAI({ apiKey: GOOGLE_API_KEY });
+    const ai = new GoogleGenAI({ apiKey: apiKey });
     const base64Image = await fileToBase64(imageFile);
 
     const imagePart = {
@@ -50,11 +71,12 @@ export async function generateMusicPromptFromAnalysisHybrid(
     durationSeconds: number
 ): Promise<MusicGenerationPrompt> {
 
-    if (!GOOGLE_API_KEY) {
+    const apiKey = await getGeminiApiKey();
+    if (!apiKey) {
         throw new Error("Chiave API Google mancante.");
     }
 
-    const ai = new GoogleGenAI({ apiKey: GOOGLE_API_KEY });
+    const ai = new GoogleGenAI({ apiKey: apiKey });
 
     // PROMPT ALTAMENTE DETTAGLIATO - FUSIONE SEMANTICA AGGRESSIVA - FORZATURA DURATA
     const textPart = {

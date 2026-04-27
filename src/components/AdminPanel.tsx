@@ -35,7 +35,7 @@ const emptyProject: Omit<ShowcaseProject, 'id'> = {
     videoUrl: ''
 };
 
-type AdminTab = 'overview' | 'requests' | 'users' | 'showcase' | 'logs' | 'database' | 'settings' | 'cookies';
+type AdminTab = 'overview' | 'requests' | 'users' | 'showcase' | 'logs' | 'database' | 'settings' | 'cookies' | 'api';
 
 const StatCard: React.FC<{ title: string; value: string | number; subtext: string; icon: string; color: string }> = ({ title, value, subtext, icon, color }) => (
     <div className="bg-brand-secondary/40 p-6 rounded-xl border border-brand-secondary flex items-center gap-4 hover:bg-brand-secondary/60 transition-colors">
@@ -233,6 +233,10 @@ export const AdminPanel: React.FC = () => {
         'upload_disclaimer': 'Disclaimer Upload'
     };
 
+    // API Settings State
+    const [apiSettings, setApiSettings] = useState({ gemini_api_key: '', gemini_api_email: '', gemini_api_budget: '' });
+    const [isTestingApi, setIsTestingApi] = useState(false);
+
     // Edit States
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [isCreatingUser, setIsCreatingUser] = useState(false);
@@ -264,6 +268,13 @@ export const AdminPanel: React.FC = () => {
             }
             if (activeTab === 'cookies') {
                 setCookieLogs(await api.getCookieLogs());
+            }
+            if (activeTab === 'api') {
+                setApiSettings({
+                    gemini_api_key: (await api.getAppSetting('gemini_api_key')).replace(/<[^>]*>?/gm, '').trim(),
+                    gemini_api_email: (await api.getAppSetting('gemini_api_email')).replace(/<[^>]*>?/gm, '').trim(),
+                    gemini_api_budget: (await api.getAppSetting('gemini_api_budget')).replace(/<[^>]*>?/gm, '').trim()
+                });
             }
         } catch (e) { console.error(e); }
         finally { setIsLoading(false); }
@@ -452,9 +463,9 @@ export const AdminPanel: React.FC = () => {
             <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
                 <h2 className="text-3xl font-bold text-white flex items-center gap-3"><i className="fas fa-user-shield text-brand-accent"></i> Admin Dashboard</h2>
                 <div className="bg-brand-secondary/50 p-1 rounded-lg flex overflow-x-auto">
-                    {['overview', 'requests', 'users', 'showcase', 'logs', 'cookies', 'database', 'settings'].map(tab => (
+                    {['overview', 'requests', 'users', 'showcase', 'logs', 'cookies', 'database', 'settings', 'api'].map(tab => (
                         <button key={tab} onClick={() => setActiveTab(tab as AdminTab)} className={`px-4 py-2 rounded text-sm font-bold capitalize whitespace-nowrap ${activeTab === tab ? 'bg-brand-accent text-black' : 'text-white hover:bg-white/10'}`}>
-                            {tab === 'settings' ? 'Impostazioni' : (tab === 'cookies' ? 'Cookie Consent' : tab)} {tab === 'requests' && requests.length > 0 && `(${requests.length})`}
+                            {tab === 'settings' ? 'Impostazioni' : (tab === 'cookies' ? 'Cookie Consent' : (tab === 'api' ? 'API & AI' : tab))} {tab === 'requests' && requests.length > 0 && `(${requests.length})`}
                         </button>
                     ))}
                 </div>
@@ -841,6 +852,92 @@ export const AdminPanel: React.FC = () => {
                                 {cookieLogs.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-gray-500 italic">Nessun log consensi registrato.</td></tr>}
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'api' && (
+                <div className="bg-[#1e1e2e] rounded-xl border border-white/10 p-6">
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-xl font-bold text-white"><i className="fas fa-robot text-brand-accent mr-3"></i> Gestione API Google Gemini</h3>
+                    </div>
+
+                    <div className="space-y-6 max-w-3xl">
+                        <div className="bg-white/5 p-4 rounded-lg border border-white/5">
+                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Google AI Studio API Key</label>
+                            <input 
+                                type="password" 
+                                value={apiSettings.gemini_api_key} 
+                                onChange={e => setApiSettings(prev => ({...prev, gemini_api_key: e.target.value}))} 
+                                className="w-full bg-black/50 border border-white/10 rounded-lg p-3 text-white text-sm font-mono focus:border-brand-accent outline-none" 
+                                placeholder="AIzaSy..." 
+                            />
+                            <p className="text-[10px] text-gray-500 mt-1">La chiave usata per tutte le chiamate ad AI Generativa. Tieni questo valore al sicuro.</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="bg-white/5 p-4 rounded-lg border border-white/5">
+                                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Email Notifiche (Info)</label>
+                                <input 
+                                    type="email" 
+                                    value={apiSettings.gemini_api_email} 
+                                    onChange={e => setApiSettings(prev => ({...prev, gemini_api_email: e.target.value}))} 
+                                    className="w-full bg-black/50 border border-white/10 rounded-lg p-3 text-white text-sm focus:border-brand-accent outline-none" 
+                                    placeholder="admin@sonificart.com" 
+                                />
+                            </div>
+                            <div className="bg-white/5 p-4 rounded-lg border border-white/5">
+                                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Budget / Scadenza (Info)</label>
+                                <input 
+                                    type="text" 
+                                    value={apiSettings.gemini_api_budget} 
+                                    onChange={e => setApiSettings(prev => ({...prev, gemini_api_budget: e.target.value}))} 
+                                    className="w-full bg-black/50 border border-white/10 rounded-lg p-3 text-white text-sm focus:border-brand-accent outline-none" 
+                                    placeholder="Es: $50 / Scade: 31-12-2026" 
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex gap-4 pt-4 border-t border-white/5">
+                            <button
+                                onClick={async () => {
+                                    setIsTestingApi(true);
+                                    try {
+                                        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiSettings.gemini_api_key}`);
+                                        if (res.ok) setConfirmModal({ isOpen: true, title: "API Valide", message: "Connessione a Google AI Studio effettuata con successo! La chiave è operativa.", type: 'success', singleButton: true, onConfirm: () => setConfirmModal(prev => ({...prev, isOpen: false })) });
+                                        else setConfirmModal({ isOpen: true, title: "Errore API", message: "Chiave non valida o scaduta.", type: 'danger', singleButton: true, onConfirm: () => setConfirmModal(prev => ({...prev, isOpen: false })) });
+                                    } catch(e) {
+                                        setConfirmModal({ isOpen: true, title: "Errore Rete", message: "Impossibile connettersi o CORS error.", type: 'danger', singleButton: true, onConfirm: () => setConfirmModal(prev => ({...prev, isOpen: false })) });
+                                    } finally {
+                                        setIsTestingApi(false);
+                                    }
+                                }}
+                                disabled={isTestingApi || !apiSettings.gemini_api_key}
+                                className="bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-lg font-bold shadow-lg transition-all disabled:opacity-50"
+                            >
+                                <i className={`fas fa-stethoscope mr-2 ${isTestingApi ? 'fa-spin' : ''}`}></i> {isTestingApi ? 'Test in corso...' : 'Test Connessione'}
+                            </button>
+                            
+                            <button
+                                onClick={async () => {
+                                    setIsLoading(true);
+                                    try {
+                                        await api.updateAppSetting('gemini_api_key', apiSettings.gemini_api_key);
+                                        await api.updateAppSetting('gemini_api_email', apiSettings.gemini_api_email);
+                                        await api.updateAppSetting('gemini_api_budget', apiSettings.gemini_api_budget);
+                                        setConfirmModal({ isOpen: true, title: "Salvataggio Riuscito", message: "Impostazioni API Google aggiornate con successo.", type: 'success', singleButton: true, onConfirm: () => setConfirmModal(prev => ({...prev, isOpen: false })) });
+                                    } catch(e) {
+                                        setConfirmModal({ isOpen: true, title: "Errore Salvataggio", message: "Impossibile salvare: " + (e as Error).message, type: 'danger', singleButton: true, onConfirm: () => setConfirmModal(prev => ({...prev, isOpen: false })) });
+                                    } finally {
+                                        setIsLoading(false);
+                                    }
+                                }}
+                                disabled={isLoading}
+                                className="bg-brand-accent hover:bg-brand-accent-light text-brand-primary px-6 py-3 rounded-lg font-bold shadow-lg transition-all ml-auto disabled:opacity-50"
+                            >
+                                <i className="fas fa-save mr-2"></i> {isLoading ? 'Salvataggio...' : 'Salva Impostazioni'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
