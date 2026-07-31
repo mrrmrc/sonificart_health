@@ -171,7 +171,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
 
                 {/* WHO HEALTH AGENT */}
                 <div className="pt-4 border-t border-white/10">
-                    <div className="flex justify-between items-center mb-4">
+                    <div className="flex justify-between items-center mb-1">
                         <h4 className="text-sm font-bold text-white">WHO Health Agent (Benessere)</h4>
                         <label htmlFor="health-agent-toggle" className="flex items-center cursor-pointer">
                             <div className="relative">
@@ -188,19 +188,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                         </label>
                     </div>
                     {config.useHealthAgent && (
-                        <div className="animate-fade-in grid grid-cols-1 gap-4">
-                            <div>
-                                <label htmlFor="healthEnrichment" className="text-xs font-bold text-brand-text-secondary uppercase mb-1 block">Arricchisci il Prompt</label>
-                                <textarea
-                                    id="healthEnrichment"
-                                    value={config.healthEnrichment || ""}
-                                    onChange={(e) => onConfigChange({ healthEnrichment: e.target.value })}
-                                    placeholder="Es. Voglio molta energia e ritmo, focus su vitalità"
-                                    className="w-full p-2 bg-black/20 border border-white/10 rounded text-sm text-white focus:ring-2 focus:ring-green-400 focus:outline-none h-20 resize-none"
-                                />
-                                <p className="text-[10px] text-brand-text-secondary mt-1">Genera musica per il benessere attivo. Gli elementi soporiferi (es. ninna nanna) sono disabilitati di default.</p>
-                            </div>
-                        </div>
+                        <p className="text-[10px] text-green-400 mt-1 animate-fade-in">Generazione ottimizzata tramite RAG (Health Evidence Network Report 67) attiva. Elementi soporiferi disabilitati.</p>
                     )}
                 </div>
 

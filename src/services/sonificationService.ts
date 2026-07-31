@@ -880,8 +880,7 @@ export async function sonifyImage(
             blockAnalysisResult.globalStats,
             scanPatternName,
             imageDescription,
-            totalDurationSeconds,
-            config.healthEnrichment || ""
+            totalDurationSeconds
         ) : await generateMusicPromptFromAnalysis(
             culturalSelectionResult.tradition,
             blockAnalysisResult.globalStats,
@@ -1031,8 +1030,7 @@ async function sonifyImageArtisticOrHybrid(
             blockAnalysisResult.globalStats,
             scanPatternName,
             imageDescription,
-            totalDurationSeconds,
-            config.healthEnrichment || ""
+            totalDurationSeconds
         ) : await generateMusicPromptFromAnalysis(
             aiTradition,
             blockAnalysisResult.globalStats,
@@ -1047,8 +1045,7 @@ async function sonifyImageArtisticOrHybrid(
             blockAnalysisResult.globalStats,
             scanPatternName,
             "Analisi Artistica",
-            totalDurationSeconds,
-            config.healthEnrichment || ""
+            totalDurationSeconds
         ) : await generateMusicPromptFromAnalysis(
             aiTradition,
             blockAnalysisResult.globalStats,

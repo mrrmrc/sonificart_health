@@ -700,6 +700,22 @@ export const api = {
         return handleResponse(response);
     },
 
+    uploadAgentDocument: async (file: File): Promise<string> => {
+        const token = getToken();
+        if (!token) throw new Error("Non autenticato");
+
+        const data = new FormData();
+        data.append('auth_token', token);
+        data.append('document', file);
+
+        const response = await fetch(`${API_BASE_URL}/index.php?action=upload_agent_document`, {
+            method: 'POST',
+            body: data
+        });
+        const result = await handleResponse(response);
+        return result.url; // Returns the uploaded file URL
+    },
+
     updateMetadata: async (id: string, title: string, subtitle: string, description: string): Promise<void> => {
         const token = getToken();
         if (!token) throw new Error("Non autenticato");

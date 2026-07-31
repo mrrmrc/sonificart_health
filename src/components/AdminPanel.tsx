@@ -35,7 +35,7 @@ const emptyProject: Omit<ShowcaseProject, 'id'> = {
     videoUrl: ''
 };
 
-type AdminTab = 'overview' | 'requests' | 'users' | 'showcase' | 'logs' | 'database' | 'settings' | 'cookies' | 'api';
+type AdminTab = 'overview' | 'requests' | 'users' | 'showcase' | 'logs' | 'database' | 'settings' | 'cookies' | 'api' | 'agents';
 
 const StatCard: React.FC<{ title: string; value: string | number; subtext: string; icon: string; color: string }> = ({ title, value, subtext, icon, color }) => (
     <div className="bg-brand-secondary/40 p-6 rounded-xl border border-brand-secondary flex items-center gap-4 hover:bg-brand-secondary/60 transition-colors">
@@ -241,6 +241,11 @@ export const AdminPanel: React.FC = () => {
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [isCreatingUser, setIsCreatingUser] = useState(false);
 
+    // Agents State
+    const [healthAgentPrompt, setHealthAgentPrompt] = useState('');
+    const [healthAgentDocument, setHealthAgentDocument] = useState('');
+    const [uploadingAgentDoc, setUploadingAgentDoc] = useState(false);
+
     // MODAL STATE
     const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean, title: string, message: string, onConfirm: () => void, type: 'info' | 'warning' | 'danger' | 'success', singleButton?: boolean }>({ isOpen: false, title: '', message: '', onConfirm: () => { }, type: 'info' });
 
@@ -275,6 +280,12 @@ export const AdminPanel: React.FC = () => {
                     gemini_api_email: (await api.getAppSetting('gemini_api_email')).replace(/<[^>]*>?/gm, '').trim(),
                     gemini_api_budget: (await api.getAppSetting('gemini_api_budget')).replace(/<[^>]*>?/gm, '').trim()
                 });
+            }
+            if (activeTab === 'agents') {
+                const promptRaw = await api.getAppSetting('agent_health_prompt');
+                const docRaw = await api.getAppSetting('agent_health_document');
+                setHealthAgentPrompt(promptRaw.replace(/<[^>]*>?/gm, '').trim());
+                setHealthAgentDocument(docRaw.replace(/<[^>]*>?/gm, '').trim());
             }
         } catch (e) { console.error(e); }
         finally { setIsLoading(false); }
@@ -458,14 +469,44 @@ export const AdminPanel: React.FC = () => {
         }
     };
 
+    const handleAgentSave = async () => {
+        setIsLoading(true);
+        try {
+            await api.updateAppSetting('agent_health_prompt', healthAgentPrompt);
+            await api.updateAppSetting('agent_health_document', healthAgentDocument);
+            setConfirmModal({
+                isOpen: true, title: "Salvataggio Riuscito", message: "Configurazione Agente salvata.", type: 'success', singleButton: true, onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            });
+        } catch (e) {
+            setConfirmModal({
+                isOpen: true, title: "Errore", message: "Errore salvataggio agente: " + (e instanceof Error ? e.message : ""), type: 'danger', singleButton: true, onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            });
+        } finally { setIsLoading(false); }
+    };
+
+    const handleAgentDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setUploadingAgentDoc(true);
+        try {
+            const url = await api.uploadAgentDocument(file);
+            setHealthAgentDocument(url);
+            await api.updateAppSetting('agent_health_document', url);
+        } catch (error) {
+            alert("Errore upload PDF: " + (error instanceof Error ? error.message : "Sconosciuto"));
+        } finally {
+            setUploadingAgentDoc(false);
+        }
+    };
+
     return (
         <div className="w-full max-w-7xl mx-auto animate-fade-in pb-20">
             <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
                 <h2 className="text-3xl font-bold text-white flex items-center gap-3"><i className="fas fa-user-shield text-brand-accent"></i> Admin Dashboard</h2>
                 <div className="bg-brand-secondary/50 p-1 rounded-lg flex overflow-x-auto">
-                    {['overview', 'requests', 'users', 'showcase', 'logs', 'cookies', 'database', 'settings', 'api'].map(tab => (
+                    {['overview', 'requests', 'users', 'showcase', 'logs', 'cookies', 'database', 'settings', 'api', 'agents'].map(tab => (
                         <button key={tab} onClick={() => setActiveTab(tab as AdminTab)} className={`px-4 py-2 rounded text-sm font-bold capitalize whitespace-nowrap ${activeTab === tab ? 'bg-brand-accent text-black' : 'text-white hover:bg-white/10'}`}>
-                            {tab === 'settings' ? 'Impostazioni' : (tab === 'cookies' ? 'Cookie Consent' : (tab === 'api' ? 'API & AI' : tab))} {tab === 'requests' && requests.length > 0 && `(${requests.length})`}
+                            {tab === 'settings' ? 'Impostazioni' : (tab === 'cookies' ? 'Cookie Consent' : (tab === 'api' ? 'API & AI' : (tab === 'agents' ? 'Agenti AI' : tab)))} {tab === 'requests' && requests.length > 0 && `(${requests.length})`}
                         </button>
                     ))}
                 </div>
@@ -852,6 +893,50 @@ export const AdminPanel: React.FC = () => {
                                 {cookieLogs.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-gray-500 italic">Nessun log consensi registrato.</td></tr>}
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'agents' && (
+                <div className="bg-[#1e1e2e] rounded-xl border border-white/10 p-6">
+                    <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><i className="fas fa-robot text-brand-accent"></i> Configurazione Agenti AI</h3>
+                    
+                    <div className="bg-black/30 p-6 rounded-lg border border-white/10 mb-6">
+                        <h4 className="font-bold text-white mb-2">WHO Health Agent (Benessere)</h4>
+                        <p className="text-xs text-gray-400 mb-4">Istruzioni specifiche e base di conoscenza RAG per l'agente del benessere.</p>
+                        
+                        <div className="mb-4">
+                            <label className="text-xs font-bold text-brand-text-secondary uppercase mb-1 block">Prompt Personalizzato / Direttive (Opzionale)</label>
+                            <textarea 
+                                value={healthAgentPrompt}
+                                onChange={e => setHealthAgentPrompt(e.target.value)}
+                                className="w-full bg-black/50 border border-white/10 rounded p-3 text-white font-mono text-xs h-32 focus:border-brand-accent focus:outline-none"
+                                placeholder="Inserisci direttive aggiuntive per l'agente. Es: Fai in modo che la musica non induca mai sonno..."
+                            />
+                        </div>
+
+                        <div className="mb-4">
+                            <label className="text-xs font-bold text-brand-text-secondary uppercase mb-1 block">Documento Base di Conoscenza (PDF RAG)</label>
+                            <div className="flex items-center gap-4">
+                                <label className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded text-sm font-bold cursor-pointer transition-colors border border-white/20">
+                                    {uploadingAgentDoc ? 'Caricamento...' : 'Carica PDF'}
+                                    <input type="file" accept=".pdf" className="hidden" onChange={handleAgentDocUpload} disabled={uploadingAgentDoc} />
+                                </label>
+                                {healthAgentDocument ? (
+                                    <div className="flex items-center gap-2 text-xs text-green-400">
+                                        <i className="fas fa-check-circle"></i> Documento attivo: <a href={healthAgentDocument} target="_blank" rel="noreferrer" className="underline">{healthAgentDocument.split('/').pop()}</a>
+                                        <button onClick={() => setHealthAgentDocument('')} className="text-red-400 hover:text-red-300 ml-2"><i className="fas fa-times"></i> Rimuovi</button>
+                                    </div>
+                                ) : (
+                                    <span className="text-xs text-gray-500">Nessun PDF caricato (RAG disattivato)</span>
+                                )}
+                            </div>
+                            <p className="text-[10px] text-gray-500 mt-2">I file PDF caricati verranno forniti a Gemini durante la generazione per arricchire il prompt (es. WHO Health Evidence Report).</p>
+                        </div>
+
+                        <button onClick={handleAgentSave} disabled={isLoading} className="bg-brand-accent text-black px-6 py-2 rounded font-bold text-sm hover:bg-brand-accent-light transition-colors">
+                            {isLoading ? 'Salvataggio...' : 'Salva Configurazione Agente'}
+                        </button>
                     </div>
                 </div>
             )}

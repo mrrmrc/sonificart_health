@@ -567,6 +567,38 @@ if ($action === 'get_logs' && $method === 'POST') {
     sendResponse($mapped);
 }
 
+// --- UPLOAD AGENT DOCUMENT (Admin Only) ---
+if ($action === 'upload_agent_document' && $method === 'POST') {
+    // Verify admin
+    if (!$userId) sendResponse(["error" => "Unauthorized"], 401);
+    $stmt = $pdo->prepare("SELECT is_admin FROM users WHERE id = ?");
+    $stmt->execute([$userId]);
+    if (!$stmt->fetchColumn()) sendResponse(["error" => "Forbidden"], 403);
+
+    if (!isset($_FILES['document']) || $_FILES['document']['error'] !== UPLOAD_ERR_OK) {
+        sendResponse(["error" => "No file uploaded or upload error"], 400);
+    }
+
+    $file = $_FILES['document'];
+    $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
+    if (strtolower($ext) !== 'pdf') {
+        sendResponse(["error" => "Only PDF files are allowed"], 400);
+    }
+
+    $serverPath = __DIR__ . '/../media/agents/';
+    if (!file_exists($serverPath)) mkdir($serverPath, 0755, true);
+
+    $hash = md5(uniqid('', true));
+    $fileName = $hash . '.' . $ext;
+
+    if (move_uploaded_file($file['tmp_name'], $serverPath . $fileName)) {
+        log_activity($pdo, $userId, 'ADMIN', "Uploaded agent document: $fileName", 'INFO');
+        sendResponse(["success" => true, "url" => "/media/agents/" . $fileName, "filename" => $file['name']]);
+    } else {
+        sendResponse(["error" => "Failed to move uploaded file"], 500);
+    }
+}
+
 // --- SAVE SONIFICATION (Protetta) ---
 if ($action === 'save_sonification' && $method === 'POST') {
     try {
