@@ -2365,7 +2365,7 @@ if ($userId) {
 if (($action === 'get_privacy_policy' || $action === 'get_app_setting') && $method === 'GET') {
     $key = $_GET['key'] ?? 'privacy_policy';
     // Validate key to prevent arbitrary reads if sensitive data existed (though app_settings is mostly public info)
-    $allowed_keys = ['privacy_policy', 'terms_of_service', 'image_upload_policy', 'notice_and_takedown', 'upload_disclaimer', 'cookie_policy', 'agent_health_prompt', 'agent_health_document', 'gemini_api_key', 'gemini_api_email', 'gemini_api_budget'];
+    $allowed_keys = ['privacy_policy', 'terms_of_service', 'image_upload_policy', 'notice_and_takedown', 'upload_disclaimer', 'cookie_policy', 'agent_health_prompt', 'agent_health_document', 'agent_health_knowledge', 'gemini_api_key', 'gemini_api_email', 'gemini_api_budget'];
     if (!in_array($key, $allowed_keys)) {
         sendResponse(["error" => "Invalid setting key"], 400);
     }
@@ -2397,7 +2397,7 @@ if (($action === 'update_privacy_policy' || $action === 'update_app_setting') &&
     // and the user expects it to be rendered as HTML.
     $content = html_entity_decode($rawContent);
 
-    $allowed_keys = ['privacy_policy', 'terms_of_service', 'image_upload_policy', 'notice_and_takedown', 'upload_disclaimer', 'cookie_policy', 'agent_health_prompt', 'agent_health_document', 'gemini_api_key', 'gemini_api_email', 'gemini_api_budget'];
+    $allowed_keys = ['privacy_policy', 'terms_of_service', 'image_upload_policy', 'notice_and_takedown', 'upload_disclaimer', 'cookie_policy', 'agent_health_prompt', 'agent_health_document', 'agent_health_knowledge', 'gemini_api_key', 'gemini_api_email', 'gemini_api_budget'];
     if (!in_array($key, $allowed_keys)) {
         sendResponse(["error" => "Invalid setting key"], 400);
     }

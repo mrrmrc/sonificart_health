@@ -245,6 +245,8 @@ export const AdminPanel: React.FC = () => {
     const [healthAgentPrompt, setHealthAgentPrompt] = useState('');
     const [healthAgentDocument, setHealthAgentDocument] = useState('');
     const [uploadingAgentDoc, setUploadingAgentDoc] = useState(false);
+    const [knowledgeBase, setKnowledgeBase] = useState<Array<{url: string, filename: string, rules: string, extracting?: boolean}>>([]);
+    const [extractingDocIndex, setExtractingDocIndex] = useState<number | null>(null);
 
     // MODAL STATE
     const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean, title: string, message: string, onConfirm: () => void, type: 'info' | 'warning' | 'danger' | 'success', singleButton?: boolean }>({ isOpen: false, title: '', message: '', onConfirm: () => { }, type: 'info' });
@@ -286,6 +288,11 @@ export const AdminPanel: React.FC = () => {
                 const docRaw = await api.getAppSetting('agent_health_document');
                 setHealthAgentPrompt(promptRaw.replace(/<[^>]*>?/gm, '').trim());
                 setHealthAgentDocument(docRaw.replace(/<[^>]*>?/gm, '').trim());
+                try {
+                    const kbRaw = await api.getAppSetting('agent_health_knowledge');
+                    const cleaned = kbRaw.replace(/<[^>]*>?/gm, '').trim();
+                    if (cleaned) setKnowledgeBase(JSON.parse(cleaned));
+                } catch { /* no knowledge base yet */ }
             }
         } catch (e) { console.error(e); }
         finally { setIsLoading(false); }
@@ -474,6 +481,7 @@ export const AdminPanel: React.FC = () => {
         try {
             await api.updateAppSetting('agent_health_prompt', healthAgentPrompt);
             await api.updateAppSetting('agent_health_document', healthAgentDocument);
+            await api.updateAppSetting('agent_health_knowledge', JSON.stringify(knowledgeBase));
             setConfirmModal({
                 isOpen: true, title: "Salvataggio Riuscito", message: "Configurazione Agente salvata.", type: 'success', singleButton: true, onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
             });
@@ -490,12 +498,24 @@ export const AdminPanel: React.FC = () => {
         setUploadingAgentDoc(true);
         try {
             const url = await api.uploadAgentDocument(file);
-            setHealthAgentDocument(url);
-            await api.updateAppSetting('agent_health_document', url);
+            const newDoc = { url, filename: file.name, rules: '', extracting: true };
+            const newKb = [...knowledgeBase, newDoc];
+            setKnowledgeBase(newKb);
+            const newIndex = newKb.length - 1;
+            // Auto-extract rules
+            try {
+                const { extractDirectivesFromPDF } = await import('../services/geminiService');
+                const rules = await extractDirectivesFromPDF(url);
+                setKnowledgeBase(prev => prev.map((doc, i) => i === newIndex ? { ...doc, rules, extracting: false } : doc));
+            } catch (extractErr: any) {
+                setKnowledgeBase(prev => prev.map((doc, i) => i === newIndex ? { ...doc, rules: '⚠️ Estrazione fallita: ' + extractErr.message, extracting: false } : doc));
+            }
         } catch (error) {
             alert("Errore upload PDF: " + (error instanceof Error ? error.message : "Sconosciuto"));
         } finally {
             setUploadingAgentDoc(false);
+            // Reset input
+            e.target.value = '';
         }
     };
 
@@ -905,7 +925,7 @@ export const AdminPanel: React.FC = () => {
                         <h4 className="font-bold text-white mb-2">WHO Health Agent (Benessere)</h4>
                         <p className="text-xs text-gray-400 mb-4">Istruzioni specifiche e base di conoscenza RAG per l'agente del benessere.</p>
                         
-                        <div className="mb-4">
+                        <div className="mb-6">
                             <label className="text-xs font-bold text-brand-text-secondary uppercase mb-1 block">Prompt Personalizzato / Direttive (Opzionale)</label>
                             <textarea 
                                 value={healthAgentPrompt}
@@ -915,38 +935,71 @@ export const AdminPanel: React.FC = () => {
                             />
                         </div>
 
-                        <div className="mb-4">
-                            <label className="text-xs font-bold text-brand-text-secondary uppercase mb-1 block">Documento Base di Conoscenza (PDF RAG)</label>
-                            <div className="flex items-center gap-4">
-                                <label className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded text-sm font-bold cursor-pointer transition-colors border border-white/20">
-                                    {uploadingAgentDoc ? 'Caricamento...' : 'Carica PDF'}
+                        {/* KNOWLEDGE BASE - Multiple PDFs */}
+                        <div className="mb-6">
+                            <div className="flex items-center justify-between mb-3">
+                                <label className="text-xs font-bold text-brand-text-secondary uppercase block">
+                                    <i className="fas fa-brain mr-1"></i> Base di Conoscenza ({knowledgeBase.length} documenti)
+                                </label>
+                                <label className="bg-brand-accent/20 hover:bg-brand-accent/30 text-brand-accent px-4 py-2 rounded text-sm font-bold cursor-pointer transition-colors border border-brand-accent/30">
+                                    {uploadingAgentDoc ? <><i className="fas fa-spinner fa-spin mr-1"></i> Caricamento...</> : <><i className="fas fa-plus mr-1"></i> Aggiungi PDF</>}
                                     <input type="file" accept=".pdf" className="hidden" onChange={handleAgentDocUpload} disabled={uploadingAgentDoc} />
                                 </label>
-                                {healthAgentDocument ? (
-                                    <div className="flex items-center gap-2 text-xs text-green-400">
-                                        <i className="fas fa-check-circle"></i> Documento attivo: <a href={healthAgentDocument} target="_blank" rel="noreferrer" className="underline">{healthAgentDocument.split('/').pop()}</a>
-                                        <button onClick={() => setHealthAgentDocument('')} className="text-red-400 hover:text-red-300 ml-2"><i className="fas fa-times"></i> Rimuovi</button>
-                                        <button 
-                                            onClick={async () => {
-                                                try {
-                                                    const { extractDirectivesFromPDF } = await import('../services/geminiService');
-                                                    alert("Estrazione in corso. Potrebbe richiedere 10-15 secondi...");
-                                                    const rules = await extractDirectivesFromPDF(healthAgentDocument);
-                                                    setHealthAgentPrompt(rules);
-                                                } catch (e: any) {
-                                                    alert("Errore durante l'estrazione: " + e.message);
-                                                }
-                                            }} 
-                                            className="ml-4 bg-brand-accent/20 text-brand-accent px-3 py-1 rounded text-xs hover:bg-brand-accent/30 transition-colors"
-                                        >
-                                            <i className="fas fa-magic"></i> Estrai Regole dal PDF
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <span className="text-xs text-gray-500">Nessun PDF caricato (RAG disattivato)</span>
-                                )}
                             </div>
-                            <p className="text-[10px] text-gray-500 mt-2">I file PDF caricati verranno forniti a Gemini durante la generazione per arricchire il prompt (es. WHO Health Evidence Report).</p>
+                            <p className="text-[10px] text-gray-500 mb-3">Ogni PDF caricato viene analizzato da Gemini AI. Le regole estratte arricchiscono il bagaglio di conoscenza dell'agente.</p>
+
+                            {knowledgeBase.length === 0 ? (
+                                <div className="bg-black/20 border border-dashed border-white/10 rounded-lg p-8 text-center">
+                                    <i className="fas fa-file-pdf text-gray-600 text-3xl mb-2"></i>
+                                    <p className="text-gray-500 text-sm">Nessun documento caricato</p>
+                                    <p className="text-gray-600 text-xs">Carica uno o più PDF per costruire la base di conoscenza dell'agente</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {knowledgeBase.map((doc, idx) => (
+                                        <div key={idx} className="bg-black/20 border border-white/10 rounded-lg p-4">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="flex items-center gap-2">
+                                                    <i className="fas fa-file-pdf text-red-400"></i>
+                                                    <a href={doc.url} target="_blank" rel="noreferrer" className="text-sm font-bold text-white hover:text-brand-accent transition-colors underline">{doc.filename}</a>
+                                                    {doc.extracting && <span className="text-xs text-yellow-400 animate-pulse"><i className="fas fa-spinner fa-spin mr-1"></i> Estrazione regole in corso...</span>}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <button 
+                                                        onClick={async () => {
+                                                            try {
+                                                                setKnowledgeBase(prev => prev.map((d, i) => i === idx ? { ...d, extracting: true } : d));
+                                                                const { extractDirectivesFromPDF } = await import('../services/geminiService');
+                                                                const rules = await extractDirectivesFromPDF(doc.url);
+                                                                setKnowledgeBase(prev => prev.map((d, i) => i === idx ? { ...d, rules, extracting: false } : d));
+                                                            } catch (e: any) {
+                                                                setKnowledgeBase(prev => prev.map((d, i) => i === idx ? { ...d, rules: '⚠️ Errore: ' + e.message, extracting: false } : d));
+                                                            }
+                                                        }}
+                                                        className="text-brand-accent hover:text-brand-accent-light text-xs transition-colors"
+                                                        title="Ri-estrai regole"
+                                                    >
+                                                        <i className="fas fa-sync-alt"></i>
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => setKnowledgeBase(prev => prev.filter((_, i) => i !== idx))}
+                                                        className="text-red-400 hover:text-red-300 text-xs transition-colors"
+                                                        title="Rimuovi documento"
+                                                    >
+                                                        <i className="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            {doc.rules && !doc.extracting && (
+                                                <div className="bg-black/30 border border-white/5 rounded p-3 mt-2">
+                                                    <p className="text-[10px] font-bold text-brand-accent uppercase mb-1"><i className="fas fa-lightbulb mr-1"></i> Regole Estratte</p>
+                                                    <p className="text-xs text-gray-300 whitespace-pre-wrap leading-relaxed">{doc.rules}</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         <button onClick={handleAgentSave} disabled={isLoading} className="bg-brand-accent text-black px-6 py-2 rounded font-bold text-sm hover:bg-brand-accent-light transition-colors">
