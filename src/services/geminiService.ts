@@ -229,7 +229,8 @@ Rispondi SOLO con il JSON.`
             const pdfResponse = await fetch(adminDocUrl);
             if (pdfResponse.ok) {
                 const pdfBlob = await pdfResponse.blob();
-                const base64Pdf = await fileToBase64(pdfBlob);
+                const pdfFile = new File([pdfBlob], "agent.pdf", { type: "application/pdf" });
+                const base64Pdf = await fileToBase64(pdfFile);
                 parts.push({
                     inlineData: {
                         mimeType: 'application/pdf',
