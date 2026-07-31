@@ -283,3 +283,35 @@ Rispondi SOLO con il JSON.`
         };
     }
 }
+export async function extractDirectivesFromPDF(pdfUrl: string): Promise<string> {
+    const apiKey = await getGeminiApiKey();
+    if (!apiKey) throw new Error("Chiave API Google mancante.");
+
+    const ai = new GoogleGenAI({ apiKey: apiKey });
+    const response = await fetch(pdfUrl);
+    if (!response.ok) throw new Error("Errore nel recupero del PDF");
+    const blob = await response.blob();
+    const base64Pdf = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onload = () => resolve((reader.result as string).split(',')[1]);
+        reader.onerror = error => reject(error);
+    });
+
+    const pdfPart = {
+        inlineData: { mimeType: 'application/pdf', data: base64Pdf },
+    };
+    const textPart = {
+        text: "Sei un analista medico ed esperto di musicoterapia. Leggi questo documento e sintetizza le 5 direttive principali (massimo 100 parole in totale) che un'intelligenza artificiale generativa musicale dovrebbe seguire per creare musica curativa basata su queste linee guida. Non includere preamboli, scrivi solo le direttive come prompt musicale."
+    };
+    try {
+        const aiResponse = await ai.models.generateContent({
+            model: 'gemini-2.0-flash',
+            contents: { parts: [pdfPart, textPart] }
+        });
+        return aiResponse.text?.trim() || "";
+    } catch (e) {
+        console.error("Errore Gemini PDF Extraction:", e);
+        throw e;
+    }
+}

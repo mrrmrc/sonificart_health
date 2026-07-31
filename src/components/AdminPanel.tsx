@@ -926,6 +926,21 @@ export const AdminPanel: React.FC = () => {
                                     <div className="flex items-center gap-2 text-xs text-green-400">
                                         <i className="fas fa-check-circle"></i> Documento attivo: <a href={healthAgentDocument} target="_blank" rel="noreferrer" className="underline">{healthAgentDocument.split('/').pop()}</a>
                                         <button onClick={() => setHealthAgentDocument('')} className="text-red-400 hover:text-red-300 ml-2"><i className="fas fa-times"></i> Rimuovi</button>
+                                        <button 
+                                            onClick={async () => {
+                                                try {
+                                                    const { extractDirectivesFromPDF } = await import('../services/geminiService');
+                                                    alert("Estrazione in corso. Potrebbe richiedere 10-15 secondi...");
+                                                    const rules = await extractDirectivesFromPDF(healthAgentDocument);
+                                                    setHealthAgentPrompt(rules);
+                                                } catch (e: any) {
+                                                    alert("Errore durante l'estrazione: " + e.message);
+                                                }
+                                            }} 
+                                            className="ml-4 bg-brand-accent/20 text-brand-accent px-3 py-1 rounded text-xs hover:bg-brand-accent/30 transition-colors"
+                                        >
+                                            <i className="fas fa-magic"></i> Estrai Regole dal PDF
+                                        </button>
                                     </div>
                                 ) : (
                                     <span className="text-xs text-gray-500">Nessun PDF caricato (RAG disattivato)</span>
