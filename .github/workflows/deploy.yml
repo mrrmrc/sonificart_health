@@ -92,9 +92,8 @@ jobs:
           protocol: ftp
           port: 21
           local-dir: ./_deploy/
-          # ATTENZIONE: se sul tuo hosting la web root non e' la radice FTP,
-          # cambia in "./public_html/", "./htdocs/" o "./www/" a seconda del provider.
-          server-dir: ./
+          # Web root dell'hosting (confermata: la cartella pubblica e' public_html).
+          server-dir: ./public_html/
           # Non tocca i file preesistenti non gestiti da questo deploy
           # (es. la cartella media/ con gli upload degli utenti).
           exclude: |
