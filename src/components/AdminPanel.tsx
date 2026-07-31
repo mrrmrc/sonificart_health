@@ -963,6 +963,20 @@ export const AdminPanel: React.FC = () => {
                     </div>
 
                     <div className="space-y-6 max-w-3xl">
+                        <div className="bg-gradient-to-r from-brand-accent/10 to-transparent p-4 rounded-lg border border-brand-accent/30 mb-2 flex items-center gap-4">
+                            <div className="bg-brand-accent/20 p-3 rounded-full">
+                                <i className="fas fa-microchip text-brand-accent text-xl"></i>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-400 uppercase tracking-widest font-bold">Motore AI Attivo</p>
+                                <p className="text-lg font-bold text-white">Google Gemini 1.5 Pro</p>
+                                <p className="text-[10px] text-gray-500">Modello avanzato per ragionamento, analisi documenti e generazione prompt musicali</p>
+                            </div>
+                            <span className="ml-auto bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-xs font-bold border border-green-500/30">
+                                <i className="fas fa-circle text-[6px] mr-1 animate-pulse"></i> Attivo
+                            </span>
+                        </div>
+
                         <div className="bg-white/5 p-4 rounded-lg border border-white/5">
                             <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Google AI Studio API Key</label>
                             <input 
