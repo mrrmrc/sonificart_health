@@ -715,11 +715,12 @@ export const api = {
             const chunk = file.slice(start, end);
 
             const formData = new FormData();
-            formData.append('fileChunk', chunk);
-            formData.append('uploadId', uploadId);
-            formData.append('chunkIndex', String(i));
-            formData.append('totalChunks', String(totalChunks));
-            formData.append('originalFilename', file.name);
+            formData.append('chunk_data', chunk, file.name);
+            formData.append('upload_session_id', uploadId);
+            formData.append('chunk_index', String(i));
+            formData.append('total_chunks', String(totalChunks));
+            formData.append('file_ext', 'pdf');
+            if (token) formData.append('auth_token', token);
 
             const response = await fetch(`${API_BASE_URL}/index.php?action=upload_chunk`, {
                 method: 'POST',
@@ -728,7 +729,11 @@ export const api = {
 
             const data = await handleResponse(response);
             if (i === totalChunks - 1) {
-                finalUrl = data.url;
+                if (data.fileUrl) {
+                    finalUrl = window.location.origin + data.fileUrl; // convert relative to absolute
+                } else if (data.url) {
+                    finalUrl = data.url;
+                }
             }
         }
         return finalUrl;
