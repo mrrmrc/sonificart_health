@@ -36,6 +36,8 @@ export interface ConfigSettings {
     enableAccompaniment: boolean;
     melodyInstrument: InstrumentType;
     accompanimentInstrument: InstrumentType;
+    useHealthAgent?: boolean;
+    healthEnrichment?: string;
 }
 
 export interface MusicalGenre {

@@ -162,3 +162,102 @@ Rispondi SOLO con il JSON.`
         };
     }
 }
+
+export async function generateHealthEvidencePrompt(
+    tradition: Tradition,
+    analysisStats: BlockAnalysisResult['globalStats'],
+    scanPatternName: string,
+    imageDescription: string,
+    durationSeconds: number,
+    customEnrichment: string = ""
+): Promise<MusicGenerationPrompt> {
+
+    const apiKey = await getGeminiApiKey();
+    if (!apiKey) {
+        throw new Error("Chiave API Google mancante.");
+    }
+
+    const ai = new GoogleGenAI({ apiKey: apiKey });
+
+    // PROMPT DETTAGLIATO BASATO SU WHO HEALTH EVIDENCE NETWORK SYNTHESIS REPORT 67
+    const textPart = {
+        text: `RUOLO: Sei un esperto Music Prompt Engineer senior, specializzato nella creazione di musica terapeutica e per il benessere, seguendo le linee guida del "WHO Health Evidence Network Synthesis Report 67".
+
+OBIETTIVO: Creare un prompt musicale che promuova attivamente il benessere psicofisico, l'energia vitale, la socializzazione o la riduzione dello stress MA CON UNA REGOLA CRITICA: EVITARE QUALSIASI ELEMENTO CHE PROVOCHI SONNO, LETARGIA O RILASSAMENTO PROFONDO DA NINNA NANNA.
+
+DATI DI INPUT:
+- SOGGETTO VISIVO: "${imageDescription}"
+- TRADIZIONE MUSICALE: '${tradition.name}' (Carattere: '${tradition.character}')
+- ARRICCHIMENTO PERSONALIZZATO DELL'UTENTE: "${customEnrichment}"
+- Statistiche Colore (CIE LAB): Saturazione al ${(analysisStats.avg_saturation * 100).toFixed(0)}%, Diversità cromatica al ${(analysisStats.hue_diversity * 100).toFixed(0)}%
+- DURATA DA RISPETTARE: ${durationSeconds.toFixed(1)} secondi.
+- Pattern di Scansione: '${scanPatternName}'
+
+REQUISITI DI FUSIONE E SALUTE (MANDATORI):
+1. **Benessere Attivo**: Il brano deve stimolare la mente, favorire emozioni positive, dare energia, o supportare l'espressione emotiva e la vitalità.
+2. **DIVIETO ASSOLUTO DI EFFETTO SONNIFERO**: Non usare termini come "lullaby", "sleepy", "deep relaxation", "droning", "somnolent". Scegli invece "uplifting", "energizing", "bright", "mindful", "active wellness".
+3. **Integrazione Cultura e Arricchimento**: Fonda la tradizione musicale con il Soggetto Visivo e, soprattutto, integra coerentemente la richiesta aggiuntiva dell'utente ("${customEnrichment}").
+4. **FEDELTÀ AL RIFERIMENTO**: Il prompt deve ordinare all'AI di restare fedele alla struttura armonica e ritmica del file WAV caricato. Usa tag come "[Maintain original melody]", "[Instrumental focus]".
+
+FORZATURA DURATA SUNO (CRITICO):
+- Inizia SEMPRE con: "[Duration: ${durationSeconds.toFixed(0)}s], [Strictly ${durationSeconds.toFixed(0)} seconds limit], [Fast Ending], [No Extension], [Strictly Instrumental], [No Vocals]".
+- Termina SEMPRE con: "[Outro: Dissolve at ${durationSeconds.toFixed(0)}s], [End at ${durationSeconds.toFixed(0)}s], [Silence], [End]".
+
+REGOLE PER "suno_lyrics" (IMPORTANTE):
+- Usa solo marcatori temporali e tag musicali brevi tra parentesi quadre.
+- Esempio corretto: "[0:00] [Bright Intro] [0:30] [Uplifting Development] [End at ${durationSeconds.toFixed(0)}s]"
+- Nessun testo cantato.
+
+STRUTTURA OUTPUT RICHIESTA (JSON):
+- **main_prompt_ita**: Descrizione poetica e tecnica di come la musicalità '${tradition.name}' si unisca al SOGGETTO VISIVO e all'ARRICCHIMENTO ("${customEnrichment}") per promuovere un benessere attivo.
+- **technical_parameters**: BPM, Chiave, Scala, e Strumentazione.
+- **justification**: Spiegazione di come il prompt rispetti il WHO Report 67 (benessere) senza provocare sonno, e come includa l'arricchimento utente.
+- **suno_prompt**: Il mega-prompt di tag per Suno.
+- **udio_prompt**: Tag separati da virgola per Udio.
+- **negative_prompt**: Elementi da evitare. (Es: "sleep, lullaby, dull, boring, vocals, text").
+- **suno_lyrics**: Marcatori temporali ESCLUSIVAMENTE in parentesi quadre per obbligare la durata di ${durationSeconds.toFixed(0)} secondi.
+
+Rispondi SOLO con il JSON.`
+    };
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.0-flash',
+            contents: { parts: [textPart] },
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        main_prompt_ita: { type: Type.STRING },
+                        technical_parameters: { type: Type.STRING },
+                        justification: { type: Type.STRING },
+                        suno_prompt: { type: Type.STRING },
+                        udio_prompt: { type: Type.STRING },
+                        negative_prompt: { type: Type.STRING },
+                        suno_lyrics: { type: Type.STRING }
+                    },
+                    required: ["main_prompt_ita", "technical_parameters", "justification", "suno_prompt", "udio_prompt", "negative_prompt", "suno_lyrics"]
+                }
+            }
+        });
+
+        const jsonText = response.text?.trim();
+
+        if (!jsonText) throw new Error("Risposta vuota da Gemini");
+
+        return JSON.parse(jsonText) as MusicGenerationPrompt;
+
+    } catch (e) {
+        console.error("Errore Gemini Health Prompt:", e);
+        return {
+            main_prompt_ita: "Generazione di emergenza per benessere attivo",
+            technical_parameters: "Auto BPM, Bright scale",
+            justification: "Errore connessione AI, uso parametri standard di benessere attivo.",
+            suno_prompt: "[Uplifting], [Instrumental], [Bright], [Active]",
+            udio_prompt: "uplifting, instrumental, bright, active",
+            negative_prompt: "sleep, lullaby, percussion, text, speech",
+            suno_lyrics: "[0:00] Intro, [0:30] Development, [End]"
+        };
+    }
+}

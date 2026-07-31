@@ -7,7 +7,7 @@ import {
 import { analyzeOriginalFile } from './forensicPackageService';
 import { NormalizationReport } from './imageNormalizationService';
 
-import { generateMusicPromptFromAnalysis, generateMusicPromptFromAnalysisHybrid, describeImageContent } from './geminiService';
+import { generateMusicPromptFromAnalysis, generateMusicPromptFromAnalysisHybrid, describeImageContent, generateHealthEvidencePrompt } from './geminiService';
 import { calculateSHA256, bufferToHex } from '../utils/cryptoUtils';
 import { exportMidi } from './midiService';
 import { createSacContainer } from './sacService';
@@ -875,7 +875,14 @@ export async function sonifyImage(
         },
         performanceMetrics: timings,
         normalizationReport: normalizationReport || null,
-        musicGenerationPrompt: await generateMusicPromptFromAnalysis(
+        musicGenerationPrompt: config.useHealthAgent ? await generateHealthEvidencePrompt(
+            culturalSelectionResult.tradition,
+            blockAnalysisResult.globalStats,
+            scanPatternName,
+            imageDescription,
+            totalDurationSeconds,
+            config.healthEnrichment || ""
+        ) : await generateMusicPromptFromAnalysis(
             culturalSelectionResult.tradition,
             blockAnalysisResult.globalStats,
             scanPatternName,
@@ -1019,7 +1026,14 @@ async function sonifyImageArtisticOrHybrid(
     const aiTradition = traditions.find(t => t.id === 49 || t.name === "Cinematic Ambient") || DEFAULT_CINEMATIC_TRADITION;
 
     if (paradigm === 'hybrid') {
-        musicPrompt = await generateMusicPromptFromAnalysis(
+        musicPrompt = config.useHealthAgent ? await generateHealthEvidencePrompt(
+            aiTradition,
+            blockAnalysisResult.globalStats,
+            scanPatternName,
+            imageDescription,
+            totalDurationSeconds,
+            config.healthEnrichment || ""
+        ) : await generateMusicPromptFromAnalysis(
             aiTradition,
             blockAnalysisResult.globalStats,
             scanPatternName,
@@ -1028,7 +1042,14 @@ async function sonifyImageArtisticOrHybrid(
         );
         timings.aiCreativeFusion = performance.now() - t; t = performance.now();
     } else {
-        musicPrompt = await generateMusicPromptFromAnalysis(
+        musicPrompt = config.useHealthAgent ? await generateHealthEvidencePrompt(
+            aiTradition,
+            blockAnalysisResult.globalStats,
+            scanPatternName,
+            "Analisi Artistica",
+            totalDurationSeconds,
+            config.healthEnrichment || ""
+        ) : await generateMusicPromptFromAnalysis(
             aiTradition,
             blockAnalysisResult.globalStats,
             scanPatternName,
