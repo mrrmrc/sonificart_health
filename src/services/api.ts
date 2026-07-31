@@ -704,16 +704,34 @@ export const api = {
         const token = getToken();
         if (!token) throw new Error("Non autenticato");
 
-        const data = new FormData();
-        data.append('auth_token', token);
-        data.append('document', file);
+        const CHUNK_SIZE = 1024 * 1024; // 1MB chunks
+        const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+        const uploadId = `${Date.now()}_agentdoc`;
+        let finalUrl = "";
 
-        const response = await fetch(`${API_BASE_URL}/index.php?action=upload_agent_document`, {
-            method: 'POST',
-            body: data
-        });
-        const result = await handleResponse(response);
-        return result.url; // Returns the uploaded file URL
+        for (let i = 0; i < totalChunks; i++) {
+            const start = i * CHUNK_SIZE;
+            const end = Math.min(start + CHUNK_SIZE, file.size);
+            const chunk = file.slice(start, end);
+
+            const formData = new FormData();
+            formData.append('fileChunk', chunk);
+            formData.append('uploadId', uploadId);
+            formData.append('chunkIndex', String(i));
+            formData.append('totalChunks', String(totalChunks));
+            formData.append('originalFilename', file.name);
+
+            const response = await fetch(`${API_BASE_URL}/index.php?action=upload_chunk`, {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await handleResponse(response);
+            if (i === totalChunks - 1) {
+                finalUrl = data.url;
+            }
+        }
+        return finalUrl;
     },
 
     updateMetadata: async (id: string, title: string, subtitle: string, description: string): Promise<void> => {
