@@ -1,0 +1,103 @@
+name: Deploy sonificart-health (FTP)
+
+# Builda il frontend Vite e carica via FTP sull'host il frontend (web root) e il
+# backend PHP (cartella /api). Si attiva a ogni push su main e manualmente da
+# Actions -> "Run workflow".
+#
+# Richiede questi GitHub Secrets (Settings -> Secrets and variables -> Actions):
+#   FTP_HOST  FTP_USER  FTP_PASS            -> accesso FTP all'hosting
+#   DB_HOST   DB_NAME   DB_USER   DB_PASS   -> credenziali database MySQL
+# Finche' i Secrets non sono impostati, il job builda ma NON carica nulla.
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend (-> internet/)
+        run: npm run build
+
+      - name: Check FTP secrets
+        id: check
+        run: |
+          if [ -z "${{ secrets.FTP_HOST }}" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Secrets FTP non impostati: build OK ma upload saltato. Aggiungi FTP_* e DB_* nei Secrets, poi rilancia il workflow."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Stage deploy folder
+        if: steps.check.outputs.configured == 'true'
+        run: |
+          set -e
+          rm -rf _deploy
+          mkdir -p _deploy/api
+          # Frontend buildato -> web root del sito
+          cp -r internet/. _deploy/
+          # Backend PHP -> /api
+          cp backend/index.php _deploy/api/index.php
+          cp backend/.user.ini _deploy/api/.user.ini
+
+      - name: Generate api/config.php from secrets
+        if: steps.check.outputs.configured == 'true'
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASS: ${{ secrets.DB_PASS }}
+        run: |
+          set -e
+          mkdir -p _deploy/api
+          # Escape per stringhe PHP tra apici singoli (\ e ')
+          esc() { printf '%s' "$1" | sed "s/\\\\/\\\\\\\\/g; s/'/\\\\'/g"; }
+          {
+            echo "<?php"
+            echo "return ["
+            echo "    'db_host'    => '$(esc "${DB_HOST:-localhost}")',"
+            echo "    'db_name'    => '$(esc "$DB_NAME")',"
+            echo "    'db_user'    => '$(esc "$DB_USER")',"
+            echo "    'db_pass'    => '$(esc "$DB_PASS")',"
+            echo "    'db_charset' => 'utf8mb4',"
+            echo "];"
+          } > _deploy/api/config.php
+
+      - name: Deploy via FTP
+        if: steps.check.outputs.configured == 'true'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USER }}
+          password: ${{ secrets.FTP_PASS }}
+          protocol: ftp
+          port: 21
+          local-dir: ./_deploy/
+          # ATTENZIONE: se sul tuo hosting la web root non e' la radice FTP,
+          # cambia in "./public_html/", "./htdocs/" o "./www/" a seconda del provider.
+          server-dir: ./
+          # Non tocca i file preesistenti non gestiti da questo deploy
+          # (es. la cartella media/ con gli upload degli utenti).
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**

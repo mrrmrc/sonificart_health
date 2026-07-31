@@ -38,11 +38,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
 }
 
 // DATABASE
+// Le credenziali NON sono committate: vengono lette da config.php (generato in fase
+// di deploy dai GitHub Secrets e caricato accanto a questo file, nella cartella /api).
 $db_host = 'localhost';
-$db_name = 'diq0p57p_sonificart';
-$db_user = 'diq0p57p_sonifico';
-$db_pass = 'DROPAxin2026!';
+$db_name = '';
+$db_user = '';
+$db_pass = '';
 $db_charset = 'utf8mb4';
+
+$__cfg_file = __DIR__ . '/config.php';
+if (is_file($__cfg_file)) {
+    $__cfg = include $__cfg_file;
+    if (is_array($__cfg)) {
+        $db_host    = $__cfg['db_host']    ?? $db_host;
+        $db_name    = $__cfg['db_name']    ?? $db_name;
+        $db_user    = $__cfg['db_user']    ?? $db_user;
+        $db_pass    = $__cfg['db_pass']    ?? $db_pass;
+        $db_charset = $__cfg['db_charset'] ?? $db_charset;
+    }
+}
+
 $baseUrl = "https://" . $_SERVER['HTTP_HOST'];
 
 try {
@@ -56,6 +71,90 @@ try {
 
 // Ensure Database Schema is up to date
 try {
+    // --- Base tables (create on a fresh/empty database) ---
+    $pdo->exec("CREATE TABLE IF NOT EXISTS users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) DEFAULT NULL,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        password VARCHAR(255) DEFAULT NULL,
+        credits INT DEFAULT 0,
+        credits_consumed INT DEFAULT 0,
+        is_pro TINYINT(1) DEFAULT 0,
+        is_admin TINYINT(1) DEFAULT 0,
+        tier VARCHAR(20) DEFAULT 'free',
+        pro_expires_at DATETIME DEFAULT NULL,
+        token VARCHAR(255) DEFAULT NULL,
+        token_expires_at DATETIME DEFAULT NULL,
+        avatar_url VARCHAR(255) DEFAULT NULL,
+        custom_logo_url VARCHAR(255) DEFAULT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS history (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        image_hash VARCHAR(255) DEFAULT NULL,
+        paradigm VARCHAR(50) DEFAULT NULL,
+        tradition_name VARCHAR(100) DEFAULT NULL,
+        image_url VARCHAR(500) DEFAULT NULL,
+        audio_url VARCHAR(500) DEFAULT NULL,
+        original_audio_url VARCHAR(500) DEFAULT NULL,
+        video_url VARCHAR(255) DEFAULT NULL,
+        music_generation_prompt TEXT DEFAULT NULL,
+        generated_ai_track_url VARCHAR(500) DEFAULT NULL,
+        config_json LONGTEXT DEFAULT NULL,
+        event_data LONGTEXT DEFAULT NULL,
+        block_data LONGTEXT DEFAULT NULL,
+        title VARCHAR(255) DEFAULT NULL,
+        subtitle VARCHAR(255) DEFAULT NULL,
+        description TEXT DEFAULT NULL,
+        audio_hash VARCHAR(255) DEFAULT NULL,
+        acquisition_metadata TEXT DEFAULT NULL,
+        validation_hashes TEXT DEFAULT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS showcase (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255),
+        author_name VARCHAR(255),
+        description TEXT,
+        image_url VARCHAR(255),
+        audio_url VARCHAR(255),
+        video_url VARCHAR(255),
+        paradigm VARCHAR(50),
+        tradition VARCHAR(100),
+        tags TEXT,
+        duration VARCHAR(50),
+        notes_count INT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        owner_id INT,
+        history_id INT DEFAULT NULL,
+        is_public TINYINT(1) DEFAULT 1,
+        is_home TINYINT(1) DEFAULT 0,
+        is_featured TINYINT(1) DEFAULT 0,
+        priority INT DEFAULT 0
+    )");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS registration_requests (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255),
+        email VARCHAR(255),
+        plan VARCHAR(50),
+        address TEXT,
+        piva VARCHAR(50),
+        sdi VARCHAR(50),
+        reason TEXT,
+        institution_type VARCHAR(100),
+        purpose TEXT,
+        website VARCHAR(255),
+        phone VARCHAR(50),
+        city VARCHAR(100),
+        invoice_sent TINYINT(1) DEFAULT 0,
+        paid TINYINT(1) DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )");
+
     $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_expires_at DATETIME DEFAULT NULL");
     $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS tier VARCHAR(20) DEFAULT 'free'");
     $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_logo_url VARCHAR(255) DEFAULT NULL");

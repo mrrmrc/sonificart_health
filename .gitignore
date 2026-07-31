@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# Deploy: credenziali e staging (mai committare)
+/_deploy/
+backend/config.php
+api/config.php
+.ftp-deploy-sync-state.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

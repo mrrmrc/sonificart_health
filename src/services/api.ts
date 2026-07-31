@@ -3,7 +3,9 @@ import { blobToBase64 } from './audioUtils';
 
 // --- CONFIGURAZIONE ---
 export const USE_MOCK_BACKEND = false;
-const API_BASE_URL = 'https://sonificart.com/api';
+// Relativo all'origine del sito: funziona su qualsiasi dominio dove viene servito
+// il frontend, purché il backend PHP stia nella cartella /api della stessa web root.
+const API_BASE_URL = '/api';
 
 const STORAGE_KEYS = {
     TOKEN: 'sonificart_auth_token',
