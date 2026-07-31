@@ -43,7 +43,7 @@ export async function describeImageContent(imageFile: File): Promise<string> {
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-1.5-pro',
+            model: 'gemini-2.5-flash',
             contents: { parts: [imagePart, textPart] }
         });
         return response.text?.trim() || "Descrizione non disponibile";
@@ -122,7 +122,7 @@ Rispondi SOLO con il JSON.`
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-1.5-pro',
+            model: 'gemini-2.5-flash',
             contents: { parts: [textPart] },
             config: {
                 responseMimeType: "application/json",
@@ -247,7 +247,7 @@ Rispondi SOLO con il JSON.`
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-1.5-pro',
+            model: 'gemini-2.5-flash',
             contents: { parts: parts },
             config: {
                 responseMimeType: "application/json",
@@ -306,7 +306,7 @@ export async function extractDirectivesFromPDF(pdfUrl: string): Promise<string> 
     };
     try {
         const aiResponse = await ai.models.generateContent({
-            model: 'gemini-1.5-pro',
+            model: 'gemini-2.5-flash',
             contents: { parts: [pdfPart, textPart] }
         });
         return aiResponse.text?.trim() || "";
