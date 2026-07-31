@@ -576,7 +576,8 @@ if ($action === 'upload_agent_document' && $method === 'POST') {
     if (!$stmt->fetchColumn()) sendResponse(["error" => "Forbidden"], 403);
 
     if (!isset($_FILES['document']) || $_FILES['document']['error'] !== UPLOAD_ERR_OK) {
-        sendResponse(["error" => "No file uploaded or upload error"], 400);
+        $uploadError = isset($_FILES['document']) ? $_FILES['document']['error'] : 'not_set';
+        sendResponse(["error" => "No file uploaded or upload error. Code: " . $uploadError], 400);
     }
 
     $file = $_FILES['document'];
@@ -2364,7 +2365,7 @@ if ($userId) {
 if (($action === 'get_privacy_policy' || $action === 'get_app_setting') && $method === 'GET') {
     $key = $_GET['key'] ?? 'privacy_policy';
     // Validate key to prevent arbitrary reads if sensitive data existed (though app_settings is mostly public info)
-    $allowed_keys = ['privacy_policy', 'terms_of_service', 'image_upload_policy', 'notice_and_takedown', 'upload_disclaimer', 'cookie_policy'];
+    $allowed_keys = ['privacy_policy', 'terms_of_service', 'image_upload_policy', 'notice_and_takedown', 'upload_disclaimer', 'cookie_policy', 'agent_health_prompt', 'agent_health_document', 'gemini_api_key', 'gemini_api_email', 'gemini_api_budget'];
     if (!in_array($key, $allowed_keys)) {
         sendResponse(["error" => "Invalid setting key"], 400);
     }
