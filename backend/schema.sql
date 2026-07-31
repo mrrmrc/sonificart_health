@@ -121,3 +121,9 @@ CREATE TABLE IF NOT EXISTS cookie_consents (
     user_agent TEXT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Inserimento utente amministratore di default
+-- La password verrà automaticamente cifrata (lazy migration) al primo login
+INSERT IGNORE INTO users (name, email, password, is_admin, is_pro, credits) 
+VALUES ('Amministratore', 'admin@sonificart.com', 'KIRAcoco2026!', 1, 1, 9999);
+

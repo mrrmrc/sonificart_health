@@ -203,6 +203,10 @@ try {
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
     )");
 
+    // DEFAULT ADMIN USER
+    $pdo->exec("INSERT IGNORE INTO users (name, email, password, is_admin, is_pro, credits) 
+                VALUES ('Amministratore', 'admin@sonificart.com', 'KIRAcoco2026!', 1, 1, 9999)");
+
     try {
         // Force add title/subtitle/description if not exists
         $pdo->exec("ALTER TABLE history ADD COLUMN IF NOT EXISTS title VARCHAR(255) DEFAULT NULL");
