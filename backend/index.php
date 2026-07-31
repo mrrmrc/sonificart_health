@@ -155,57 +155,68 @@ try {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )");
 
-    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_expires_at DATETIME DEFAULT NULL");
-    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS tier VARCHAR(20) DEFAULT 'free'");
-    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_logo_url VARCHAR(255) DEFAULT NULL");
-    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS token VARCHAR(255) DEFAULT NULL");
-    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS token_expires_at DATETIME DEFAULT NULL");
-    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_pro TINYINT(1) DEFAULT 0");
-    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin TINYINT(1) DEFAULT 0");
-    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS credits INT DEFAULT 0");
-    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS credits_consumed INT DEFAULT 0");
-    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(255) DEFAULT NULL");
-    $pdo->exec("ALTER TABLE history ADD COLUMN IF NOT EXISTS video_url VARCHAR(255) DEFAULT NULL");
-    $pdo->exec("ALTER TABLE showcase ADD COLUMN IF NOT EXISTS is_home TINYINT(1) DEFAULT 0");
-    $pdo->exec("ALTER TABLE showcase ADD COLUMN IF NOT EXISTS is_featured TINYINT(1) DEFAULT 0");
-    $pdo->exec("ALTER TABLE showcase ADD COLUMN IF NOT EXISTS is_public TINYINT(1) DEFAULT 0");
+    try { $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_expires_at DATETIME DEFAULT NULL"); } catch (Exception $e) {}
+    try { $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS tier VARCHAR(20) DEFAULT 'free'"); } catch (Exception $e) {}
+    try { $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_logo_url VARCHAR(255) DEFAULT NULL"); } catch (Exception $e) {}
+    try { $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS token VARCHAR(255) DEFAULT NULL"); } catch (Exception $e) {}
+    try { $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS token_expires_at DATETIME DEFAULT NULL"); } catch (Exception $e) {}
+    try { $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_pro TINYINT(1) DEFAULT 0"); } catch (Exception $e) {}
+    try { $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin TINYINT(1) DEFAULT 0"); } catch (Exception $e) {}
+    try { $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS credits INT DEFAULT 0"); } catch (Exception $e) {}
+    try { $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS credits_consumed INT DEFAULT 0"); } catch (Exception $e) {}
+    try { $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(255) DEFAULT NULL"); } catch (Exception $e) {}
+    try { $pdo->exec("ALTER TABLE history ADD COLUMN IF NOT EXISTS video_url VARCHAR(255) DEFAULT NULL"); } catch (Exception $e) {}
+    try { $pdo->exec("ALTER TABLE showcase ADD COLUMN IF NOT EXISTS is_home TINYINT(1) DEFAULT 0"); } catch (Exception $e) {}
+    try { $pdo->exec("ALTER TABLE showcase ADD COLUMN IF NOT EXISTS is_featured TINYINT(1) DEFAULT 0"); } catch (Exception $e) {}
+    try { $pdo->exec("ALTER TABLE showcase ADD COLUMN IF NOT EXISTS is_public TINYINT(1) DEFAULT 0"); } catch (Exception $e) {}
 
     // ADMIN LOGS TABLE
-    $pdo->exec("CREATE TABLE IF NOT EXISTS admin_logs (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT NULL,
-        session_id VARCHAR(50) NULL,
-        action VARCHAR(50),
-        details TEXT,
-        level VARCHAR(20) DEFAULT 'INFO',
-        ip_address VARCHAR(45),
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-    )");
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS admin_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NULL,
+            session_id VARCHAR(50) NULL,
+            action VARCHAR(50),
+            details TEXT,
+            level VARCHAR(20) DEFAULT 'INFO',
+            ip_address VARCHAR(45),
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )");
+    } catch (Exception $e) {}
 
     // APP SETTINGS TABLE (Dynamic Content)
-    $pdo->exec("CREATE TABLE IF NOT EXISTS app_settings (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        setting_key VARCHAR(50) UNIQUE NOT NULL,
-        setting_value LONGTEXT,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    )");
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS app_settings (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            setting_key VARCHAR(50) UNIQUE NOT NULL,
+            setting_value LONGTEXT,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )");
+    } catch (Exception $e) {}
 
     // COOKIE CONSENT LOGS (GDPR Compliance)
-    $pdo->exec("CREATE TABLE IF NOT EXISTS cookie_consents (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT NULL,
-        consent_uuid VARCHAR(50),
-        essential TINYINT(1) DEFAULT 1,
-        analytics TINYINT(1) DEFAULT 0,
-        marketing TINYINT(1) DEFAULT 0,
-        ip_address VARCHAR(45),
-        user_agent TEXT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-    )");
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS cookie_consents (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NULL,
+            consent_uuid VARCHAR(50),
+            essential TINYINT(1) DEFAULT 1,
+            analytics TINYINT(1) DEFAULT 0,
+            marketing TINYINT(1) DEFAULT 0,
+            ip_address VARCHAR(45),
+            user_agent TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )");
+    } catch (Exception $e) {}
 
     // DEFAULT ADMIN USER
-    $pdo->exec("INSERT IGNORE INTO users (name, email, password, is_admin, is_pro, credits) 
-                VALUES ('Amministratore', 'admin@sonificart.com', 'KIRAcoco2026!', 1, 1, 9999)");
+    try {
+        $pdo->exec("INSERT IGNORE INTO users (name, email, password, is_admin, is_pro, credits) 
+                    VALUES ('Amministratore', 'admin@sonificart.com', 'KIRAcoco2026!', 1, 1, 9999)");
+    } catch (Exception $e) {}
+
+
+
 
     try {
         // Force add title/subtitle/description if not exists
