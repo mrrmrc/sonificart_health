@@ -542,6 +542,30 @@ if ($action === 'soundverse_generate' && $method === 'POST') {
 
     $prompt = $input['prompt'] ?? '';
     $duration = (int)($input['duration'] ?? 60);
+    $audioBase64 = $input['audio_base64'] ?? ($input['audioBase64'] ?? null);
+    $audioUrlInput = $input['audioUrl'] ?? ($input['reference_audio'] ?? null);
+
+    $publicRefAudioUrl = null;
+
+    if ($audioBase64) {
+        $refHash = 'ref_sv_' . md5($prompt . time() . rand(1000, 9999));
+        $savedPath = saveBase64File($audioBase64, 'audio', $refHash);
+        if ($savedPath) {
+            $publicRefAudioUrl = $baseUrl . $savedPath;
+        }
+    } else if ($audioUrlInput && strpos($audioUrlInput, 'http') === 0) {
+        $publicRefAudioUrl = $audioUrlInput;
+    }
+
+    $postData = [
+        'prompt' => $prompt,
+        'duration' => $duration
+    ];
+    if ($publicRefAudioUrl) {
+        $postData['audio_url'] = $publicRefAudioUrl;
+        $postData['reference_audio'] = $publicRefAudioUrl;
+        $postData['audio'] = $publicRefAudioUrl;
+    }
 
     $ch = curl_init('https://api.soundverse.ai/v1/audio/generate');
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -551,10 +575,7 @@ if ($action === 'soundverse_generate' && $method === 'POST') {
         'Authorization: Bearer ' . trim($apiKey),
         'x-api-key: ' . trim($apiKey)
     ]);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
-        'prompt' => $prompt,
-        'duration' => $duration
-    ]));
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($postData));
     curl_setopt($ch, CURLOPT_TIMEOUT, 120);
 
     $response = curl_exec($ch);
@@ -570,10 +591,7 @@ if ($action === 'soundverse_generate' && $method === 'POST') {
             'Content-Type: application/json',
             'Authorization: Bearer ' . trim($apiKey)
         ]);
-        curl_setopt($ch2, CURLOPT_POSTFIELDS, json_encode([
-            'prompt' => $prompt,
-            'duration' => $duration
-        ]));
+        curl_setopt($ch2, CURLOPT_POSTFIELDS, json_encode($postData));
         curl_setopt($ch2, CURLOPT_TIMEOUT, 120);
         $res2 = curl_exec($ch2);
         $http2 = curl_getinfo($ch2, CURLINFO_HTTP_CODE);
@@ -585,7 +603,7 @@ if ($action === 'soundverse_generate' && $method === 'POST') {
     }
 
     $resData = json_decode($response, true);
-    sendResponse($resData ?: ["raw" => $response, "success" => true], $httpCode ?: 200);
+    sendResponse($resData ?: ["raw" => $response, "success" => true, "refAudio" => $publicRefAudioUrl], $httpCode ?: 200);
 }
 
 // --- LOG EVENT (Public) ---

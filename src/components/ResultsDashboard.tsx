@@ -13,6 +13,7 @@ import { createForensicPackage } from '../services/forensicPackageService';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ConfirmationModal } from './ConfirmationModal';
 import { api } from '../services/api';
+import { generateSoundverseAudioTrack } from '../services/soundverseService';
 
 const InfoCard: React.FC<{ title: string, icon: string, children: React.ReactNode, className?: string }> = ({ title, icon, children, className }) => (
     <div className={`bg-brand-primary/50 p-4 rounded-lg border border-brand-secondary ${className}`}>
@@ -435,17 +436,17 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                 || correctedResult.musicGenerationPrompt?.technical_parameters
                 || `Genre: Cinematic Health Ambient | Style: Mindful | Duration: ${correctedResult.configUsed?.targetDurationSeconds || 60}s`;
             
-            const { generateSoundverseAudioTrack } = await import('../services/soundverseService');
             const targetSec = correctedResult.configUsed?.targetDurationSeconds || 60;
+            const audioWavBlob = correctedResult.audioOutput?.audioWavBlob || null;
             const audioWavUrl = correctedResult.audioOutput?.audioUrl || null;
 
-            const res = await generateSoundverseAudioTrack(promptToUse, targetSec, audioWavUrl);
+            const res = await generateSoundverseAudioTrack(promptToUse, targetSec, audioWavBlob, audioWavUrl);
 
             if (res.success && res.audioUrl) {
                 setConfirmModal({
                     isOpen: true,
                     title: "Traccia Soundverse AI Generata!",
-                    message: "La linea melodica deterministica e le specifiche cliniche/artistiche sono state inviate con successo a Soundverse.AI!",
+                    message: "La linea melodica deterministica ed il prompt di specifiche cliniche sono stati inviati con successo a Soundverse.AI!",
                     type: 'success',
                     singleButton: true,
                     onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))

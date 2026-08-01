@@ -1,4 +1,5 @@
 import { api as backendApi } from './api';
+import { blobToBase64 } from './audioUtils';
 
 const DEFAULT_SOUNDVERSE_KEY = "sksoundverse_ivOVxIp9fudT87xVfqjPUWIB7SHSis9QTRojifOh3k_rKyiz-g1iadzoCtH8GzQl";
 
@@ -25,11 +26,26 @@ export interface SoundverseGenerationResponse {
 export async function generateSoundverseAudioTrack(
     promptText: string,
     durationSeconds: number = 60,
+    audioWavBlob?: Blob | null,
     audioWavUrl?: string | null
 ): Promise<SoundverseGenerationResponse> {
     const apiKey = await getSoundverseApiKey();
 
+    let audioBase64: string | null = null;
+
     try {
+        if (audioWavBlob) {
+            audioBase64 = await blobToBase64(audioWavBlob);
+        } else if (audioWavUrl && audioWavUrl.startsWith('blob:')) {
+            try {
+                const res = await fetch(audioWavUrl);
+                const blob = await res.blob();
+                audioBase64 = await blobToBase64(blob);
+            } catch (e) {
+                console.warn("Impossibile scaricare blob audio localmente:", e);
+            }
+        }
+
         const response = await fetch('/api/index.php?action=soundverse_generate', {
             method: 'POST',
             headers: {
@@ -39,8 +55,8 @@ export async function generateSoundverseAudioTrack(
                 apiKey: apiKey,
                 prompt: promptText,
                 duration: durationSeconds,
-                audioUrl: audioWavUrl || null,
-                reference_audio: audioWavUrl || null
+                audio_base64: audioBase64,
+                audioUrl: (audioWavUrl && !audioWavUrl.startsWith('blob:')) ? audioWavUrl : null
             })
         });
 
@@ -50,11 +66,9 @@ export async function generateSoundverseAudioTrack(
             throw new Error(data.error || `Errore server (${response.status})`);
         }
 
-        // Parse Soundverse API response structure
         const audioUrl = data.audio_url || data.url || data.audioUrl || data.output_url || data.audio || (data.data && (data.data.audio_url || data.data.url));
 
         if (!audioUrl) {
-            // Check if returned polling ID or job ID
             if (data.id || data.job_id) {
                 return {
                     success: true,
