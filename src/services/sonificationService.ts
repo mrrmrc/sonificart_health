@@ -2,12 +2,13 @@ import {
     SonificationResult, Tradition, ConfigSettings, BlockAnalysisResult, MappedBlock,
     UniversalMapping, TransformedNoteEvent, CulturalSelectionResult, ScoreBreakdown, BlockData,
     PerformanceMetrics, MusicGenerationPrompt, InstrumentType, ScanPattern, ScanPatternOverride, AudioOutputResult,
-    OriginalFileMetadata
+    OriginalFileMetadata, HealthClassificationResult
 } from '../types';
 import { analyzeOriginalFile } from './forensicPackageService';
 import { NormalizationReport } from './imageNormalizationService';
 
 import { generateMusicPromptFromAnalysis, generateMusicPromptFromAnalysisHybrid, describeImageContent, generateHealthEvidencePrompt } from './geminiService';
+import { classifyHealthCategories } from './healthCategoryClassifier';
 import { calculateSHA256, bufferToHex } from '../utils/cryptoUtils';
 import { exportMidi } from './midiService';
 import { createSacContainer } from './sacService';
@@ -851,6 +852,33 @@ export async function sonifyImage(
 
     timings.totalProcessingTime = Object.values(timings).reduce((sum: number, val) => (typeof val === 'number' ? sum + val : sum), 0);
 
+    // Health Classification (computed before return, only when health agent is active)
+    let healthClassification: HealthClassificationResult | null = null;
+    let musicGenerationPrompt: MusicGenerationPrompt;
+
+    if (config.useHealthAgent) {
+        healthClassification = classifyHealthCategories(blockAnalysisResult.globalStats, imageDescription);
+        console.log('[SonificART Health] Classificazione WHO:', healthClassification.primaryCategory.label,
+            `(${(healthClassification.primaryCategory.score * 100).toFixed(0)}%)`,
+            '| Categorie attive:', healthClassification.activeCategories.map(c => c.label).join(', '));
+        musicGenerationPrompt = await generateHealthEvidencePrompt(
+            culturalSelectionResult.tradition,
+            blockAnalysisResult.globalStats,
+            scanPatternName,
+            imageDescription,
+            totalDurationSeconds,
+            healthClassification
+        );
+    } else {
+        musicGenerationPrompt = await generateMusicPromptFromAnalysis(
+            culturalSelectionResult.tradition,
+            blockAnalysisResult.globalStats,
+            scanPatternName,
+            totalDurationSeconds,
+            imageDescription
+        );
+    }
+
     return {
         imageHash,
         audioHash,
@@ -875,22 +903,11 @@ export async function sonifyImage(
         },
         performanceMetrics: timings,
         normalizationReport: normalizationReport || null,
-        musicGenerationPrompt: config.useHealthAgent ? await generateHealthEvidencePrompt(
-            culturalSelectionResult.tradition,
-            blockAnalysisResult.globalStats,
-            scanPatternName,
-            imageDescription,
-            totalDurationSeconds
-        ) : await generateMusicPromptFromAnalysis(
-            culturalSelectionResult.tradition,
-            blockAnalysisResult.globalStats,
-            scanPatternName,
-            totalDurationSeconds,
-            imageDescription
-        ),
+        musicGenerationPrompt,
         acquisitionMetadata,
         // *** FORENSIC: Include original file metadata for verification ***
         originalFileMetadata,
+        healthClassification,
     };
 }
 
@@ -1024,13 +1041,24 @@ async function sonifyImageArtisticOrHybrid(
     // ma manteniamo i dati della tradizione originale (es. Maqam, Flamenco) nel framework per la sintesi del WAV deterministico
     const aiTradition = traditions.find(t => t.id === 49 || t.name === "Cinematic Ambient") || DEFAULT_CINEMATIC_TRADITION;
 
+    // Health classification (computed once, used in both paradigm branches)
+    let healthClassification: HealthClassificationResult | null = null;
+    if (config.useHealthAgent) {
+        const descForClassification = paradigm === 'hybrid' ? imageDescription : 'Analisi Artistica';
+        healthClassification = classifyHealthCategories(blockAnalysisResult.globalStats, descForClassification);
+        console.log('[SonificART Health] Classificazione WHO:', healthClassification.primaryCategory.label,
+            `(${(healthClassification.primaryCategory.score * 100).toFixed(0)}%)`,
+            '| Categorie attive:', healthClassification.activeCategories.map(c => c.label).join(', '));
+    }
+
     if (paradigm === 'hybrid') {
         musicPrompt = config.useHealthAgent ? await generateHealthEvidencePrompt(
             aiTradition,
             blockAnalysisResult.globalStats,
             scanPatternName,
             imageDescription,
-            totalDurationSeconds
+            totalDurationSeconds,
+            healthClassification
         ) : await generateMusicPromptFromAnalysis(
             aiTradition,
             blockAnalysisResult.globalStats,
@@ -1045,7 +1073,8 @@ async function sonifyImageArtisticOrHybrid(
             blockAnalysisResult.globalStats,
             scanPatternName,
             "Analisi Artistica",
-            totalDurationSeconds
+            totalDurationSeconds,
+            healthClassification
         ) : await generateMusicPromptFromAnalysis(
             aiTradition,
             blockAnalysisResult.globalStats,
@@ -1095,6 +1124,7 @@ async function sonifyImageArtisticOrHybrid(
         acquisitionMetadata,
         // *** FORENSIC: Include original file metadata for verification ***
         originalFileMetadata,
+        healthClassification,
     };
 }
 

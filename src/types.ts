@@ -217,6 +217,24 @@ export interface OriginalFileMetadata {
     originalBlob?: Blob;    // The original file as a Blob (for creating forensic packages)
 }
 
+// --- WHO HEALTH CATEGORY CLASSIFICATION ---
+export type HealthCategoryType = 'calming' | 'physiological' | 'cognitive_motor' | 'social_emotional' | 'motivation';
+
+export interface HealthCategoryScore {
+    category: HealthCategoryType;
+    score: number;          // 0.0 - 1.0
+    label: string;          // Human-readable label (IT)
+    whoDirective: string;   // Specific WHO directive to inject into prompt
+    visualReason: string;   // Why this category was selected based on visual analysis
+}
+
+export interface HealthClassificationResult {
+    primaryCategory: HealthCategoryScore;
+    activeCategories: HealthCategoryScore[];  // score > threshold
+    allScores: HealthCategoryScore[];
+    promptFragment: string;  // Ready-to-use prompt text for Gemini with only relevant directives
+}
+
 export interface SonificationResult {
     imageHash: string;
     audioHash: string;
@@ -245,6 +263,7 @@ export interface SonificationResult {
     title?: string | null;
     description?: string | null;
     videoUrl?: string | null;
+    healthClassification?: HealthClassificationResult | null;
 }
 
 export interface SacVerificationDetails {

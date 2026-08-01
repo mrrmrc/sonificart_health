@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { SonificationResult, TransformedNoteEvent, User } from '../types';
+import { SonificationResult, TransformedNoteEvent, User, HealthClassificationResult } from '../types';
+import { classifyHealthCategories } from '../services/healthCategoryClassifier';
 import { AudioPlayer } from './AudioPlayer';
 import { ScanPathOverlay } from './ScanPathOverlay';
 import { CursorHighlight } from './CursorHighlight';
@@ -450,6 +451,19 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
     const displayImage = correctedResult.standardizedImageUrl;
     const safeHash = correctedResult.imageHash || "unknown_hash";
     const safeDuration = correctedResult.audioOutput?.duration || 0;
+
+    const healthData: HealthClassificationResult | null = useMemo(() => {
+        if (correctedResult.healthClassification) {
+            return correctedResult.healthClassification;
+        }
+        if (correctedResult.configUsed?.useHealthAgent && correctedResult.blockAnalysisResult?.globalStats) {
+            return classifyHealthCategories(
+                correctedResult.blockAnalysisResult.globalStats,
+                (correctedResult as any).description || ""
+            );
+        }
+        return null;
+    }, [correctedResult]);
 
     const calculateImageRect = useCallback(() => {
         if (!imageRef.current || !containerRef.current) return;
@@ -1163,6 +1177,108 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+                {/* --- SEZIONE CLASSIFICAZIONE TERAPEUTICA WHO HEALTH AGENT --- */}
+                {healthData && (
+                    <InfoCard
+                        title="WHO Health Agent — Classificazione Terapeutica Visiva"
+                        icon="fa-heart-pulse"
+                        className="lg:col-span-3 relative overflow-hidden bg-gradient-to-br from-emerald-950/40 via-teal-950/20 to-black border-emerald-500/40 shadow-xl shadow-emerald-950/20"
+                    >
+                        <div className="space-y-6">
+                            {/* INTESTAZIONE E CATEGORIA PRIMARIA */}
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-emerald-500/10 p-4 rounded-xl border border-emerald-500/20">
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-wider">
+                                        <i className="fas fa-bullseye text-sm animate-pulse"></i>
+                                        Categoria Terapeutica Primaria Identificata
+                                    </div>
+                                    <h3 className="text-xl font-extrabold text-white flex items-center gap-3">
+                                        {healthData.primaryCategory.label}
+                                        <span className="text-sm px-3 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-mono font-bold">
+                                            {(healthData.primaryCategory.score * 100).toFixed(0)}% Rilevanza
+                                        </span>
+                                    </h3>
+                                    <p className="text-xs text-emerald-200/80 italic">
+                                        {healthData.primaryCategory.visualReason}
+                                    </p>
+                                </div>
+                                <div className="bg-black/40 px-4 py-2 rounded-lg border border-emerald-500/30 text-right">
+                                    <span className="text-[10px] text-gray-400 block uppercase font-bold">Linee Guida Attive</span>
+                                    <span className="text-xs font-mono font-bold text-emerald-300">
+                                        {healthData.activeCategories.length} su 5 Categorie WHO
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* GRIGLIA BARRE DELLE 5 CATEGORIE WHO */}
+                            <div>
+                                <h5 className="text-xs uppercase font-bold text-gray-300 mb-3 flex items-center gap-2">
+                                    <i className="fas fa-chart-bar text-emerald-400"></i>
+                                    Profilo delle 5 Categorie WHO (Health Evidence Network Report 67)
+                                </h5>
+                                <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                                    {healthData.allScores.map((scoreObj) => {
+                                        const isActive = scoreObj.score >= 0.3;
+                                        const isPrimary = scoreObj.category === healthData.primaryCategory.category;
+                                        const pct = Math.round(scoreObj.score * 100);
+                                        return (
+                                            <div
+                                                key={scoreObj.category}
+                                                className={`p-3 rounded-lg border transition-all ${
+                                                    isPrimary
+                                                        ? 'bg-emerald-500/20 border-emerald-400 shadow-md shadow-emerald-500/10'
+                                                        : isActive
+                                                        ? 'bg-teal-900/20 border-teal-500/30'
+                                                        : 'bg-black/30 border-white/5 opacity-50'
+                                                }`}
+                                            >
+                                                <div className="flex justify-between items-center text-xs mb-1 font-bold">
+                                                    <span className={isPrimary ? 'text-emerald-300' : isActive ? 'text-teal-200' : 'text-gray-400'}>
+                                                        {scoreObj.label.split('/')[0]}
+                                                    </span>
+                                                    <span className="font-mono text-[11px]">{pct}%</span>
+                                                </div>
+                                                <div className="w-full bg-black/50 rounded-full h-1.5 mb-2 overflow-hidden border border-white/10">
+                                                    <div
+                                                        className={`h-full rounded-full transition-all duration-500 ${
+                                                            isPrimary
+                                                                ? 'bg-gradient-to-r from-emerald-400 to-teal-300'
+                                                                : isActive
+                                                                ? 'bg-teal-400'
+                                                                : 'bg-gray-600'
+                                                        }`}
+                                                        style={{ width: `${pct}%` }}
+                                                    ></div>
+                                                </div>
+                                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono block text-center ${
+                                                    isPrimary
+                                                        ? 'bg-emerald-400 text-black font-bold'
+                                                        : isActive
+                                                        ? 'bg-teal-500/30 text-teal-300'
+                                                        : 'bg-white/5 text-gray-500'
+                                                }`}>
+                                                    {isPrimary ? 'PRIMARIA' : isActive ? 'ATTIVA' : 'NON ATTIVA'}
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* DIRETTIVA WHO INIETTATA NEL PROMPT */}
+                            <div className="bg-black/40 p-4 rounded-xl border border-white/10">
+                                <h5 className="text-xs uppercase font-bold text-emerald-400 mb-2 flex items-center gap-2">
+                                    <i className="fas fa-file-medical-alt"></i>
+                                    Direttiva WHO Specificamente Inviata all'AI
+                                </h5>
+                                <p className="text-xs text-gray-300 font-mono leading-relaxed whitespace-pre-line bg-white/5 p-3 rounded-lg border border-white/5">
+                                    {healthData.primaryCategory.whoDirective}
+                                </p>
+                            </div>
+                        </div>
+                    </InfoCard>
+                )}
 
                 {/* --- SEZIONE CONCEPT & AI RIGENERATA CON MULTI-TAB --- */}
                 {correctedResult.paradigm?.toLowerCase().trim() !== 'scientific' && correctedResult.musicGenerationPrompt && (

@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { MusicGenerationPrompt, Tradition, BlockAnalysisResult } from "../types";
+import { MusicGenerationPrompt, Tradition, BlockAnalysisResult, HealthClassificationResult } from "../types";
 import { fileToBase64 } from "../utils/fileUtils";
 
 // --- CONFIGURAZIONE CHIAVE ---
@@ -168,7 +168,8 @@ export async function generateHealthEvidencePrompt(
     analysisStats: BlockAnalysisResult['globalStats'],
     scanPatternName: string,
     imageDescription: string,
-    durationSeconds: number
+    durationSeconds: number,
+    healthClassification?: HealthClassificationResult | null
 ): Promise<MusicGenerationPrompt> {
 
     const apiKey = await getGeminiApiKey();
@@ -183,6 +184,15 @@ export async function generateHealthEvidencePrompt(
     const adminDocUrl = adminDocUrlRaw ? adminDocUrlRaw.replace(/<[^>]*>?/gm, '').trim() : '';
 
     const ai = new GoogleGenAI({ apiKey: apiKey });
+
+    // Build the health classification section
+    // If classification is available, inject specific WHO directives instead of generic ones
+    const healthSection = healthClassification
+        ? `
+--- INIZIO CLASSIFICAZIONE TERAPEUTICA VISIVA ---
+${healthClassification.promptFragment}
+--- FINE CLASSIFICAZIONE TERAPEUTICA VISIVA ---`
+        : `5. **RAG (DOCUMENTO PDF ALLEGATO)**: Se è presente un documento PDF allegato a questa conversazione, applica tutte le sue linee guida (es. WHO Health Evidence Report) per massimizzare il potenziale curativo e di benessere della sonificazione.`;
 
     // Base knowledge string
     const textPart = {
@@ -203,16 +213,16 @@ REQUISITI DI FUSIONE E SALUTE (MANDATORI):
 2. **DIVIETO ASSOLUTO DI EFFETTO SONNIFERO**: Non usare termini come "lullaby", "sleepy", "deep relaxation", "droning", "somnolent". Scegli invece "uplifting", "energizing", "bright", "mindful", "active wellness".
 3. **Integrazione Cultura**: Fonda la tradizione musicale con il Soggetto Visivo.
 4. **FEDELTÀ AL RIFERIMENTO**: Il prompt deve ordinare all'AI di restare fedele alla struttura armonica e ritmica del file WAV caricato. Usa tag come "[Maintain original melody]", "[Instrumental focus]".
-5. **RAG (DOCUMENTO PDF ALLEGHATO)**: Se è presente un documento PDF allegato a questa conversazione, applica tutte le sue linee guida (es. WHO Health Evidence Report) per massimizzare il potenziale curativo e di benessere della sonificazione.
+${healthSection}
 
 FORZATURA DURATA SUNO (CRITICO):
 - Inizia SEMPRE con: "[Duration: ${durationSeconds.toFixed(0)}s], [Strictly ${durationSeconds.toFixed(0)} seconds limit], [Fast Ending], [No Extension], [Strictly Instrumental], [No Vocals]".
 - Termina SEMPRE con: "[Outro: Dissolve at ${durationSeconds.toFixed(0)}s], [End at ${durationSeconds.toFixed(0)}s], [Silence], [End]".
 
 STRUTTURA OUTPUT RICHIESTA (JSON):
-- **main_prompt_ita**: Descrizione poetica e tecnica del brano, focalizzata sui benefici sul benessere.
-- **technical_parameters**: BPM, Chiave, Scala, e Strumentazione.
-- **justification**: Spiegazione di come il prompt rispetti le istruzioni dell'admin e l'eventuale PDF, mantenendo l'energia vitale.
+- **main_prompt_ita**: Descrizione poetica e tecnica del brano, focalizzata sui benefici sul benessere e sulla categoria terapeutica primaria identificata.
+- **technical_parameters**: BPM, Chiave, Scala, e Strumentazione coerenti con le direttive terapeutiche specifiche.
+- **justification**: Spiegazione di come il prompt rispetti le direttive WHO SPECIFICHE per questa immagine (non generiche), le istruzioni dell'admin, e la classificazione visiva.
 - **suno_prompt**: Il mega-prompt di tag per Suno.
 - **udio_prompt**: Tag separati da virgola per Udio.
 - **negative_prompt**: Elementi da evitare (OBBLIGATORIAMENTE includere termini soporiferi o noiosi).
