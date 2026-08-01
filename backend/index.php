@@ -471,8 +471,6 @@ function generatePassword($length = 10)
 }
 
 // INPUT PROCESSING
-$action = $_GET['action'] ?? '';
-$method = $_SERVER['REQUEST_METHOD'];
 $input = $_POST;
 
 if (empty($_POST)) {
@@ -482,6 +480,12 @@ if (empty($_POST)) {
         $input = $decoded;
     }
 }
+
+$action = $_GET['action'] ?? ($input['action'] ?? '');
+if (empty($action) && isset($input['action'])) {
+    $action = $input['action'];
+}
+$method = $_SERVER['REQUEST_METHOD'];
 
 // Ensure multipart large payload check
 if (strpos($_SERVER['CONTENT_TYPE'] ?? '', 'multipart/form-data') !== false) {
