@@ -764,7 +764,19 @@ export async function sonifyImage(
 
     const scanSequence = generateScanSequence(gridW, gridH, scanPatternEnum);
 
-    const baseEventDurationSeconds = config.noteDurationSeconds;
+    // Health Classification & Clinical BPM Auto-application
+    let healthClassification: HealthClassificationResult | null = null;
+    if (config.useHealthAgent) {
+        healthClassification = classifyHealthCategories(blockAnalysisResult.globalStats, imageDescription);
+        config.bpm = healthClassification.primaryCategory.targetBpm;
+        console.log('[SonificART Health] Classificazione WHO:', healthClassification.primaryCategory.label,
+            `(${(healthClassification.primaryCategory.score * 100).toFixed(0)}%)`,
+            '| BPM Clinico Applicato:', config.bpm);
+    }
+
+    const activeBlocksCount = scanSequence.filter(idx => !mappedBlocks[idx].blockData.isFiller).length || 1;
+    const targetTotalSeconds = config.targetDurationSeconds || (config.noteDurationSeconds * config.pixelCount);
+    const baseEventDurationSeconds = targetTotalSeconds / activeBlocksCount;
 
     const melodyEvents: TransformedNoteEvent[] = [];
     let currentTime = 0;
@@ -852,15 +864,9 @@ export async function sonifyImage(
 
     timings.totalProcessingTime = Object.values(timings).reduce((sum: number, val) => (typeof val === 'number' ? sum + val : sum), 0);
 
-    // Health Classification (computed before return, only when health agent is active)
-    let healthClassification: HealthClassificationResult | null = null;
     let musicGenerationPrompt: MusicGenerationPrompt;
 
-    if (config.useHealthAgent) {
-        healthClassification = classifyHealthCategories(blockAnalysisResult.globalStats, imageDescription);
-        console.log('[SonificART Health] Classificazione WHO:', healthClassification.primaryCategory.label,
-            `(${(healthClassification.primaryCategory.score * 100).toFixed(0)}%)`,
-            '| Categorie attive:', healthClassification.activeCategories.map(c => c.label).join(', '));
+    if (config.useHealthAgent && healthClassification) {
         musicGenerationPrompt = await generateHealthEvidencePrompt(
             culturalSelectionResult.tradition,
             blockAnalysisResult.globalStats,
@@ -985,7 +991,22 @@ async function sonifyImageArtisticOrHybrid(
     const gridW = blockAnalysisResult.gridSize;
     const gridH = blockAnalysisResult.gridSize;
     const scanSequence = generateScanSequence(gridW, gridH, scanPatternEnum);
-    const baseEventDurationSeconds = config.noteDurationSeconds;
+
+    // Health classification (computed before note generation for clinical BPM and target duration)
+    let healthClassification: HealthClassificationResult | null = null;
+    if (config.useHealthAgent) {
+        const descForClassification = paradigm === 'hybrid' ? imageDescription : 'Analisi Artistica';
+        healthClassification = classifyHealthCategories(blockAnalysisResult.globalStats, descForClassification);
+        config.bpm = healthClassification.primaryCategory.targetBpm;
+        console.log('[SonificART Health] Classificazione WHO (Artistico):', healthClassification.primaryCategory.label,
+            `(${(healthClassification.primaryCategory.score * 100).toFixed(0)}%)`,
+            '| BPM Clinico Applicato:', config.bpm);
+    }
+
+    const activeBlocksCount = scanSequence.filter(idx => !mappedBlocks[idx].blockData.isFiller).length || 1;
+    const targetTotalSeconds = config.targetDurationSeconds || (config.noteDurationSeconds * config.pixelCount);
+    const baseEventDurationSeconds = targetTotalSeconds / activeBlocksCount;
+
     const melodyEvents: TransformedNoteEvent[] = [];
     let currentTime = 0;
     let contentScanPosition = 0;
@@ -1041,15 +1062,7 @@ async function sonifyImageArtisticOrHybrid(
     // ma manteniamo i dati della tradizione originale (es. Maqam, Flamenco) nel framework per la sintesi del WAV deterministico
     const aiTradition = traditions.find(t => t.id === 49 || t.name === "Cinematic Ambient") || DEFAULT_CINEMATIC_TRADITION;
 
-    // Health classification (computed once, used in both paradigm branches)
-    let healthClassification: HealthClassificationResult | null = null;
-    if (config.useHealthAgent) {
-        const descForClassification = paradigm === 'hybrid' ? imageDescription : 'Analisi Artistica';
-        healthClassification = classifyHealthCategories(blockAnalysisResult.globalStats, descForClassification);
-        console.log('[SonificART Health] Classificazione WHO:', healthClassification.primaryCategory.label,
-            `(${(healthClassification.primaryCategory.score * 100).toFixed(0)}%)`,
-            '| Categorie attive:', healthClassification.activeCategories.map(c => c.label).join(', '));
-    }
+    // Health classification was pre-computed before note generation for clinical BPM and target duration
 
     if (paradigm === 'hybrid') {
         musicPrompt = config.useHealthAgent ? await generateHealthEvidencePrompt(

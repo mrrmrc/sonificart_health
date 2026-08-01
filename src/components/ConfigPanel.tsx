@@ -35,12 +35,20 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
     const creditCost = paradigm === 'scientific' ? 1 : 2;
 
     const handleBpmChange = (newBpm: number) => {
-        const newDuration = 15 / newBpm;
+        if (config.useHealthAgent) return; // Locked in Health Agent mode
+        const newDuration = config.targetDurationSeconds 
+            ? (config.targetDurationSeconds / config.pixelCount)
+            : (15 / newBpm);
         onConfigChange({ bpm: newBpm, noteDurationSeconds: newDuration });
     };
 
+    const handleTargetDurationChange = (targetSec: number) => {
+        const noteDur = targetSec / config.pixelCount;
+        onConfigChange({ targetDurationSeconds: targetSec, noteDurationSeconds: noteDur });
+    };
+
     const { estimatedDuration, isDurationTooLong, isDurationInvalid } = useMemo(() => {
-        const totalSeconds = config.noteDurationSeconds * config.pixelCount;
+        const totalSeconds = config.targetDurationSeconds || (config.noteDurationSeconds * config.pixelCount);
 
         const invalid = !isFinite(totalSeconds) || totalSeconds <= 0;
         if (invalid) {
@@ -51,14 +59,14 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
         const seconds = Math.round(totalSeconds % 60);
         const durationString = `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
 
-        const tooLong = totalSeconds > 600;
+        const tooLong = totalSeconds > 240;
 
         return {
             estimatedDuration: durationString,
             isDurationTooLong: tooLong,
             isDurationInvalid: false
         };
-    }, [config.pixelCount, config.noteDurationSeconds]);
+    }, [config.pixelCount, config.noteDurationSeconds, config.targetDurationSeconds]);
 
     const estimates = useMemo(() => {
         const totalNotes = config.pixelCount;
@@ -83,24 +91,58 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                     />
                 </div>
 
-                {/* RESOLUTION & BPM */}
+                {/* TARGET DURATION (60s - 240s) & RESOLUTION & BPM */}
                 <div className="grid grid-cols-1 gap-6">
+                    <div className="config-item">
+                        <label htmlFor="targetDurationSetting" className="text-xs font-bold text-brand-text-secondary uppercase mb-2 flex items-center justify-between">
+                            <span>Durata Target Audio (1 min - 4 min)</span>
+                            <span className="text-[10px] text-emerald-400 font-normal">Granularità Adattiva</span>
+                        </label>
+                        <div className="flex items-center gap-4">
+                            <input
+                                type="range"
+                                id="targetDurationSetting"
+                                min="60"
+                                max="240"
+                                step="5"
+                                value={config.targetDurationSeconds || 60}
+                                onChange={(e) => handleTargetDurationChange(parseInt(e.target.value, 10))}
+                                className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-emerald-400"
+                            />
+                            <span className="bg-black/20 border border-emerald-500/30 text-emerald-300 font-mono font-bold py-1 px-3 rounded-md min-w-[75px] text-center text-sm">
+                                {Math.floor((config.targetDurationSeconds || 60) / 60)}m {((config.targetDurationSeconds || 60) % 60).toString().padStart(2, '0')}s
+                            </span>
+                        </div>
+                        <div className="flex justify-between mt-1 text-[10px] text-brand-text-secondary">
+                            <span>1 min (60s)</span>
+                            <span>2 min</span>
+                            <span>3 min</span>
+                            <span>4 min (240s)</span>
+                        </div>
+                    </div>
+
                     <div className="config-item">
                         <label htmlFor="pixelCount" className="text-xs font-bold text-brand-text-secondary uppercase mb-2 block">{t('config.resolution')}</label>
                         <select
                             id="pixelCount"
                             value={config.pixelCount}
-                            onChange={(e) => onConfigChange({ pixelCount: parseInt(e.target.value, 10) })}
-                            className="w-full p-3 bg-black/20 border border-white/10 rounded-lg text-white focus:ring-2 focus:ring-brand-accent focus:outline-none transition-all hover:bg-black/30"
+                            onChange={(e) => {
+                                const newPixels = parseInt(e.target.value, 10);
+                                const targetSec = config.targetDurationSeconds || 60;
+                                onConfigChange({ pixelCount: newPixels, noteDurationSeconds: targetSec / newPixels });
+                            }}
+                            className="w-full p-2 bg-black/20 border border-white/10 rounded text-sm text-white focus:ring-2 focus:ring-brand-accent focus:outline-none"
                         >
                             <option value="1024">{t('config.pixel_1024')}</option>
                             <option value="4096">{t('config.pixel_4096')}</option>
                             <option value="16384">{t('config.pixel_16384')}</option>
                         </select>
                     </div>
+
                     <div className="config-item">
-                        <label htmlFor="bpmSetting" className="text-xs font-bold text-brand-text-secondary uppercase mb-2 block">
-                            {t('config.tempo')}
+                        <label htmlFor="bpmSetting" className="text-xs font-bold text-brand-text-secondary uppercase mb-2 block flex items-center justify-between">
+                            <span>{t('config.tempo')}</span>
+                            {config.useHealthAgent && <span className="text-[10px] text-emerald-400 font-bold"><i className="fas fa-lock mr-1"></i>WHO Health Mode</span>}
                         </label>
                         <div className="flex items-center gap-4">
                             <input
@@ -111,14 +153,22 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                                 step="1"
                                 value={config.bpm}
                                 onChange={(e) => handleBpmChange(parseInt(e.target.value, 10))}
-                                className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-brand-accent"
+                                disabled={config.useHealthAgent}
+                                className={`w-full h-2 rounded-lg appearance-none ${config.useHealthAgent ? 'bg-white/5 opacity-50 cursor-not-allowed' : 'bg-white/10 cursor-pointer accent-brand-accent'}`}
                             />
-                            <span className="bg-black/20 border border-white/10 text-brand-accent font-mono font-bold py-1 px-3 rounded-md min-w-[60px] text-center text-sm">{config.bpm}</span>
+                            <span className={`bg-black/20 border text-font-mono font-bold py-1 px-3 rounded-md min-w-[60px] text-center text-sm ${config.useHealthAgent ? 'border-emerald-500/30 text-emerald-300' : 'border-white/10 text-brand-accent'}`}>{config.bpm}</span>
                         </div>
-                        <div className="flex justify-between mt-1 text-[10px] text-brand-text-secondary">
-                            <span>{t('config.slow')}</span>
-                            <span>{t('config.fast')}</span>
-                        </div>
+                        {config.useHealthAgent ? (
+                            <div className="text-[11px] text-emerald-300 bg-emerald-500/10 p-2 rounded border border-emerald-500/20 mt-2 flex items-center gap-2">
+                                <i className="fas fa-lock text-emerald-400"></i>
+                                <span>BPM determinato ed applicato automaticamente dall'Agente WHO in base all'analisi visiva.</span>
+                            </div>
+                        ) : (
+                            <div className="flex justify-between mt-1 text-[10px] text-brand-text-secondary">
+                                <span>{t('config.slow')}</span>
+                                <span>{t('config.fast')}</span>
+                            </div>
+                        )}
                     </div>
                 </div>
 

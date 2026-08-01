@@ -17,9 +17,10 @@ const ACTIVATION_THRESHOLD = 0.3;
 
 // --- DIRETTIVE WHO PER CATEGORIA (Health Evidence Network Report 67) ---
 // Sintesi clinica e neuroscientifica approfondita dei parametri acustici terapeutici
-const WHO_DIRECTIVES: Record<HealthCategoryType, { label: string; directive: string }> = {
+const WHO_DIRECTIVES: Record<HealthCategoryType, { label: string; targetBpm: number; directive: string }> = {
     calming: {
         label: 'Calming / Riduzione Stress e Ansia',
+        targetBpm: 64,
         directive: `DIRETTIVA WHO - CALMING, RIDUZIONE STRESS E ANSIA (SISTEMA NERVOSO PARASIMPATICO):
 1. TEMPO & RITMO: Tempo lento e stabile tra 56 e 68 BPM (sincronizzazione con la frequenza cardiaca a riposo e respirazione lenta a 6 cicli/min). Ritmo isometrico fluido, privo di sbalzi o sincope accentuata.
 2. ARMONIA & SCALA: Modi consonanti (Ionio, Lidio, Pentatonico Maggiore). Prevalenza di intervalli di 5a e 4a giusta, 3a maggiore. ASSENZA TOTALE di dissonanze (2e minori, tritoni, accordi diminuiti) o risoluzioni sospese.
@@ -29,6 +30,7 @@ const WHO_DIRECTIVES: Record<HealthCategoryType, { label: string; directive: str
     },
     physiological: {
         label: 'Regolazione Fisiologica e Modulazione del Dolore',
+        targetBpm: 74,
         directive: `DIRETTIVA WHO - REGOLAZIONE FISIOLOGICA E MODULAZIONE DEL DOLORE:
 1. ENTRAINMENT RITMICO: Tempo rigido e costante tra 68 e 78 BPM per la regolazione del ritmo baroriflesso, pressione arteriosa e frequenza cardiaca.
 2. ESTRATTO SOMATOSENSORIALE (SUB-BASS): Linea di basso pulsante e continua nella regione 60-120 Hz (contrabbasso, cello, sub-synth morbido) per fornire un ancoraggio ritmico propriocettivo e stimolazione vibroacustica corporea.
@@ -38,6 +40,7 @@ const WHO_DIRECTIVES: Record<HealthCategoryType, { label: string; directive: str
     },
     cognitive_motor: {
         label: 'Miglioramento Cognitivo e Cueing Motorio',
+        targetBpm: 108,
         directive: `DIRETTIVA WHO - MIGLIORAMENTO COGNITIVO E CUEING UDITIVO-MOTORIO (NEUROPLASTICITÀ):
 1. AUDITORY MOTOR CUEING (RAS): Tempo marcato e altamente strutturato (90-120 BPM per la riabilitazione del passo, sincronizzazione motoria post-ictus o Parkinson).
 2. TRANSIENTI & ATTACCO TIMBRICO: Utilizzo prioritario di strumenti ad attacco impulsivo definito (pianoforte, marimba, pizzicato d'archi, percussioni intonate) per fornire marker temporali netti e precisi alla corteccia motoria primaria e ai gangli della base.
@@ -47,6 +50,7 @@ const WHO_DIRECTIVES: Record<HealthCategoryType, { label: string; directive: str
     },
     social_emotional: {
         label: 'Connessione Sociale ed Espressione Emotiva',
+        targetBpm: 86,
         directive: `DIRETTIVA WHO - CONNESSIONE SOCIALE ED ESPRESSIONE EMOTIVA (SISTEMA OSSITOCINERGICO):
 1. RISONANZA VOCALE & CORALE: Impiego prioritario di formanti vocali, cori sintetici, voice pad, chitarra acustica e archi caldi per stimolare il sistema dei neuroni specchio e promuovere l'empatia interpersonale.
 2. STRUTTURA ARMONICA & CALL-AND-RESPONSE: Progressioni tonali calde e rassicuranti (I - V - vi - IV; I - IV - I - V), frasi musicali concepite a "domanda e risposta" che imitano il dialogo interpersonale.
@@ -56,6 +60,7 @@ const WHO_DIRECTIVES: Record<HealthCategoryType, { label: string; directive: str
     },
     motivation: {
         label: 'Motivazione e Adesione al Trattamento',
+        targetBpm: 118,
         directive: `DIRETTIVA WHO - MOTIVAZIONE, ENERGIA E ADESIONE TERAPEUTICA (SISTEMA DOPAMINERGICO):
 1. GROOVE & PROPULSIONE MOTORIA: Tempo energetico tra 105 e 128 BPM con propulsione ritmica continua (groove sincopato moderato, cassa/percussione costante) adatto a sostenere l'esercizio fisico e la fisioterapia.
 2. REWARD ARMONICO & REWARD DOPAMINERGICO: Architettura musicale basata su accumulo di tensione e risoluzioni armoniche altamente gratificanti (build-up e release) per attivare il sistema di ricompensa striatale.
@@ -241,6 +246,7 @@ export function classifyHealthCategories(
             category: 'calming',
             score: calmingScore,
             label: WHO_DIRECTIVES.calming.label,
+            targetBpm: WHO_DIRECTIVES.calming.targetBpm,
             whoDirective: WHO_DIRECTIVES.calming.directive,
             visualReason: buildVisualReason('calming', { coldness, lowSaturation, lowVariance, lowDiversity, calmKeywords })
         },
@@ -248,6 +254,7 @@ export function classifyHealthCategories(
             category: 'physiological',
             score: physiologicalScore,
             label: WHO_DIRECTIVES.physiological.label,
+            targetBpm: WHO_DIRECTIVES.physiological.targetBpm,
             whoDirective: WHO_DIRECTIVES.physiological.directive,
             visualReason: buildVisualReason('physiological', { mediumVariance, mediumDiversity, mediumSaturation, neutralColor })
         },
@@ -255,6 +262,7 @@ export function classifyHealthCategories(
             category: 'cognitive_motor',
             score: cognitiveScore,
             label: WHO_DIRECTIVES.cognitive_motor.label,
+            targetBpm: WHO_DIRECTIVES.cognitive_motor.targetBpm,
             whoDirective: WHO_DIRECTIVES.cognitive_motor.directive,
             visualReason: buildVisualReason('cognitive_motor', { highDiversity, highVariance, highSaturation, complexityKw })
         },
@@ -262,6 +270,7 @@ export function classifyHealthCategories(
             category: 'social_emotional',
             score: socialScore,
             label: WHO_DIRECTIVES.social_emotional.label,
+            targetBpm: WHO_DIRECTIVES.social_emotional.targetBpm,
             whoDirective: WHO_DIRECTIVES.social_emotional.directive,
             visualReason: buildVisualReason('social_emotional', { warmth, warmthB, goodSaturation, socialKw })
         },
@@ -269,6 +278,7 @@ export function classifyHealthCategories(
             category: 'motivation',
             score: motivationScore,
             label: WHO_DIRECTIVES.motivation.label,
+            targetBpm: WHO_DIRECTIVES.motivation.targetBpm,
             whoDirective: WHO_DIRECTIVES.motivation.directive,
             visualReason: buildVisualReason('motivation', { brightness, strongSaturation, strongVariance, balancedDiversity, energyKw })
         }

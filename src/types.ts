@@ -32,6 +32,7 @@ export interface ConfigSettings {
     pixelCount: number;
     bpm: number;
     noteDurationSeconds: number;
+    targetDurationSeconds?: number;
     osc: OscSettings;
     enableAccompaniment: boolean;
     melodyInstrument: InstrumentType;
@@ -224,6 +225,7 @@ export interface HealthCategoryScore {
     category: HealthCategoryType;
     score: number;          // 0.0 - 1.0
     label: string;          // Human-readable label (IT)
+    targetBpm: number;      // Clinical WHO target BPM for this category
     whoDirective: string;   // Specific WHO directive to inject into prompt
     visualReason: string;   // Why this category was selected based on visual analysis
 }
