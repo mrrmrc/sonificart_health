@@ -428,22 +428,24 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
     const [isGeneratingSoundverse, setIsGeneratingSoundverse] = useState(false);
 
     const handleGenerateSoundverseAudio = async () => {
-        if (!correctedResult.musicGenerationPrompt) return;
         setIsGeneratingSoundverse(true);
 
         try {
-            const promptToUse = correctedResult.musicGenerationPrompt.soundverse_prompt 
-                || correctedResult.musicGenerationPrompt.technical_parameters;
+            const promptToUse = correctedResult.musicGenerationPrompt?.soundverse_prompt 
+                || correctedResult.musicGenerationPrompt?.technical_parameters
+                || `Genre: Cinematic Health Ambient | Style: Mindful | Duration: ${correctedResult.configUsed?.targetDurationSeconds || 60}s`;
             
             const { generateSoundverseAudioTrack } = await import('../services/soundverseService');
             const targetSec = correctedResult.configUsed?.targetDurationSeconds || 60;
-            const res = await generateSoundverseAudioTrack(promptToUse, targetSec);
+            const audioWavUrl = correctedResult.audioOutput?.audioUrl || null;
+
+            const res = await generateSoundverseAudioTrack(promptToUse, targetSec, audioWavUrl);
 
             if (res.success && res.audioUrl) {
                 setConfirmModal({
                     isOpen: true,
                     title: "Traccia Soundverse AI Generata!",
-                    message: "La traccia audio è stata creata con successo con le tue credenziali Soundverse.AI!",
+                    message: "La linea melodica deterministica e le specifiche cliniche/artistiche sono state inviate con successo a Soundverse.AI!",
                     type: 'success',
                     singleButton: true,
                     onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
@@ -452,7 +454,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                 setConfirmModal({
                     isOpen: true,
                     title: "Richiesta Inviata a Soundverse",
-                    message: res.error || "Generazione in corso su Soundverse.ai! Controlla la tua dashboard di Soundverse o riprova tra poco.",
+                    message: res.error || "Linea melodica e specifiche inviate a Soundverse.ai! Controlla la tua dashboard di Soundverse o riprova tra poco.",
                     type: 'info',
                     singleButton: true,
                     onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
@@ -1327,9 +1329,9 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                     </InfoCard>
                 )}
 
-                {/* --- SEZIONE CONCEPT & AI RIGENERATA CON MULTI-TAB --- */}
-                {correctedResult.paradigm?.toLowerCase().trim() !== 'scientific' && correctedResult.musicGenerationPrompt && (
-                    <InfoCard title="Prompt per IA & Generazione Soundverse" icon="fa-robot" className="lg:col-span-3 relative overflow-hidden bg-gradient-to-br from-purple-900/20 to-blue-900/20 border-purple-500/30">
+                {/* --- SEZIONE CONCEPT & AI RIGENERATA CON MULTI-TAB & SOUNDVERSE --- */}
+                {(correctedResult.musicGenerationPrompt || correctedResult.audioOutput) && (
+                    <InfoCard title="Generazione Soundverse AI & Prompt Generativi" icon="fa-robot" className="lg:col-span-3 relative overflow-hidden bg-gradient-to-br from-purple-900/20 to-blue-900/20 border-purple-500/30">
                         <div className='grid grid-cols-1 md:grid-cols-12 gap-8'>
                             
                             {/* BANNER GENERAZIONE SOUNDVERSE AI */}
@@ -1376,7 +1378,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                         {t('results.concept_ita') || "Concept (Ita)"}
                                     </h5>
                                     <p className="text-sm text-brand-text-primary italic leading-relaxed bg-white/5 p-3 rounded-lg border border-white/5 shadow-inner">
-                                        "{correctedResult.musicGenerationPrompt.main_prompt_ita}"
+                                        "{correctedResult.musicGenerationPrompt?.main_prompt_ita || "Sonificazione deterministica con traduzione armonica avanzata e specifiche cliniche WHO."}"
                                     </p>
                                 </div>
 
@@ -1386,7 +1388,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                         {t('results.ai_reason') || "Ragionamento AI"}
                                     </h5>
                                     <p className="text-xs text-brand-text-secondary leading-relaxed bg-black/20 p-3 rounded-lg border border-white/5">
-                                        {correctedResult.musicGenerationPrompt.justification}
+                                        {correctedResult.musicGenerationPrompt?.justification || "Analisi visiva e direttive WHO applicate all'invio dell'audio deterministico ed alla composizione generativa."}
                                     </p>
                                 </div>
 
@@ -1396,7 +1398,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                         {t('results.tech_specs') || "Specifiche Tecniche"}
                                     </h5>
                                     <p className="text-xs text-brand-accent font-mono bg-brand-accent/5 p-2 rounded border border-brand-accent/10 text-center">
-                                        {correctedResult.musicGenerationPrompt.technical_parameters}
+                                        {correctedResult.musicGenerationPrompt?.technical_parameters || `Durata Target: ${correctedResult.configUsed?.targetDurationSeconds || 60}s | Pixel: ${correctedResult.configUsed?.pixelCount || 1024}`}
                                     </p>
                                 </div>
                             </div>
@@ -1444,14 +1446,14 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                     </div>
                                     <div className="bg-brand-primary/80 p-5 rounded-xl text-sm font-mono break-words border border-brand-accent/20 min-h-[120px] shadow-2xl group-hover:border-brand-accent/40 transition-colors leading-relaxed">
                                         {activePromptTab === 'suno' && (
-                                            <span className="text-brand-accent/90">{correctedResult.musicGenerationPrompt.suno_prompt}</span>
+                                            <span className="text-brand-accent/90">{correctedResult.musicGenerationPrompt?.suno_prompt || "[Deterministic Scan], [Instrumental], [Ambient]"}</span>
                                         )}
                                         {activePromptTab === 'udio' && (
-                                            <span className="text-blue-300/90">{correctedResult.musicGenerationPrompt.udio_prompt}</span>
+                                            <span className="text-blue-300/90">{correctedResult.musicGenerationPrompt?.udio_prompt || "deterministic scan, instrumental, ambient"}</span>
                                         )}
                                         {activePromptTab === 'soundverse' && (
                                             <span className="text-emerald-300/90">
-                                                {correctedResult.musicGenerationPrompt.soundverse_prompt || correctedResult.musicGenerationPrompt.technical_parameters}
+                                                {correctedResult.musicGenerationPrompt?.soundverse_prompt || correctedResult.musicGenerationPrompt?.technical_parameters || `Genre: Cinematic Health Ambient | Style: Mindful | Reference Sync: [Maintain scan melody] | Duration: ${correctedResult.configUsed?.targetDurationSeconds || 60}s`}
                                             </span>
                                         )}
                                     </div>

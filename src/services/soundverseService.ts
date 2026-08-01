@@ -24,7 +24,8 @@ export interface SoundverseGenerationResponse {
 
 export async function generateSoundverseAudioTrack(
     promptText: string,
-    durationSeconds: number = 60
+    durationSeconds: number = 60,
+    audioWavUrl?: string | null
 ): Promise<SoundverseGenerationResponse> {
     const apiKey = await getSoundverseApiKey();
 
@@ -37,7 +38,9 @@ export async function generateSoundverseAudioTrack(
             body: JSON.stringify({
                 apiKey: apiKey,
                 prompt: promptText,
-                duration: durationSeconds
+                duration: durationSeconds,
+                audioUrl: audioWavUrl || null,
+                reference_audio: audioWavUrl || null
             })
         });
 
