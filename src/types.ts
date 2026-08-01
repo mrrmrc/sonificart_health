@@ -59,8 +59,9 @@ export interface MusicGenerationPrompt {
     justification: string;
     suno_prompt: string;      // Ottimizzato per Suno (Meta Tags)
     udio_prompt: string;      // Ottimizzato per Udio (Tags descrittivi)
+    soundverse_prompt?: string; // Ottimizzato per Soundverse AI (Parametrizzazione strutturata)
     negative_prompt: string;
-    suno_lyrics: string;      // NEW: Marcatori temporali per sincronizzazione
+    suno_lyrics: string;      // Marcatori temporali per sincronizzazione
 }
 
 

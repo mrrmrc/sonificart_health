@@ -423,8 +423,8 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
         };
     }, [result, originalAspectRatio, imageRef.current?.naturalWidth]);
 
-    // Stato per i Tab del Prompt (Suno / Udio)
-    const [activePromptTab, setActivePromptTab] = useState<'suno' | 'udio'>('suno');
+    // Stato per i Tab del Prompt (Suno / Udio / Soundverse AI)
+    const [activePromptTab, setActivePromptTab] = useState<'suno' | 'udio' | 'soundverse'>('suno');
 
     const [imageRenderInfo, setImageRenderInfo] = useState({ x: 0, y: 0, width: 0, height: 0 });
     const [playbackTime, setPlaybackTime] = useState(0);
@@ -518,13 +518,14 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
         switch (activePromptTab) {
             case 'suno': textToCopy = correctedResult.musicGenerationPrompt.suno_prompt; break;
             case 'udio': textToCopy = correctedResult.musicGenerationPrompt.udio_prompt; break;
+            case 'soundverse': textToCopy = correctedResult.musicGenerationPrompt.soundverse_prompt || correctedResult.musicGenerationPrompt.technical_parameters; break;
         }
         if (textToCopy) {
             navigator.clipboard.writeText(textToCopy);
             setConfirmModal({
                 isOpen: true,
-                title: "Copiato",
-                message: t('results.link_copied') || "Prompt Copiato!",
+                title: "Prompt Copiato",
+                message: `Il prompt per ${activePromptTab.toUpperCase()} è stato copiato negli appunti!`,
                 type: 'success',
                 singleButton: true,
                 onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
@@ -1327,14 +1328,21 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                             className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-wider transition-all shadow-lg ${activePromptTab === 'suno' ? 'bg-brand-accent text-brand-primary' : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white'}`}
                                         >
                                             <i className="fas fa-bolt mr-1.5"></i>
-                                            PROMPT 1
+                                            SUNO (PROMPT 1)
                                         </button>
                                         <button
                                             onClick={() => setActivePromptTab('udio')}
                                             className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-wider transition-all shadow-lg ${activePromptTab === 'udio' ? 'bg-blue-500 text-white' : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white'}`}
                                         >
                                             <i className="fas fa-wave-square mr-1.5"></i>
-                                            PROMPT 2
+                                            UDIO (PROMPT 2)
+                                        </button>
+                                        <button
+                                            onClick={() => setActivePromptTab('soundverse')}
+                                            className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-wider transition-all shadow-lg ${activePromptTab === 'soundverse' ? 'bg-emerald-500 text-black font-bold' : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white'}`}
+                                        >
+                                            <i className="fas fa-compact-disc mr-1.5"></i>
+                                            SOUNDVERSE (PROMPT 3)
                                         </button>
                                     </div>
                                     <button
@@ -1349,14 +1357,19 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                 <div className="relative group">
                                     <div className="absolute -top-2 left-3 px-2 bg-brand-secondary text-[9px] font-black text-brand-text-secondary tracking-widest uppercase z-10 flex items-center gap-2">
                                         <i className="fas fa-arrow-right text-brand-accent animate-pulse"></i>
-                                        PROMPT PER IA MUSICALE
+                                        PROMPT PER IA MUSICALE ({activePromptTab.toUpperCase()})
                                     </div>
-                                    <div className="bg-brand-primary/80 p-5 rounded-xl text-sm font-mono break-words border border-brand-accent/20 min-h-[120px] shadow-2xl group-hover:border-brand-accent/40 transition-colors">
+                                    <div className="bg-brand-primary/80 p-5 rounded-xl text-sm font-mono break-words border border-brand-accent/20 min-h-[120px] shadow-2xl group-hover:border-brand-accent/40 transition-colors leading-relaxed">
                                         {activePromptTab === 'suno' && (
-                                            <span className="text-brand-accent/90 leading-relaxed">{correctedResult.musicGenerationPrompt.suno_prompt}</span>
+                                            <span className="text-brand-accent/90">{correctedResult.musicGenerationPrompt.suno_prompt}</span>
                                         )}
                                         {activePromptTab === 'udio' && (
-                                            <span className="text-blue-300/90 leading-relaxed">{correctedResult.musicGenerationPrompt.udio_prompt}</span>
+                                            <span className="text-blue-300/90">{correctedResult.musicGenerationPrompt.udio_prompt}</span>
+                                        )}
+                                        {activePromptTab === 'soundverse' && (
+                                            <span className="text-emerald-300/90">
+                                                {correctedResult.musicGenerationPrompt.soundverse_prompt || correctedResult.musicGenerationPrompt.technical_parameters}
+                                            </span>
                                         )}
                                     </div>
                                 </div>
