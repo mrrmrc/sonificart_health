@@ -427,9 +427,29 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
     // Stato per i Tab del Prompt (Suno / Udio / Soundverse AI)
     const [activePromptTab, setActivePromptTab] = useState<'suno' | 'udio' | 'soundverse'>('suno');
     const [isGeneratingSoundverse, setIsGeneratingSoundverse] = useState(false);
+    const [soundverseProgress, setSoundverseProgress] = useState<{
+        isGenerating: boolean;
+        percentage: number;
+        statusMessage: string;
+        detail: string;
+        logs: string[];
+    }>({
+        isGenerating: false,
+        percentage: 0,
+        statusMessage: '',
+        detail: '',
+        logs: []
+    });
 
     const handleGenerateSoundverseAudio = async () => {
         setIsGeneratingSoundverse(true);
+        setSoundverseProgress({
+            isGenerating: true,
+            percentage: 5,
+            statusMessage: 'Inizializzazione Richiesta',
+            detail: 'Preparazione parametri e verifica traccia audio deterministica...',
+            logs: [`[${new Date().toLocaleTimeString()}] Avvio richiesta Soundverse AI...`]
+        });
 
         try {
             const promptToUse = correctedResult.musicGenerationPrompt?.soundverse_prompt 
@@ -440,7 +460,21 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
             const audioWavBlob = correctedResult.audioOutput?.audioWavBlob || null;
             const audioWavUrl = correctedResult.audioOutput?.audioUrl || null;
 
-            const res = await generateSoundverseAudioTrack(promptToUse, targetSec, audioWavBlob, audioWavUrl);
+            const res = await generateSoundverseAudioTrack(
+                promptToUse, 
+                targetSec, 
+                audioWavBlob, 
+                audioWavUrl,
+                (pct, status, detail) => {
+                    setSoundverseProgress(prev => ({
+                        ...prev,
+                        percentage: pct,
+                        statusMessage: status,
+                        detail: detail,
+                        logs: [...prev.logs, `[${new Date().toLocaleTimeString()}] (${pct}%) ${status}: ${detail}`]
+                    }));
+                }
+            );
 
             if (res.success && res.audioUrl) {
                 setConfirmModal({
@@ -472,6 +506,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
             });
         } finally {
             setIsGeneratingSoundverse(false);
+            setSoundverseProgress(prev => ({ ...prev, isGenerating: false }));
         }
     };
 
@@ -1691,6 +1726,70 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                         </div>
                         <p className="text-xs text-gray-400 break-all bg-black/30 p-2 rounded border border-white/5">{qrUrl}</p>
                         <button onClick={() => copyLink(qrUrl)} className="text-brand-accent text-xs mt-3 hover:underline">Copia Link</button>
+                    </div>
+                </div>
+            )}
+
+            {/* MODALE DI PROGRESSO SOUNDVERSE AI IN TEMPO REALE */}
+            {soundverseProgress.isGenerating && (
+                <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fade-in">
+                    <div className="bg-gradient-to-b from-gray-900 via-emerald-950/80 to-black p-6 md:p-8 rounded-2xl border border-emerald-500/40 max-w-lg w-full shadow-2xl space-y-6 relative overflow-hidden">
+                        {/* AMBIENT GLOW */}
+                        <div className="absolute -top-24 -left-24 w-48 h-48 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none"></div>
+                        <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-teal-500/20 rounded-full blur-3xl pointer-events-none"></div>
+
+                        <div className="flex items-center justify-between relative z-10">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-emerald-500/20 p-3 rounded-xl border border-emerald-500/30 text-emerald-400">
+                                    <i className="fas fa-compact-disc text-3xl animate-spin-slow"></i>
+                                </div>
+                                <div>
+                                    <h4 className="text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
+                                        Elaborazione Soundverse AI
+                                        <span className="text-[10px] bg-emerald-400 text-black px-2 py-0.5 rounded font-mono font-bold">
+                                            {soundverseProgress.percentage}%
+                                        </span>
+                                    </h4>
+                                    <p className="text-xs text-emerald-300 font-mono">{soundverseProgress.statusMessage}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* PROGRESS BAR ANIMATA */}
+                        <div className="space-y-2 relative z-10">
+                            <div className="flex justify-between text-xs text-gray-400 font-mono">
+                                <span>Avanzamento Sintesi</span>
+                                <span className="text-emerald-400 font-bold">{soundverseProgress.percentage}%</span>
+                            </div>
+                            <div className="w-full bg-black/60 rounded-full h-3.5 p-0.5 border border-emerald-500/30 overflow-hidden shadow-inner">
+                                <div
+                                    className="h-full rounded-full bg-gradient-to-r from-teal-500 via-emerald-400 to-green-300 transition-all duration-500 shadow-emerald-500/50 shadow-lg relative"
+                                    style={{ width: `${soundverseProgress.percentage}%` }}
+                                >
+                                    <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
+                                </div>
+                            </div>
+                            <p className="text-xs text-gray-300 italic pt-1 flex items-center gap-2">
+                                <i className="fas fa-spinner fa-spin text-emerald-400"></i>
+                                {soundverseProgress.detail}
+                            </p>
+                        </div>
+
+                        {/* CONSOLE DI REPORTISTICA LOGS IN TEMPO REALE */}
+                        <div className="bg-black/80 rounded-xl p-3 border border-white/10 text-[11px] font-mono space-y-1.5 max-h-36 overflow-y-auto relative z-10 shadow-inner">
+                            <div className="text-[9px] text-gray-500 uppercase tracking-widest font-black border-b border-white/10 pb-1 mb-2 flex items-center justify-between">
+                                <span><i className="fas fa-terminal mr-1.5 text-emerald-400"></i>Report In Tempo Reale</span>
+                                <span className="text-emerald-400 animate-pulse font-bold flex items-center gap-1">
+                                    <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-ping"></span>
+                                    LIVE
+                                </span>
+                            </div>
+                            {soundverseProgress.logs.map((log, idx) => (
+                                <div key={idx} className="text-gray-300 leading-tight border-l-2 border-emerald-500/50 pl-2 py-0.5">
+                                    {log}
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
             )}
