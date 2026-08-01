@@ -312,7 +312,16 @@ export async function extractDirectivesFromPDF(pdfUrl: string): Promise<string> 
         inlineData: { mimeType: 'application/pdf', data: base64Pdf },
     };
     const textPart = {
-        text: "Sei un analista medico ed esperto di musicoterapia. Leggi questo documento e sintetizza le 5 direttive principali (massimo 100 parole in totale) che un'intelligenza artificiale generativa musicale dovrebbe seguire per creare musica curativa basata su queste linee guida. Non includere preamboli, scrivi solo le direttive come prompt musicale."
+        text: `Sei un esperto neuroscienziato clinico e musicoterapeuta senior. Analizza questo documento ufficiale (es. WHO Health Evidence Network Report 67) in modo ESTREMAMENTE APPROFONDITO ed esaustivo.
+
+Estrai le direttive medico-musicali dettagliate per ciascuna delle 5 categorie di intervento salute/benessere. Per OGNI categoria (Calming/Stress, Regolazione Fisiologica/Dolore, Cognitivo/Motorio, Connessione Sociale/Emotiva, Motivazione/Adesione), specifica in dettaglio:
+1. TEMPO & RITMO: Range di BPM clinici e pattern ritmici (es. entrainment, Iso-principio, RAS Auditory Motor Cueing).
+2. ARMONIA & SCALE: Struttura armonica, scale e intervalli consigliati vs intervalli vietati.
+3. TIMBRO & SPETTRO: Inviluppi timbrici, spettrali (taglio frequenze in kHz) e strumentazione clinica raccomandata.
+4. DINAMICA & LUFS: Range dinamico e gestione dei transienti/inviluppi.
+5. OBIETTIVO NEUROFISIOLOGICO: Target neurofisiologico specifico (tono vagale, cortisolo, ossitocina, dopamina striatale, cueing motorio).
+
+Fornisci una sintesi ad alta precisione scientifica e clinica (ampia e dettagliata, circa 400-600 parole), ben formattata per punti per ciascuna delle 5 categorie.`
     };
     try {
         const aiResponse = await ai.models.generateContent({
