@@ -567,43 +567,64 @@ if ($action === 'soundverse_generate' && $method === 'POST') {
         $postData['audio'] = $publicRefAudioUrl;
     }
 
-    $ch = curl_init('https://api.soundverse.ai/v1/audio/generate');
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Content-Type: application/json',
-        'Authorization: Bearer ' . trim($apiKey),
-        'x-api-key: ' . trim($apiKey)
-    ]);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($postData));
-    curl_setopt($ch, CURLOPT_TIMEOUT, 120);
+    $endpoints = [
+        'https://api.soundverse.ai/v1/audio/generate',
+        'https://api.soundverse.ai/v1/generate',
+        'https://api.soundverse.ai/v1/music/generate',
+        'https://api.soundverse.ai/v1/audio',
+        'https://api.soundverse.ai/v1/process',
+        'https://backend.soundverse.ai/v1/audio/generate',
+        'https://backend.soundverse.ai/api/v1/generate'
+    ];
 
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlErr = curl_error($ch);
-    curl_close($ch);
+    $lastResponse = null;
+    $lastHttpCode = 0;
+    $successResult = null;
+    $attempted = [];
 
-    if ($curlErr || $httpCode >= 400) {
-        $ch2 = curl_init('https://backend.soundverse.ai/api/v1/generate');
-        curl_setopt($ch2, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch2, CURLOPT_POST, true);
-        curl_setopt($ch2, CURLOPT_HTTPHEADER, [
+    foreach ($endpoints as $endpointUrl) {
+        $ch = curl_init($endpointUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Content-Type: application/json',
-            'Authorization: Bearer ' . trim($apiKey)
+            'Authorization: Bearer ' . trim($apiKey),
+            'x-api-key: ' . trim($apiKey),
+            'api-key: ' . trim($apiKey)
         ]);
-        curl_setopt($ch2, CURLOPT_POSTFIELDS, json_encode($postData));
-        curl_setopt($ch2, CURLOPT_TIMEOUT, 120);
-        $res2 = curl_exec($ch2);
-        $http2 = curl_getinfo($ch2, CURLINFO_HTTP_CODE);
-        curl_close($ch2);
-        if ($res2 && $http2 < 400) {
-            $response = $res2;
-            $httpCode = $http2;
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($postData));
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr = curl_error($ch);
+        curl_close($ch);
+
+        $attempted[] = ["url" => $endpointUrl, "code" => $httpCode, "err" => $curlErr];
+
+        if (!$curlErr && $httpCode >= 200 && $httpCode < 300) {
+            $successResult = json_decode($response, true) ?: ["raw" => $response];
+            $lastHttpCode = $httpCode;
+            break;
         }
+
+        $lastResponse = $response;
+        $lastHttpCode = $httpCode;
     }
 
-    $resData = json_decode($response, true);
-    sendResponse($resData ?: ["raw" => $response, "success" => true, "refAudio" => $publicRefAudioUrl], $httpCode ?: 200);
+    if ($successResult) {
+        sendResponse(array_merge($successResult, ["refAudio" => $publicRefAudioUrl, "success" => true]));
+    } else {
+        $decodedLast = json_decode($lastResponse, true);
+        sendResponse([
+            "error" => $decodedLast['error'] ?? $decodedLast['message'] ?? ("Soundverse API Endpoint error (HTTP " . $lastHttpCode . ")"),
+            "httpCode" => $lastHttpCode,
+            "raw" => $lastResponse,
+            "refAudio" => $publicRefAudioUrl,
+            "attempted" => $attempted
+        ], $lastHttpCode ?: 404);
+    }
 }
 
 // --- LOG EVENT (Public) ---
