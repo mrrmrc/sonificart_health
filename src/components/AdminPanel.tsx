@@ -506,15 +506,22 @@ export const AdminPanel: React.FC = () => {
             try {
                 const { extractDirectivesFromPDF } = await import('../services/geminiService');
                 const rules = await extractDirectivesFromPDF(url);
-                setKnowledgeBase(prev => prev.map((doc, i) => i === newIndex ? { ...doc, rules, extracting: false } : doc));
+                const updatedKb = newKb.map((doc, i) => i === newIndex ? { ...doc, rules, extracting: false } : doc);
+                setKnowledgeBase(updatedKb);
+                // Auto-save to DB so changes are not lost
+                await api.updateAppSetting('agent_health_knowledge', JSON.stringify(updatedKb));
+                if (url) await api.updateAppSetting('agent_health_document', url);
+                if (rules) await api.updateAppSetting('agent_health_prompt', rules);
             } catch (extractErr: any) {
-                setKnowledgeBase(prev => prev.map((doc, i) => i === newIndex ? { ...doc, rules: '⚠️ Estrazione fallita: ' + extractErr.message, extracting: false } : doc));
+                console.error("Estrazione PDF fallita:", extractErr);
+                const updatedKb = newKb.map((doc, i) => i === newIndex ? { ...doc, rules: '⚠️ Estrazione fallita: ' + extractErr.message, extracting: false } : doc);
+                setKnowledgeBase(updatedKb);
+                await api.updateAppSetting('agent_health_knowledge', JSON.stringify(updatedKb));
             }
         } catch (error) {
             alert("Errore upload PDF: " + (error instanceof Error ? error.message : "Sconosciuto"));
         } finally {
             setUploadingAgentDoc(false);
-            // Reset input
             e.target.value = '';
         }
     };
@@ -971,7 +978,12 @@ export const AdminPanel: React.FC = () => {
                                                                 setKnowledgeBase(prev => prev.map((d, i) => i === idx ? { ...d, extracting: true } : d));
                                                                 const { extractDirectivesFromPDF } = await import('../services/geminiService');
                                                                 const rules = await extractDirectivesFromPDF(doc.url);
-                                                                setKnowledgeBase(prev => prev.map((d, i) => i === idx ? { ...d, rules, extracting: false } : d));
+                                                                setKnowledgeBase(prev => {
+                                                                    const updatedKb = prev.map((d, i) => i === idx ? { ...d, rules, extracting: false } : d);
+                                                                    api.updateAppSetting('agent_health_knowledge', JSON.stringify(updatedKb));
+                                                                    api.updateAppSetting('agent_health_prompt', rules);
+                                                                    return updatedKb;
+                                                                });
                                                             } catch (e: any) {
                                                                 setKnowledgeBase(prev => prev.map((d, i) => i === idx ? { ...d, rules: '⚠️ Errore: ' + e.message, extracting: false } : d));
                                                             }
@@ -982,7 +994,15 @@ export const AdminPanel: React.FC = () => {
                                                         <i className="fas fa-sync-alt"></i>
                                                     </button>
                                                     <button 
-                                                        onClick={() => setKnowledgeBase(prev => prev.filter((_, i) => i !== idx))}
+                                                        onClick={async () => {
+                                                            const updatedKb = knowledgeBase.filter((_, i) => i !== idx);
+                                                            setKnowledgeBase(updatedKb);
+                                                            await api.updateAppSetting('agent_health_knowledge', JSON.stringify(updatedKb));
+                                                            if (updatedKb.length === 0) {
+                                                                await api.updateAppSetting('agent_health_document', '');
+                                                                await api.updateAppSetting('agent_health_prompt', '');
+                                                            }
+                                                        }}
                                                         className="text-red-400 hover:text-red-300 text-xs transition-colors"
                                                         title="Rimuovi documento"
                                                     >
