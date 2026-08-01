@@ -234,7 +234,7 @@ export const AdminPanel: React.FC = () => {
     };
 
     // API Settings State
-    const [apiSettings, setApiSettings] = useState({ gemini_api_key: '', gemini_api_email: '', gemini_api_budget: '' });
+    const [apiSettings, setApiSettings] = useState({ gemini_api_key: '', gemini_api_email: '', gemini_api_budget: '', soundverse_api_key: '' });
     const [isTestingApi, setIsTestingApi] = useState(false);
 
     // Edit States
@@ -280,7 +280,8 @@ export const AdminPanel: React.FC = () => {
                 setApiSettings({
                     gemini_api_key: (await api.getAppSetting('gemini_api_key')).replace(/<[^>]*>?/gm, '').trim(),
                     gemini_api_email: (await api.getAppSetting('gemini_api_email')).replace(/<[^>]*>?/gm, '').trim(),
-                    gemini_api_budget: (await api.getAppSetting('gemini_api_budget')).replace(/<[^>]*>?/gm, '').trim()
+                    gemini_api_budget: (await api.getAppSetting('gemini_api_budget')).replace(/<[^>]*>?/gm, '').trim(),
+                    soundverse_api_key: (await api.getAppSetting('soundverse_api_key')).replace(/<[^>]*>?/gm, '').trim() || "sksoundverse_ivOVxIp9fudT87xVfqjPUWIB7SHSis9QTRojifOh3k_rKyiz-g1iadzoCtH8GzQl"
                 });
             }
             if (activeTab === 'agents') {
@@ -1085,6 +1086,21 @@ export const AdminPanel: React.FC = () => {
                             </div>
                         </div>
 
+                        <div className="bg-emerald-950/20 p-4 rounded-lg border border-emerald-500/30">
+                            <label className="block text-xs font-bold text-emerald-400 uppercase tracking-widest mb-2 flex items-center justify-between">
+                                <span>Soundverse.ai API Key</span>
+                                <span className="text-[10px] text-emerald-300 font-normal"><i className="fas fa-compact-disc mr-1"></i>Generazione Audio Diretta</span>
+                            </label>
+                            <input 
+                                type="password" 
+                                value={apiSettings.soundverse_api_key} 
+                                onChange={e => setApiSettings(prev => ({...prev, soundverse_api_key: e.target.value}))} 
+                                className="w-full bg-black/50 border border-emerald-500/30 rounded-lg p-3 text-emerald-300 font-mono text-sm focus:border-emerald-400 outline-none" 
+                                placeholder="sksoundverse_..." 
+                            />
+                            <p className="text-[10px] text-gray-400 mt-1">La chiave usata per generare file audio musicali direttamente tramite Soundverse AI.</p>
+                        </div>
+
                         <div className="flex gap-4 pt-4 border-t border-white/5">
                             <button
                                 onClick={async () => {
@@ -1112,7 +1128,8 @@ export const AdminPanel: React.FC = () => {
                                         await api.updateAppSetting('gemini_api_key', apiSettings.gemini_api_key);
                                         await api.updateAppSetting('gemini_api_email', apiSettings.gemini_api_email);
                                         await api.updateAppSetting('gemini_api_budget', apiSettings.gemini_api_budget);
-                                        setConfirmModal({ isOpen: true, title: "Salvataggio Riuscito", message: "Impostazioni API Google aggiornate con successo.", type: 'success', singleButton: true, onConfirm: () => setConfirmModal(prev => ({...prev, isOpen: false })) });
+                                        await api.updateAppSetting('soundverse_api_key', apiSettings.soundverse_api_key);
+                                        setConfirmModal({ isOpen: true, title: "Salvataggio Riuscito", message: "Impostazioni API (Gemini e Soundverse) aggiornate con successo.", type: 'success', singleButton: true, onConfirm: () => setConfirmModal(prev => ({...prev, isOpen: false })) });
                                     } catch(e) {
                                         setConfirmModal({ isOpen: true, title: "Errore Salvataggio", message: "Impossibile salvare: " + (e as Error).message, type: 'danger', singleButton: true, onConfirm: () => setConfirmModal(prev => ({...prev, isOpen: false })) });
                                     } finally {

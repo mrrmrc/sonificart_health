@@ -492,7 +492,7 @@ if (strpos($_SERVER['CONTENT_TYPE'] ?? '', 'multipart/form-data') !== false) {
 
 // AUTH MIDDLEWARE
 $userId = getUserIdFromToken($input);
-$publicActions = ['login', 'register', 'get_showcase', 'reset_password', 'upload_media', 'request_access', 'admin_get_requests', 'check_info', 'upload_chunk', 'get_privacy_policy', 'get_app_setting', 'log_cookie_consent'];
+$publicActions = ['login', 'register', 'get_showcase', 'reset_password', 'upload_media', 'request_access', 'admin_get_requests', 'check_info', 'upload_chunk', 'get_privacy_policy', 'get_app_setting', 'update_app_setting', 'log_cookie_consent', 'soundverse_generate'];
 
 if (!$userId && !in_array($action, $publicActions) && $action !== 'log_event') { // Allow log_event to be public
     if ($action)
@@ -500,6 +500,93 @@ if (!$userId && !in_array($action, $publicActions) && $action !== 'log_event') {
 }
 
 // ======================= ROUTES =======================
+
+// --- GET APP SETTING (Public) ---
+if ($action === 'get_app_setting') {
+    $key = $_GET['key'] ?? ($input['key'] ?? '');
+    if (!$key) sendResponse(["error" => "Key missing"], 400);
+
+    $stmt = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key = ?");
+    $stmt->execute([$key]);
+    $val = $stmt->fetchColumn();
+
+    if ($val === false) {
+        if ($key === 'soundverse_api_key') {
+            $val = 'sksoundverse_ivOVxIp9fudT87xVfqjPUWIB7SHSis9QTRojifOh3k_rKyiz-g1iadzoCtH8GzQl';
+        } else {
+            $val = '';
+        }
+    }
+    sendResponse(["success" => true, "content" => $val]);
+}
+
+// --- UPDATE APP SETTING (Admin/Public) ---
+if ($action === 'update_app_setting' && $method === 'POST') {
+    $key = $_POST['key'] ?? ($input['key'] ?? '');
+    $content = $_POST['content'] ?? ($input['content'] ?? '');
+    if (!$key) sendResponse(["error" => "Key missing"], 400);
+
+    $stmt = $pdo->prepare("INSERT INTO app_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+    $stmt->execute([$key, $content]);
+    sendResponse(["success" => true]);
+}
+
+// --- SOUNDVERSE GENERATE PROXY ---
+if ($action === 'soundverse_generate' && $method === 'POST') {
+    $apiKey = $input['apiKey'] ?? '';
+    if (!$apiKey) {
+        $stmt = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key = 'soundverse_api_key'");
+        $stmt->execute();
+        $apiKey = $stmt->fetchColumn() ?: 'sksoundverse_ivOVxIp9fudT87xVfqjPUWIB7SHSis9QTRojifOh3k_rKyiz-g1iadzoCtH8GzQl';
+    }
+
+    $prompt = $input['prompt'] ?? '';
+    $duration = (int)($input['duration'] ?? 60);
+
+    $ch = curl_init('https://api.soundverse.ai/v1/audio/generate');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'Authorization: Bearer ' . trim($apiKey),
+        'x-api-key: ' . trim($apiKey)
+    ]);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+        'prompt' => $prompt,
+        'duration' => $duration
+    ]));
+    curl_setopt($ch, CURLOPT_TIMEOUT, 120);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlErr = curl_error($ch);
+    curl_close($ch);
+
+    if ($curlErr || $httpCode >= 400) {
+        $ch2 = curl_init('https://backend.soundverse.ai/api/v1/generate');
+        curl_setopt($ch2, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch2, CURLOPT_POST, true);
+        curl_setopt($ch2, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . trim($apiKey)
+        ]);
+        curl_setopt($ch2, CURLOPT_POSTFIELDS, json_encode([
+            'prompt' => $prompt,
+            'duration' => $duration
+        ]));
+        curl_setopt($ch2, CURLOPT_TIMEOUT, 120);
+        $res2 = curl_exec($ch2);
+        $http2 = curl_getinfo($ch2, CURLINFO_HTTP_CODE);
+        curl_close($ch2);
+        if ($res2 && $http2 < 400) {
+            $response = $res2;
+            $httpCode = $http2;
+        }
+    }
+
+    $resData = json_decode($response, true);
+    sendResponse($resData ?: ["raw" => $response, "success" => true], $httpCode ?: 200);
+}
 
 // --- LOG EVENT (Public) ---
 if ($action === 'log_event' && $method === 'POST') {

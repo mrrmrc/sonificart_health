@@ -425,6 +425,52 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
 
     // Stato per i Tab del Prompt (Suno / Udio / Soundverse AI)
     const [activePromptTab, setActivePromptTab] = useState<'suno' | 'udio' | 'soundverse'>('suno');
+    const [isGeneratingSoundverse, setIsGeneratingSoundverse] = useState(false);
+
+    const handleGenerateSoundverseAudio = async () => {
+        if (!correctedResult.musicGenerationPrompt) return;
+        setIsGeneratingSoundverse(true);
+
+        try {
+            const promptToUse = correctedResult.musicGenerationPrompt.soundverse_prompt 
+                || correctedResult.musicGenerationPrompt.technical_parameters;
+            
+            const { generateSoundverseAudioTrack } = await import('../services/soundverseService');
+            const targetSec = correctedResult.configUsed?.targetDurationSeconds || 60;
+            const res = await generateSoundverseAudioTrack(promptToUse, targetSec);
+
+            if (res.success && res.audioUrl) {
+                setConfirmModal({
+                    isOpen: true,
+                    title: "Traccia Soundverse AI Generata!",
+                    message: "La traccia audio è stata creata con successo con le tue credenziali Soundverse.AI!",
+                    type: 'success',
+                    singleButton: true,
+                    onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+                });
+            } else {
+                setConfirmModal({
+                    isOpen: true,
+                    title: "Richiesta Inviata a Soundverse",
+                    message: res.error || "Generazione in corso su Soundverse.ai! Controlla la tua dashboard di Soundverse o riprova tra poco.",
+                    type: 'info',
+                    singleButton: true,
+                    onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+                });
+            }
+        } catch (e: any) {
+            setConfirmModal({
+                isOpen: true,
+                title: "Errore Soundverse AI",
+                message: e.message || "Si è verificato un errore durante la chiamata a Soundverse AI.",
+                type: 'danger',
+                singleButton: true,
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            });
+        } finally {
+            setIsGeneratingSoundverse(false);
+        }
+    };
 
     const [imageRenderInfo, setImageRenderInfo] = useState({ x: 0, y: 0, width: 0, height: 0 });
     const [playbackTime, setPlaybackTime] = useState(0);
@@ -1283,8 +1329,45 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
 
                 {/* --- SEZIONE CONCEPT & AI RIGENERATA CON MULTI-TAB --- */}
                 {correctedResult.paradigm?.toLowerCase().trim() !== 'scientific' && correctedResult.musicGenerationPrompt && (
-                    <InfoCard title="Prompt per IA" icon="fa-robot" className="lg:col-span-3 relative overflow-hidden bg-gradient-to-br from-purple-900/20 to-blue-900/20 border-purple-500/30">
+                    <InfoCard title="Prompt per IA & Generazione Soundverse" icon="fa-robot" className="lg:col-span-3 relative overflow-hidden bg-gradient-to-br from-purple-900/20 to-blue-900/20 border-purple-500/30">
                         <div className='grid grid-cols-1 md:grid-cols-12 gap-8'>
+                            
+                            {/* BANNER GENERAZIONE SOUNDVERSE AI */}
+                            <div className="md:col-span-12 bg-gradient-to-r from-emerald-950/80 via-teal-900/50 to-black/60 p-4 rounded-xl border border-emerald-500/40 flex flex-wrap items-center justify-between gap-4 shadow-xl">
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-emerald-500/20 p-3 rounded-lg border border-emerald-500/30 text-emerald-400">
+                                        <i className="fas fa-compact-disc text-2xl animate-spin-slow"></i>
+                                    </div>
+                                    <div>
+                                        <h5 className="text-sm font-bold text-white flex items-center gap-2">
+                                            Generazione Diretta Soundverse.ai API
+                                            <span className="text-[9px] bg-emerald-500/20 text-emerald-300 font-mono px-2 py-0.5 rounded border border-emerald-500/40 uppercase font-bold tracking-wider">
+                                                <i className="fas fa-check-circle mr-1 text-emerald-400"></i>API Key Attiva
+                                            </span>
+                                        </h5>
+                                        <p className="text-xs text-gray-300">Genera automaticamente il brano audio dal prompt mediante l'API ufficiale Soundverse AI.</p>
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={handleGenerateSoundverseAudio}
+                                    disabled={isGeneratingSoundverse}
+                                    className="bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-500 hover:from-emerald-300 hover:to-teal-200 text-black font-black px-6 py-3 rounded-xl shadow-lg hover:shadow-emerald-500/20 transition-all flex items-center gap-2.5 disabled:opacity-50 text-xs uppercase tracking-wider border border-emerald-300/50 cursor-pointer"
+                                >
+                                    {isGeneratingSoundverse ? (
+                                        <>
+                                            <i className="fas fa-spinner fa-spin text-sm"></i>
+                                            <span>Elaborazione su Soundverse...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <i className="fas fa-wand-magic-sparkles text-sm"></i>
+                                            <span>Genera Brano con Soundverse AI</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+
                             {/* COLONNA SINISTRA: CONCEPT E RAGIONAMENTO */}
                             <div className='md:col-span-4 space-y-6 border-r border-white/5 pr-6'>
                                 <div>
