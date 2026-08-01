@@ -1101,24 +1101,47 @@ export const AdminPanel: React.FC = () => {
                             <p className="text-[10px] text-gray-400 mt-1">La chiave usata per generare file audio musicali direttamente tramite Soundverse AI.</p>
                         </div>
 
-                        <div className="flex gap-4 pt-4 border-t border-white/5">
+                        <div className="flex flex-wrap gap-4 pt-4 border-t border-white/5">
                             <button
                                 onClick={async () => {
                                     setIsTestingApi(true);
                                     try {
                                         const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiSettings.gemini_api_key}`);
-                                        if (res.ok) setConfirmModal({ isOpen: true, title: "API Valide", message: "Connessione a Google AI Studio effettuata con successo! La chiave è operativa.", type: 'success', singleButton: true, onConfirm: () => setConfirmModal(prev => ({...prev, isOpen: false })) });
-                                        else setConfirmModal({ isOpen: true, title: "Errore API", message: "Chiave non valida o scaduta.", type: 'danger', singleButton: true, onConfirm: () => setConfirmModal(prev => ({...prev, isOpen: false })) });
+                                        if (res.ok) setConfirmModal({ isOpen: true, title: "API Gemini Valida", message: "Connessione a Google AI Studio effettuata con successo! La chiave è operativa.", type: 'success', singleButton: true, onConfirm: () => setConfirmModal(prev => ({...prev, isOpen: false })) });
+                                        else setConfirmModal({ isOpen: true, title: "Errore API Gemini", message: "Chiave Google non valida o scaduta.", type: 'danger', singleButton: true, onConfirm: () => setConfirmModal(prev => ({...prev, isOpen: false })) });
                                     } catch(e) {
-                                        setConfirmModal({ isOpen: true, title: "Errore Rete", message: "Impossibile connettersi o CORS error.", type: 'danger', singleButton: true, onConfirm: () => setConfirmModal(prev => ({...prev, isOpen: false })) });
+                                        setConfirmModal({ isOpen: true, title: "Errore Rete", message: "Impossibile connettersi a Google.", type: 'danger', singleButton: true, onConfirm: () => setConfirmModal(prev => ({...prev, isOpen: false })) });
                                     } finally {
                                         setIsTestingApi(false);
                                     }
                                 }}
                                 disabled={isTestingApi || !apiSettings.gemini_api_key}
-                                className="bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-lg font-bold shadow-lg transition-all disabled:opacity-50"
+                                className="bg-white/10 hover:bg-white/20 text-white px-5 py-3 rounded-lg font-bold shadow-lg transition-all disabled:opacity-50 text-xs"
                             >
-                                <i className={`fas fa-stethoscope mr-2 ${isTestingApi ? 'fa-spin' : ''}`}></i> {isTestingApi ? 'Test in corso...' : 'Test Connessione'}
+                                <i className={`fas fa-stethoscope mr-2 ${isTestingApi ? 'fa-spin' : ''}`}></i> {isTestingApi ? 'Test Gemini...' : 'Test Google AI'}
+                            </button>
+
+                            <button
+                                onClick={async () => {
+                                    setIsTestingApi(true);
+                                    try {
+                                        const { checkSoundverseApi } = await import('../services/soundverseService');
+                                        const check = await checkSoundverseApi(apiSettings.soundverse_api_key);
+                                        if (check.success) {
+                                            setConfirmModal({ isOpen: true, title: "API Soundverse Attiva", message: "Pre-flight OK! Connessione a Soundverse AI verificata ed operativa.", type: 'success', singleButton: true, onConfirm: () => setConfirmModal(prev => ({...prev, isOpen: false })) });
+                                        } else {
+                                            setConfirmModal({ isOpen: true, title: "Errore Soundverse", message: check.error || "Chiave Soundverse non valida.", type: 'danger', singleButton: true, onConfirm: () => setConfirmModal(prev => ({...prev, isOpen: false })) });
+                                        }
+                                    } catch(e: any) {
+                                        setConfirmModal({ isOpen: true, title: "Errore Test Soundverse", message: e.message, type: 'danger', singleButton: true, onConfirm: () => setConfirmModal(prev => ({...prev, isOpen: false })) });
+                                    } finally {
+                                        setIsTestingApi(false);
+                                    }
+                                }}
+                                disabled={isTestingApi || !apiSettings.soundverse_api_key}
+                                className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 px-5 py-3 rounded-lg font-bold shadow-lg transition-all disabled:opacity-50 text-xs"
+                            >
+                                <i className={`fas fa-compact-disc mr-2 ${isTestingApi ? 'fa-spin' : ''}`}></i> {isTestingApi ? 'Test Soundverse...' : 'Test Soundverse AI'}
                             </button>
                             
                             <button

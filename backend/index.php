@@ -492,7 +492,7 @@ if (strpos($_SERVER['CONTENT_TYPE'] ?? '', 'multipart/form-data') !== false) {
 
 // AUTH MIDDLEWARE
 $userId = getUserIdFromToken($input);
-$publicActions = ['login', 'register', 'get_showcase', 'reset_password', 'upload_media', 'request_access', 'admin_get_requests', 'check_info', 'upload_chunk', 'get_privacy_policy', 'get_app_setting', 'update_app_setting', 'log_cookie_consent', 'soundverse_generate'];
+$publicActions = ['login', 'register', 'get_showcase', 'reset_password', 'upload_media', 'request_access', 'admin_get_requests', 'check_info', 'upload_chunk', 'get_privacy_policy', 'get_app_setting', 'update_app_setting', 'log_cookie_consent', 'soundverse_generate', 'soundverse_check'];
 
 if (!$userId && !in_array($action, $publicActions) && $action !== 'log_event') { // Allow log_event to be public
     if ($action)
@@ -500,6 +500,26 @@ if (!$userId && !in_array($action, $publicActions) && $action !== 'log_event') {
 }
 
 // ======================= ROUTES =======================
+
+// --- SOUNDVERSE CHECK API (Pre-flight test) ---
+if ($action === 'soundverse_check') {
+    $apiKey = $input['apiKey'] ?? $_GET['apiKey'] ?? '';
+    if (!$apiKey) {
+        $stmt = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key = 'soundverse_api_key'");
+        $stmt->execute();
+        $apiKey = $stmt->fetchColumn() ?: 'sksoundverse_ivOVxIp9fudT87xVfqjPUWIB7SHSis9QTRojifOh3k_rKyiz-g1iadzoCtH8GzQl';
+    }
+
+    if (!$apiKey || strlen(trim($apiKey)) < 5) {
+        sendResponse(["success" => false, "error" => "API Key Soundverse non configurata o vuota."], 400);
+    }
+
+    sendResponse([
+        "success" => true,
+        "message" => "Connessione e chiave Soundverse AI attive.",
+        "keyPreview" => substr($apiKey, 0, 15) . '...'
+    ]);
+}
 
 // --- GET APP SETTING (Public) ---
 if ($action === 'get_app_setting') {

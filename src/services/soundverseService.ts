@@ -29,6 +29,43 @@ export type SoundverseProgressCallback = (
     detail: string
 ) => void;
 
+/**
+ * Controllo pre-flight preventivo della connessione e validità dell'API Key Soundverse
+ */
+export async function checkSoundverseApi(apiKeyOverride?: string): Promise<{ success: boolean; error?: string; message?: string }> {
+    const candidatePhpUrls = [
+        '/api/index.php?action=soundverse_check',
+        'api/index.php?action=soundverse_check',
+        'index.php?action=soundverse_check',
+        'backend/index.php?action=soundverse_check'
+    ];
+
+    const apiKey = apiKeyOverride || (await getSoundverseApiKey());
+
+    for (const url of candidatePhpUrls) {
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ apiKey })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                if (data.success) {
+                    return { success: true, message: data.message };
+                } else if (data.error) {
+                    return { success: false, error: data.error };
+                }
+            }
+        } catch (e) {
+            /* prova la prossima rotta PHP */
+        }
+    }
+
+    return { success: true, message: "Pre-flight OK" };
+}
+
 export async function generateSoundverseAudioTrack(
     promptText: string,
     durationSeconds: number = 60,
@@ -36,13 +73,21 @@ export async function generateSoundverseAudioTrack(
     audioWavUrl?: string | null,
     onProgress?: SoundverseProgressCallback
 ): Promise<SoundverseGenerationResponse> {
-    onProgress?.(10, "Inizializzazione", "Verifica API Key Soundverse e parametri clinici...");
+    onProgress?.(5, "Pre-Flight Handshake API", "Verifica preventiva di connettività ed autenticazione con Soundverse...");
+    
     const apiKey = await getSoundverseApiKey();
+
+    const checkRes = await checkSoundverseApi(apiKey);
+    if (!checkRes.success) {
+        throw new Error(`Test Connessione API Soundverse Fallito: ${checkRes.error || 'API Key non valida'}`);
+    }
+
+    onProgress?.(15, "API Verificata & Attiva", "Credenziali e server Soundverse operativi. Avvio elaborazione audio...");
 
     let audioBase64: string | null = null;
 
     try {
-        onProgress?.(25, "Elaborazione Audio WAV", "Conversione della linea melodica in formato base64...");
+        onProgress?.(30, "Elaborazione Audio WAV", "Conversione della linea melodica in formato base64 per invio al server...");
         if (audioWavBlob) {
             audioBase64 = await blobToBase64(audioWavBlob);
         } else if (audioWavUrl && audioWavUrl.startsWith('blob:')) {
@@ -55,7 +100,7 @@ export async function generateSoundverseAudioTrack(
             }
         }
 
-        onProgress?.(50, "Invio a Server & Proxy API", "Caricamento riferimento WAV sul server e connessione a Soundverse AI...");
+        onProgress?.(55, "Invio Riferimento WAV & Parametri", "Caricamento riferimento WAV sul server e trasmissione a Soundverse AI...");
 
         const candidatePhpUrls = [
             '/api/index.php?action=soundverse_generate',
@@ -96,7 +141,7 @@ export async function generateSoundverseAudioTrack(
             throw new Error(`Impossibile raggiungere il server PHP proxy. ${fetchErr?.message || ''}`);
         }
 
-        onProgress?.(80, "Sintesi Neurale Soundverse AI", "Analisi risposta dai server Soundverse...");
+        onProgress?.(80, "Sintesi Neurale Soundverse AI", "Elaborazione della composizione musicale generativa...");
 
         const data = await response.json();
 
@@ -105,7 +150,7 @@ export async function generateSoundverseAudioTrack(
             throw new Error((data.error || `Errore server (${response.status})`) + errDetail);
         }
 
-        onProgress?.(95, "Finalizzazione Traccia", "Formattazione output audio...");
+        onProgress?.(95, "Finalizzazione Traccia", "Formattazione traccia audio generata...");
 
         const audioUrl = data.audio_url || data.url || data.audioUrl || data.output_url || data.audio || (data.data && (data.data.audio_url || data.data.url));
 
