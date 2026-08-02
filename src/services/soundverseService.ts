@@ -104,11 +104,15 @@ async function callPhpProxy(actionName: string, payloadData: Record<string, any>
 /**
  * Controllo pre-flight preventivo della connessione e validità dell'API Key Soundverse
  */
-export async function checkSoundverseApi(apiKeyOverride?: string): Promise<{ success: boolean; error?: string; message?: string }> {
+export async function checkSoundverseApi(apiKeyOverride?: string): Promise<{ success: boolean; error?: string; message?: string; checkLog?: any[] }> {
     try {
         const apiKey = apiKeyOverride || (await getSoundverseApiKey());
         const data = await callPhpProxy('soundverse_check', { apiKey });
-        return { success: true, message: data.message };
+        // Il backend ora restituisce sempre HTTP 200 con success: true/false
+        if (data.success === false) {
+            return { success: false, error: data.error || "Verifica API Key fallita.", checkLog: data.checkLog };
+        }
+        return { success: true, message: data.message, checkLog: data.checkLog };
     } catch (e: any) {
         return { success: false, error: e.message || "Impossibile verificare l'API Key Soundverse." };
     }
@@ -121,16 +125,22 @@ export async function generateSoundverseAudioTrack(
     audioWavUrl?: string | null,
     onProgress?: SoundverseProgressCallback
 ): Promise<SoundverseGenerationResponse> {
-    onProgress?.(5, "Pre-Flight Handshake API", "Verifica preventiva di connettività ed autenticazione con Soundverse...");
+    onProgress?.(5, "Pre-Flight Handshake API", "Verifica REALE di connettività ed autenticazione con Soundverse...");
     
     const apiKey = await getSoundverseApiKey();
 
     const checkRes = await checkSoundverseApi(apiKey);
     if (!checkRes.success) {
-        throw new Error(`Test Connessione API Soundverse Fallito: ${checkRes.error || 'API Key non valida'}`);
+        // Mostra dettagli diagnostici del pre-flight reale
+        const checkDetail = checkRes.checkLog
+            ? checkRes.checkLog.map((l: any) => `[${l.url || ''}] → HTTP ${l.code || '?'} ${l.err || 'OK'}`).join(' | ')
+            : '';
+        const errorMsg = `Pre-Flight Fallito: ${checkRes.error || 'API Key non valida'}${checkDetail ? '\n\nDettagli: ' + checkDetail : ''}`;
+        onProgress?.(10, "❌ Pre-Flight FALLITO", errorMsg);
+        throw new Error(errorMsg);
     }
 
-    onProgress?.(15, "API Verificata & Attiva", "Credenziali e server Soundverse operativi. Avvio elaborazione audio...");
+    onProgress?.(15, "✅ API Verificata (Check Reale)", `Credenziali verificate con successo. ${checkRes.message || ''} Avvio elaborazione audio...`);
 
     let audioBase64: string | null = null;
 
@@ -148,7 +158,7 @@ export async function generateSoundverseAudioTrack(
             }
         }
 
-        onProgress?.(55, "Invio Riferimento WAV & Parametri", "Caricamento riferimento WAV sul server e trasmissione a Soundverse AI...");
+        onProgress?.(50, "Invio a Soundverse AI", "Trasmissione prompt e parametri agli endpoint API aggiornati (v7/v1)...");
 
         const data = await callPhpProxy('soundverse_generate', {
             apiKey: apiKey,
@@ -158,30 +168,138 @@ export async function generateSoundverseAudioTrack(
             audioUrl: (audioWavUrl && !audioWavUrl.startsWith('blob:')) ? audioWavUrl : null
         });
 
-        onProgress?.(80, "Sintesi Neurale Soundverse AI", "Elaborazione della composizione musicale generativa...");
+        // === DEBUG: Log completo della risposta backend per diagnostica ===
+        console.log('[Soundverse] Risposta completa dal backend:', JSON.stringify(data, null, 2));
+        if (data.stepLog) {
+            console.log('[Soundverse] StepLog:', data.stepLog);
+        }
 
-        if (data.error) {
-            const errDetail = data.attempted ? ` (Tentati ${data.attempted.length} endpoint)` : '';
-            throw new Error((data.error || 'Errore server') + errDetail);
+        // --- Log dettagliato di ogni step dal backend ---
+        if (data.stepLog && Array.isArray(data.stepLog)) {
+            for (const step of data.stepLog) {
+                switch (step.step) {
+                    case 'ATTEMPT':
+                        onProgress?.(55, `🔄 Tentativo: ${step.endpoint}`, `Connessione a ${step.url}...`);
+                        break;
+                    case 'RESPONSE': {
+                        const emoji = (step.httpCode >= 200 && step.httpCode < 300) ? '✅' : (step.httpCode === 401 || step.httpCode === 403) ? '🔒' : '❌';
+                        onProgress?.(60, `${emoji} ${step.endpoint}: HTTP ${step.httpCode}`, step.curlError || step.responsePreview?.substring(0, 100) || '');
+                        break;
+                    }
+                    case 'AUTH_FAIL':
+                        onProgress?.(60, "🔒 Autenticazione Fallita", step.detail || 'API Key rifiutata');
+                        break;
+                    case 'SUCCESS':
+                        onProgress?.(65, `✅ ${step.endpoint}`, step.detail || 'Risposta positiva');
+                        break;
+                    case 'JOB_CREATED':
+                        onProgress?.(70, "🔄 Job Asincrono Creato", `Job ID: ${step.jobId} — In attesa elaborazione Soundverse...`);
+                        break;
+                    case 'POLL': {
+                        const pct = Math.min(70 + (step.attempt || 0) * 1, 90);
+                        onProgress?.(pct, `🔄 Polling #${step.attempt}`, `Stato: ${step.status || 'in elaborazione'}...`);
+                        break;
+                    }
+                    case 'POLL_COMPLETE':
+                        onProgress?.(92, "✅ Generazione Completata", step.detail || 'Audio pronto');
+                        break;
+                    case 'JOB_FAILED':
+                        onProgress?.(75, "❌ Job Fallito", step.detail || 'Errore sconosciuto');
+                        break;
+                    case 'POLL_TIMEOUT':
+                        onProgress?.(80, "⏰ Timeout Polling", step.detail || 'Elaborazione non completata nel tempo previsto');
+                        break;
+                    case 'ENDPOINT_FAIL':
+                        onProgress?.(55, `❌ ${step.endpoint}: HTTP ${step.httpCode}`, step.detail || '');
+                        break;
+                    case 'CURL_ERROR':
+                        onProgress?.(55, `❌ Errore Connessione: ${step.endpoint}`, step.detail || '');
+                        break;
+                }
+            }
+        }
+
+        // Controlla errore nella risposta
+        if (data.error || data.success === false) {
+            const stepCount = data.stepLog ? data.stepLog.length : 0;
+            const errMsg = data.error || 'Errore server Soundverse';
+            throw new Error(`${errMsg} (${stepCount} step diagnostici eseguiti)`);
         }
 
         onProgress?.(95, "Finalizzazione Traccia", "Formattazione traccia audio generata...");
 
-        const audioUrl = data.audio_url || data.url || data.audioUrl || data.output_url || data.audio || (data.data && (data.data.audio_url || data.data.url));
+        // --- Estrazione robusta dell'URL audio (cerca in profondità nella risposta) ---
+        const findAudioUrl = (obj: any, depth: number = 0): string | null => {
+            if (!obj || depth > 5) return null;
+            if (typeof obj === 'string' && (obj.startsWith('http://') || obj.startsWith('https://')) && 
+                (obj.includes('.mp3') || obj.includes('.wav') || obj.includes('.ogg') || obj.includes('.flac') || obj.includes('audio') || obj.includes('cdn'))) {
+                return obj;
+            }
+            if (typeof obj !== 'object') return null;
+            
+            // Campi prioritari da controllare
+            const priorityKeys = ['audio_url', 'audioUrl', 'url', 'output_url', 'audio', 'output', 'download_url', 'file_url', 'mp3_url', 'wav_url', 'src', 'source', 'link', 'path'];
+            for (const key of priorityKeys) {
+                if (obj[key] && typeof obj[key] === 'string' && (obj[key].startsWith('http://') || obj[key].startsWith('https://'))) {
+                    return obj[key];
+                }
+            }
+            
+            // Cerca ricorsivamente in sotto-oggetti e array
+            if (Array.isArray(obj)) {
+                for (const item of obj) {
+                    const found = findAudioUrl(item, depth + 1);
+                    if (found) return found;
+                }
+            } else {
+                for (const key of Object.keys(obj)) {
+                    if (['stepLog', 'checkLog', 'raw'].includes(key)) continue; // Skip diagnostic fields
+                    const found = findAudioUrl(obj[key], depth + 1);
+                    if (found) return found;
+                }
+            }
+            return null;
+        };
+
+        // Prima prova i campi noti, poi ricerca profonda
+        let audioUrl = data.audio_url || data.url || data.audioUrl || data.output_url || data.audio || (data.data && (data.data.audio_url || data.data.url));
+        
+        if (!audioUrl) {
+            console.log('[Soundverse] URL non trovato nei campi standard, ricerca profonda...');
+            audioUrl = findAudioUrl(data);
+            if (audioUrl) {
+                console.log('[Soundverse] URL trovato con ricerca profonda:', audioUrl);
+            }
+        }
+
+        // Cerca anche job_id in profondità
+        const findJobId = (obj: any): string | null => {
+            if (!obj || typeof obj !== 'object') return null;
+            for (const key of ['job_id', 'id', 'task_id', 'generation_id', 'request_id']) {
+                if (obj[key] && typeof obj[key] === 'string') return obj[key];
+            }
+            if (obj.data && typeof obj.data === 'object') return findJobId(obj.data);
+            return null;
+        };
 
         if (!audioUrl) {
-            if (data.id || data.job_id) {
-                onProgress?.(100, "Richiesta Presa in Carico", "Soundverse ha preso in carico il job di sintesi.");
+            const jobId = findJobId(data);
+            if (jobId) {
+                onProgress?.(100, "Richiesta Presa in Carico", `Soundverse ha preso in carico il job (ID: ${jobId}). Controlla la dashboard Soundverse.`);
                 return {
                     success: true,
-                    audioUrl: data.audio_url || null,
+                    audioUrl: undefined,
                     raw: data
                 };
             }
-            throw new Error("Impossibile recuperare l'URL audio generato da Soundverse AI.");
+            
+            // Log dettagliato per debug: mostra le chiavi della risposta
+            const dataKeys = Object.keys(data).filter(k => !['stepLog', 'checkLog'].includes(k));
+            console.error('[Soundverse] Nessun URL audio e nessun job_id trovato. Chiavi risposta:', dataKeys, 'Dati:', JSON.stringify(data, null, 2));
+            throw new Error(`Impossibile recuperare l'URL audio. Chiavi nella risposta: [${dataKeys.join(', ')}]. Controlla la Console per la risposta completa.`);
         }
 
-        onProgress?.(100, "Completato", "Traccia generata con successo!");
+        onProgress?.(100, "✅ Completato", "Traccia generata con successo!");
         return {
             success: true,
             audioUrl: audioUrl,

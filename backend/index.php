@@ -505,24 +505,87 @@ if (!$userId && !in_array($action, $publicActions) && $action !== 'log_event') {
 
 // ======================= ROUTES =======================
 
-// --- SOUNDVERSE CHECK API (Pre-flight test) ---
+// --- SOUNDVERSE CHECK API (Pre-flight REALE) ---
 if ($action === 'soundverse_check') {
     $apiKey = $input['apiKey'] ?? $_GET['apiKey'] ?? '';
     if (!$apiKey) {
         $stmt = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key = 'soundverse_api_key'");
         $stmt->execute();
-        $apiKey = $stmt->fetchColumn() ?: 'sksoundverse_ivOVxIp9fudT87xVfqjPUWIB7SHSis9QTRojifOh3k_rKyiz-g1iadzoCtH8GzQl';
+        $apiKey = $stmt->fetchColumn() ?: '';
     }
 
     if (!$apiKey || strlen(trim($apiKey)) < 5) {
-        sendResponse(["success" => false, "error" => "API Key Soundverse non configurata o vuota."], 400);
+        sendResponse(["success" => false, "error" => "API Key Soundverse non configurata o vuota.", "checkLog" => []]);
     }
 
-    sendResponse([
-        "success" => true,
-        "message" => "Connessione e chiave Soundverse AI attive.",
-        "keyPreview" => substr($apiKey, 0, 15) . '...'
-    ]);
+    // VERIFICA REALE: chiama l'API Soundverse con la key per verificare autenticazione
+    $checkEndpoints = [
+        'https://api.soundverse.ai/v1/generations',
+        'https://apiv2.soundverse.ai/v7/generate/music'
+    ];
+
+    $keyValid = false;
+    $checkError = '';
+    $checkLog = [];
+
+    foreach ($checkEndpoints as $checkUrl) {
+        $ch = curl_init($checkUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'GET');
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Authorization: Bearer ' . trim($apiKey),
+            'Content-Type: application/json'
+        ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr = curl_error($ch);
+        curl_close($ch);
+
+        $checkLog[] = ["url" => $checkUrl, "code" => $httpCode, "err" => $curlErr ?: null];
+
+        if ($curlErr) {
+            $checkError = "Errore connessione Soundverse: $curlErr";
+            continue;
+        }
+
+        // 401/403 = chiave non valida (risposta definitiva)
+        if ($httpCode === 401 || $httpCode === 403) {
+            $decodedCheck = json_decode($response, true);
+            $checkError = "API Key non valida o scaduta (HTTP $httpCode)" .
+                ($decodedCheck && isset($decodedCheck['message']) ? ": " . $decodedCheck['message'] : "");
+            break;
+        }
+
+        // Qualsiasi altra risposta non-errore-di-autenticazione = la key è accettata
+        if ($httpCode >= 200 && $httpCode < 500) {
+            $keyValid = true;
+            break;
+        }
+
+        // 5xx = server down
+        $checkError = "Soundverse API server non disponibile (HTTP $httpCode)";
+    }
+
+    if ($keyValid) {
+        sendResponse([
+            "success" => true,
+            "message" => "Connessione e chiave Soundverse AI verificate con successo (check reale).",
+            "keyPreview" => substr($apiKey, 0, 15) . '...',
+            "checkLog" => $checkLog
+        ]);
+    } else {
+        sendResponse([
+            "success" => false,
+            "error" => $checkError ?: "Impossibile verificare la API Key Soundverse.",
+            "keyPreview" => substr($apiKey, 0, 15) . '...',
+            "checkLog" => $checkLog
+        ]);
+    }
 }
 
 // --- GET APP SETTING (Public) ---
@@ -555,13 +618,17 @@ if ($action === 'update_app_setting' && $method === 'POST') {
     sendResponse(["success" => true]);
 }
 
-// --- SOUNDVERSE GENERATE PROXY ---
+// --- SOUNDVERSE GENERATE PROXY (v2 – Endpoint aggiornati + Polling + Logging) ---
 if ($action === 'soundverse_generate' && $method === 'POST') {
     $apiKey = $input['apiKey'] ?? '';
     if (!$apiKey) {
         $stmt = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key = 'soundverse_api_key'");
         $stmt->execute();
-        $apiKey = $stmt->fetchColumn() ?: 'sksoundverse_ivOVxIp9fudT87xVfqjPUWIB7SHSis9QTRojifOh3k_rKyiz-g1iadzoCtH8GzQl';
+        $apiKey = $stmt->fetchColumn() ?: '';
+    }
+
+    if (!$apiKey || strlen(trim($apiKey)) < 5) {
+        sendResponse(["success" => false, "error" => "API Key Soundverse mancante o non configurata.", "stepLog" => []]);
     }
 
     $prompt = $input['prompt'] ?? '';
@@ -570,54 +637,68 @@ if ($action === 'soundverse_generate' && $method === 'POST') {
     $audioUrlInput = $input['audioUrl'] ?? ($input['reference_audio'] ?? null);
 
     $publicRefAudioUrl = null;
+    $stepLog = [];
+
+    // --- Salva audio di riferimento se fornito ---
+    $stepLog[] = ['step' => 'INIT', 'detail' => 'Preparazione parametri', 'timestamp' => date('H:i:s')];
 
     if ($audioBase64) {
         $refHash = 'ref_sv_' . md5($prompt . time() . rand(1000, 9999));
         $savedPath = saveBase64File($audioBase64, 'audio', $refHash);
         if ($savedPath) {
             $publicRefAudioUrl = $baseUrl . $savedPath;
+            $stepLog[] = ['step' => 'AUDIO_SAVED', 'detail' => 'Audio riferimento salvato: ' . $savedPath, 'timestamp' => date('H:i:s')];
         }
     } else if ($audioUrlInput && strpos($audioUrlInput, 'http') === 0) {
         $publicRefAudioUrl = $audioUrlInput;
     }
 
-    $postData = [
+    $idempotencyKey = 'sonificart-' . md5($prompt . time() . rand(1000, 9999));
+
+    // --- Payload per API v7 (documentato 2025-2026) ---
+    $v7Payload = [
+        'prompt' => $prompt,
+        'parameters' => ['versions' => 1]
+    ];
+    if ($publicRefAudioUrl) {
+        $v7Payload['reference_audio'] = $publicRefAudioUrl;
+    }
+
+    // --- Payload per API v1 nativa ---
+    $v1Payload = [
         'prompt' => $prompt,
         'duration' => $duration
     ];
     if ($publicRefAudioUrl) {
-        $postData['audio_url'] = $publicRefAudioUrl;
-        $postData['reference_audio'] = $publicRefAudioUrl;
-        $postData['audio'] = $publicRefAudioUrl;
+        $v1Payload['audio_url'] = $publicRefAudioUrl;
+        $v1Payload['reference_audio'] = $publicRefAudioUrl;
     }
 
+    // --- Endpoint da provare (in ordine di priorita') ---
     $endpoints = [
-        'https://api.soundverse.ai/v1/audio/generate',
-        'https://api.soundverse.ai/v1/generate',
-        'https://api.soundverse.ai/v1/music/generate',
-        'https://api.soundverse.ai/v1/audio',
-        'https://api.soundverse.ai/v1/process',
-        'https://backend.soundverse.ai/v1/audio/generate',
-        'https://backend.soundverse.ai/api/v1/generate'
+        ['url' => 'https://apiv2.soundverse.ai/v7/generate/music', 'payload' => $v7Payload, 'label' => 'APIv2 v7 Generate Music'],
+        ['url' => 'https://api.soundverse.ai/v7/generate/music',  'payload' => $v7Payload, 'label' => 'API v7 Generate Music'],
+        ['url' => 'https://api.soundverse.ai/v1/generations',      'payload' => $v1Payload, 'label' => 'API v1 Generations (Native)'],
+        ['url' => 'https://api.soundverse.ai/v1/audio/generate',   'payload' => $v1Payload, 'label' => 'API v1 Audio Generate'],
     ];
 
     $lastResponse = null;
     $lastHttpCode = 0;
     $successResult = null;
-    $attempted = [];
 
-    foreach ($endpoints as $endpointUrl) {
-        $ch = curl_init($endpointUrl);
+    foreach ($endpoints as $ep) {
+        $stepLog[] = ['step' => 'ATTEMPT', 'endpoint' => $ep['label'], 'url' => $ep['url'], 'timestamp' => date('H:i:s')];
+
+        $ch = curl_init($ep['url']);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Content-Type: application/json',
             'Authorization: Bearer ' . trim($apiKey),
-            'x-api-key: ' . trim($apiKey),
-            'api-key: ' . trim($apiKey)
+            'Idempotency-Key: ' . $idempotencyKey
         ]);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($postData));
-        curl_setopt($ch, CURLOPT_TIMEOUT, 45);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($ep['payload']));
+        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
@@ -627,29 +708,137 @@ if ($action === 'soundverse_generate' && $method === 'POST') {
         $curlErr = curl_error($ch);
         curl_close($ch);
 
-        $attempted[] = ["url" => $endpointUrl, "code" => $httpCode, "err" => $curlErr];
+        $decoded = json_decode($response, true);
 
-        if (!$curlErr && $httpCode >= 200 && $httpCode < 300) {
-            $successResult = json_decode($response, true) ?: ["raw" => $response];
+        $stepLog[] = [
+            'step' => 'RESPONSE',
+            'endpoint' => $ep['label'],
+            'httpCode' => $httpCode,
+            'curlError' => $curlErr ?: null,
+            'responsePreview' => $response ? substr($response, 0, 300) : null,
+            'timestamp' => date('H:i:s')
+        ];
+
+        if ($curlErr) {
+            $stepLog[] = ['step' => 'CURL_ERROR', 'endpoint' => $ep['label'], 'detail' => $curlErr, 'timestamp' => date('H:i:s')];
+            $lastResponse = $response;
+            $lastHttpCode = $httpCode;
+            continue;
+        }
+
+        // Autenticazione fallita: inutile provare altri endpoint con la stessa key
+        if ($httpCode === 401 || $httpCode === 403) {
+            $stepLog[] = ['step' => 'AUTH_FAIL', 'endpoint' => $ep['label'], 'detail' => 'API Key rifiutata (HTTP ' . $httpCode . ')', 'timestamp' => date('H:i:s')];
+            $lastResponse = $response;
             $lastHttpCode = $httpCode;
             break;
         }
 
+        if ($httpCode >= 200 && $httpCode < 300 && $decoded) {
+            $successResult = $decoded;
+            $lastHttpCode = $httpCode;
+            $stepLog[] = ['step' => 'SUCCESS', 'endpoint' => $ep['label'], 'detail' => 'Risposta positiva ricevuta', 'timestamp' => date('H:i:s')];
+
+            // --- Verifica se e' un job asincrono ---
+            $jobId = $decoded['job_id'] ?? $decoded['id'] ?? $decoded['task_id'] ?? null;
+            $hasAudioAlready = isset($decoded['audio_url']) || isset($decoded['url']) || isset($decoded['output_url']);
+
+            if ($jobId && !$hasAudioAlready) {
+                $stepLog[] = ['step' => 'JOB_CREATED', 'jobId' => $jobId, 'detail' => 'Job asincrono creato, avvio polling...', 'timestamp' => date('H:i:s')];
+
+                $pollEndpoints = [
+                    "https://api.soundverse.ai/v1/generations/$jobId",
+                    "https://api.soundverse.ai/v7/status?job_id=$jobId",
+                    "https://apiv2.soundverse.ai/v7/status?job_id=$jobId"
+                ];
+
+                $maxPolls = 24; // 24 x 5s = 120s max
+                $pollInterval = 5;
+                $pollResult = null;
+
+                for ($poll = 0; $poll < $maxPolls; $poll++) {
+                    sleep($pollInterval);
+
+                    foreach ($pollEndpoints as $pollUrl) {
+                        $pch = curl_init($pollUrl);
+                        curl_setopt($pch, CURLOPT_RETURNTRANSFER, true);
+                        curl_setopt($pch, CURLOPT_HTTPHEADER, [
+                            'Authorization: Bearer ' . trim($apiKey),
+                            'Content-Type: application/json'
+                        ]);
+                        curl_setopt($pch, CURLOPT_TIMEOUT, 15);
+                        curl_setopt($pch, CURLOPT_SSL_VERIFYPEER, false);
+                        curl_setopt($pch, CURLOPT_SSL_VERIFYHOST, 0);
+
+                        $pollResponse = curl_exec($pch);
+                        $pollCode = curl_getinfo($pch, CURLINFO_HTTP_CODE);
+                        $pollCurlErr = curl_error($pch);
+                        curl_close($pch);
+
+                        if ($pollCurlErr || $pollCode < 200 || $pollCode >= 300) {
+                            continue; // Prova il prossimo endpoint di polling
+                        }
+
+                        $pollData = json_decode($pollResponse, true);
+                        if (!$pollData) continue;
+
+                        $status = strtolower($pollData['status'] ?? '');
+                        $stepLog[] = ['step' => 'POLL', 'attempt' => $poll + 1, 'status' => $status, 'pollUrl' => $pollUrl, 'timestamp' => date('H:i:s')];
+
+                        if (in_array($status, ['completed', 'done', 'success', 'finished'])) {
+                            $pollResult = $pollData;
+                            break 2;
+                        }
+                        if (in_array($status, ['failed', 'error', 'cancelled'])) {
+                            $stepLog[] = ['step' => 'JOB_FAILED', 'detail' => $pollData['error'] ?? $pollData['message'] ?? 'Job fallito su Soundverse', 'timestamp' => date('H:i:s')];
+                            break 2;
+                        }
+
+                        break; // Risposta ricevuta da questo endpoint, non provare gli altri
+                    }
+                }
+
+                if ($pollResult) {
+                    $successResult = array_merge($successResult, $pollResult);
+                    $stepLog[] = ['step' => 'POLL_COMPLETE', 'detail' => 'Generazione completata con successo', 'timestamp' => date('H:i:s')];
+                } else {
+                    $stepLog[] = ['step' => 'POLL_TIMEOUT', 'detail' => 'Polling terminato senza risultato dopo ' . ($maxPolls * $pollInterval) . 's', 'timestamp' => date('H:i:s')];
+                }
+            }
+
+            break; // Endpoint ha risposto con successo
+        }
+
         $lastResponse = $response;
         $lastHttpCode = $httpCode;
+        $stepLog[] = ['step' => 'ENDPOINT_FAIL', 'endpoint' => $ep['label'], 'httpCode' => $httpCode, 'detail' => 'Risposta non valida, provo il prossimo...', 'timestamp' => date('H:i:s')];
     }
 
+    // --- Risposta finale ---
     if ($successResult) {
-        sendResponse(array_merge($successResult, ["refAudio" => $publicRefAudioUrl, "success" => true]));
+        sendResponse(array_merge($successResult, [
+            "refAudio" => $publicRefAudioUrl,
+            "success" => true,
+            "stepLog" => $stepLog
+        ]));
     } else {
         $decodedLast = json_decode($lastResponse, true);
+        $errorMsg = 'Soundverse API non raggiungibile';
+        if ($decodedLast) {
+            $errorMsg = $decodedLast['error'] ?? $decodedLast['message'] ?? $errorMsg;
+        }
+        if ($lastHttpCode === 401 || $lastHttpCode === 403) {
+            $errorMsg = "API Key Soundverse non valida o scaduta (HTTP $lastHttpCode). Verifica la chiave nel pannello Admin.";
+        }
+
         sendResponse([
-            "error" => $decodedLast['error'] ?? $decodedLast['message'] ?? ("Soundverse API Endpoint error (HTTP " . $lastHttpCode . ")"),
+            "success" => false,
+            "error" => $errorMsg,
             "httpCode" => $lastHttpCode,
-            "raw" => $lastResponse,
+            "raw" => $lastResponse ? substr($lastResponse, 0, 500) : null,
             "refAudio" => $publicRefAudioUrl,
-            "attempted" => $attempted
-        ], $lastHttpCode ?: 404);
+            "stepLog" => $stepLog
+        ]);
     }
 }
 
