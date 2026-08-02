@@ -788,6 +788,54 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
         }
     };
 
+    const handleDownloadAiTrack = async () => {
+        if (!isOwner && !user?.isAdmin) {
+            setConfirmModal({
+                isOpen: true,
+                title: "Accesso Negato",
+                message: "Solo l'autore può scaricare i file audio.",
+                type: 'danger',
+                singleButton: true,
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            });
+            return;
+        }
+
+        const aiUrl = correctedResult.audioOutput?.customAudioUrl || (correctedResult.audioOutput as any)?.generatedAiTrackUrl;
+
+        if (aiUrl && (aiUrl.startsWith('http') || aiUrl.startsWith('blob:'))) {
+            try {
+                const res = await fetch(aiUrl);
+                const blob = await res.blob();
+                const cleanTitle = workTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                const ext = aiUrl.includes('.wav') ? 'wav' : 'mp3';
+                saveAs(blob, `${cleanTitle}_BRANO_AI.${ext}`);
+            } catch (e) {
+                if (aiUrl.startsWith('http')) {
+                    window.open(aiUrl, '_blank');
+                } else {
+                    setConfirmModal({
+                        isOpen: true,
+                        title: "Errore Download",
+                        message: "Impossibile scaricare il file audio.",
+                        type: 'danger',
+                        singleButton: true,
+                        onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+                    });
+                }
+            }
+        } else {
+            setConfirmModal({
+                isOpen: true,
+                title: "Brano AI Non Ancora Generato",
+                message: "Usa prima il pulsante 'Genera Brano con Soundverse AI' nella scheda sottostante per sintetizzare la traccia musicale AI.",
+                type: 'info',
+                singleButton: true,
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            });
+        }
+    };
+
     // *** FORENSIC PACKAGE DOWNLOAD ***
     const handleDownloadForensicPackage = async () => {
         if (!isOwner && !user?.isAdmin) {
@@ -1676,14 +1724,14 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                 <button onClick={onRequestAccess} className="px-4 py-1.5 bg-brand-accent text-black text-xs font-bold rounded-full">{t('results.unlock') || "Sblocca"}</button>
                             </div>
                         )}
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-3 gap-2">
                             <button
                                 disabled={(!isPro && (user?.credits || 0) <= 0) || (!isOwner && !user?.isAdmin)}
                                 onClick={handleDownloadWav}
                                 className={`py-2 rounded text-xs font-bold border ${(!isOwner && !user?.isAdmin) ? 'bg-gray-800 text-gray-500 border-gray-700 cursor-not-allowed' : 'bg-brand-accent/10 text-brand-accent hover:bg-brand-accent/20 border-brand-accent/20'}`}
                                 title={(!isOwner && !user?.isAdmin) ? "Solo l'autore può scaricare questo file" : "Scarica Audio WAV"}
                             >
-                                <i className={`fas ${(!isOwner && !user?.isAdmin) ? 'fa-lock' : 'fa-file-audio'} mr-2`}></i> WAV
+                                <i className={`fas ${(!isOwner && !user?.isAdmin) ? 'fa-lock' : 'fa-file-audio'} mr-1`}></i> WAV
                             </button>
                             <button
                                 disabled={(!isPro && (user?.credits || 0) <= 0) || (!isOwner && !user?.isAdmin)}
@@ -1697,7 +1745,15 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                 className={`py-2 rounded text-xs font-bold border ${(!isOwner && !user?.isAdmin) ? 'bg-gray-800 text-gray-500 border-gray-700 cursor-not-allowed' : 'bg-brand-accent/10 text-brand-accent hover:bg-brand-accent/20 border-brand-accent/20'}`}
                                 title={(!isOwner && !user?.isAdmin) ? "Solo l'autore può scaricare questo file" : "Scarica MIDI"}
                             >
-                                <i className={`fas ${(!isOwner && !user?.isAdmin) ? 'fa-lock' : 'fa-music'} mr-2`}></i> MIDI
+                                <i className={`fas ${(!isOwner && !user?.isAdmin) ? 'fa-lock' : 'fa-music'} mr-1`}></i> MIDI
+                            </button>
+                            <button
+                                disabled={(!isPro && (user?.credits || 0) <= 0) || (!isOwner && !user?.isAdmin)}
+                                onClick={handleDownloadAiTrack}
+                                className={`py-2 rounded text-xs font-bold border ${(!isOwner && !user?.isAdmin) ? 'bg-gray-800 text-gray-500 border-gray-700 cursor-not-allowed' : (correctedResult.audioOutput?.customAudioUrl ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30' : 'bg-purple-500/10 text-purple-300 border-purple-500/20 hover:bg-purple-500/20')}`}
+                                title={(!isOwner && !user?.isAdmin) ? "Solo l'autore può scaricare il brano AI" : "Scarica Brano Generato da Soundverse AI"}
+                            >
+                                <i className={`fas ${(!isOwner && !user?.isAdmin) ? 'fa-lock' : 'fa-robot'} mr-1`}></i> BRANO AI
                             </button>
                         </div>
 
