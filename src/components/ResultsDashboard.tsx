@@ -477,10 +477,15 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
             );
 
             if (res.success && res.audioUrl) {
+                if (result.audioOutput) {
+                    result.audioOutput.customAudioUrl = res.audioUrl;
+                    (result.audioOutput as any).generatedAiTrackUrl = res.audioUrl;
+                }
+                setAudioSource('custom');
                 setConfirmModal({
                     isOpen: true,
                     title: "Traccia Soundverse AI Generata!",
-                    message: "La linea melodica deterministica ed il prompt di specifiche cliniche sono stati inviati con successo a Soundverse.AI!",
+                    message: "La traccia audio generata da Soundverse AI è pronta! È stata impostata come traccia audio attiva per la riproduzione ed il salvataggio.",
                     type: 'success',
                     singleButton: true,
                     onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))

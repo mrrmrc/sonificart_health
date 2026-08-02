@@ -39,11 +39,11 @@ export type SoundverseProgressCallback = (
 async function callPhpProxy(actionName: string, payloadData: Record<string, any>): Promise<any> {
     const token = getLocalAuthToken();
     const candidatePhpUrls = [
-        `index.php?action=${actionName}`,
-        `/index.php?action=${actionName}`,
         `/api/index.php?action=${actionName}`,
         `api/index.php?action=${actionName}`,
-        `backend/index.php?action=${actionName}`
+        `backend/index.php?action=${actionName}`,
+        `/index.php?action=${actionName}`,
+        `index.php?action=${actionName}`
     ];
 
     const headers: Record<string, string> = {
@@ -74,15 +74,18 @@ async function callPhpProxy(actionName: string, payloadData: Record<string, any>
             }
 
             const text = await res.text();
+            
+            // Se la risposta e' una pagina HTML (React SPA fallback), ignora e prova la rotta successiva
+            const trimmedText = text.trim();
+            if (trimmedText.startsWith('<!DOCTYPE') || trimmedText.startsWith('<html') || trimmedText.includes('@context') || trimmedText.includes('<script')) {
+                continue;
+            }
+
             let data: any = null;
             try {
                 data = JSON.parse(text);
             } catch (e) {
-                // Tenta estrazione se avvolto da HTML
-                const match = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-                if (match) {
-                    try { data = JSON.parse(match[0]); } catch (inner) {}
-                }
+                // Se non e' JSON valido, non tentare estrazione da HTML
             }
 
             if (data) {
@@ -228,19 +231,26 @@ export async function generateSoundverseAudioTrack(
 
         onProgress?.(95, "Finalizzazione Traccia", "Formattazione traccia audio generata...");
 
+        const isValidAudioUrlStr = (str: string): boolean => {
+            if (typeof str !== 'string') return false;
+            if (!str.startsWith('http://') && !str.startsWith('https://')) return false;
+            if (str.includes('sonificart.com') || str.includes('schema.org')) return false;
+            const lower = str.toLowerCase();
+            return lower.includes('.mp3') || lower.includes('.wav') || lower.includes('.ogg') || lower.includes('.flac') || lower.includes('.m4a') || lower.includes('.aac') || lower.includes('soundverse') || lower.includes('cdn') || lower.includes('audio') || lower.includes('media');
+        };
+
         // --- Estrazione robusta dell'URL audio (cerca in profondità nella risposta) ---
         const findAudioUrl = (obj: any, depth: number = 0): string | null => {
             if (!obj || depth > 5) return null;
-            if (typeof obj === 'string' && (obj.startsWith('http://') || obj.startsWith('https://')) && 
-                (obj.includes('.mp3') || obj.includes('.wav') || obj.includes('.ogg') || obj.includes('.flac') || obj.includes('audio') || obj.includes('cdn'))) {
+            if (typeof obj === 'string' && isValidAudioUrlStr(obj)) {
                 return obj;
             }
             if (typeof obj !== 'object') return null;
             
             // Campi prioritari da controllare
-            const priorityKeys = ['audio_url', 'audioUrl', 'url', 'output_url', 'audio', 'output', 'download_url', 'file_url', 'mp3_url', 'wav_url', 'src', 'source', 'link', 'path'];
+            const priorityKeys = ['audio_url', 'audioUrl', 'output_url', 'audio', 'download_url', 'file_url', 'mp3_url', 'wav_url', 'url', 'src', 'source', 'link', 'path'];
             for (const key of priorityKeys) {
-                if (obj[key] && typeof obj[key] === 'string' && (obj[key].startsWith('http://') || obj[key].startsWith('https://'))) {
+                if (obj[key] && isValidAudioUrlStr(obj[key])) {
                     return obj[key];
                 }
             }
@@ -253,7 +263,7 @@ export async function generateSoundverseAudioTrack(
                 }
             } else {
                 for (const key of Object.keys(obj)) {
-                    if (['stepLog', 'checkLog', 'raw'].includes(key)) continue; // Skip diagnostic fields
+                    if (['stepLog', 'checkLog', 'raw', 'author', 'offers', '@context'].includes(key)) continue; // Skip diagnostic & metadata fields
                     const found = findAudioUrl(obj[key], depth + 1);
                     if (found) return found;
                 }
