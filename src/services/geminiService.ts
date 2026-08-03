@@ -367,13 +367,17 @@ DATI DI INPUT:
 - STATISTICHE CROMATICHE: Saturazione ${(analysisStats.avg_saturation * 100).toFixed(0)}%, Diversità cromatica ${(analysisStats.hue_diversity * 100).toFixed(0)}%
 ${healthSection}
 
-REQUISITI DI COMPOSIZIONE LIBERA WHO (MANDATORI):
-1. **Composizione Olistica Terapeutica**: Struttura il brano considerando la drammaturgia visiva ed emozionale dell'opera ("${imageDescription}").
-2. **Scelta Strumentale & Timbrica Clinica**: Seleziona strumenti adatti alla categoria primaria WHO ("${healthClassification?.primaryCategory.label || 'Wellness'}").
-3. **Controllo Durata Rigido**:
-   - suno_prompt: Inizia con: "[Duration: ${durationSeconds.toFixed(0)}s], [Strictly ${durationSeconds.toFixed(0)} seconds limit], [${configBpm} BPM], [Strict Tempo], [Strictly Instrumental], [No Vocals]". Termina con: "[Outro: Dissolve at ${durationSeconds.toFixed(0)}s], [End at ${durationSeconds.toFixed(0)}s], [Silence], [End]".
-   - udio_prompt: Tag descrittivi con ${configBpm} BPM, genere e strumentazione clinica WHO.
-   - soundverse_prompt: "Genre: Cinematic Health Composition | Tempo: ${configBpm} BPM | Key: Auto | Style: Holistic ${healthClassification?.primaryCategory.label || 'Wellness'} | Instruments: [Strumenti Clinici WHO] | Duration: ${durationSeconds.toFixed(0)}s".
+REQUISITI DI SINFONIA PITTORICO-CLINICA WHO (MANDATORI E CRUCIALI):
+1. **Inclusione dello Stile Pittorico e del Soggetto dell'Opera (FONDAMENTALE)**:
+   Per spiegare al motore AI di generazione musicale (Soundverse/Suno/Udio) quale opera si sta sonificando, DEVI INCLUDERE ESPLICITAMENTE in ciascun prompt:
+   - Lo STILE ARTISTICO / PITTORICO dell'opera (es. Impressionismo di Monet, Cubismo Geometrizzato, Barocco Chiaroscuro, Arte Moderna Astratta, Rinascimentale).
+   - Il SOGGETTO VISIVO ed i COLORI dell'opera (es. "${imageDescription}").
+
+2. **Formattazione dei Prompt per i Motori AI**:
+   - **soundverse_prompt**: DEVE INIZIARE CON IL TEMA VISIVO E PITTORICO DELL'OPERA:
+     "Visual Theme: [Stile Pittorico & Soggetto dell'Opera: es. Monet Impressionism Water Lilies / Modern Abstract Cubist Geometry] | Genre: Cinematic Health Composition | Style: Holistic ${healthClassification?.primaryCategory.label || 'Wellness'} | Mood: [Atmosfera Emozionale dell'Opera] | Tempo: ${configBpm} BPM | Instruments: [Strumenti Clinici WHO ed evocativi dello stile pittorico] | Duration: ${durationSeconds.toFixed(0)}s"
+   - **suno_prompt**: Inizia con: "[Duration: ${durationSeconds.toFixed(0)}s], [Strictly ${durationSeconds.toFixed(0)} seconds limit], [${configBpm} BPM], [Visual Style: Stile Pittorico dell'Opera], [Subject: ${imageDescription}], [Strictly Instrumental], [No Vocals]". Termina con: "[Outro: Dissolve at ${durationSeconds.toFixed(0)}s], [End at ${durationSeconds.toFixed(0)}s], [Silence], [End]".
+   - **udio_prompt**: Tag descrittivi che combinano lo stile pittorico dell'opera, il soggetto visivo, ${configBpm} BPM, genere e strumentazione clinica WHO.
 
 Rispondi SOLO con il JSON con campi: main_prompt_ita, technical_parameters, justification, suno_prompt, udio_prompt, soundverse_prompt, negative_prompt, suno_lyrics.`
     };
@@ -406,12 +410,12 @@ Rispondi SOLO con il JSON con campi: main_prompt_ita, technical_parameters, just
     } catch (e) {
         console.error("Errore Gemini AI Composer Prompt:", e);
         return {
-            main_prompt_ita: "Composizione Olistica Terapeutica WHO",
+            main_prompt_ita: `Composizione Olistica Terapeutica WHO: ${imageDescription}`,
             technical_parameters: `${configBpm} BPM`,
             justification: "Composizione AI basata sull'interpretazione olistica dell'opera d'arte.",
-            suno_prompt: `[Duration: ${durationSeconds.toFixed(0)}s], [${configBpm} BPM], [Strictly Instrumental], [Holistic Composition]`,
-            udio_prompt: `holistic, therapeutic, instrumental, ${configBpm} bpm`,
-            soundverse_prompt: `Genre: Cinematic Health Composition | Tempo: ${configBpm} BPM | Style: Holistic Wellness | Instruments: Cello, Flute, Piano | Duration: ${durationSeconds.toFixed(0)}s`,
+            suno_prompt: `[Duration: ${durationSeconds.toFixed(0)}s], [${configBpm} BPM], [Visual Theme: ${imageDescription}], [Strictly Instrumental], [Holistic Composition]`,
+            udio_prompt: `visual theme: ${imageDescription}, holistic, therapeutic, instrumental, ${configBpm} bpm`,
+            soundverse_prompt: `Visual Theme: ${imageDescription} | Genre: Cinematic Health Composition | Tempo: ${configBpm} BPM | Style: Holistic Wellness | Instruments: Cello, Flute, Piano | Duration: ${durationSeconds.toFixed(0)}s`,
             negative_prompt: "lullaby, noisy, harsh",
             suno_lyrics: "[0:00] Intro, [End]"
         };
