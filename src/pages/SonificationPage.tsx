@@ -289,6 +289,19 @@ export const SonificationPage: React.FC = () => {
         window.scrollTo(0, 0);
     };
 
+    const handleParadigmSelect = (newParadigm: Paradigm) => {
+        setParadigm(newParadigm);
+        if (newParadigm === 'ai_composer') {
+            setConfig(prev => ({ ...prev, useHealthAgent: true }));
+        }
+    };
+
+    const handleParadigmReTrigger = (p: Paradigm) => {
+        if (imageFile && !isProcessing) {
+            startSonification();
+        }
+    };
+
     return (
         <div className="max-w-7xl mx-auto">
             {!result && !isProcessing && (
@@ -296,7 +309,7 @@ export const SonificationPage: React.FC = () => {
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                         <div className="lg:col-span-7 transition-all duration-500 flex flex-col gap-6">
                             <div className="bg-slate-950/60 backdrop-blur-xl p-6 rounded-xl border border-white/10 shadow-2xl">
-                                <div className="mb-6"><h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2"><div className="w-6 h-6 rounded bg-brand-accent text-black flex items-center justify-center text-xs font-bold">1</div> {t('steps.select_paradigm')}</h3><ParadigmToggle selectedParadigm={paradigm} onParadigmChange={setParadigm} isPro={isUnlimited} /></div>
+                                <div className="mb-6"><h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2"><div className="w-6 h-6 rounded bg-brand-accent text-black flex items-center justify-center text-xs font-bold">1</div> {t('steps.select_paradigm')}</h3><ParadigmToggle selectedParadigm={paradigm} onParadigmChange={handleParadigmSelect} onReTrigger={handleParadigmReTrigger} isPro={isUnlimited} /></div>
                                 <div className="border-t border-white/10 pt-6">
                                     <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
                                         <div className="w-6 h-6 rounded bg-white text-black flex items-center justify-center text-xs font-bold">2</div>

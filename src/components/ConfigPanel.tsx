@@ -83,6 +83,18 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
 
             <div className="flex-grow space-y-6">
 
+                {paradigm === 'ai_composer' && (
+                    <div className="bg-emerald-500/15 border border-emerald-500/40 p-4 rounded-xl text-emerald-300 animate-fade-in shadow-lg shadow-emerald-950/40">
+                        <div className="flex items-center gap-2 font-bold text-emerald-400 text-sm mb-1">
+                            <i className="fas fa-robot text-emerald-400 text-base"></i>
+                            <span>Paradigma AI Composer (WHO) Attivo</span>
+                        </div>
+                        <p className="text-xs text-emerald-200/90 leading-relaxed">
+                            L'AI valuterà l'opera d'arte su livello olistico (Vision + Categoria Clinica WHO) componendo direttamente il brano clinico. Clicca il pulsante verde in basso per avviare.
+                        </p>
+                    </div>
+                )}
+
                 {/* SCAN PATTERN */}
                 <div className="pb-4 border-b border-white/10">
                     <ScanPatternSelector
@@ -266,13 +278,19 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 <button
                     onClick={onStartProcessing}
                     disabled={isDurationInvalid}
-                    className="w-full btn bg-brand-accent hover:bg-brand-accent-light text-brand-primary font-bold py-4 px-8 rounded-xl transition-all transform hover:scale-[1.02] shadow-[0_0_20px_rgba(45,212,191,0.3)] disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-600 disabled:shadow-none disabled:scale-100 flex items-center justify-center gap-3"
+                    className={`w-full btn font-bold py-4 px-8 rounded-xl transition-all transform hover:scale-[1.02] flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-600 disabled:shadow-none disabled:scale-100 ${
+                        paradigm === 'ai_composer'
+                            ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400 hover:from-emerald-400 hover:to-teal-300 text-black shadow-[0_0_25px_rgba(16,185,129,0.5)] font-extrabold text-base animate-pulse'
+                            : 'bg-brand-accent hover:bg-brand-accent-light text-brand-primary shadow-[0_0_20px_rgba(45,212,191,0.3)]'
+                    }`}
                 >
-                    <i className="fas fa-play"></i>
+                    <i className={`fas ${paradigm === 'ai_composer' ? 'fa-wand-magic-sparkles text-lg' : 'fa-play'}`}></i>
                     <span>
-                        {isProUser
-                            ? (t('config.start').split('(')[0].trim()) // "AVVIA ANALISI" (Rimuove la parte del costo tra parentesi se presente)
-                            : t('config.start', { cost: creditCost })
+                        {paradigm === 'ai_composer'
+                            ? "🎼 COMPONI CON AI COMPOSER (WHO)"
+                            : (isProUser
+                                ? (t('config.start').split('(')[0].trim())
+                                : t('config.start', { cost: creditCost }))
                         }
                     </span>
                 </button>
