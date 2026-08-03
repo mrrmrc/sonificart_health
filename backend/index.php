@@ -495,8 +495,7 @@ if (strpos($_SERVER['CONTENT_TYPE'] ?? '', 'multipart/form-data') !== false) {
 }
 
 // AUTH MIDDLEWARE
-$userId = getUserIdFromToken($input);
-$publicActions = ['login', 'register', 'get_showcase', 'reset_password', 'upload_media', 'request_access', 'admin_get_requests', 'check_info', 'upload_chunk', 'get_privacy_policy', 'get_app_setting', 'update_app_setting', 'log_cookie_consent', 'soundverse_generate', 'soundverse_check', 'soundverse_balance'];
+$publicActions = ['login', 'register', 'get_showcase', 'reset_password', 'upload_media', 'request_access', 'admin_get_requests', 'check_info', 'upload_chunk', 'get_privacy_policy', 'get_app_setting', 'update_app_setting', 'log_cookie_consent', 'soundverse_generate', 'soundverse_check', 'soundverse_balance', 'music_ai_generate', 'music_ai_test'];
 
 if (!$userId && !in_array($action, $publicActions) && $action !== 'log_event') { // Allow log_event to be public
     if ($action)
@@ -504,6 +503,199 @@ if (!$userId && !in_array($action, $publicActions) && $action !== 'log_event') {
 }
 
 // ======================= ROUTES =======================
+
+// --- MUSIC AI TEST API ---
+if ($action === 'music_ai_test') {
+    $provider = $input['provider'] ?? null;
+    if (!$provider || !is_array($provider)) {
+        sendResponse(["success" => false, "error" => "Dati provider mancanti o non validi."]);
+    }
+
+    $type = $provider['type'] ?? 'soundverse';
+    $apiKey = $provider['apiKey'] ?? '';
+    $endpointUrl = $provider['endpointUrl'] ?? '';
+
+    if ($type === 'soundverse') {
+        $ch = curl_init('https://apiv2.soundverse.ai/v1/account/balance');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Authorization: Bearer ' . trim($apiKey),
+            'Content-Type: application/json'
+        ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr = curl_error($ch);
+        curl_close($ch);
+
+        if ($curlErr) {
+            sendResponse(["success" => false, "error" => "Errore connessione Soundverse: " . $curlErr]);
+        }
+
+        if ($httpCode >= 200 && $httpCode < 400) {
+            sendResponse(["success" => true, "message" => "Connessione a Soundverse AI verificata con successo!"]);
+        } else {
+            sendResponse(["success" => false, "error" => "Autenticazione Soundverse fallita (HTTP $httpCode)"]);
+        }
+    } else {
+        if (!$endpointUrl || !filter_var($endpointUrl, FILTER_VALIDATE_URL)) {
+            sendResponse(["success" => false, "error" => "URL Endpoint non valido per il provider custom."]);
+        }
+
+        $authHeaderName = $provider['authHeaderName'] ?? 'Authorization';
+        $headers = ['Content-Type: application/json'];
+        if ($apiKey) {
+            if (strtolower($authHeaderName) === 'authorization' && strpos($apiKey, 'Bearer ') !== 0) {
+                $headers[] = 'Authorization: Bearer ' . trim($apiKey);
+            } else {
+                $headers[] = $authHeaderName . ': ' . trim($apiKey);
+            }
+        }
+
+        $ch = curl_init($endpointUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['action' => 'ping', 'test' => true]));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr = curl_error($ch);
+        curl_close($ch);
+
+        if ($curlErr) {
+            sendResponse(["success" => false, "error" => "Errore cURL verso Endpoint Custom: " . $curlErr]);
+        }
+
+        if ($httpCode >= 200 && $httpCode < 500) {
+            sendResponse(["success" => true, "message" => "Endpoint Custom raggiungibile (HTTP $httpCode)."]);
+        } else {
+            sendResponse(["success" => false, "error" => "Endpoint Custom ha restituito errore (HTTP $httpCode)."]);
+        }
+    }
+}
+
+// --- UNIVERSAL MUSIC AI GENERATE PROXY ---
+if ($action === 'music_ai_generate' && $method === 'POST') {
+    $provider = $input['provider'] ?? null;
+
+    if (!$provider || !is_array($provider)) {
+        $stmt = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key = 'music_ai_providers'");
+        $stmt->execute();
+        $rawProviders = $stmt->fetchColumn();
+
+        $stmt = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key = 'active_music_ai_provider'");
+        $stmt->execute();
+        $activeId = $stmt->fetchColumn();
+
+        if ($rawProviders) {
+            $list = json_decode($rawProviders, true);
+            if (is_array($list)) {
+                foreach ($list as $p) {
+                    if (($activeId && $p['id'] === $activeId) || (!empty($p['isDefault']))) {
+                        $provider = $p;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    $providerType = $provider['type'] ?? 'soundverse';
+
+    if ($providerType === 'soundverse' || empty($providerType)) {
+        if (!empty($provider['apiKey'])) {
+            $input['apiKey'] = $provider['apiKey'];
+        }
+        $action = 'soundverse_generate';
+    } else {
+        $endpointUrl = $provider['endpointUrl'] ?? '';
+        $apiKey = $provider['apiKey'] ?? '';
+        $authHeaderName = $provider['authHeaderName'] ?? 'Authorization';
+
+        if (!$endpointUrl || !filter_var($endpointUrl, FILTER_VALIDATE_URL)) {
+            sendResponse(["success" => false, "error" => "Endpoint URL del provider custom non valido."]);
+        }
+
+        $prompt = $input['prompt'] ?? '';
+        $duration = (int)($input['duration'] ?? 60);
+        $audioBase64 = $input['audio_base64'] ?? ($input['audioBase64'] ?? null);
+        $audioUrlInput = $input['audioUrl'] ?? null;
+
+        $publicRefAudioUrl = null;
+        if ($audioBase64) {
+            $refHash = 'ref_custom_' . md5($prompt . time() . rand(1000, 9999));
+            $savedPath = saveBase64File($audioBase64, 'audio', $refHash);
+            if ($savedPath) {
+                $publicRefAudioUrl = $baseUrl . $savedPath;
+            }
+        } else if ($audioUrlInput && strpos($audioUrlInput, 'http') === 0) {
+            $publicRefAudioUrl = $audioUrlInput;
+        }
+
+        $payload = [
+            'prompt' => $prompt,
+            'duration' => $duration,
+            'reference_audio' => $publicRefAudioUrl,
+            'audio_url' => $publicRefAudioUrl,
+            'parameters' => [
+                'duration' => $duration,
+                'source' => 'sonificart_health'
+            ]
+        ];
+
+        $headers = ['Content-Type: application/json'];
+        if ($apiKey) {
+            if (strtolower($authHeaderName) === 'authorization' && strpos($apiKey, 'Bearer ') !== 0) {
+                $headers[] = 'Authorization: Bearer ' . trim($apiKey);
+            } else {
+                $headers[] = $authHeaderName . ': ' . trim($apiKey);
+            }
+        }
+
+        $ch = curl_init($endpointUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 120);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr = curl_error($ch);
+        curl_close($ch);
+
+        if ($curlErr) {
+            sendResponse(["success" => false, "error" => "Errore connessione a " . ($provider['name'] ?? 'Provider Custom') . ": " . $curlErr]);
+        }
+
+        $decoded = json_decode($response, true);
+        if ($httpCode >= 200 && $httpCode < 300 && is_array($decoded)) {
+            sendResponse(array_merge($decoded, [
+                "success" => true,
+                "provider" => $provider['name'] ?? 'Custom API'
+            ]));
+        } else {
+            $errMsg = "Risposta non valida da " . ($provider['name'] ?? 'Provider Custom') . " (HTTP $httpCode)";
+            if (is_array($decoded) && isset($decoded['error'])) {
+                $errMsg .= ": " . (is_string($decoded['error']) ? $decoded['error'] : json_encode($decoded['error']));
+            }
+            sendResponse([
+                "success" => false,
+                "error" => $errMsg,
+                "raw" => $response ? substr($response, 0, 500) : null
+            ]);
+        }
+    }
+}
 
 // --- SOUNDVERSE BALANCE API ---
 if ($action === 'soundverse_balance') {

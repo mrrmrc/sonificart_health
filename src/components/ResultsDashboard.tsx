@@ -13,7 +13,7 @@ import { createForensicPackage } from '../services/forensicPackageService';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ConfirmationModal } from './ConfirmationModal';
 import { api } from '../services/api';
-import { generateSoundverseAudioTrack } from '../services/soundverseService';
+import { generateAiAudioTrack } from '../services/musicAiService';
 
 const InfoCard: React.FC<{ title: string, icon: string, children: React.ReactNode, className?: string }> = ({ title, icon, children, className }) => (
     <div className={`bg-brand-primary/50 p-4 rounded-lg border border-brand-secondary ${className}`}>
@@ -441,14 +441,26 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
         logs: []
     });
 
+    const [activeEngineName, setActiveEngineName] = useState<string>('Musica AI');
+
+    useEffect(() => {
+        import('../services/musicAiService').then(({ getMusicProviders }) => {
+            getMusicProviders().then(data => {
+                if (data.activeProvider?.name) {
+                    setActiveEngineName(data.activeProvider.name);
+                }
+            }).catch(() => {});
+        });
+    }, []);
+
     const handleGenerateSoundverseAudio = async () => {
         setIsGeneratingSoundverse(true);
         setSoundverseProgress({
             isGenerating: true,
             percentage: 5,
             statusMessage: 'Inizializzazione Richiesta',
-            detail: 'Preparazione parametri e verifica traccia audio deterministica...',
-            logs: [`[${new Date().toLocaleTimeString()}] Avvio richiesta Soundverse AI...`]
+            detail: `Preparazione parametri per ${activeEngineName}...`,
+            logs: [`[${new Date().toLocaleTimeString()}] Avvio richiesta ${activeEngineName}...`]
         });
 
         try {
@@ -460,7 +472,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
             const audioWavBlob = correctedResult.audioOutput?.audioWavBlob || null;
             const audioWavUrl = correctedResult.audioOutput?.audioUrl || null;
 
-            const res = await generateSoundverseAudioTrack(
+            const res = await generateAiAudioTrack(
                 promptToUse, 
                 targetSec, 
                 audioWavBlob, 
@@ -484,8 +496,8 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                 setAudioSource('custom');
                 setConfirmModal({
                     isOpen: true,
-                    title: "Traccia Soundverse AI Generata!",
-                    message: "La traccia audio generata da Soundverse AI è pronta! È stata impostata come traccia audio attiva per la riproduzione ed il salvataggio.",
+                    title: `Traccia AI Generata (${res.providerName || activeEngineName})!`,
+                    message: `La traccia audio generata da ${res.providerName || activeEngineName} è pronta! È stata impostata come traccia audio attiva per la riproduzione ed il salvataggio.`,
                     type: 'success',
                     singleButton: true,
                     onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
@@ -493,8 +505,8 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
             } else {
                 setConfirmModal({
                     isOpen: true,
-                    title: "Richiesta Inviata a Soundverse",
-                    message: res.error || "Linea melodica e specifiche inviate a Soundverse.ai! Controlla la tua dashboard di Soundverse o riprova tra poco.",
+                    title: `Richiesta Inviata a ${activeEngineName}`,
+                    message: res.error || `Linea melodica e specifiche inviate a ${activeEngineName}! Controlla l'elaborazione o riprova tra poco.`,
                     type: 'info',
                     singleButton: true,
                     onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
@@ -503,8 +515,8 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
         } catch (e: any) {
             setConfirmModal({
                 isOpen: true,
-                title: "Errore Soundverse AI",
-                message: e.message || "Si è verificato un errore durante la chiamata a Soundverse AI.",
+                title: `Errore Generazione AI (${activeEngineName})`,
+                message: e.message || `Si è verificato un errore durante la chiamata a ${activeEngineName}.`,
                 type: 'danger',
                 singleButton: true,
                 onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
@@ -1431,12 +1443,12 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                     </div>
                                     <div>
                                         <h5 className="text-sm font-bold text-white flex items-center gap-2">
-                                            Generazione Diretta Soundverse.ai API
+                                            Generazione Diretta Musica AI
                                             <span className="text-[9px] bg-emerald-500/20 text-emerald-300 font-mono px-2 py-0.5 rounded border border-emerald-500/40 uppercase font-bold tracking-wider">
-                                                <i className="fas fa-check-circle mr-1 text-emerald-400"></i>API Key Attiva
+                                                <i className="fas fa-check-circle mr-1 text-emerald-400"></i>Motore Attivo: {activeEngineName}
                                             </span>
                                         </h5>
-                                        <p className="text-xs text-gray-300">Genera automaticamente il brano audio dal prompt mediante l'API ufficiale Soundverse AI.</p>
+                                        <p className="text-xs text-gray-300">Genera automaticamente il brano audio dal prompt mediante l'engine attivo ({activeEngineName}).</p>
                                     </div>
                                 </div>
 
@@ -1448,12 +1460,12 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                     {isGeneratingSoundverse ? (
                                         <>
                                             <i className="fas fa-spinner fa-spin text-sm"></i>
-                                            <span>Elaborazione su Soundverse...</span>
+                                            <span>Elaborazione su {activeEngineName}...</span>
                                         </>
                                     ) : (
                                         <>
                                             <i className="fas fa-wand-magic-sparkles text-sm"></i>
-                                            <span>Genera Brano con Soundverse AI</span>
+                                            <span>Genera Brano con {activeEngineName}</span>
                                         </>
                                     )}
                                 </button>

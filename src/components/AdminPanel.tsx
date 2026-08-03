@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { ShowcaseProject, SystemStats, User, SystemLog } from '../types';
 import { api } from '../services/api';
 import { ConfirmationModal } from './ConfirmationModal';
+import { MusicAiProvider, MusicProviderType, getMusicProviders, saveMusicProviders, testMusicProvider, DEFAULT_SOUNDVERSE_PROVIDER } from '../services/musicAiService';
 
 // --- INTERFACCE ---
 interface AccessRequest {
@@ -58,6 +59,135 @@ const ProgressBar: React.FC<{ label: string; value: number; max: number; unit: s
             </div>
             <div className="w-full bg-brand-primary rounded-full h-3 overflow-hidden border border-brand-secondary/50">
                 <div className={`h-full rounded-full ${colorClass} transition-all duration-500`} style={{ width: `${percentage}%` }}></div>
+            </div>
+        </div>
+    );
+};
+
+// --- PROVIDER EDIT MODAL ---
+interface ProviderModalProps {
+    provider?: MusicAiProvider | null;
+    onClose: () => void;
+    onSave: (p: MusicAiProvider) => void;
+}
+
+const ProviderEditModal: React.FC<ProviderModalProps> = ({ provider, onClose, onSave }) => {
+    const isNew = !provider;
+    const [name, setName] = useState(provider?.name || '');
+    const [type, setType] = useState<MusicProviderType>(provider?.type || 'custom_webhook');
+    const [apiKey, setApiKey] = useState(provider?.apiKey || '');
+    const [endpointUrl, setEndpointUrl] = useState(provider?.endpointUrl || '');
+    const [authHeaderName, setAuthHeaderName] = useState(provider?.authHeaderName || 'Authorization');
+    const [description, setDescription] = useState(provider?.description || '');
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!name.trim()) return alert("Inserisci il nome del provider.");
+        if (type !== 'soundverse' && !endpointUrl.trim()) return alert("Inserisci l'URL dell'Endpoint API.");
+
+        const updated: MusicAiProvider = {
+            id: provider?.id || `provider_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+            name: name.trim(),
+            type,
+            apiKey: apiKey.trim(),
+            endpointUrl: type === 'soundverse' ? 'https://apiv2.soundverse.ai/v7/generate/music' : endpointUrl.trim(),
+            authHeaderName: authHeaderName.trim() || 'Authorization',
+            isDefault: provider?.isDefault || false,
+            description: description.trim()
+        };
+
+        onSave(updated);
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={onClose}>
+            <div className="bg-[#1e1e2e] p-6 rounded-xl max-w-lg w-full border border-white/10 space-y-4" onClick={e => e.stopPropagation()}>
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <i className="fas fa-server text-brand-accent"></i>
+                    {isNew ? 'Aggiungi Nuovo Provider Musica AI' : 'Modifica Provider Musica AI'}
+                </h3>
+
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Nome Provider</label>
+                        <input
+                            required
+                            className="w-full bg-black/40 border border-white/10 p-2.5 rounded text-white text-sm focus:border-brand-accent outline-none"
+                            placeholder="Es: Custom Webhook AI / Suno Wrapper"
+                            value={name}
+                            onChange={e => setName(e.target.value)}
+                        />
+                    </div>
+
+                    <div>
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Tipo di Integrazione</label>
+                        <select
+                            className="w-full bg-black/40 border border-white/10 p-2.5 rounded text-white text-sm focus:border-brand-accent outline-none"
+                            value={type}
+                            onChange={e => setType(e.target.value as MusicProviderType)}
+                        >
+                            <option value="soundverse">Soundverse AI (Nativo)</option>
+                            <option value="custom_webhook">Custom Webhook POST (REST JSON)</option>
+                            <option value="generic_rest">Generic REST API (Headers Custom)</option>
+                        </select>
+                    </div>
+
+                    {type !== 'soundverse' && (
+                        <div>
+                            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Endpoint URL API</label>
+                            <input
+                                required
+                                type="url"
+                                className="w-full bg-black/40 border border-white/10 p-2.5 rounded text-white text-sm font-mono focus:border-brand-accent outline-none"
+                                placeholder="https://api.tuodominio.com/v1/generate-music"
+                                value={endpointUrl}
+                                onChange={e => setEndpointUrl(e.target.value)}
+                            />
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">API Key / Secret Token</label>
+                            <input
+                                type="password"
+                                className="w-full bg-black/40 border border-white/10 p-2.5 rounded text-white text-sm font-mono focus:border-brand-accent outline-none"
+                                placeholder="sk_... o secret token"
+                                value={apiKey}
+                                onChange={e => setApiKey(e.target.value)}
+                            />
+                        </div>
+
+                        {type !== 'soundverse' && (
+                            <div>
+                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Header Autenticazione</label>
+                                <input
+                                    className="w-full bg-black/40 border border-white/10 p-2.5 rounded text-white text-sm font-mono focus:border-brand-accent outline-none"
+                                    placeholder="Authorization"
+                                    value={authHeaderName}
+                                    onChange={e => setAuthHeaderName(e.target.value)}
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    <div>
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Note / Descrizione (Opzionale)</label>
+                        <input
+                            className="w-full bg-black/40 border border-white/10 p-2.5 rounded text-white text-xs focus:border-brand-accent outline-none"
+                            placeholder="Es: Modello a basso costo..."
+                            value={description}
+                            onChange={e => setDescription(e.target.value)}
+                        />
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-4 border-t border-white/10">
+                        <button type="button" onClick={onClose} className="text-gray-400 hover:text-white text-xs px-4 py-2">Annulla</button>
+                        <button type="submit" className="bg-brand-accent text-brand-primary px-6 py-2 rounded font-bold text-xs hover:bg-brand-accent-light transition-all">
+                            {isNew ? 'Aggiungi Provider' : 'Salva Modifiche'}
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     );
@@ -246,6 +376,23 @@ export const AdminPanel: React.FC = () => {
         loading: boolean;
     }>({ loading: false });
 
+    // Multi-Provider State
+    const [musicProviders, setMusicProviders] = useState<MusicAiProvider[]>([]);
+    const [activeProviderId, setActiveProviderId] = useState<string>('');
+    const [editingProvider, setEditingProvider] = useState<MusicAiProvider | null>(null);
+    const [isProviderModalOpen, setIsProviderModalOpen] = useState(false);
+    const [testingProviderId, setTestingProviderId] = useState<string | null>(null);
+
+    const loadMusicProvidersData = useCallback(async () => {
+        try {
+            const data = await getMusicProviders();
+            setMusicProviders(data.providers);
+            setActiveProviderId(data.activeProvider?.id || data.providers[0]?.id || '');
+        } catch (e) {
+            console.error("Errore caricamento provider musica:", e);
+        }
+    }, []);
+
     const fetchSoundverseBalance = useCallback(async (keyOverride?: string) => {
         setSoundverseBalance(prev => ({ ...prev, loading: true, error: undefined }));
         try {
@@ -321,6 +468,7 @@ export const AdminPanel: React.FC = () => {
                     soundverse_api_key: svKey
                 });
                 fetchSoundverseBalance(svKey);
+                loadMusicProvidersData();
             }
             if (activeTab === 'agents') {
                 const promptRaw = await api.getAppSetting('agent_health_prompt');
@@ -1125,84 +1273,124 @@ export const AdminPanel: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="bg-emerald-950/20 p-5 rounded-lg border border-emerald-500/30 space-y-4">
-                            <div>
-                                <label className="block text-xs font-bold text-emerald-400 uppercase tracking-widest mb-2 flex items-center justify-between">
-                                    <span>Soundverse.ai API Key</span>
-                                    <span className="text-[10px] text-emerald-300 font-normal"><i className="fas fa-compact-disc mr-1"></i>Generazione Audio Diretta</span>
-                                </label>
-                                <input 
-                                    type="password" 
-                                    value={apiSettings.soundverse_api_key} 
-                                    onChange={e => setApiSettings(prev => ({...prev, soundverse_api_key: e.target.value}))} 
-                                    className="w-full bg-black/50 border border-emerald-500/30 rounded-lg p-3 text-emerald-300 font-mono text-sm focus:border-emerald-400 outline-none" 
-                                    placeholder="sksoundverse_..." 
-                                />
-                                <p className="text-[10px] text-gray-400 mt-1">La chiave usata per generare file audio musicali direttamente tramite Soundverse AI.</p>
+                        {/* MULTI-PROVIDER MUSIC AI SECTION */}
+                        <div className="bg-[#181d26] p-6 rounded-xl border border-white/10 space-y-6">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-white/10 pb-4">
+                                <div>
+                                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                        <i className="fas fa-sliders-h text-brand-accent"></i> Gestione Multi-Provider Musica AI
+                                    </h3>
+                                    <p className="text-xs text-gray-400 mt-1">Configura molteplici API/Webhook per la generazione audio e seleziona il motore predefinito (Default).</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => { setEditingProvider(null); setIsProviderModalOpen(true); }}
+                                    className="bg-brand-accent hover:bg-brand-accent-light text-brand-primary px-4 py-2 rounded-lg text-xs font-bold shadow-lg transition-all whitespace-nowrap flex items-center gap-1.5"
+                                >
+                                    <i className="fas fa-plus"></i> Nuovo Provider API
+                                </button>
                             </div>
 
-                            {/* Soundverse Balance Live Card */}
-                            <div className="bg-[#141f17] p-4 rounded-lg border border-emerald-500/40 space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-300 flex items-center gap-2">
-                                        <i className="fas fa-coins text-yellow-400"></i> Saldo Crediti Soundverse AI
-                                    </h4>
-                                    <button
-                                        type="button"
-                                        onClick={() => fetchSoundverseBalance(apiSettings.soundverse_api_key)}
-                                        disabled={soundverseBalance.loading}
-                                        className="text-[11px] font-bold text-emerald-300 hover:text-white bg-emerald-900/50 hover:bg-emerald-800/60 px-3 py-1 rounded border border-emerald-500/40 transition-all flex items-center gap-1.5"
-                                    >
-                                        <i className={`fas fa-sync-alt ${soundverseBalance.loading ? 'fa-spin' : ''}`}></i>
-                                        {soundverseBalance.loading ? 'Aggiornamento...' : 'Aggiorna Crediti Live'}
-                                    </button>
-                                </div>
+                            <div className="space-y-4">
+                                {musicProviders.map(p => {
+                                    const isAct = p.id === activeProviderId;
+                                    return (
+                                        <div
+                                            key={p.id}
+                                            className={`p-5 rounded-xl border transition-all flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${isAct ? 'bg-brand-accent/10 border-brand-accent shadow-lg shadow-brand-accent/5' : 'bg-black/30 border-white/10 hover:border-white/20'}`}
+                                        >
+                                            <div className="space-y-1 max-w-xl">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className="font-bold text-white text-base">{p.name}</span>
+                                                    <span className="text-[10px] bg-white/10 text-gray-300 font-mono px-2 py-0.5 rounded uppercase font-bold">{p.type}</span>
+                                                    {isAct && (
+                                                        <span className="text-[10px] bg-brand-accent text-brand-primary font-bold px-2 py-0.5 rounded-full flex items-center gap-1 uppercase">
+                                                            <i className="fas fa-check-circle"></i> Attivo (Default)
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {p.description && <p className="text-xs text-gray-400">{p.description}</p>}
+                                                <div className="text-[11px] font-mono text-gray-500 flex flex-wrap gap-x-4 gap-y-1 pt-1">
+                                                    <span>Endpoint: <span className="text-gray-300">{p.endpointUrl || 'Soundverse API v7/v1'}</span></span>
+                                                    {p.apiKey && <span>Key: <span className="text-gray-300">{p.apiKey.substring(0, 12)}...</span></span>}
+                                                </div>
+                                            </div>
 
-                                {soundverseBalance.loading ? (
-                                    <div className="text-xs text-emerald-400/80 animate-pulse py-2 flex items-center gap-2">
-                                        <i className="fas fa-spinner fa-spin"></i> Lettura bilancio crediti in corso dal server Soundverse...
-                                    </div>
-                                ) : soundverseBalance.error ? (
-                                    <div className="bg-red-950/40 border border-red-500/40 rounded p-3 text-xs text-red-300">
-                                        <p className="font-bold flex items-center gap-1"><i className="fas fa-exclamation-triangle text-red-400"></i> {soundverseBalance.error}</p>
-                                        <p className="text-[11px] text-red-300/80 mt-1">Se hai rigenerato una nuova API Key su Soundverse dopo la ricarica dei crediti, incolla la nuova chiave qui sopra e clicca su <strong>Salva Impostazioni</strong>.</p>
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                        <div className={`p-3 rounded-lg border flex flex-col justify-center ${soundverseBalance.totalCredits && soundverseBalance.totalCredits > 0 ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-200' : 'bg-amber-500/10 border-amber-500/40 text-amber-200'}`}>
-                                            <span className="text-[10px] uppercase font-bold tracking-wider opacity-80">Crediti Totali Disponibili</span>
-                                            <span className="text-2xl font-extrabold font-mono mt-0.5">
-                                                {soundverseBalance.totalCredits ?? 0}
-                                            </span>
-                                            <span className="text-[10px] opacity-75 mt-0.5 font-sans">
-                                                {soundverseBalance.totalCredits && soundverseBalance.totalCredits > 0 ? '✅ Operativo per generare tracce' : '⚠️ Crediti a 0 / Esauriti'}
-                                            </span>
+                                            <div className="flex items-center gap-2 w-full md:w-auto justify-end flex-wrap">
+                                                {!isAct && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={async () => {
+                                                            setActiveProviderId(p.id);
+                                                            await saveMusicProviders(musicProviders, p.id);
+                                                        }}
+                                                        className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded text-xs font-bold transition-all"
+                                                    >
+                                                        Imposta Default
+                                                    </button>
+                                                )}
+
+                                                <button
+                                                    type="button"
+                                                    disabled={testingProviderId === p.id}
+                                                    onClick={async () => {
+                                                        setTestingProviderId(p.id);
+                                                        try {
+                                                            const res = await testMusicProvider(p);
+                                                            if (res.success) {
+                                                                setConfirmModal({ isOpen: true, title: "Test Riuscito", message: res.message || `Provider ${p.name} raggiungibile!`, type: 'success', singleButton: true, onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })) });
+                                                            } else {
+                                                                setConfirmModal({ isOpen: true, title: "Test Fallito", message: res.error || `Impossibile contattare ${p.name}`, type: 'danger', singleButton: true, onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })) });
+                                                            }
+                                                        } catch (e: any) {
+                                                            setConfirmModal({ isOpen: true, title: "Errore Test", message: e.message, type: 'danger', singleButton: true, onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false })) });
+                                                        } finally {
+                                                            setTestingProviderId(null);
+                                                        }
+                                                    }}
+                                                    className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 px-3 py-1.5 rounded text-xs font-bold transition-all disabled:opacity-50"
+                                                >
+                                                    <i className={`fas fa-stethoscope mr-1 ${testingProviderId === p.id ? 'fa-spin' : ''}`}></i> Test
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setEditingProvider(p); setIsProviderModalOpen(true); }}
+                                                    className="bg-white/5 hover:bg-white/10 text-gray-300 p-2 rounded text-xs transition-all"
+                                                    title="Modifica Provider"
+                                                >
+                                                    <i className="fas fa-edit"></i>
+                                                </button>
+
+                                                {musicProviders.length > 1 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setConfirmModal({
+                                                                isOpen: true,
+                                                                title: "Elimina Provider",
+                                                                message: `Eliminare il provider "${p.name}"?`,
+                                                                type: 'danger',
+                                                                onConfirm: async () => {
+                                                                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                                                                    const updated = musicProviders.filter(x => x.id !== p.id);
+                                                                    const newActive = isAct ? updated[0].id : activeProviderId;
+                                                                    setMusicProviders(updated);
+                                                                    setActiveProviderId(newActive);
+                                                                    await saveMusicProviders(updated, newActive);
+                                                                }
+                                                            });
+                                                        }}
+                                                        className="bg-red-500/20 hover:bg-red-500/30 text-red-400 p-2 rounded text-xs transition-all"
+                                                        title="Elimina Provider"
+                                                    >
+                                                        <i className="fas fa-trash"></i>
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
-
-                                        <div className="bg-black/30 p-3 rounded-lg border border-white/10 flex flex-col justify-center text-gray-300">
-                                            <span className="text-[10px] uppercase font-bold tracking-wider opacity-70">Crediti Base Piano</span>
-                                            <span className="text-xl font-bold font-mono mt-0.5 text-white">
-                                                {soundverseBalance.baseEffective ?? 0}
-                                            </span>
-                                            <span className="text-[10px] text-gray-400 mt-0.5 font-sans">Inclusi nel piano mensile</span>
-                                        </div>
-
-                                        <div className="bg-black/30 p-3 rounded-lg border border-white/10 flex flex-col justify-center text-gray-300">
-                                            <span className="text-[10px] uppercase font-bold tracking-wider opacity-70">Extra Cents / Ricariche</span>
-                                            <span className="text-xl font-bold font-mono mt-0.5 text-white">
-                                                {soundverseBalance.extraCents ?? 0}
-                                            </span>
-                                            <span className="text-[10px] text-gray-400 mt-0.5 font-sans">Crediti ricaricati</span>
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div className="text-[11px] text-gray-300 bg-black/40 p-2.5 rounded border border-white/5 leading-relaxed flex items-start gap-2">
-                                    <i className="fas fa-lightbulb text-yellow-400 text-sm mt-0.5 shrink-0"></i>
-                                    <span>
-                                        <strong>Hai ricaricato i crediti su Soundverse?</strong> Se Soundverse ti ha fornito una <strong>nuova API Key</strong> nella tua dashboard Soundverse dopo la ricarica, incollala nel campo qui sopra e clicca su <strong>Salva Impostazioni</strong> per collegare la nuova chiave.
-                                    </span>
-                                </div>
+                                    );
+                                })}
                             </div>
                         </div>
 
@@ -1275,6 +1463,20 @@ export const AdminPanel: React.FC = () => {
             )}
 
             {(editingUser || isCreatingUser) && <UserEditModal user={editingUser} onClose={() => { setEditingUser(null); setIsCreatingUser(false); }} onSave={handleUserSave} onDelete={!isCreatingUser ? handleUserDelete : undefined} />}
+
+            {isProviderModalOpen && (
+                <ProviderEditModal
+                    provider={editingProvider}
+                    onClose={() => setIsProviderModalOpen(false)}
+                    onSave={async (p) => {
+                        setIsProviderModalOpen(false);
+                        const exists = musicProviders.some(x => x.id === p.id);
+                        const updated = exists ? musicProviders.map(x => x.id === p.id ? p : x) : [...musicProviders, p];
+                        setMusicProviders(updated);
+                        await saveMusicProviders(updated, activeProviderId || p.id);
+                    }}
+                />
+            )}
 
             <ConfirmationModal
                 isOpen={confirmModal.isOpen}
