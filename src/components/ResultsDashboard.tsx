@@ -443,6 +443,8 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
 
     const [activeEngineName, setActiveEngineName] = useState<string>('Musica AI');
 
+    const hasAutoTriggeredRef = useRef(false);
+
     useEffect(() => {
         import('../services/musicAiService').then(({ getMusicProviders }) => {
             getMusicProviders().then(data => {
@@ -452,6 +454,16 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
             }).catch(() => {});
         });
     }, []);
+
+    useEffect(() => {
+        if (correctedResult.paradigm === 'ai_composer' && !isHistoryView && !correctedResult.audioOutput?.customAudioUrl && !hasAutoTriggeredRef.current) {
+            hasAutoTriggeredRef.current = true;
+            console.log('[AI Composer] Avvio automatico generazione traccia AI per paradigma AI Composer...');
+            setTimeout(() => {
+                handleGenerateSoundverseAudio();
+            }, 800);
+        }
+    }, [correctedResult.paradigm, isHistoryView]);
 
     const handleGenerateSoundverseAudio = async () => {
         setIsGeneratingSoundverse(true);
