@@ -443,8 +443,6 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
 
     const [activeEngineName, setActiveEngineName] = useState<string>('Musica AI');
 
-    const hasAutoTriggeredRef = useRef(false);
-
     useEffect(() => {
         import('../services/musicAiService').then(({ getMusicProviders }) => {
             getMusicProviders().then(data => {
@@ -454,16 +452,6 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
             }).catch(() => {});
         });
     }, []);
-
-    useEffect(() => {
-        if (correctedResult.paradigm === 'ai_composer' && !isHistoryView && !correctedResult.audioOutput?.customAudioUrl && !hasAutoTriggeredRef.current) {
-            hasAutoTriggeredRef.current = true;
-            console.log('[AI Composer] Avvio automatico generazione traccia AI per paradigma AI Composer...');
-            setTimeout(() => {
-                handleGenerateSoundverseAudio();
-            }, 800);
-        }
-    }, [correctedResult.paradigm, isHistoryView]);
 
     const handleGenerateSoundverseAudio = async () => {
         setIsGeneratingSoundverse(true);
@@ -644,6 +632,55 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                 onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
             });
         }
+    };
+
+    const downloadPromptTxt = () => {
+        const p = correctedResult.musicGenerationPrompt;
+        const hc = correctedResult.healthClassification;
+        const durSec = Math.round(correctedResult.audioOutput?.duration || 60);
+
+        const content = `================================================================
+SONIFICART HEALTH - PROMPT COMPOSITIVO CLINICO WHO (REPORT 67)
+================================================================
+Immagine / Opera: ${correctedResult.title || 'Opera Visiva'}
+Paradigma: ${correctedResult.paradigm?.toUpperCase()}
+BPM Target Clinico: ${correctedResult.audioOutput?.bpm || 74} BPM
+Durata Brano: ${durSec} secondi
+
+CATEGORIA CLINICA WHO PRIMARIA:
+${hc?.primaryCategory.label || 'Wellness'} (Score: ${((hc?.primaryCategory.score || 1) * 100).toFixed(0)}%)
+Motivazione Visiva: ${hc?.primaryCategory.visualReason || ''}
+Direttiva Clinica WHO: ${hc?.primaryCategory.whoDirective || ''}
+
+----------------------------------------------------------------
+1. PROMPT SOUNDVERSE AI (PARAMETRIZZATO):
+----------------------------------------------------------------
+${p?.soundverse_prompt || p?.technical_parameters || ''}
+
+----------------------------------------------------------------
+2. PROMPT SUNO AI (META-TAGS & STRUTTURA):
+----------------------------------------------------------------
+${p?.suno_prompt || ''}
+
+----------------------------------------------------------------
+3. PROMPT UDIO AI:
+----------------------------------------------------------------
+${p?.udio_prompt || ''}
+
+----------------------------------------------------------------
+4. TESTO DI SINCRONIZZAZIONE LYRICS:
+----------------------------------------------------------------
+${p?.suno_lyrics || ''}
+
+----------------------------------------------------------------
+5. DESCRIZIONE COMPOSITIVA E GIUSTIFICAZIONE MEDICA:
+----------------------------------------------------------------
+${p?.main_prompt_ita || ''}
+${p?.justification || ''}
+================================================================
+`;
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        saveAs(blob, `prompt_who_${(correctedResult.title || 'sonification').toLowerCase().replace(/\s+/g, '_')}.txt`);
     };
 
     const handleVideoAction = () => { if (generatedVideoBlob) { saveAs(generatedVideoBlob, `kinetic_proof_${safeHash.substring(0, 8)}.mp4`); } else { setIsVideoModalOpen(true); } };
@@ -1543,12 +1580,20 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                                             SOUNDVERSE (PROMPT 3)
                                         </button>
                                     </div>
-                                    <button
-                                        onClick={copyPrompt}
-                                        className="px-3 py-1.5 bg-brand-accent/10 text-brand-accent hover:bg-brand-accent hover:text-brand-primary transition-all rounded-md text-[10px] font-black tracking-tighter uppercase flex items-center gap-2 border border-brand-accent/20"
-                                    >
-                                        <i className="fas fa-copy"></i> {t('results.copy') || "Copia Prompt"}
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={copyPrompt}
+                                            className="px-3 py-1.5 bg-brand-accent/10 text-brand-accent hover:bg-brand-accent hover:text-brand-primary transition-all rounded-md text-[10px] font-black tracking-tighter uppercase flex items-center gap-2 border border-brand-accent/20"
+                                        >
+                                            <i className="fas fa-copy"></i> {t('results.copy') || "Copia Prompt"}
+                                        </button>
+                                        <button
+                                            onClick={downloadPromptTxt}
+                                            className="px-3 py-1.5 bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500 hover:text-black transition-all rounded-md text-[10px] font-black tracking-tighter uppercase flex items-center gap-2 border border-emerald-500/40 shadow-lg"
+                                        >
+                                            <i className="fas fa-download"></i> Scarica Prompt (.TXT)
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {/* AREA TESTO PROMPT DINAMICA */}

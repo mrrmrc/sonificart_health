@@ -35,6 +35,14 @@ export const hybridSteps: ProcessingStep[] = [
     { id: 9, name: 'Deterministic Audio Synthesis', status: 'pending' },
 ];
 
+export const aiComposerSteps: ProcessingStep[] = [
+    { id: 1, name: '1. Analisi Cromatico-Spaziale CIE LAB', status: 'pending' },
+    { id: 2, name: '2. Vision AI & Interpretazione Semantica dell\'Opera', status: 'pending' },
+    { id: 3, name: '3. Classificazione Clinica WHO (Report 67)', status: 'pending' },
+    { id: 4, name: '4. Strutturazione Compositiva Olistica Terapeutica', status: 'pending' },
+    { id: 5, name: '5. Generazione Prompt Medico per AI (Soundverse / Suno / Udio)', status: 'pending' },
+];
+
 export const initialSettings: ConfigSettings = {
     pixelCount: 1024,
     bpm: 120,

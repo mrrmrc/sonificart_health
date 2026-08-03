@@ -17,7 +17,7 @@ import { ConfigPanel } from '../components/ConfigPanel';
 import { ParadigmInfo } from '../components/ParadigmInfo';
 import { PhotoStandardizationModal } from '../components/PhotoStandardizationModal';
 import { NormalizationReport } from '../services/imageNormalizationService';
-import { initialSettings, scientificSteps, artisticSteps, hybridSteps } from '../config/defaults';
+import { initialSettings, scientificSteps, artisticSteps, hybridSteps, aiComposerSteps } from '../config/defaults';
 import { reconstructResultFromPartialData } from '../utils/dataUtils';
 
 interface OutletContextType {
@@ -224,6 +224,7 @@ export const SonificationPage: React.FC = () => {
         let initialSteps = scientificSteps;
         if (paradigm === 'artistic') initialSteps = artisticSteps;
         else if (paradigm === 'hybrid') initialSteps = hybridSteps;
+        else if (paradigm === 'ai_composer') initialSteps = aiComposerSteps;
 
         setProcessingSteps(initialSteps.map(s => ({ ...s, status: 'pending' })));
         setIsProcessing(true); setResult(null); setIsViewingHistory(false);
