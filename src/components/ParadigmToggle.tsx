@@ -58,8 +58,8 @@ export const ParadigmToggle: React.FC<ParadigmToggleProps> = ({ selectedParadigm
         className={getButtonClass('ai_composer')}
         aria-pressed={selectedParadigm === 'ai_composer'}
       >
-        <i className="fas fa-robot mr-2 text-emerald-400"></i>
-        AI Composer
+        <i className="fas fa-heart-pulse mr-2 text-emerald-400"></i>
+        Health Sonification
         {!isPro && <span className="ml-1.5 bg-emerald-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded">WHO</span>}
       </button>
     </div>

@@ -86,8 +86,8 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 {paradigm === 'ai_composer' && (
                     <div className="bg-emerald-500/15 border border-emerald-500/40 p-4 rounded-xl text-emerald-300 animate-fade-in shadow-lg shadow-emerald-950/40">
                         <div className="flex items-center gap-2 font-bold text-emerald-400 text-sm mb-1">
-                            <i className="fas fa-robot text-emerald-400 text-base"></i>
-                            <span>Paradigma AI Composer (WHO) Attivo</span>
+                            <i className="fas fa-heart-pulse text-emerald-400 text-base"></i>
+                            <span>Paradigma Health Sonification (WHO) Attivo</span>
                         </div>
                         <p className="text-xs text-emerald-200/90 leading-relaxed">
                             L'AI valuterà l'opera d'arte su livello olistico (Vision + Categoria Clinica WHO) componendo direttamente il brano clinico. Clicca il pulsante verde in basso per avviare.
@@ -231,28 +231,30 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                     )}
                 </div>
 
-                {/* WHO HEALTH AGENT */}
-                <div className="pt-4 border-t border-white/10">
-                    <div className="flex justify-between items-center mb-1">
-                        <h4 className="text-sm font-bold text-white">WHO Health Agent (Benessere)</h4>
-                        <label htmlFor="health-agent-toggle" className="flex items-center cursor-pointer">
-                            <div className="relative">
-                                <input
-                                    type="checkbox"
-                                    id="health-agent-toggle"
-                                    className="sr-only peer"
-                                    checked={config.useHealthAgent || false}
-                                    onChange={(e) => onConfigChange({ useHealthAgent: e.target.checked })}
-                                />
-                                <div className="block bg-white/10 w-10 h-6 rounded-full"></div>
-                                <div className="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-all peer-checked:bg-green-400 peer-checked:translate-x-full"></div>
-                            </div>
-                        </label>
+                {/* WHO HEALTH AGENT (Disabilitato per Scientifico ed Artistico) */}
+                {paradigm !== 'scientific' && paradigm !== 'artistic' && (
+                    <div className="pt-4 border-t border-white/10">
+                        <div className="flex justify-between items-center mb-1">
+                            <h4 className="text-sm font-bold text-white">WHO Health Agent (Benessere)</h4>
+                            <label htmlFor="health-agent-toggle" className="flex items-center cursor-pointer">
+                                <div className="relative">
+                                    <input
+                                        type="checkbox"
+                                        id="health-agent-toggle"
+                                        className="sr-only peer"
+                                        checked={config.useHealthAgent || false}
+                                        onChange={(e) => onConfigChange({ useHealthAgent: e.target.checked })}
+                                    />
+                                    <div className="block bg-white/10 w-10 h-6 rounded-full"></div>
+                                    <div className="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-all peer-checked:bg-green-400 peer-checked:translate-x-full"></div>
+                                </div>
+                            </label>
+                        </div>
+                        {config.useHealthAgent && (
+                            <p className="text-[10px] text-green-400 mt-1 animate-fade-in">Generazione ottimizzata tramite RAG (Health Evidence Network Report 67) attiva. Elementi soporiferi disabilitati.</p>
+                        )}
                     </div>
-                    {config.useHealthAgent && (
-                        <p className="text-[10px] text-green-400 mt-1 animate-fade-in">Generazione ottimizzata tramite RAG (Health Evidence Network Report 67) attiva. Elementi soporiferi disabilitati.</p>
-                    )}
-                </div>
+                )}
 
                 {/* ESTIMATES */}
                 <div className="bg-white/5 border border-white/10 p-4 rounded-xl mt-auto">
@@ -284,10 +286,10 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                             : 'bg-brand-accent hover:bg-brand-accent-light text-brand-primary shadow-[0_0_20px_rgba(45,212,191,0.3)]'
                     }`}
                 >
-                    <i className={`fas ${paradigm === 'ai_composer' ? 'fa-wand-magic-sparkles text-lg' : 'fa-play'}`}></i>
+                    <i className={`fas ${paradigm === 'ai_composer' ? 'fa-heart-pulse text-lg' : 'fa-play'}`}></i>
                     <span>
                         {paradigm === 'ai_composer'
-                            ? "🎼 COMPONI CON AI COMPOSER (WHO)"
+                            ? "🎼 COMPONI CON HEALTH SONIFICATION (WHO)"
                             : (isProUser
                                 ? (t('config.start').split('(')[0].trim())
                                 : t('config.start', { cost: creditCost }))

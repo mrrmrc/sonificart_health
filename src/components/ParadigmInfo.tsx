@@ -76,16 +76,16 @@ export const ParadigmInfo: React.FC<ParadigmInfoProps> = ({ paradigm, onGoPro, i
             }
         },
         ai_composer: {
-            title: "Paradigma AI Composer (WHO)",
+            title: "Paradigma Health Sonification (WHO)",
             subtitle: "Composizione Clinica Olistica WHO",
-            icon: "fa-robot",
+            icon: "fa-heart-pulse",
             color: "text-emerald-400",
             bg: "bg-emerald-500/10",
             border: "border-emerald-500/30",
             process: [
                 { title: "1. Analisi Visiva Olistica", desc: "Vision AI valuta il soggetto, la palette LAB, il bilanciamento ed i contenuti emozionali dell'opera d'arte." },
                 { title: "2. Classificazione Clinica WHO", desc: "Mappatura automatica sui target medici del WHO Evidence Network Report 67 (Calming, Fisiologico, Cognitivo, Sociale, Motivazione)." },
-                { title: "3. Composizione Libera AI", desc: "Svincola la generazione dalla rigidità del mapping blocco-per-blocco, consentendo al compositore AI di strutturare il brano in modo organico." },
+                { title: "3. Composizione Libera Health Sonification", desc: "Orchestra la generazione dalla combinazione del motivo di note estratto dal quadro con la categoria medica WHO." },
                 { title: "4. Generazione Audio Terapeutica", desc: "Inoltro del prompt clinico e dei parametri di entrainment ritmico e timbrico all'engine AI attivo." }
             ],
             license: {

@@ -294,6 +294,8 @@ export const SonificationPage: React.FC = () => {
         setParadigm(newParadigm);
         if (newParadigm === 'ai_composer') {
             setConfig(prev => ({ ...prev, useHealthAgent: true }));
+        } else if (newParadigm === 'artistic' || newParadigm === 'scientific') {
+            setConfig(prev => ({ ...prev, useHealthAgent: false }));
         }
     };
 
