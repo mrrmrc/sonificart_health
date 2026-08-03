@@ -384,11 +384,21 @@ REQUISITI DI SINFONIA PITTORICO-CLINICA WHO (MANDATORI E CRUCIALI):
 
 4. **Analisi Semantico-Iconografica dell'Opera (MANDATORIO per semantic_analysis)**:
    Fornisci l'oggetto JSON semantic_analysis che spiega l'impatto visivo sul suono:
-   - facial_expressions: Descrizione delle espressioni facciali o della carica emotiva dei soggetti visivi (es. "Volti drammatici ed intensi").
+   - facial_expressions: Descrizione delle espressioni facciali o della carica emotiva dei soggetti visivi.
    - materials_objects: Array di oggetti e materiali riconosciuti (es. ["Armature metalliche", "Cavalli", "Legno"]).
    - natural_elements: Presenza di elementi naturali (es. "Cielo tempestoso", "Luce naturale", "Acqua").
    - pictorial_style: Stile pittorico dell'opera (es. "Rinascimentale / Drammatico", "Impressionista", "Moderno Astratto").
-   - acoustic_impact: Spiegazione trasparente dell'impatto acustico (es. "Le armature metalliche introducono percussioni bronzee; la drammaticità dei volti attiva archi espressivi in registro grave").
+   - acoustic_impact: Spiegazione trasparente dell'impatto acustico.
+
+5. **Generazione Hotspot Visivi per l'HUD sull'Immagine (MANDATORIO 3-5 hotspots)**:
+   Fornisci l'array hotspots con 3-5 pin visivi localizzati nell'immagine:
+   - id: identificativo univoco (es. "pin_1", "pin_2").
+   - label: Titolo del pin (es. "Volti & Emozioni", "Armature Metalliche", "Luce & Chiaroscuro", "Target Clinico WHO").
+   - category: uno tra "emotions", "materials", "style", "who_target".
+   - x_percent (15-85) e y_percent (15-85): posizione percentuale approssimativa dell'elemento.
+   - description: Cosa rileva la Vision AI in quel punto dell'opera.
+   - reasoning_step: Spiegazione del ragionamento dell'AI (es. "Fase 2: L'AI rileva forte drammaticità visiva e la associa ad un timbro di archi in registro grave").
+   - acoustic_effect: Impatto acustico (es. "Violoncello solo + Percussioni bronzee").
 
 Rispondi SOLO con il JSON con campi: main_prompt_ita, technical_parameters, justification, suno_prompt, udio_prompt, soundverse_prompt, negative_prompt, suno_lyrics, semantic_analysis.`
     };
@@ -420,9 +430,26 @@ Rispondi SOLO con il JSON con campi: main_prompt_ita, technical_parameters, just
                                 },
                                 natural_elements: { type: Type.STRING },
                                 pictorial_style: { type: Type.STRING },
-                                acoustic_impact: { type: Type.STRING }
+                                acoustic_impact: { type: Type.STRING },
+                                hotspots: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            id: { type: Type.STRING },
+                                            label: { type: Type.STRING },
+                                            category: { type: Type.STRING },
+                                            x_percent: { type: Type.NUMBER },
+                                            y_percent: { type: Type.NUMBER },
+                                            description: { type: Type.STRING },
+                                            reasoning_step: { type: Type.STRING },
+                                            acoustic_effect: { type: Type.STRING }
+                                        },
+                                        required: ["id", "label", "category", "x_percent", "y_percent", "description", "reasoning_step", "acoustic_effect"]
+                                    }
+                                }
                             },
-                            required: ["facial_expressions", "materials_objects", "natural_elements", "pictorial_style", "acoustic_impact"]
+                            required: ["facial_expressions", "materials_objects", "natural_elements", "pictorial_style", "acoustic_impact", "hotspots"]
                         }
                     },
                     required: ["main_prompt_ita", "technical_parameters", "justification", "suno_prompt", "udio_prompt", "soundverse_prompt", "negative_prompt", "suno_lyrics", "semantic_analysis"]
@@ -448,7 +475,39 @@ Rispondi SOLO con il JSON con campi: main_prompt_ita, technical_parameters, just
                 materials_objects: ["Elementi visivi dell'opera"],
                 natural_elements: "Atmosfera e luce naturale",
                 pictorial_style: "Stile artistico visivo",
-                acoustic_impact: "Gli elementi visivi orientano la strumentazione ed il timbro acustico."
+                acoustic_impact: "Gli elementi visivi orientano la strumentazione ed il timbro acustico.",
+                hotspots: [
+                    {
+                        id: "pin_1",
+                        label: "Volti ed Emozioni",
+                        category: "emotions",
+                        x_percent: 50,
+                        y_percent: 35,
+                        description: "Espressioni facciali ed atmosfera espressiva centrale dell'opera",
+                        reasoning_step: "Fase 2 (Vision AI): L'AI rileva la drammaticità della scena e la converte in armonie espressive in registro grave.",
+                        acoustic_effect: "Violoncello Solo & Archi ad alta tensione"
+                    },
+                    {
+                        id: "pin_2",
+                        label: "Oggetti & Strutture",
+                        category: "materials",
+                        x_percent: 30,
+                        y_percent: 65,
+                        description: "Texture di materiali (metalli, legni, elementi architettonici)",
+                        reasoning_step: "Fase 3 (WHO Impact): L'AI associa la consistenza dei materiali a percussioni metalliche e risonanze bronzee.",
+                        acoustic_effect: "Glockenspiel & Percussioni Bronzee"
+                    },
+                    {
+                        id: "pin_3",
+                        label: "Target Clinico WHO",
+                        category: "who_target",
+                        x_percent: 70,
+                        y_percent: 50,
+                        description: `Target clinico principale ad ${configBpm} BPM`,
+                        reasoning_step: `Fase 4 (Composizione WHO): Sintonizzazione dei transienti ritmici a ${configBpm} BPM per l'entrainment neurofisiologico.`,
+                        acoustic_effect: `Entrainment Ritmico a ${configBpm} BPM`
+                    }
+                ]
             }
         };
     }

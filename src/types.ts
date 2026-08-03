@@ -53,12 +53,24 @@ export interface MusicalGenre {
     };
 }
 
+export interface SemanticHotspot {
+    id: string;
+    label: string;
+    category: 'emotions' | 'materials' | 'style' | 'who_target';
+    x_percent: number;
+    y_percent: number;
+    description: string;
+    reasoning_step: string;
+    acoustic_effect: string;
+}
+
 export interface SemanticAnalysis {
     facial_expressions: string;
     materials_objects: string[];
     natural_elements: string;
     pictorial_style: string;
     acoustic_impact: string;
+    hotspots?: SemanticHotspot[];
 }
 
 export interface MusicGenerationPrompt {

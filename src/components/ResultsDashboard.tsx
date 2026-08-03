@@ -14,6 +14,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { ConfirmationModal } from './ConfirmationModal';
 import { api } from '../services/api';
 import { generateAiAudioTrack } from '../services/musicAiService';
+import { AiVisionInspectorOverlay } from './AiVisionInspectorOverlay';
 
 const InfoCard: React.FC<{ title: string, icon: string, children: React.ReactNode, className?: string }> = ({ title, icon, children, className }) => (
     <div className={`bg-brand-primary/50 p-4 rounded-lg border border-brand-secondary ${className}`}>
@@ -1268,6 +1269,16 @@ ${p?.justification || ''}
                                 activeBlockPosition={displayEvent?.sourceBlock?.position ?? null}
                                 contentBounds={contentBounds}
                             />
+
+                            {/* VISION AI INSPECTOR OVERLAY FOR AI COMPOSER */}
+                            {correctedResult.paradigm === 'ai_composer' && (
+                                <AiVisionInspectorOverlay
+                                    hotspots={correctedResult.musicGenerationPrompt?.semantic_analysis?.hotspots || []}
+                                    pictorialStyle={correctedResult.musicGenerationPrompt?.semantic_analysis?.pictorial_style}
+                                    targetBpm={correctedResult.audioOutput?.bpm}
+                                    primaryCategoryLabel={correctedResult.healthClassification?.primaryCategory.label}
+                                />
+                            )}
                         </div>
                     </div>
                     <CursorLoupe activeEvent={displayEvent} isPlaying={isPlaying} />
