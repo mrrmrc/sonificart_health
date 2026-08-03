@@ -382,7 +382,15 @@ REQUISITI DI SINFONIA PITTORICO-CLINICA WHO (MANDATORI E CRUCIALI):
    - **suno_prompt**: Inizia con: "[Duration: ${durationSeconds.toFixed(0)}s], [Strictly ${durationSeconds.toFixed(0)} seconds limit], [${configBpm} BPM], [Visual Style: Stile Pittorico dell'Opera], [Melodic Motif: ${melodyNotesSequence || 'Main Motif'}], [Subject: ${imageDescription}], [Strictly Instrumental], [No Vocals]". Termina con: "[Outro: Dissolve at ${durationSeconds.toFixed(0)}s], [End at ${durationSeconds.toFixed(0)}s], [Silence], [End]".
    - **udio_prompt**: Tag descrittivi che combinano lo stile pittorico dell'opera, la linea melodica (${melodyNotesSequence}), il soggetto visivo, ${configBpm} BPM, genere e strumentazione clinica WHO.
 
-Rispondi SOLO con il JSON con campi: main_prompt_ita, technical_parameters, justification, suno_prompt, udio_prompt, soundverse_prompt, negative_prompt, suno_lyrics.`
+4. **Analisi Semantico-Iconografica dell'Opera (MANDATORIO per semantic_analysis)**:
+   Fornisci l'oggetto JSON semantic_analysis che spiega l'impatto visivo sul suono:
+   - facial_expressions: Descrizione delle espressioni facciali o della carica emotiva dei soggetti visivi (es. "Volti drammatici ed intensi").
+   - materials_objects: Array di oggetti e materiali riconosciuti (es. ["Armature metalliche", "Cavalli", "Legno"]).
+   - natural_elements: Presenza di elementi naturali (es. "Cielo tempestoso", "Luce naturale", "Acqua").
+   - pictorial_style: Stile pittorico dell'opera (es. "Rinascimentale / Drammatico", "Impressionista", "Moderno Astratto").
+   - acoustic_impact: Spiegazione trasparente dell'impatto acustico (es. "Le armature metalliche introducono percussioni bronzee; la drammaticità dei volti attiva archi espressivi in registro grave").
+
+Rispondi SOLO con il JSON con campi: main_prompt_ita, technical_parameters, justification, suno_prompt, udio_prompt, soundverse_prompt, negative_prompt, suno_lyrics, semantic_analysis.`
     };
 
     try {
@@ -401,9 +409,23 @@ Rispondi SOLO con il JSON con campi: main_prompt_ita, technical_parameters, just
                         udio_prompt: { type: Type.STRING },
                         soundverse_prompt: { type: Type.STRING },
                         negative_prompt: { type: Type.STRING },
-                        suno_lyrics: { type: Type.STRING }
+                        suno_lyrics: { type: Type.STRING },
+                        semantic_analysis: {
+                            type: Type.OBJECT,
+                            properties: {
+                                facial_expressions: { type: Type.STRING },
+                                materials_objects: {
+                                    type: Type.ARRAY,
+                                    items: { type: Type.STRING }
+                                },
+                                natural_elements: { type: Type.STRING },
+                                pictorial_style: { type: Type.STRING },
+                                acoustic_impact: { type: Type.STRING }
+                            },
+                            required: ["facial_expressions", "materials_objects", "natural_elements", "pictorial_style", "acoustic_impact"]
+                        }
                     },
-                    required: ["main_prompt_ita", "technical_parameters", "justification", "suno_prompt", "udio_prompt", "soundverse_prompt", "negative_prompt", "suno_lyrics"]
+                    required: ["main_prompt_ita", "technical_parameters", "justification", "suno_prompt", "udio_prompt", "soundverse_prompt", "negative_prompt", "suno_lyrics", "semantic_analysis"]
                 }
             }
         });
@@ -420,7 +442,14 @@ Rispondi SOLO con il JSON con campi: main_prompt_ita, technical_parameters, just
             udio_prompt: `visual theme: ${imageDescription}, holistic, therapeutic, instrumental, ${configBpm} bpm`,
             soundverse_prompt: `Visual Theme: ${imageDescription} | Genre: Cinematic Health Composition | Tempo: ${configBpm} BPM | Style: Holistic Wellness | Instruments: Cello, Flute, Piano | Duration: ${durationSeconds.toFixed(0)}s`,
             negative_prompt: "lullaby, noisy, harsh",
-            suno_lyrics: "[0:00] Intro, [End]"
+            suno_lyrics: "[0:00] Intro, [End]",
+            semantic_analysis: {
+                facial_expressions: "Carica emotiva ed espressiva visiva dell'opera",
+                materials_objects: ["Elementi visivi dell'opera"],
+                natural_elements: "Atmosfera e luce naturale",
+                pictorial_style: "Stile artistico visivo",
+                acoustic_impact: "Gli elementi visivi orientano la strumentazione ed il timbro acustico."
+            }
         };
     }
 }

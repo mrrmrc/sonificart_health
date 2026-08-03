@@ -53,6 +53,14 @@ export interface MusicalGenre {
     };
 }
 
+export interface SemanticAnalysis {
+    facial_expressions: string;
+    materials_objects: string[];
+    natural_elements: string;
+    pictorial_style: string;
+    acoustic_impact: string;
+}
+
 export interface MusicGenerationPrompt {
     main_prompt_ita: string;
     technical_parameters: string;
@@ -62,6 +70,7 @@ export interface MusicGenerationPrompt {
     soundverse_prompt?: string; // Ottimizzato per Soundverse AI (Parametrizzazione strutturata)
     negative_prompt: string;
     suno_lyrics: string;      // Marcatori temporali per sincronizzazione
+    semantic_analysis?: SemanticAnalysis | null;
 }
 
 

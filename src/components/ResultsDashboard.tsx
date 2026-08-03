@@ -1275,6 +1275,68 @@ ${p?.justification || ''}
 
                 <div className="lg:col-span-2 bg-brand-secondary/50 p-6 rounded-lg">
                     <div className="space-y-6">
+
+                        {/* SCHEDA ANALISI SEMANTICO-ICONOGRAFICA (AI COMPOSER) */}
+                        {correctedResult.paradigm === 'ai_composer' && (
+                            <div className="bg-gradient-to-br from-emerald-950/80 via-slate-900/90 to-emerald-950/80 p-5 rounded-xl border border-emerald-500/30 shadow-2xl backdrop-blur-xl animate-fade-in space-y-4">
+                                <div className="flex items-center justify-between border-b border-emerald-500/20 pb-3">
+                                    <div className="flex items-center gap-2 text-emerald-400 font-extrabold text-sm uppercase tracking-wider">
+                                        <i className="fas fa-wand-magic-sparkles text-emerald-300 text-lg"></i>
+                                        <span>Analisi Semantico-Iconografica</span>
+                                    </div>
+                                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-mono font-bold">
+                                        Vision AI & WHO
+                                    </span>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-3 text-xs">
+                                    {/* STILE PITTORICO */}
+                                    <div className="bg-black/40 p-3 rounded-lg border border-white/5 space-y-1">
+                                        <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                                            <i className="fas fa-paint-brush"></i> Stile Pittorico Estratto
+                                        </div>
+                                        <div className="text-white font-medium">
+                                            {correctedResult.musicGenerationPrompt?.semantic_analysis?.pictorial_style || 'Analisi Pittorica dell\'Opera'}
+                                        </div>
+                                    </div>
+
+                                    {/* ESPRESSIONI FACCIALI ED EMOZIONI */}
+                                    <div className="bg-black/40 p-3 rounded-lg border border-white/5 space-y-1">
+                                        <div className="text-[10px] text-purple-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                                            <i className="fas fa-theater-masks"></i> Emozioni & Volti
+                                        </div>
+                                        <div className="text-gray-200">
+                                            {correctedResult.musicGenerationPrompt?.semantic_analysis?.facial_expressions || 'Drammaturgia espressiva visiva'}
+                                        </div>
+                                    </div>
+
+                                    {/* OGGETTI E MATERIALI */}
+                                    <div className="bg-black/40 p-3 rounded-lg border border-white/5 space-y-1">
+                                        <div className="text-[10px] text-amber-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                                            <i className="fas fa-cube"></i> Oggetti & Materiali Riconosciuti
+                                        </div>
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                            {(correctedResult.musicGenerationPrompt?.semantic_analysis?.materials_objects || ['Elementi Visivi']).map((obj, i) => (
+                                                <span key={i} className="bg-white/10 text-amber-200 text-[10px] px-2 py-0.5 rounded border border-amber-500/20">
+                                                    {obj}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* IMPATTO ACUSTICO SUL SUONO */}
+                                    <div className="bg-emerald-950/40 p-3 rounded-lg border border-emerald-500/30 space-y-1">
+                                        <div className="text-[10px] text-cyan-300 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                                            <i className="fas fa-sliders-h"></i> Impatto Strumentale sul Suono
+                                        </div>
+                                        <div className="text-cyan-100 text-[11px] leading-relaxed">
+                                            {correctedResult.musicGenerationPrompt?.semantic_analysis?.acoustic_impact || 'Gli elementi visivi orientano la timbrica ed i colori degli strumenti.'}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         <div>
                             <h4 className="font-bold text-white mb-3 flex items-center gap-2 text-base border-b border-brand-secondary pb-2"><i className="fas fa-palette text-brand-accent"></i><span>{t('results.chromatic_profile')}</span></h4>
                             <div className="space-y-3">
