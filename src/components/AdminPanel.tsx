@@ -237,6 +237,41 @@ export const AdminPanel: React.FC = () => {
     const [apiSettings, setApiSettings] = useState({ gemini_api_key: '', gemini_api_email: '', gemini_api_budget: '', soundverse_api_key: '' });
     const [isTestingApi, setIsTestingApi] = useState(false);
 
+    // Soundverse Balance State
+    const [soundverseBalance, setSoundverseBalance] = useState<{
+        totalCredits?: number;
+        baseEffective?: number;
+        extraCents?: number;
+        error?: string;
+        loading: boolean;
+    }>({ loading: false });
+
+    const fetchSoundverseBalance = useCallback(async (keyOverride?: string) => {
+        setSoundverseBalance(prev => ({ ...prev, loading: true, error: undefined }));
+        try {
+            const { getSoundverseBalance } = await import('../services/soundverseService');
+            const res = await getSoundverseBalance(keyOverride || apiSettings.soundverse_api_key);
+            if (res.success) {
+                setSoundverseBalance({
+                    totalCredits: res.totalCredits,
+                    baseEffective: res.baseEffective,
+                    extraCents: res.extraCents,
+                    loading: false
+                });
+            } else {
+                setSoundverseBalance({
+                    error: res.error || "Impossibile recuperare i crediti Soundverse",
+                    loading: false
+                });
+            }
+        } catch (e: any) {
+            setSoundverseBalance({
+                error: e.message || "Errore di connessione a Soundverse",
+                loading: false
+            });
+        }
+    }, [apiSettings.soundverse_api_key]);
+
     // Edit States
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [isCreatingUser, setIsCreatingUser] = useState(false);
@@ -259,6 +294,7 @@ export const AdminPanel: React.FC = () => {
                 setStats(await api.getSystemStats());
                 setRequests(api.getAccessRequests ? await api.getAccessRequests() : []);
                 setUsers(await api.getAllUsers());
+                fetchSoundverseBalance();
             }
             if (activeTab === 'users') setUsers(await api.getAllUsers());
             if (activeTab === 'showcase') setProjects(await api.getShowcase(true));
@@ -277,12 +313,14 @@ export const AdminPanel: React.FC = () => {
                 setCookieLogs(await api.getCookieLogs());
             }
             if (activeTab === 'api') {
+                const svKey = (await api.getAppSetting('soundverse_api_key')).replace(/<[^>]*>?/gm, '').trim() || "sksoundverse_ivOVxIp9fudT87xVfqjPUWIB7SHSis9QTRojifOh3k_rKyiz-g1iadzoCtH8GzQl";
                 setApiSettings({
                     gemini_api_key: (await api.getAppSetting('gemini_api_key')).replace(/<[^>]*>?/gm, '').trim(),
                     gemini_api_email: (await api.getAppSetting('gemini_api_email')).replace(/<[^>]*>?/gm, '').trim(),
                     gemini_api_budget: (await api.getAppSetting('gemini_api_budget')).replace(/<[^>]*>?/gm, '').trim(),
-                    soundverse_api_key: (await api.getAppSetting('soundverse_api_key')).replace(/<[^>]*>?/gm, '').trim() || "sksoundverse_ivOVxIp9fudT87xVfqjPUWIB7SHSis9QTRojifOh3k_rKyiz-g1iadzoCtH8GzQl"
+                    soundverse_api_key: svKey
                 });
+                fetchSoundverseBalance(svKey);
             }
             if (activeTab === 'agents') {
                 const promptRaw = await api.getAppSetting('agent_health_prompt');
@@ -544,9 +582,10 @@ export const AdminPanel: React.FC = () => {
 
             {!isLoading && activeTab === 'overview' && stats && (
                 <div className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                         <StatCard title="Utenti" value={stats.totalUsers} subtext="Registrati" icon="fa-users" color="bg-blue-500/20 text-blue-400" />
                         <StatCard title="Opere" value={stats.totalSonifications} subtext="Salvate" icon="fa-music" color="bg-purple-500/20 text-purple-400" />
+                        <StatCard title="Crediti SV" value={soundverseBalance.loading ? '...' : (soundverseBalance.totalCredits !== undefined ? soundverseBalance.totalCredits : 'N/D')} subtext={soundverseBalance.error ? 'Errore bilancio' : 'Soundverse.ai'} icon="fa-coins" color={soundverseBalance.totalCredits && soundverseBalance.totalCredits > 0 ? "bg-emerald-500/20 text-emerald-400" : "bg-amber-500/20 text-amber-400"} />
                         <StatCard title="Richieste" value={requests.length} subtext="Totali" icon="fa-envelope" color="bg-yellow-500/20 text-yellow-400" />
                         <StatCard title="Server" value={(stats as any).serverOs || 'Linux'} subtext={`PHP ${(stats as any).phpVersion}`} icon="fa-server" color="bg-green-500/20 text-green-400" />
                     </div>
@@ -1086,19 +1125,85 @@ export const AdminPanel: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="bg-emerald-950/20 p-4 rounded-lg border border-emerald-500/30">
-                            <label className="block text-xs font-bold text-emerald-400 uppercase tracking-widest mb-2 flex items-center justify-between">
-                                <span>Soundverse.ai API Key</span>
-                                <span className="text-[10px] text-emerald-300 font-normal"><i className="fas fa-compact-disc mr-1"></i>Generazione Audio Diretta</span>
-                            </label>
-                            <input 
-                                type="password" 
-                                value={apiSettings.soundverse_api_key} 
-                                onChange={e => setApiSettings(prev => ({...prev, soundverse_api_key: e.target.value}))} 
-                                className="w-full bg-black/50 border border-emerald-500/30 rounded-lg p-3 text-emerald-300 font-mono text-sm focus:border-emerald-400 outline-none" 
-                                placeholder="sksoundverse_..." 
-                            />
-                            <p className="text-[10px] text-gray-400 mt-1">La chiave usata per generare file audio musicali direttamente tramite Soundverse AI.</p>
+                        <div className="bg-emerald-950/20 p-5 rounded-lg border border-emerald-500/30 space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-emerald-400 uppercase tracking-widest mb-2 flex items-center justify-between">
+                                    <span>Soundverse.ai API Key</span>
+                                    <span className="text-[10px] text-emerald-300 font-normal"><i className="fas fa-compact-disc mr-1"></i>Generazione Audio Diretta</span>
+                                </label>
+                                <input 
+                                    type="password" 
+                                    value={apiSettings.soundverse_api_key} 
+                                    onChange={e => setApiSettings(prev => ({...prev, soundverse_api_key: e.target.value}))} 
+                                    className="w-full bg-black/50 border border-emerald-500/30 rounded-lg p-3 text-emerald-300 font-mono text-sm focus:border-emerald-400 outline-none" 
+                                    placeholder="sksoundverse_..." 
+                                />
+                                <p className="text-[10px] text-gray-400 mt-1">La chiave usata per generare file audio musicali direttamente tramite Soundverse AI.</p>
+                            </div>
+
+                            {/* Soundverse Balance Live Card */}
+                            <div className="bg-[#141f17] p-4 rounded-lg border border-emerald-500/40 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-300 flex items-center gap-2">
+                                        <i className="fas fa-coins text-yellow-400"></i> Saldo Crediti Soundverse AI
+                                    </h4>
+                                    <button
+                                        type="button"
+                                        onClick={() => fetchSoundverseBalance(apiSettings.soundverse_api_key)}
+                                        disabled={soundverseBalance.loading}
+                                        className="text-[11px] font-bold text-emerald-300 hover:text-white bg-emerald-900/50 hover:bg-emerald-800/60 px-3 py-1 rounded border border-emerald-500/40 transition-all flex items-center gap-1.5"
+                                    >
+                                        <i className={`fas fa-sync-alt ${soundverseBalance.loading ? 'fa-spin' : ''}`}></i>
+                                        {soundverseBalance.loading ? 'Aggiornamento...' : 'Aggiorna Crediti Live'}
+                                    </button>
+                                </div>
+
+                                {soundverseBalance.loading ? (
+                                    <div className="text-xs text-emerald-400/80 animate-pulse py-2 flex items-center gap-2">
+                                        <i className="fas fa-spinner fa-spin"></i> Lettura bilancio crediti in corso dal server Soundverse...
+                                    </div>
+                                ) : soundverseBalance.error ? (
+                                    <div className="bg-red-950/40 border border-red-500/40 rounded p-3 text-xs text-red-300">
+                                        <p className="font-bold flex items-center gap-1"><i className="fas fa-exclamation-triangle text-red-400"></i> {soundverseBalance.error}</p>
+                                        <p className="text-[11px] text-red-300/80 mt-1">Se hai rigenerato una nuova API Key su Soundverse dopo la ricarica dei crediti, incolla la nuova chiave qui sopra e clicca su <strong>Salva Impostazioni</strong>.</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                        <div className={`p-3 rounded-lg border flex flex-col justify-center ${soundverseBalance.totalCredits && soundverseBalance.totalCredits > 0 ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-200' : 'bg-amber-500/10 border-amber-500/40 text-amber-200'}`}>
+                                            <span className="text-[10px] uppercase font-bold tracking-wider opacity-80">Crediti Totali Disponibili</span>
+                                            <span className="text-2xl font-extrabold font-mono mt-0.5">
+                                                {soundverseBalance.totalCredits ?? 0}
+                                            </span>
+                                            <span className="text-[10px] opacity-75 mt-0.5 font-sans">
+                                                {soundverseBalance.totalCredits && soundverseBalance.totalCredits > 0 ? '✅ Operativo per generare tracce' : '⚠️ Crediti a 0 / Esauriti'}
+                                            </span>
+                                        </div>
+
+                                        <div className="bg-black/30 p-3 rounded-lg border border-white/10 flex flex-col justify-center text-gray-300">
+                                            <span className="text-[10px] uppercase font-bold tracking-wider opacity-70">Crediti Base Piano</span>
+                                            <span className="text-xl font-bold font-mono mt-0.5 text-white">
+                                                {soundverseBalance.baseEffective ?? 0}
+                                            </span>
+                                            <span className="text-[10px] text-gray-400 mt-0.5 font-sans">Inclusi nel piano mensile</span>
+                                        </div>
+
+                                        <div className="bg-black/30 p-3 rounded-lg border border-white/10 flex flex-col justify-center text-gray-300">
+                                            <span className="text-[10px] uppercase font-bold tracking-wider opacity-70">Extra Cents / Ricariche</span>
+                                            <span className="text-xl font-bold font-mono mt-0.5 text-white">
+                                                {soundverseBalance.extraCents ?? 0}
+                                            </span>
+                                            <span className="text-[10px] text-gray-400 mt-0.5 font-sans">Crediti ricaricati</span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="text-[11px] text-gray-300 bg-black/40 p-2.5 rounded border border-white/5 leading-relaxed flex items-start gap-2">
+                                    <i className="fas fa-lightbulb text-yellow-400 text-sm mt-0.5 shrink-0"></i>
+                                    <span>
+                                        <strong>Hai ricaricato i crediti su Soundverse?</strong> Se Soundverse ti ha fornito una <strong>nuova API Key</strong> nella tua dashboard Soundverse dopo la ricarica, incollala nel campo qui sopra e clicca su <strong>Salva Impostazioni</strong> per collegare la nuova chiave.
+                                    </span>
+                                </div>
+                            </div>
                         </div>
 
                         <div className="flex flex-wrap gap-4 pt-4 border-t border-white/5">

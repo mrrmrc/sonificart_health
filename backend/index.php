@@ -496,7 +496,7 @@ if (strpos($_SERVER['CONTENT_TYPE'] ?? '', 'multipart/form-data') !== false) {
 
 // AUTH MIDDLEWARE
 $userId = getUserIdFromToken($input);
-$publicActions = ['login', 'register', 'get_showcase', 'reset_password', 'upload_media', 'request_access', 'admin_get_requests', 'check_info', 'upload_chunk', 'get_privacy_policy', 'get_app_setting', 'update_app_setting', 'log_cookie_consent', 'soundverse_generate', 'soundverse_check'];
+$publicActions = ['login', 'register', 'get_showcase', 'reset_password', 'upload_media', 'request_access', 'admin_get_requests', 'check_info', 'upload_chunk', 'get_privacy_policy', 'get_app_setting', 'update_app_setting', 'log_cookie_consent', 'soundverse_generate', 'soundverse_check', 'soundverse_balance'];
 
 if (!$userId && !in_array($action, $publicActions) && $action !== 'log_event') { // Allow log_event to be public
     if ($action)
@@ -504,6 +504,65 @@ if (!$userId && !in_array($action, $publicActions) && $action !== 'log_event') {
 }
 
 // ======================= ROUTES =======================
+
+// --- SOUNDVERSE BALANCE API ---
+if ($action === 'soundverse_balance') {
+    $apiKey = $input['apiKey'] ?? $_GET['apiKey'] ?? '';
+    if (!$apiKey) {
+        $stmt = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key = 'soundverse_api_key'");
+        $stmt->execute();
+        $apiKey = $stmt->fetchColumn() ?: '';
+    }
+
+    if (!$apiKey || strlen(trim($apiKey)) < 5) {
+        sendResponse(["success" => false, "error" => "API Key Soundverse non configurata o vuota."]);
+    }
+
+    $ch = curl_init('https://apiv2.soundverse.ai/v1/account/balance');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Authorization: Bearer ' . trim($apiKey),
+        'Content-Type: application/json'
+    ]);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 12);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlErr = curl_error($ch);
+    curl_close($ch);
+
+    if ($curlErr) {
+        sendResponse(["success" => false, "error" => "Errore di connessione a Soundverse: " . $curlErr]);
+    }
+
+    $decoded = json_decode($response, true);
+    if ($httpCode >= 200 && $httpCode < 300 && is_array($decoded)) {
+        $totalEffective = $decoded['total_effective'] ?? 0;
+        $baseEffective = $decoded['base_effective'] ?? 0;
+        $extraCents = $decoded['extra_cents'] ?? 0;
+
+        sendResponse([
+            "success" => true,
+            "totalCredits" => $totalEffective,
+            "baseEffective" => $baseEffective,
+            "extraCents" => $extraCents,
+            "raw" => $decoded
+        ]);
+    } else {
+        $errMsg = "Impossibile recuperare il saldo crediti (HTTP $httpCode)";
+        if ($decoded && isset($decoded['detail'])) {
+            $errMsg .= ": " . $decoded['detail'];
+        }
+        sendResponse([
+            "success" => false,
+            "error" => $errMsg,
+            "httpCode" => $httpCode,
+            "raw" => $decoded
+        ]);
+    }
+}
 
 // --- SOUNDVERSE CHECK API (Pre-flight REALE) ---
 if ($action === 'soundverse_check') {
@@ -518,15 +577,17 @@ if ($action === 'soundverse_check') {
         sendResponse(["success" => false, "error" => "API Key Soundverse non configurata o vuota.", "checkLog" => []]);
     }
 
-    // VERIFICA REALE: chiama l'API Soundverse con la key per verificare autenticazione
+    // VERIFICA REALE: chiama l'API Soundverse con la key per verificare autenticazione e saldo crediti
     $checkEndpoints = [
-        'https://api.soundverse.ai/v1/generations',
-        'https://apiv2.soundverse.ai/v7/generate/music'
+        'https://apiv2.soundverse.ai/v1/account/balance',
+        'https://apiv2.soundverse.ai/v7/generate/music',
+        'https://api.soundverse.ai/v1/generations'
     ];
 
     $keyValid = false;
     $checkError = '';
     $checkLog = [];
+    $totalCredits = null;
 
     foreach ($checkEndpoints as $checkUrl) {
         $ch = curl_init($checkUrl);
@@ -561,13 +622,15 @@ if ($action === 'soundverse_check') {
             break;
         }
 
-        // Qualsiasi altra risposta non-errore-di-autenticazione = la key è accettata
         if ($httpCode >= 200 && $httpCode < 500) {
             $keyValid = true;
+            $decoded = json_decode($response, true);
+            if (is_array($decoded) && isset($decoded['total_effective'])) {
+                $totalCredits = $decoded['total_effective'];
+            }
             break;
         }
 
-        // 5xx = server down
         $checkError = "Soundverse API server non disponibile (HTTP $httpCode)";
     }
 
@@ -575,6 +638,7 @@ if ($action === 'soundverse_check') {
         sendResponse([
             "success" => true,
             "message" => "Connessione e chiave Soundverse AI verificate con successo (check reale).",
+            "totalCredits" => $totalCredits,
             "keyPreview" => substr($apiKey, 0, 15) . '...',
             "checkLog" => $checkLog
         ]);

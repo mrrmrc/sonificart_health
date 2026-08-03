@@ -104,10 +104,41 @@ async function callPhpProxy(actionName: string, payloadData: Record<string, any>
     throw new Error(lastError?.message || "Impossibile contattare il server backend PHP.");
 }
 
+export interface SoundverseBalanceResponse {
+    success: boolean;
+    totalCredits?: number;
+    baseEffective?: number;
+    extraCents?: number;
+    error?: string;
+    raw?: any;
+}
+
+/**
+ * Recupera il saldo crediti/token Soundverse in tempo reale dall'API
+ */
+export async function getSoundverseBalance(apiKeyOverride?: string): Promise<SoundverseBalanceResponse> {
+    try {
+        const apiKey = apiKeyOverride || (await getSoundverseApiKey());
+        const data = await callPhpProxy('soundverse_balance', { apiKey });
+        if (data.success === false) {
+            return { success: false, error: data.error || "Impossibile recuperare i crediti Soundverse." };
+        }
+        return {
+            success: true,
+            totalCredits: data.totalCredits ?? 0,
+            baseEffective: data.baseEffective ?? 0,
+            extraCents: data.extraCents ?? 0,
+            raw: data.raw
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Errore durante la lettura del saldo crediti Soundverse." };
+    }
+}
+
 /**
  * Controllo pre-flight preventivo della connessione e validità dell'API Key Soundverse
  */
-export async function checkSoundverseApi(apiKeyOverride?: string): Promise<{ success: boolean; error?: string; message?: string; checkLog?: any[] }> {
+export async function checkSoundverseApi(apiKeyOverride?: string): Promise<{ success: boolean; error?: string; message?: string; totalCredits?: number; checkLog?: any[] }> {
     try {
         const apiKey = apiKeyOverride || (await getSoundverseApiKey());
         const data = await callPhpProxy('soundverse_check', { apiKey });
@@ -115,7 +146,7 @@ export async function checkSoundverseApi(apiKeyOverride?: string): Promise<{ suc
         if (data.success === false) {
             return { success: false, error: data.error || "Verifica API Key fallita.", checkLog: data.checkLog };
         }
-        return { success: true, message: data.message, checkLog: data.checkLog };
+        return { success: true, message: data.message, totalCredits: data.totalCredits, checkLog: data.checkLog };
     } catch (e: any) {
         return { success: false, error: e.message || "Impossibile verificare l'API Key Soundverse." };
     }
