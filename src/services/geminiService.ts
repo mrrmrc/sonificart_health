@@ -336,7 +336,8 @@ export async function generateAiComposerPrompt(
     analysisStats: BlockAnalysisResult['globalStats'],
     imageDescription: string,
     durationSeconds: number,
-    healthClassification?: HealthClassificationResult | null
+    healthClassification?: HealthClassificationResult | null,
+    melodyNotesSequence?: string
 ): Promise<MusicGenerationPrompt> {
     const apiKey = await getGeminiApiKey();
     if (!apiKey) {
@@ -357,27 +358,29 @@ ${healthClassification.promptFragment}
         text: `RUOLO: Sei un Maestro Compositore AI Senior e Neuroscienziato della Musica, specializzato nell'interpretazione OLISTICA delle opere d'arte visiva secondo i principi clinici del WHO (Health Evidence Network Report 67).
 
 SVOLGIMENTO (PARADIGMA AI COMPOSER):
-Non sei vincolato da una traduzione matematica nota-per-nota pixel-per-pixel. Agisci invece come un compositore umano/AI che valuta l'opera d'arte nella sua totalità (contenuto visivo, colori, atmosfera, carica emotiva) e compone un'opera musicale originale perfettamente orientata al benessere ed all'obiettivo medico identificato.
+Non sei vincolato da una traduzione matematica nota-per-nota pixel-per-pixel. Agisci invece come un compositore umano/AI che valuta l'opera d'arte nella sua totalità (contenuto visivo, colori, atmosfera, carica emotiva) e compone un'opera musicale originale perfettamente orientata al benessere ed all'obiettivo medico identificato, basandosi sulla linea melodica estratta dall'opera.
 
 DATI DI INPUT:
 - OPERA D'ARTE (SOGGETTO VISIVO): "${imageDescription}"
 - TRADIZIONE E CARATTERE MUSICALE: '${tradition.name}' (Profilo: '${tradition.character}')
+- LINEA MELODICA ESTRATTA DAI PIXEL DELL'OPERA: "${melodyNotesSequence || 'D4 - E4 - G4 - A4 - C5'}"
 - BPM CLINICO TARGET WHO: ${configBpm} BPM
 - DURATA ESATTA DA RISPETTARE: ${durationSeconds.toFixed(0)} secondi.
 - STATISTICHE CROMATICHE: Saturazione ${(analysisStats.avg_saturation * 100).toFixed(0)}%, Diversità cromatica ${(analysisStats.hue_diversity * 100).toFixed(0)}%
 ${healthSection}
 
 REQUISITI DI SINFONIA PITTORICO-CLINICA WHO (MANDATORI E CRUCIALI):
-1. **Inclusione dello Stile Pittorico e del Soggetto dell'Opera (FONDAMENTALE)**:
-   Per spiegare al motore AI di generazione musicale (Soundverse/Suno/Udio) quale opera si sta sonificando, DEVI INCLUDERE ESPLICITAMENTE in ciascun prompt:
-   - Lo STILE ARTISTICO / PITTORICO dell'opera (es. Impressionismo di Monet, Cubismo Geometrizzato, Barocco Chiaroscuro, Arte Moderna Astratta, Rinascimentale).
-   - Il SOGGETTO VISIVO ed i COLORI dell'opera (es. "${imageDescription}").
+1. **Inclusione della Linea Melodica Estratta (FONDAMENTALE)**:
+   Includi ESPLICITAMENTE nei prompt la LINEA MELODICA / MOTIVO NOTA ESTRATTO DALLE SCANSIONI DEI PIXEL ("${melodyNotesSequence || 'D4 - E4 - G4 - A4'}"), di modo che l'AI musicale segua il tema melodico preciso derivato dall'opera visiva.
 
-2. **Formattazione dei Prompt per i Motori AI**:
-   - **soundverse_prompt**: DEVE INIZIARE CON IL TEMA VISIVO E PITTORICO DELL'OPERA:
-     "Visual Theme: [Stile Pittorico & Soggetto dell'Opera: es. Monet Impressionism Water Lilies / Modern Abstract Cubist Geometry] | Genre: Cinematic Health Composition | Style: Holistic ${healthClassification?.primaryCategory.label || 'Wellness'} | Mood: [Atmosfera Emozionale dell'Opera] | Tempo: ${configBpm} BPM | Instruments: [Strumenti Clinici WHO ed evocativi dello stile pittorico] | Duration: ${durationSeconds.toFixed(0)}s"
-   - **suno_prompt**: Inizia con: "[Duration: ${durationSeconds.toFixed(0)}s], [Strictly ${durationSeconds.toFixed(0)} seconds limit], [${configBpm} BPM], [Visual Style: Stile Pittorico dell'Opera], [Subject: ${imageDescription}], [Strictly Instrumental], [No Vocals]". Termina con: "[Outro: Dissolve at ${durationSeconds.toFixed(0)}s], [End at ${durationSeconds.toFixed(0)}s], [Silence], [End]".
-   - **udio_prompt**: Tag descrittivi che combinano lo stile pittorico dell'opera, il soggetto visivo, ${configBpm} BPM, genere e strumentazione clinica WHO.
+2. **Inclusione dello Stile Pittorico e del Soggetto dell'Opera**:
+   Includi lo STILE ARTISTICO / PITTORICO dell'opera (es. Impressionismo di Monet, Cubismo Geometrizzato, Barocco Chiaroscuro, Arte Moderna Astratta, Rinascimentale) ed il SOGGETTO VISIVO ("${imageDescription}").
+
+3. **Formattazione dei Prompt per i Motori AI**:
+   - **soundverse_prompt**: DEVE INIZIARE CON TEMA VISIVO E LINEA MELODICA ESTRATTA:
+     "Visual Theme: [Stile Pittorico & Soggetto dell'Opera: es. Monet Impressionism Water Lilies / Modern Abstract Cubist Geometry] | Reference Melody Theme: [${melodyNotesSequence || 'Main Motif'}] | Genre: Cinematic Health Composition | Style: Holistic ${healthClassification?.primaryCategory.label || 'Wellness'} | Mood: [Atmosfera Emozionale] | Tempo: ${configBpm} BPM | Instruments: [Strumenti Clinici WHO ed evocativi dello stile pittorico] | Duration: ${durationSeconds.toFixed(0)}s"
+   - **suno_prompt**: Inizia con: "[Duration: ${durationSeconds.toFixed(0)}s], [Strictly ${durationSeconds.toFixed(0)} seconds limit], [${configBpm} BPM], [Visual Style: Stile Pittorico dell'Opera], [Melodic Motif: ${melodyNotesSequence || 'Main Motif'}], [Subject: ${imageDescription}], [Strictly Instrumental], [No Vocals]". Termina con: "[Outro: Dissolve at ${durationSeconds.toFixed(0)}s], [End at ${durationSeconds.toFixed(0)}s], [Silence], [End]".
+   - **udio_prompt**: Tag descrittivi che combinano lo stile pittorico dell'opera, la linea melodica (${melodyNotesSequence}), il soggetto visivo, ${configBpm} BPM, genere e strumentazione clinica WHO.
 
 Rispondi SOLO con il JSON con campi: main_prompt_ita, technical_parameters, justification, suno_prompt, udio_prompt, soundverse_prompt, negative_prompt, suno_lyrics.`
     };

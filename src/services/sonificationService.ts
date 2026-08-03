@@ -1171,12 +1171,23 @@ export async function sonifyImageAiComposer(
 
     try {
         const imageDescription = await describeImageContent(file);
+
+        // Extract key note motif sequence (first 16 melody notes)
+        const melodyNotesSequence = res.audioOutput?.events
+            ? res.audioOutput.events
+                .filter(e => !e.isAccompaniment)
+                .slice(0, 16)
+                .map(e => e.noteName)
+                .join(' - ')
+            : undefined;
+
         const aiComposerPrompt = await generateAiComposerPrompt(
             res.culturalSelectionResult.tradition,
             res.blockAnalysisResult.globalStats,
             imageDescription,
             res.audioOutput.duration,
-            res.healthClassification
+            res.healthClassification,
+            melodyNotesSequence
         );
         res.musicGenerationPrompt = aiComposerPrompt;
     } catch (e) {
