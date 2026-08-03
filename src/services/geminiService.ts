@@ -369,36 +369,43 @@ DATI DI INPUT:
 - STATISTICHE CROMATICHE: Saturazione ${(analysisStats.avg_saturation * 100).toFixed(0)}%, Diversità cromatica ${(analysisStats.hue_diversity * 100).toFixed(0)}%
 ${healthSection}
 
-REQUISITI DI SINFONIA PITTORICO-CLINICA WHO (MANDATORI E CRUCIALI):
-1. **Inclusione della Linea Melodica Estratta (FONDAMENTALE)**:
-   Includi ESPLICITAMENTE nei prompt la LINEA MELODICA / MOTIVO NOTA ESTRATTO DALLE SCANSIONI DEI PIXEL ("${melodyNotesSequence || 'D4 - E4 - G4 - A4'}"), di modo che l'AI musicale segua il tema melodico preciso derivato dall'opera visiva.
+REQUISITI DI SINFONIA PITTORICO-CLINICA & INGEGNERIA NEURO-ACUSTICA VISCERALE (MANDATORI PER TUTTE LE AI):
+1. **Genere Musicale 100% Dinamico (NESSUN BOILERPLATE O FRASI FISSE)**:
+   NON usare mai la frase fissa "Cinematic Health Composition". Definisci invece un GENERE MUSICALE 100% DINAMICO derivato dallo stile pittorico dell'opera (es. "Impressionist Atmospheric Ambient", "Baroque Chiaroscuro Orchestral", "Avant-Garde Minimalist Polyrhythmic", "Traditional Asian Zen Meditation", "Modernist Emotional Soundscape").
 
-2. **Inclusione dello Stile Pittorico e del Soggetto dell'Opera**:
-   Includi lo STILE ARTISTICO / PITTORICO dell'opera (es. Impressionismo di Monet, Cubismo Geometrizzato, Barocco Chiaroscuro, Arte Moderna Astratta, Rinascimentale) ed il SOGGETTO VISIVO ("${imageDescription}").
+2. **Ingegneria Neuro-Acustica Viscerale, Infrasuoni & Audio Spaziale Olografico (MANDATORIO IN TUTTI I PROMPT)**:
+   Per scatenare l'esperienza di catarsi estetica (Sindrome di Stendhal) e far entrare l'ascoltatore dentro l'opera, INCLUDI ESPLICITAMENTE in ciascun prompt i seguenti tag di psicoacustica e produzione audio:
+   - Infrasuoni & Sub-Bassi: "Sub-Bass Infrasound Resonances (24Hz), Somatosensory Visceral Sub-Bass"
+   - Frequenze Nascoste & Battimenti Binaurali: "Hidden Binaural Theta/Gamma Wave Entrainment (4Hz/40Hz), 432Hz Harmonic Base Tuning, 528Hz Solfeggio Frequency"
+   - Immersione Spaziale: "3D Holographic Binaural Soundstage, Wide Spatial Audio Movement, Ethereal Atmospheric Depth"
+   - Impatto Emotivo: "Stendhal Aesthetic Chill Engine, Deep Emotional Catharsis"
 
-3. **Formattazione dei Prompt per i Motori AI**:
-   - **soundverse_prompt**: DEVE INIZIARE CON TEMA VISIVO E LINEA MELODICA ESTRATTA:
-     "Visual Theme: [Stile Pittorico & Soggetto dell'Opera: es. Monet Impressionism Water Lilies / Modern Abstract Cubist Geometry] | Reference Melody Theme: [${melodyNotesSequence || 'Main Motif'}] | Genre: Cinematic Health Composition | Style: Holistic ${healthClassification?.primaryCategory.label || 'Wellness'} | Mood: [Atmosfera Emozionale] | Tempo: ${configBpm} BPM | Instruments: [Strumenti Clinici WHO ed evocativi dello stile pittorico] | Duration: ${durationSeconds.toFixed(0)}s"
-   - **suno_prompt**: Inizia con: "[Duration: ${durationSeconds.toFixed(0)}s], [Strictly ${durationSeconds.toFixed(0)} seconds limit], [${configBpm} BPM], [Visual Style: Stile Pittorico dell'Opera], [Melodic Motif: ${melodyNotesSequence || 'Main Motif'}], [Subject: ${imageDescription}], [Strictly Instrumental], [No Vocals]". Termina con: "[Outro: Dissolve at ${durationSeconds.toFixed(0)}s], [End at ${durationSeconds.toFixed(0)}s], [Silence], [End]".
-   - **udio_prompt**: Tag descrittivi che combinano lo stile pittorico dell'opera, la linea melodica (${melodyNotesSequence}), il soggetto visivo, ${configBpm} BPM, genere e strumentazione clinica WHO.
+3. **Inclusione della Linea Melodica Estratta e dello Stile Visivo**:
+   Includi la LINEA MELODICA ESTRATTA ("${melodyNotesSequence || 'D4 - E4 - G4 - A4'}") ed il SOGGETTO VISIVO ("${imageDescription}").
 
-4. **Analisi Semantico-Iconografica dell'Opera (MANDATORIO per semantic_analysis)**:
+4. **Formattazione dei Prompt per i Motori AI**:
+   - **soundverse_prompt**:
+     "Visual Theme: [Stile Pittorico & Soggetto dell'Opera] | Reference Melody Theme: [${melodyNotesSequence || 'Main Motif'}] | Genre: [Genere Musicale Dinamico Adattivo] | Neuro-Acoustics & Spatial FX: Sub-Bass Infrasound (24Hz), Hidden Binaural Theta Wave (6Hz), 432Hz Tuning, 3D Holographic Stereo Panning, Deep Spatial Reverb | Style: Holistic ${healthClassification?.primaryCategory.label || 'Wellness'} | Mood: [Atmosfera Emozionale e Chiaroscuro] | Tempo: ${configBpm} BPM | Instruments: [Strumenti Clinici WHO ed evocativi dell'epoca/stile dell'opera] | Duration: ${durationSeconds.toFixed(0)}s"
+   - **suno_prompt**: Inizia con: "[Duration: ${durationSeconds.toFixed(0)}s], [${configBpm} BPM], [Genre: Genere Musicale Dinamico], [Visual Style: Stile Pittorico], [Melodic Motif: ${melodyNotesSequence || 'Main Motif'}], [Production FX: Sub-Bass 24Hz Infrasound, 432Hz Tuning, 3D Binaural Panning, Holographic Ambient Reverb], [Subject: ${imageDescription}], [Strictly Instrumental]". Termina con: "[Outro: Dissolve at ${durationSeconds.toFixed(0)}s], [End at ${durationSeconds.toFixed(0)}s], [Silence], [End]".
+   - **udio_prompt**: Tag descrittivi che combinano il genere dinamico, lo stile pittorico, la linea melodica (${melodyNotesSequence}), i tag psicoacustici (24hz sub-bass, 432hz tuning, binaural theta wave, 3d spatial audio), ${configBpm} BPM e la strumentazione clinica WHO.
+
+5. **Analisi Semantico-Iconografica dell'Opera (MANDATORIO per semantic_analysis)**:
    Fornisci l'oggetto JSON semantic_analysis che spiega l'impatto visivo sul suono:
    - facial_expressions: Descrizione delle espressioni facciali o della carica emotiva dei soggetti visivi.
    - materials_objects: Array di oggetti e materiali riconosciuti (es. ["Armature metalliche", "Cavalli", "Legno"]).
    - natural_elements: Presenza di elementi naturali (es. "Cielo tempestoso", "Luce naturale", "Acqua").
    - pictorial_style: Stile pittorico dell'opera (es. "Rinascimentale / Drammatico", "Impressionista", "Moderno Astratto").
-   - acoustic_impact: Spiegazione trasparente dell'impatto acustico.
+   - acoustic_impact: Spiegazione trasparente dell'impatto acustico e psicoacustico.
 
-5. **Generazione Hotspot Visivi per l'HUD sull'Immagine (MANDATORIO 3-5 hotspots)**:
+6. **Generazione Hotspot Visivi per l'HUD sull'Immagine (MANDATORIO 3-5 hotspots)**:
    Fornisci l'array hotspots con 3-5 pin visivi localizzati nell'immagine:
    - id: identificativo univoco (es. "pin_1", "pin_2").
    - label: Titolo del pin (es. "Volti & Emozioni", "Armature Metalliche", "Luce & Chiaroscuro", "Target Clinico WHO").
    - category: uno tra "emotions", "materials", "style", "who_target".
    - x_percent (15-85) e y_percent (15-85): posizione percentuale approssimativa dell'elemento.
    - description: Cosa rileva la Vision AI in quel punto dell'opera.
-   - reasoning_step: Spiegazione del ragionamento dell'AI (es. "Fase 2: L'AI rileva forte drammaticità visiva e la associa ad un timbro di archi in registro grave").
-   - acoustic_effect: Impatto acustico (es. "Violoncello solo + Percussioni bronzee").
+   - reasoning_step: Spiegazione del ragionamento dell'AI (es. "Fase 2: L'AI rileva forte drammaticità visiva e la associa ad un timbro di archi in registro grave con sub-bassi infrasintetici a 24Hz").
+   - acoustic_effect: Impatto acustico e psicoacustico (es. "Violoncello solo + Percussioni bronzee + Infrasuono 24Hz").
 
 Rispondi SOLO con il JSON con campi: main_prompt_ita, technical_parameters, justification, suno_prompt, udio_prompt, soundverse_prompt, negative_prompt, suno_lyrics, semantic_analysis.`
     };
