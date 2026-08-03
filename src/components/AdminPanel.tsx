@@ -79,6 +79,36 @@ const ProviderEditModal: React.FC<ProviderModalProps> = ({ provider, onClose, on
     const [endpointUrl, setEndpointUrl] = useState(provider?.endpointUrl || '');
     const [authHeaderName, setAuthHeaderName] = useState(provider?.authHeaderName || 'Authorization');
     const [description, setDescription] = useState(provider?.description || '');
+    
+    const [showKey, setShowKey] = useState(false);
+    const [isTesting, setIsTesting] = useState(false);
+    const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+    const handleTestInModal = async () => {
+        setIsTesting(true);
+        setTestResult(null);
+        try {
+            const p: MusicAiProvider = {
+                id: provider?.id || 'temp_test',
+                name: name || 'Test Provider',
+                type,
+                apiKey: apiKey.trim(),
+                endpointUrl: type === 'soundverse' ? 'https://apiv2.soundverse.ai/v7/generate/music' : endpointUrl.trim(),
+                authHeaderName: authHeaderName.trim() || 'Authorization',
+                isDefault: false
+            };
+            const res = await testMusicProvider(p);
+            if (res.success) {
+                setTestResult({ success: true, message: res.message || "Connessione verificata con successo!" });
+            } else {
+                setTestResult({ success: false, message: res.error || "Test fallito." });
+            }
+        } catch (e: any) {
+            setTestResult({ success: false, message: e.message || "Errore test connessione." });
+        } finally {
+            setIsTesting(false);
+        }
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -124,7 +154,11 @@ const ProviderEditModal: React.FC<ProviderModalProps> = ({ provider, onClose, on
                         <select
                             className="w-full bg-black/40 border border-white/10 p-2.5 rounded text-white text-sm focus:border-brand-accent outline-none"
                             value={type}
-                            onChange={e => setType(e.target.value as MusicProviderType)}
+                            onChange={e => {
+                                const newType = e.target.value as MusicProviderType;
+                                setType(newType);
+                                if (newType === 'soundverse' && !name) setName('Soundverse AI (Predefinito)');
+                            }}
                         >
                             <option value="soundverse">Soundverse AI (Nativo)</option>
                             <option value="custom_webhook">Custom Webhook POST (REST JSON)</option>
@@ -149,13 +183,23 @@ const ProviderEditModal: React.FC<ProviderModalProps> = ({ provider, onClose, on
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">API Key / Secret Token</label>
-                            <input
-                                type="password"
-                                className="w-full bg-black/40 border border-white/10 p-2.5 rounded text-white text-sm font-mono focus:border-brand-accent outline-none"
-                                placeholder="sk_... o secret token"
-                                value={apiKey}
-                                onChange={e => setApiKey(e.target.value)}
-                            />
+                            <div className="relative">
+                                <input
+                                    type={showKey ? "text" : "password"}
+                                    className="w-full bg-black/40 border border-white/10 p-2.5 pr-10 rounded text-white text-sm font-mono focus:border-brand-accent outline-none"
+                                    placeholder="sk_... o secret token"
+                                    value={apiKey}
+                                    onChange={e => setApiKey(e.target.value)}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowKey(!showKey)}
+                                    className="absolute right-2.5 top-2.5 text-gray-400 hover:text-white text-xs"
+                                    title={showKey ? "Nascondi chiave" : "Mostra chiave"}
+                                >
+                                    <i className={`fas ${showKey ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                                </button>
+                            </div>
                         </div>
 
                         {type !== 'soundverse' && (
@@ -181,11 +225,30 @@ const ProviderEditModal: React.FC<ProviderModalProps> = ({ provider, onClose, on
                         />
                     </div>
 
-                    <div className="flex justify-end gap-2 pt-4 border-t border-white/10">
-                        <button type="button" onClick={onClose} className="text-gray-400 hover:text-white text-xs px-4 py-2">Annulla</button>
-                        <button type="submit" className="bg-brand-accent text-brand-primary px-6 py-2 rounded font-bold text-xs hover:bg-brand-accent-light transition-all">
-                            {isNew ? 'Aggiungi Provider' : 'Salva Modifiche'}
+                    {testResult && (
+                        <div className={`p-3 rounded-lg border text-xs font-bold ${testResult.success ? 'bg-emerald-950/50 border-emerald-500/40 text-emerald-300' : 'bg-red-950/50 border-red-500/40 text-red-300'}`}>
+                            <i className={`fas ${testResult.success ? 'fa-check-circle' : 'fa-exclamation-triangle'} mr-1.5`}></i>
+                            {testResult.message}
+                        </div>
+                    )}
+
+                    <div className="flex items-center justify-between pt-4 border-t border-white/10">
+                        <button
+                            type="button"
+                            onClick={handleTestInModal}
+                            disabled={isTesting || !apiKey.trim()}
+                            className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 px-4 py-2 rounded text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1.5"
+                        >
+                            <i className={`fas fa-stethoscope ${isTesting ? 'fa-spin' : ''}`}></i>
+                            {isTesting ? 'Verifica in corso...' : 'Testa Chiave Ora'}
                         </button>
+
+                        <div className="flex gap-2">
+                            <button type="button" onClick={onClose} className="text-gray-400 hover:text-white text-xs px-4 py-2">Annulla</button>
+                            <button type="submit" className="bg-brand-accent text-brand-primary px-6 py-2 rounded font-bold text-xs hover:bg-brand-accent-light transition-all">
+                                {isNew ? 'Aggiungi Provider' : 'Salva Modifiche'}
+                            </button>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -1474,6 +1537,11 @@ export const AdminPanel: React.FC = () => {
                         const updated = exists ? musicProviders.map(x => x.id === p.id ? p : x) : [...musicProviders, p];
                         setMusicProviders(updated);
                         await saveMusicProviders(updated, activeProviderId || p.id);
+
+                        if (p.type === 'soundverse' && p.apiKey) {
+                            setApiSettings(prev => ({ ...prev, soundverse_api_key: p.apiKey }));
+                            fetchSoundverseBalance(p.apiKey);
+                        }
                     }}
                 />
             )}
