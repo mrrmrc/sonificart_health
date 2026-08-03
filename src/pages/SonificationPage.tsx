@@ -5,7 +5,7 @@ import { useOutletContext, useLocation } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
 import OSC from 'osc-js';
 import { SonificationResult, ConfigSettings, ProcessingStep, Paradigm, ScanPatternOverride, User, DashboardEntry } from '../types';
-import { sonifyImage, sonifyImageArtistic, sonifyImageHybrid, synthesizeAudio } from '../services/sonificationService';
+import { sonifyImage, sonifyImageArtistic, sonifyImageHybrid, sonifyImageAiComposer, synthesizeAudio } from '../services/sonificationService';
 import { api } from '../services/api';
 import { ProcessingView } from '../components/ProcessingView';
 import { ResultsDashboard } from '../components/ResultsDashboard';
@@ -234,6 +234,7 @@ export const SonificationPage: React.FC = () => {
 
             if (paradigm === 'scientific') res = await sonifyImage(imageFile, config, progressCb, oscClient, scanPatternOverride, normalizationReport, acquisitionMetadata, originalImageFile || undefined);
             else if (paradigm === 'artistic') res = await sonifyImageArtistic(imageFile, config, progressCb, oscClient, scanPatternOverride, acquisitionMetadata, originalImageFile || undefined);
+            else if (paradigm === 'ai_composer') res = await sonifyImageAiComposer(imageFile, config, progressCb, oscClient, scanPatternOverride, acquisitionMetadata, originalImageFile || undefined);
             else res = await sonifyImageHybrid(imageFile, config, progressCb, oscClient, scanPatternOverride, acquisitionMetadata, originalImageFile || undefined);
 
             // setResult(res);

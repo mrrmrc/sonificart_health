@@ -103,7 +103,7 @@ export const ShowcaseView: React.FC<ShowcaseViewProps> = ({ user, initialProject
                 <h2 className="text-4xl font-display font-bold text-white mb-4">{t('showcase.title')}</h2>
                 <p className="text-brand-text-secondary mb-8">{t('showcase.subtitle')}</p>
                 <div className="flex flex-wrap justify-center gap-4 bg-white/5 p-2 rounded-full inline-flex backdrop-blur-sm border border-white/10">
-                    {['all', 'scientific', 'artistic', 'hybrid'].map(f => (
+                    {['all', 'scientific', 'artistic', 'hybrid', 'ai_composer'].map(f => (
                         <button key={f} onClick={() => { setFilter(f); setCurrentPage(1); }} className={`px-4 py-1.5 rounded-full text-xs font-bold capitalize transition-colors ${filter === f ? 'bg-brand-accent text-brand-primary' : 'text-gray-400 hover:text-white'}`}>{t(`showcase.${f === 'all' ? 'all' : f}`)}</button>
                     ))}
                     <div className="w-px h-6 bg-white/10 mx-2 self-center hidden sm:block"></div>

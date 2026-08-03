@@ -17,7 +17,7 @@ export const ParadigmToggle: React.FC<ParadigmToggleProps> = ({ selectedParadigm
   };
 
   return (
-    <div className="w-full max-w-md mx-auto p-1 bg-brand-secondary rounded-lg flex gap-1">
+    <div className="w-full max-w-2xl mx-auto p-1 bg-brand-secondary rounded-lg grid grid-cols-2 sm:grid-cols-4 gap-1">
       <button
         onClick={() => onParadigmChange('scientific')}
         className={getButtonClass('scientific')}
@@ -25,8 +25,7 @@ export const ParadigmToggle: React.FC<ParadigmToggleProps> = ({ selectedParadigm
       >
         <i className="fas fa-flask mr-2"></i>
         Scientifico
-        {/* Mostra "1 CR" SOLO se NON è pro/admin */}
-        {!isPro && <span className="ml-2 bg-white/20 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">1 CR</span>}
+        {!isPro && <span className="ml-1.5 bg-white/20 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">1 CR</span>}
       </button>
       <button
         onClick={() => onParadigmChange('hybrid')}
@@ -35,7 +34,7 @@ export const ParadigmToggle: React.FC<ParadigmToggleProps> = ({ selectedParadigm
       >
         <i className="fas fa-layer-group mr-2"></i>
         Ibrido
-        {!isPro && <span className="ml-2 bg-yellow-500 text-yellow-900 text-[10px] font-bold px-1.5 py-0.5 rounded">2 CR</span>}
+        {!isPro && <span className="ml-1.5 bg-yellow-500 text-yellow-900 text-[10px] font-bold px-1.5 py-0.5 rounded">2 CR</span>}
       </button>
       <button
         onClick={() => onParadigmChange('artistic')}
@@ -44,7 +43,16 @@ export const ParadigmToggle: React.FC<ParadigmToggleProps> = ({ selectedParadigm
       >
         <i className="fas fa-palette mr-2"></i>
         Artistico
-        {!isPro && <span className="ml-2 bg-yellow-500 text-yellow-900 text-[10px] font-bold px-1.5 py-0.5 rounded">2 CR</span>}
+        {!isPro && <span className="ml-1.5 bg-yellow-500 text-yellow-900 text-[10px] font-bold px-1.5 py-0.5 rounded">2 CR</span>}
+      </button>
+      <button
+        onClick={() => onParadigmChange('ai_composer')}
+        className={getButtonClass('ai_composer')}
+        aria-pressed={selectedParadigm === 'ai_composer'}
+      >
+        <i className="fas fa-robot mr-2 text-emerald-400"></i>
+        AI Composer
+        {!isPro && <span className="ml-1.5 bg-emerald-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded">WHO</span>}
       </button>
     </div>
   );

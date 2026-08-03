@@ -1,6 +1,6 @@
 export type ProcessingStatus = 'pending' | 'active' | 'completed';
 
-export type Paradigm = 'scientific' | 'artistic' | 'hybrid';
+export type Paradigm = 'scientific' | 'artistic' | 'hybrid' | 'ai_composer';
 
 export type InstrumentType = 'sine' | 'square' | 'sawtooth' | 'triangle';
 

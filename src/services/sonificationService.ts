@@ -7,7 +7,7 @@ import {
 import { analyzeOriginalFile } from './forensicPackageService';
 import { NormalizationReport } from './imageNormalizationService';
 
-import { generateMusicPromptFromAnalysis, generateMusicPromptFromAnalysisHybrid, describeImageContent, generateHealthEvidencePrompt } from './geminiService';
+import { generateMusicPromptFromAnalysis, generateMusicPromptFromAnalysisHybrid, describeImageContent, generateHealthEvidencePrompt, generateAiComposerPrompt } from './geminiService';
 import { classifyHealthCategories } from './healthCategoryClassifier';
 import { calculateSHA256, bufferToHex } from '../utils/cryptoUtils';
 import { exportMidi } from './midiService';
@@ -1146,3 +1146,42 @@ export const sonifyImageArtistic = (file: File, config: ConfigSettings, progress
 
 export const sonifyImageHybrid = (file: File, config: ConfigSettings, progressCallback: (stepIndex: number, status: 'active' | 'completed') => void, oscClient: OSC | null, scanPatternOverride: ScanPatternOverride, acquisitionMetadata?: SonificationResult['acquisitionMetadata'], originalFileOverride?: File) =>
     sonifyImageArtisticOrHybrid(file, config, progressCallback, oscClient, 'hybrid', scanPatternOverride, acquisitionMetadata, originalFileOverride);
+
+export async function sonifyImageAiComposer(
+    file: File,
+    config: ConfigSettings,
+    progressCallback: (stepIndex: number, status: 'active' | 'completed') => void,
+    oscClient: OSC | null,
+    scanPatternOverride: ScanPatternOverride,
+    acquisitionMetadata?: SonificationResult['acquisitionMetadata'],
+    originalFileOverride?: File
+): Promise<SonificationResult> {
+    const res = await sonifyImageArtisticOrHybrid(
+        file,
+        config,
+        progressCallback,
+        oscClient,
+        'hybrid',
+        scanPatternOverride,
+        acquisitionMetadata,
+        originalFileOverride
+    );
+
+    res.paradigm = 'ai_composer';
+
+    try {
+        const imageDescription = await describeImageContent(file);
+        const aiComposerPrompt = await generateAiComposerPrompt(
+            res.culturalSelectionResult.tradition,
+            res.blockAnalysisResult.globalStats,
+            imageDescription,
+            res.audioOutput.duration,
+            res.healthClassification
+        );
+        res.musicGenerationPrompt = aiComposerPrompt;
+    } catch (e) {
+        console.warn("Errore generazione prompt AI Composer:", e);
+    }
+
+    return res;
+}

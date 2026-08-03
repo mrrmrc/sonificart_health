@@ -330,3 +330,90 @@ Fornisci una sintesi ad alta precisione scientifica e clinica (ampia e dettaglia
         throw e;
     }
 }
+
+export async function generateAiComposerPrompt(
+    tradition: Tradition,
+    analysisStats: BlockAnalysisResult['globalStats'],
+    imageDescription: string,
+    durationSeconds: number,
+    healthClassification?: HealthClassificationResult | null
+): Promise<MusicGenerationPrompt> {
+    const apiKey = await getGeminiApiKey();
+    if (!apiKey) {
+        throw new Error("Chiave API Google mancante.");
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
+    const configBpm = healthClassification?.primaryCategory.targetBpm || 74;
+
+    const healthSection = healthClassification
+        ? `
+--- CLASSIFICAZIONE OLISTICA TERAPEUTICA WHO ---
+${healthClassification.promptFragment}
+--- FINE CLASSIFICAZIONE WHO ---`
+        : `Applica tutte le linee guida del WHO Health Evidence Network Report 67 per la composizione medica e terapeutica.`;
+
+    const textPart = {
+        text: `RUOLO: Sei un Maestro Compositore AI Senior e Neuroscienziato della Musica, specializzato nell'interpretazione OLISTICA delle opere d'arte visiva secondo i principi clinici del WHO (Health Evidence Network Report 67).
+
+SVOLGIMENTO (PARADIGMA AI COMPOSER):
+Non sei vincolato da una traduzione matematica nota-per-nota pixel-per-pixel. Agisci invece come un compositore umano/AI che valuta l'opera d'arte nella sua totalità (contenuto visivo, colori, atmosfera, carica emotiva) e compone un'opera musicale originale perfettamente orientata al benessere ed all'obiettivo medico identificato.
+
+DATI DI INPUT:
+- OPERA D'ARTE (SOGGETTO VISIVO): "${imageDescription}"
+- TRADIZIONE E CARATTERE MUSICALE: '${tradition.name}' (Profilo: '${tradition.character}')
+- BPM CLINICO TARGET WHO: ${configBpm} BPM
+- DURATA ESATTA DA RISPETTARE: ${durationSeconds.toFixed(0)} secondi.
+- STATISTICHE CROMATICHE: Saturazione ${(analysisStats.avg_saturation * 100).toFixed(0)}%, Diversità cromatica ${(analysisStats.hue_diversity * 100).toFixed(0)}%
+${healthSection}
+
+REQUISITI DI COMPOSIZIONE LIBERA WHO (MANDATORI):
+1. **Composizione Olistica Terapeutica**: Struttura il brano considerando la drammaturgia visiva ed emozionale dell'opera ("${imageDescription}").
+2. **Scelta Strumentale & Timbrica Clinica**: Seleziona strumenti adatti alla categoria primaria WHO ("${healthClassification?.primaryCategory.label || 'Wellness'}").
+3. **Controllo Durata Rigido**:
+   - suno_prompt: Inizia con: "[Duration: ${durationSeconds.toFixed(0)}s], [Strictly ${durationSeconds.toFixed(0)} seconds limit], [${configBpm} BPM], [Strict Tempo], [Strictly Instrumental], [No Vocals]". Termina con: "[Outro: Dissolve at ${durationSeconds.toFixed(0)}s], [End at ${durationSeconds.toFixed(0)}s], [Silence], [End]".
+   - udio_prompt: Tag descrittivi con ${configBpm} BPM, genere e strumentazione clinica WHO.
+   - soundverse_prompt: "Genre: Cinematic Health Composition | Tempo: ${configBpm} BPM | Key: Auto | Style: Holistic ${healthClassification?.primaryCategory.label || 'Wellness'} | Instruments: [Strumenti Clinici WHO] | Duration: ${durationSeconds.toFixed(0)}s".
+
+Rispondi SOLO con il JSON con campi: main_prompt_ita, technical_parameters, justification, suno_prompt, udio_prompt, soundverse_prompt, negative_prompt, suno_lyrics.`
+    };
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: { parts: [textPart] },
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        main_prompt_ita: { type: Type.STRING },
+                        technical_parameters: { type: Type.STRING },
+                        justification: { type: Type.STRING },
+                        suno_prompt: { type: Type.STRING },
+                        udio_prompt: { type: Type.STRING },
+                        soundverse_prompt: { type: Type.STRING },
+                        negative_prompt: { type: Type.STRING },
+                        suno_lyrics: { type: Type.STRING }
+                    },
+                    required: ["main_prompt_ita", "technical_parameters", "justification", "suno_prompt", "udio_prompt", "soundverse_prompt", "negative_prompt", "suno_lyrics"]
+                }
+            }
+        });
+        const jsonText = response.text?.trim();
+        if (!jsonText) throw new Error("Risposta vuota da Gemini AI Composer");
+        return JSON.parse(jsonText) as MusicGenerationPrompt;
+    } catch (e) {
+        console.error("Errore Gemini AI Composer Prompt:", e);
+        return {
+            main_prompt_ita: "Composizione Olistica Terapeutica WHO",
+            technical_parameters: `${configBpm} BPM`,
+            justification: "Composizione AI basata sull'interpretazione olistica dell'opera d'arte.",
+            suno_prompt: `[Duration: ${durationSeconds.toFixed(0)}s], [${configBpm} BPM], [Strictly Instrumental], [Holistic Composition]`,
+            udio_prompt: `holistic, therapeutic, instrumental, ${configBpm} bpm`,
+            soundverse_prompt: `Genre: Cinematic Health Composition | Tempo: ${configBpm} BPM | Style: Holistic Wellness | Instruments: Cello, Flute, Piano | Duration: ${durationSeconds.toFixed(0)}s`,
+            negative_prompt: "lullaby, noisy, harsh",
+            suno_lyrics: "[0:00] Intro, [End]"
+        };
+    }
+}
