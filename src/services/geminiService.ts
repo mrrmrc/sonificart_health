@@ -388,6 +388,8 @@ REQUISITI DI SINFONIA PITTORICO-CLINICA & INGEGNERIA NEURO-ACUSTICA VISCERALE (M
      "Visual Theme: [Stile Pittorico & Soggetto dell'Opera] | Reference Melody Theme: [${melodyNotesSequence || 'Main Motif'}] | Genre: [Genere Musicale Dinamico Adattivo] | Neuro-Acoustics & Spatial FX: Sub-Bass Infrasound (24Hz), Hidden Binaural Theta Wave (6Hz), 432Hz Tuning, 3D Holographic Stereo Panning, Deep Spatial Reverb | Style: Holistic ${healthClassification?.primaryCategory.label || 'Wellness'} | Mood: [Atmosfera Emozionale e Chiaroscuro] | Tempo: ${configBpm} BPM | Instruments: [Strumenti Clinici WHO ed evocativi dell'epoca/stile dell'opera] | Duration: ${durationSeconds.toFixed(0)}s"
    - **suno_prompt**: Inizia con: "[Duration: ${durationSeconds.toFixed(0)}s], [${configBpm} BPM], [Genre: Genere Musicale Dinamico], [Visual Style: Stile Pittorico], [Melodic Motif: ${melodyNotesSequence || 'Main Motif'}], [Production FX: Sub-Bass 24Hz Infrasound, 432Hz Tuning, 3D Binaural Panning, Holographic Ambient Reverb], [Subject: ${imageDescription}], [Strictly Instrumental]". Termina con: "[Outro: Dissolve at ${durationSeconds.toFixed(0)}s], [End at ${durationSeconds.toFixed(0)}s], [Silence], [End]".
    - **udio_prompt**: Tag descrittivi che combinano il genere dinamico, lo stile pittorico, la linea melodica (${melodyNotesSequence}), i tag psicoacustici (24hz sub-bass, 432hz tuning, binaural theta wave, 3d spatial audio), ${configBpm} BPM e la strumentazione clinica WHO.
+   - **suno_lyrics (MANDATORIO STRUTTURATO SU TIMESTAMPS)**: Genera la TIMELINE ESTRATTA DALL'OPERA suddivisa in timestamps da incollare nel campo Lyrics dell'AI per sincronizzare le sezioni musicali. Esempio obbligatorio:
+     "[0:00] [Intro: Ethereal 24Hz Sub-Bass Ambient, 432Hz Base Tuning, Reference Motif: ${melodyNotesSequence || 'Main Theme'}]\n[0:25] [Section A: Main Theme & Strings Crescendo, 3D Spatial Panning]\n[1:00] [Section B: Visceral Resonance & Resonant Percussion Textures]\n[1:45] [Climax: Full Orchestral Catharsis & High Stendhal Resonance]\n[${(durationSeconds * 0.85).toFixed(0)}s] [Outro: Dissolve into Sub-Bass Ambient Silence]\n[${durationSeconds.toFixed(0)}s] [End]"
 
 5. **Analisi Semantico-Iconografica dell'Opera (MANDATORIO per semantic_analysis)**:
    Fornisci l'oggetto JSON semantic_analysis che spiega l'impatto visivo sul suono:
@@ -476,7 +478,7 @@ Rispondi SOLO con il JSON con campi: main_prompt_ita, technical_parameters, just
             udio_prompt: `visual theme: ${imageDescription}, holistic, therapeutic, instrumental, ${configBpm} bpm`,
             soundverse_prompt: `Visual Theme: ${imageDescription} | Genre: Cinematic Health Composition | Tempo: ${configBpm} BPM | Style: Holistic Wellness | Instruments: Cello, Flute, Piano | Duration: ${durationSeconds.toFixed(0)}s`,
             negative_prompt: "lullaby, noisy, harsh",
-            suno_lyrics: "[0:00] Intro, [End]",
+            suno_lyrics: `[0:00] [Intro: Ethereal 24Hz Sub-Bass Ambient, 432Hz Base Tuning]\n[0:25] [Section A: Main Theme & Strings Crescendo]\n[1:00] [Section B: Visceral Resonant Textures & 3D Panning]\n[${(durationSeconds * 0.85).toFixed(0)}s] [Outro: Sub-Bass Ambient Dissolve]\n[${durationSeconds.toFixed(0)}s] [End]`,
             semantic_analysis: {
                 facial_expressions: "Carica emotiva ed espressiva visiva dell'opera",
                 materials_objects: ["Elementi visivi dell'opera"],
