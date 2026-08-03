@@ -11,9 +11,9 @@
 
 import { BlockAnalysisResult, HealthCategoryScore, HealthClassificationResult, HealthCategoryType } from '../types';
 
-// --- SOGLIA DI ATTIVAZIONE ---
+/// --- SOGLIA DI ATTIVAZIONE ---
 // Categorie con score inferiore a questa soglia non vengono incluse nel prompt
-const ACTIVATION_THRESHOLD = 0.3;
+const ACTIVATION_THRESHOLD = 0.45;
 
 // --- DIRETTIVE WHO PER CATEGORIA (Health Evidence Network Report 67) ---
 // Sintesi clinica e neuroscientifica approfondita dei parametri acustici terapeutici
@@ -42,7 +42,7 @@ const WHO_DIRECTIVES: Record<HealthCategoryType, { label: string; targetBpm: num
         label: 'Miglioramento Cognitivo e Cueing Motorio',
         targetBpm: 108,
         directive: `DIRETTIVA WHO - MIGLIORAMENTO COGNITIVO E CUEING UDITIVO-MOTORIO (NEUROPLASTICITÀ):
-1. AUDITORY MOTOR CUEING (RAS): Tempo marcato e altamente strutturato (90-120 BPM per la riabilitazione del passo, sincronizzazione motoria post-ictus o Parkinson).
+1. AUDITORY MOTOR CUEING (RAS): Tempo marcato e highly strutturato (90-120 BPM per la riabilitazione del passo, sincronizzazione motoria post-ictus o Parkinson).
 2. TRANSIENTI & ATTACCO TIMBRICO: Utilizzo prioritario di strumenti ad attacco impulsivo definito (pianoforte, marimba, pizzicato d'archi, percussioni intonate) per fornire marker temporali netti e precisi alla corteccia motoria primaria e ai gangli della base.
 3. MELODIA & MEMORIA DI LAVORO: Frasi melodiche chiare a salto o grado congiunto con struttura simmetrica (A-B-A), concepite per stimolare la neuroplasticità dell'ippocampo e il recupero del linguaggio (Melodic Intonation Therapy).
 4. COMPLESSITÀ MISURATA: Modulazioni armoniche controllate che mantengano elevata l'attenzione sostenuta senza superare la soglia di saturazione cognitiva del paziente.
@@ -77,7 +77,7 @@ const SOCIAL_KEYWORDS = [
     'people', 'person', 'group', 'crowd', 'children', 'child', 'family',
     'danza', 'dance', 'festa', 'celebration', 'ritratto', 'portrait',
     'volto', 'face', 'mani', 'hands', 'abbraccio', 'embrace',
-    'comunità', 'community', 'insieme', 'together'
+    'comunità', 'community', 'insieme', 'together', 'crocifissione', 'croce', 'cristo', 'gesù'
 ];
 
 const NATURE_CALM_KEYWORDS = [
@@ -114,7 +114,6 @@ function keywordMatchScore(imageDescription: string, keywords: string[]): number
             matches++;
         }
     }
-    // Normalize: 1 match = 0.3, 2 matches = 0.5, 3+ matches = 0.7+
     return Math.min(1.0, matches * 0.25);
 }
 
@@ -136,10 +135,6 @@ function gaussianProximity(value: number, center: number, sigma: number): number
 
 /**
  * ALGORITMO PRINCIPALE: Classifica le caratteristiche visive nelle 5 categorie WHO.
- * 
- * @param globalStats - Statistiche globali dall'analisi dei blocchi (CIE LAB, saturazione, ecc.)
- * @param imageDescription - Descrizione testuale dell'immagine dalla Vision AI
- * @returns HealthClassificationResult con scores, categorie attive, e prompt fragment
  */
 export function classifyHealthCategories(
     globalStats: BlockAnalysisResult['globalStats'],
@@ -154,44 +149,33 @@ export function classifyHealthCategories(
         avg_variance     // Varianza media della luminanza intra-blocco
     } = globalStats;
 
-    // ==========================================================
-    // 1. CALMING / STRESS REDUCTION
-    // Attivato da: colori freddi, bassa saturazione, bassa varianza
-    // ==========================================================
     const coldness = normalize(-avg_b, -50, 50);                   // avg_b negativo = freddo
     const lowSaturation = 1 - normalize(avg_saturation, 0, 0.8);  // Bassa saturazione
     const lowVariance = 1 - normalize(avg_variance, 0, 1000);     // Bassa varianza = uniformità
     const lowDiversity = 1 - normalize(hue_diversity, 0, 0.8);    // Bassa diversità cromatica
     const calmKeywords = keywordMatchScore(imageDescription, NATURE_CALM_KEYWORDS);
 
-    const calmingScore = Math.min(1.0,
-        coldness * 0.25 +
-        lowSaturation * 0.25 +
-        lowVariance * 0.15 +
-        lowDiversity * 0.15 +
-        calmKeywords * 0.20
-    );
+    const warmth = normalize(avg_a, -30, 50);                      // avg_a positivo = caldo/rosso
+    const warmthB = normalize(avg_b, -30, 50);                    // avg_b positivo = giallo/caldo
+    const socialKw = keywordMatchScore(imageDescription, SOCIAL_KEYWORDS);
+    const energyKw = keywordMatchScore(imageDescription, ENERGY_KEYWORDS);
 
-    // ==========================================================
-    // 2. REGOLAZIONE FISIOLOGICA
-    // Attivato da: varianza media (pattern regolari), colori neutri/bilanciati
-    // ==========================================================
+    // Penalità per la categoria Calming se l'immagine ha elementi caldi/drammatici/sociali
+    const calmingPenalties = (warmth * 0.3) + (socialKw * 0.4) + (energyKw * 0.3);
+
+    const calmingScore = Math.max(0, Math.min(1.0,
+        (coldness * 0.30 + lowSaturation * 0.30 + lowVariance * 0.20 + lowDiversity * 0.10 + calmKeywords * 0.20) - calmingPenalties
+    ));
+
     const mediumVariance = gaussianProximity(avg_variance, 300, 200);   // Varianza ottimale ~300
     const mediumDiversity = gaussianProximity(hue_diversity, 0.45, 0.2); // Diversità media
     const mediumSaturation = gaussianProximity(avg_saturation, 0.4, 0.2); // Saturazione bilanciata
     const neutralColor = 1 - normalize(Math.abs(avg_a) + Math.abs(avg_b), 0, 80); // Colori neutri
 
-    const physiologicalScore = Math.min(1.0,
-        mediumVariance * 0.30 +
-        mediumDiversity * 0.20 +
-        mediumSaturation * 0.20 +
-        neutralColor * 0.30
-    );
+    const physiologicalScore = Math.max(0, Math.min(1.0,
+        (mediumVariance * 0.30 + mediumDiversity * 0.20 + mediumSaturation * 0.20 + neutralColor * 0.30) - (socialKw * 0.2)
+    ));
 
-    // ==========================================================
-    // 3. MIGLIORAMENTO COGNITIVO/MOTORIO
-    // Attivato da: alta diversità, alta varianza (contorni), complessità visiva
-    // ==========================================================
     const highDiversity = normalize(hue_diversity, 0.3, 0.9);     // Alta diversità cromatica
     const highVariance = normalize(avg_variance, 200, 1500);       // Alta varianza = dettaglio
     const highSaturation = normalize(avg_saturation, 0.3, 0.9);   // Colori vivaci
@@ -204,31 +188,19 @@ export function classifyHealthCategories(
         complexityKw * 0.25
     );
 
-    // ==========================================================
-    // 4. CONNESSIONE SOCIALE/EMOTIVA
-    // Attivato da: colori caldi, saturazione alta, contenuto sociale nell'immagine
-    // ==========================================================
-    const warmth = normalize(avg_a, -30, 50);                      // avg_a positivo = caldo/rosso
-    const warmthB = normalize(avg_b, -30, 50);                    // avg_b positivo = giallo/caldo
     const goodSaturation = normalize(avg_saturation, 0.2, 0.8);   // Saturazione significativa
-    const socialKw = keywordMatchScore(imageDescription, SOCIAL_KEYWORDS);
 
     const socialScore = Math.min(1.0,
         warmth * 0.20 +
         warmthB * 0.15 +
         goodSaturation * 0.15 +
-        socialKw * 0.50  // Keywords pesano molto per questa categoria
+        socialKw * 0.50
     );
 
-    // ==========================================================
-    // 5. MOTIVAZIONE / ADESIONE
-    // Attivato da: alta energia visiva (luminosità + saturazione), contrasto forte
-    // ==========================================================
     const brightness = normalize(avg_L, 30, 80);                   // Luminosità alta
     const strongSaturation = normalize(avg_saturation, 0.3, 0.9); // Saturazione forte
     const strongVariance = normalize(avg_variance, 100, 1000);     // Contrasto forte
     const balancedDiversity = gaussianProximity(hue_diversity, 0.5, 0.3); // Diversità bilanciata
-    const energyKw = keywordMatchScore(imageDescription, ENERGY_KEYWORDS);
 
     const motivationScore = Math.min(1.0,
         brightness * 0.20 +
@@ -238,9 +210,6 @@ export function classifyHealthCategories(
         energyKw * 0.30
     );
 
-    // ==========================================================
-    // ASSEMBLAGGIO RISULTATI
-    // ==========================================================
     const allScores: HealthCategoryScore[] = [
         {
             category: 'calming',
@@ -287,12 +256,14 @@ export function classifyHealthCategories(
     // Ordina per score decrescente
     allScores.sort((a, b) => b.score - a.score);
 
-    // Filtra categorie attive (score > threshold)
-    const activeCategories = allScores.filter(s => s.score >= ACTIVATION_THRESHOLD);
+    // Seleziona la primaria (score più alto)
+    const primaryCategory = allScores[0];
 
-    // Se nessuna supera la soglia, usa almeno la prima (score più alto)
-    const effectiveActive = activeCategories.length > 0 ? activeCategories : [allScores[0]];
-    const primaryCategory = effectiveActive[0];
+    // Categorie secondarie attive SOLO se superano la soglia 0.45 E hanno uno score vicino a quello primario (almeno 75%)
+    const secondaryActive = allScores.slice(1).filter(s => s.score >= ACTIVATION_THRESHOLD && s.score >= primaryCategory.score * 0.75);
+
+    // Massimo 2 categorie attive (1 primaria + al massimo 1 secondaria strettamente correlata)
+    const effectiveActive = [primaryCategory, ...secondaryActive].slice(0, 2);
 
     // Genera il prompt fragment
     const promptFragment = buildPromptFragment(effectiveActive, primaryCategory);

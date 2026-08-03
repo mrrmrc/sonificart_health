@@ -468,7 +468,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                 || correctedResult.musicGenerationPrompt?.technical_parameters
                 || `Genre: Cinematic Health Ambient | Style: Mindful | Duration: ${correctedResult.configUsed?.targetDurationSeconds || 60}s`;
             
-            const targetSec = correctedResult.configUsed?.targetDurationSeconds || 60;
+            const targetSec = Math.round(correctedResult.audioOutput?.duration || correctedResult.configUsed?.targetDurationSeconds || 60);
             const audioWavBlob = correctedResult.audioOutput?.audioWavBlob || null;
             const audioWavUrl = correctedResult.audioOutput?.audioUrl || null;
 
