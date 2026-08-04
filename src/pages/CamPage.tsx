@@ -258,7 +258,10 @@ S'innalza il canto al vertice del cielo!`;
         }, 100);
     };
 
-    // Real WebAudio Synth
+    // Sequencer interval reference for real-time generative music
+    const sequencerTimerRef = useRef<any>(null);
+
+    // Real-Time Generative Procedural Music Engine (Instant 0 Latency for Museum Visitors)
     const playTherapeuticAudio = () => {
         stopSynthAudio();
 
@@ -271,50 +274,103 @@ S'innalza il canto al vertice del cielo!`;
             const targetBpm = primaryCat?.targetBpm || 64;
             const isCalming = primaryCat?.category === 'calming' || primaryCat?.category === 'physiological';
 
-            const filter = ctx.createBiquadFilter();
-            filter.type = 'lowpass';
-            filter.frequency.setValueAtTime(isCalming ? 3200 : 12000, ctx.currentTime);
+            // Master Filter tuned to WHO directive
+            const masterFilter = ctx.createBiquadFilter();
+            masterFilter.type = 'lowpass';
+            masterFilter.frequency.setValueAtTime(isCalming ? 3600 : 9500, ctx.currentTime);
 
+            // Master Volume
             const masterGain = ctx.createGain();
-            masterGain.gain.setValueAtTime(0.15, ctx.currentTime);
+            masterGain.gain.setValueAtTime(0.22, ctx.currentTime);
 
-            filter.connect(masterGain);
+            masterFilter.connect(masterGain);
             masterGain.connect(ctx.destination);
 
-            const baseFreq = 220; // A3
-            const chordNotes = isCalming
-                ? [baseFreq, baseFreq * 1.25, baseFreq * 1.5, baseFreq * 1.875]
-                : [baseFreq, baseFreq * 1.2, baseFreq * 1.5, baseFreq * 1.75];
+            // Harmonic Scale (A3 = 216Hz in 432Hz tuning system)
+            // Pentatonic Healing Scale: A3, C4, D4, E4, G4, A4, C5, E5
+            const scaleFreqs = isCalming
+                ? [216, 256.8, 288.6, 324, 384, 432, 513.6, 648] // Healing 432Hz Pentatonic
+                : [216, 242.7, 272.2, 324, 364.1, 432, 485.4, 648]; // Lydian Inspiriting
 
-            const oscs: OscillatorNode[] = [];
-            const gains: GainNode[] = [];
+            // LAYER 1: Deep Ambient String/Bass Drone (Continuous Warm Atmosphere)
+            const bassOsc = ctx.createOscillator();
+            const bassGain = ctx.createGain();
+            bassOsc.type = 'sine';
+            bassOsc.frequency.setValueAtTime(108, ctx.currentTime); // Sub-bass A2 (108Hz)
+            bassGain.gain.setValueAtTime(0.001, ctx.currentTime);
+            bassGain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 1.5);
+            bassOsc.connect(bassGain);
+            bassGain.connect(masterFilter);
+            bassOsc.start();
 
-            chordNotes.forEach((freq, i) => {
-                const osc = ctx.createOscillator();
-                const g = ctx.createGain();
+            // Warm Fifth Pad
+            const padOsc = ctx.createOscillator();
+            const padGain = ctx.createGain();
+            padOsc.type = 'triangle';
+            padOsc.frequency.setValueAtTime(162, ctx.currentTime); // E3 (162Hz)
+            padGain.gain.setValueAtTime(0.001, ctx.currentTime);
+            padGain.gain.linearRampToValueAtTime(0.08, ctx.currentTime + 2.0);
+            padOsc.connect(padGain);
+            padGain.connect(masterFilter);
+            padOsc.start();
+
+            // LAYER 2: Procedural Melodic Arpeggiator (Real Instrument Timbre)
+            const beatMs = (60 / targetBpm) * 500; // Eighth notes
+            let stepIndex = 0;
+
+            const playNextNote = () => {
+                if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') return;
+                const now = audioCtxRef.current.currentTime;
+
+                // Pick note from harmonic scale based on step pattern
+                const noteIndex = (stepIndex % 2 === 0)
+                    ? (stepIndex % scaleFreqs.length)
+                    : ((stepIndex * 3) % scaleFreqs.length);
+
+                const freq = scaleFreqs[noteIndex];
+
+                // Plucked Harp / Piano Synth Node
+                const osc = audioCtxRef.current.createOscillator();
+                const noteGain = audioCtxRef.current.createGain();
 
                 osc.type = isCalming ? 'sine' : 'triangle';
-                osc.frequency.setValueAtTime(freq, ctx.currentTime);
+                osc.frequency.setValueAtTime(freq, now);
 
-                const lfo = ctx.createOscillator();
-                const lfoGain = ctx.createGain();
-                lfo.frequency.setValueAtTime((targetBpm / 60) * 2, ctx.currentTime);
-                lfoGain.gain.setValueAtTime(freq * 0.015, ctx.currentTime);
-                lfo.connect(osc.frequency);
-                lfo.start();
+                // Add subtle harmonic overtone (Rich Piano/Harp feeling)
+                const overtoneOsc = audioCtxRef.current.createOscillator();
+                const overtoneGain = audioCtxRef.current.createGain();
+                overtoneOsc.type = 'sine';
+                overtoneOsc.frequency.setValueAtTime(freq * 2, now);
 
-                g.gain.setValueAtTime(0.001, ctx.currentTime);
-                g.gain.exponentialRampToValueAtTime(0.12 / chordNotes.length, ctx.currentTime + 0.3 + i * 0.1);
+                // Acoustic Envelope (Fast attack, natural exponential decay)
+                noteGain.gain.setValueAtTime(0.001, now);
+                noteGain.gain.linearRampToValueAtTime(0.18, now + 0.02);
+                noteGain.gain.exponentialRampToValueAtTime(0.0001, now + (isCalming ? 1.4 : 0.8));
 
-                osc.connect(g);
-                g.connect(filter);
+                overtoneGain.gain.setValueAtTime(0.001, now);
+                overtoneGain.gain.linearRampToValueAtTime(0.04, now + 0.01);
+                overtoneGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
 
-                osc.start();
-                oscs.push(osc);
-                gains.push(g);
-            });
+                osc.connect(noteGain);
+                overtoneOsc.connect(overtoneGain);
 
-            synthNodesRef.current = { oscs, gains, filter };
+                noteGain.connect(masterFilter);
+                overtoneGain.connect(masterFilter);
+
+                osc.start(now);
+                overtoneOsc.start(now);
+
+                osc.stop(now + 1.5);
+                overtoneOsc.stop(now + 0.6);
+
+                stepIndex++;
+            };
+
+            // Play first note immediately and start loop
+            playNextNote();
+            sequencerTimerRef.current = setInterval(playNextNote, beatMs);
+
+            synthNodesRef.current = { oscs: [bassOsc, padOsc], gains: [bassGain, padGain], filter: masterFilter };
             setIsPlayingSynth(true);
         } catch (e) {
             console.warn("Audio Context Synth error:", e);
@@ -322,6 +378,10 @@ S'innalza il canto al vertice del cielo!`;
     };
 
     const stopSynthAudio = () => {
+        if (sequencerTimerRef.current) {
+            clearInterval(sequencerTimerRef.current);
+            sequencerTimerRef.current = null;
+        }
         if (synthNodesRef.current.oscs) {
             synthNodesRef.current.oscs.forEach(o => { try { o.stop(); o.disconnect(); } catch (e) {} });
         }
