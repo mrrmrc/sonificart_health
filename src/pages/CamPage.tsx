@@ -83,9 +83,22 @@ export const CamPage: React.FC = () => {
     const audioCtxRef = useRef<AudioContext | null>(null);
     const synthNodesRef = useRef<{ oscs: OscillatorNode[]; gains: GainNode[]; filter?: BiquadFilterNode }>({ oscs: [], gains: [] });
 
-    // Start Camera
+    // Start Camera with detailed diagnostics and HTTPS check
     const startCamera = async () => {
         setCamError(null);
+
+        // Check 1: HTTPS / Secure Context Check
+        if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+            setCamError("⚠️ Accesso Telecamera Bloccato: Il browser richiede l'uso del protocollo sicuro HTTPS. Assicurati che l'indirizzo inizi con https:// (es. https://sonificarthealth.sviluppo.host)");
+            return;
+        }
+
+        // Check 2: mediaDevices API availability
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            setCamError("⚠️ Il tuo browser o la connessione attuale non supportano l'accesso WebRTC alla telecamera.");
+            return;
+        }
+
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
@@ -98,7 +111,15 @@ export const CamPage: React.FC = () => {
             }
         } catch (err: any) {
             console.error("Camera access error:", err);
-            setCamError("Impossibile accedere alla telecamera. Verificare i permessi del browser.");
+            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                setCamError("⚠️ Permesso Telecamera Negato dal Browser. Per attivare la webcam, clicca sull'icona del lucchetto o della telecamera a sinistra dell'URL nel tuo browser e seleziona 'Consenti'.");
+            } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                setCamError("⚠️ Nessuna telecamera rilevata sul dispositivo. Collegare una webcam e riprovare.");
+            } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+                setCamError("⚠️ La telecamera è in uso da un altra applicazione (es. Zoom, Teams, Google Meet). Chiudere le altre app e riprovare.");
+            } else {
+                setCamError(`⚠️ Errore di accesso alla telecamera (${err.name || 'Sconosciuto'}). Verificare i permessi del browser.`);
+            }
         }
     };
 
@@ -464,9 +485,23 @@ S'innalza il canto al vertice del cielo!`;
                         {/* Video Container */}
                         <div className="relative bg-slate-950 rounded-xl border border-white/10 overflow-hidden aspect-video">
                             {camError ? (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center text-red-400">
-                                    <i className="fas fa-exclamation-triangle text-3xl mb-2"></i>
-                                    <p className="text-xs font-bold">{camError}</p>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center text-red-400 bg-red-950/20 space-y-3">
+                                    <i className="fas fa-exclamation-triangle text-3xl mb-1"></i>
+                                    <p className="text-xs font-bold leading-relaxed max-w-lg">{camError}</p>
+                                    <div className="flex flex-wrap justify-center gap-3 pt-2">
+                                        <button
+                                            onClick={startCamera}
+                                            className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold uppercase tracking-wider border border-white/20 transition-all"
+                                        >
+                                            <i className="fas fa-rotate-right mr-1.5"></i> Riprova Connessione
+                                        </button>
+                                        <button
+                                            onClick={() => { setCamError(null); setIsCamActive(true); }}
+                                            className="px-4 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 rounded-lg text-xs font-bold uppercase tracking-wider border border-cyan-500/40 transition-all"
+                                        >
+                                            <i className="fas fa-play mr-1.5"></i> Testa Senza Telecamera (Simulazione)
+                                        </button>
+                                    </div>
                                 </div>
                             ) : (
                                 <>
