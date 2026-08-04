@@ -252,6 +252,7 @@ S'innalza il canto al vertice del cielo!`;
                 setGeneratedLibretto(libretto);
                 setGeneratedSunoPrompt(prompt);
 
+                // AUTOMATIC IMMEDIATE PLAYBACK - No extra button needed!
                 playTherapeuticAudio();
             }
         }, 100);
@@ -441,9 +442,27 @@ S'innalza il canto al vertice del cielo!`;
                             ))}
                         </div>
 
-                        {/* Selected Artwork Display */}
-                        <div className="relative rounded-xl overflow-hidden border border-white/10 aspect-video bg-black">
-                            <img src={selectedArtwork.url} alt={selectedArtwork.title} className="w-full h-full object-cover" />
+                        {/* Selected Artwork Display with WHO Dynamic Visual Impact */}
+                        <div className={`relative rounded-xl overflow-hidden border transition-all duration-700 aspect-video bg-black ${whoResult ? 'border-cyan-400 shadow-[0_0_30px_rgba(45,212,191,0.25)]' : 'border-white/10'}`}>
+                            <img
+                                src={selectedArtwork.url}
+                                alt={selectedArtwork.title}
+                                className="w-full h-full object-cover transition-all duration-1000"
+                                style={{
+                                    filter: whoResult?.primaryCategory ? (
+                                        whoResult.primaryCategory.category === 'calming' ? 'contrast(0.92) brightness(1.05) saturate(0.85) sepia(0.08)' :
+                                        whoResult.primaryCategory.category === 'physiological' ? 'contrast(1.1) saturate(1.15) hue-rotate(-8deg)' :
+                                        whoResult.primaryCategory.category === 'cognitive_motor' ? 'contrast(1.25) saturate(1.25) brightness(1.08)' :
+                                        whoResult.primaryCategory.category === 'motivation' ? 'contrast(1.15) brightness(1.18) saturate(1.4)' :
+                                        'saturate(1.2)'
+                                    ) : 'none'
+                                }}
+                            />
+                            {whoResult && (
+                                <div className="absolute top-3 left-3 bg-black/80 backdrop-blur-md border border-cyan-500/40 px-3 py-1 rounded-full text-[10px] font-mono text-cyan-300 font-bold flex items-center gap-1.5 animate-pulse">
+                                    <i className="fas fa-wand-magic-sparkles"></i> Visual Impact WHO Attivo ({whoResult.primaryCategory.label.split('/')[0]})
+                                </div>
+                            )}
                             <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-4 flex flex-col justify-end">
                                 <span className="text-base font-bold text-white">{selectedArtwork.title}</span>
                                 <span className="text-xs text-cyan-300 font-mono">{selectedArtwork.artist}</span>
