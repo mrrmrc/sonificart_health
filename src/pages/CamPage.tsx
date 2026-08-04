@@ -9,7 +9,7 @@ interface OutletContextType {
     setIsLoginModalOpen: (open: boolean) => void;
 }
 
-export interface OrganicColorShape {
+export interface PixelColorGroup {
     idNumber: number;
     idCode: string;
     name: string;
@@ -24,7 +24,7 @@ export interface OrganicColorShape {
     b_val: number;
     centroidX: number; // 0-100%
     centroidY: number; // 0-100%
-    pixelIndices: Int32Array; // Array of pixel indices in this organic shape
+    pixelIndices: Int32Array; // Complete pixel array for 100% zero-residue coverage
     isDetached: boolean;
     midiNote: number;
     noteName: string;
@@ -42,10 +42,10 @@ export const CamPage: React.FC = () => {
     const [scanStepMessage, setScanStepMessage] = useState<string>('');
     const [progressPct, setProgressPct] = useState<number>(0);
 
-    // Organic Shapes State
-    const [shapes, setShapes] = useState<OrganicColorShape[]>([]);
+    // Pixel Groups State
+    const [groups, setGroups] = useState<PixelColorGroup[]>([]);
     const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
-    const [selectedShape, setSelectedShape] = useState<OrganicColorShape | null>(null);
+    const [selectedGroup, setSelectedGroup] = useState<PixelColorGroup | null>(null);
 
     // Canvas & Audio Refs
     const originalImageRef = useRef<HTMLImageElement>(null);
@@ -62,25 +62,24 @@ export const CamPage: React.FC = () => {
             setUploadedImageUrl(url);
             setUploadedFileName(file.name);
             stopDeconstruction();
-            setShapes([]);
+            setGroups([]);
             setCurrentStepIndex(0);
-            setSelectedShape(null);
+            setSelectedGroup(null);
         }
     };
 
-    // Extract True Organic Color Shapes via Connected Component Flood-Fill
-    const extractOrganicColorShapes = () => {
+    // Analyze 100.0% of Image Surface Pixel-by-Pixel (Zero Residue)
+    const analyzePixelByPixelExhaustive = () => {
         if (!originalImageRef.current || !uploadedImageUrl) return;
 
         setIsDeconstructing(true);
-        setScanStepMessage("Estrazione meticolosa forme organiche (Inseguimento colore)...");
+        setScanStepMessage("Analisi pixel per pixel a copertura 100% (Zero Residuo)...");
 
         const img = originalImageRef.current;
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        // Resolution for organic shape extraction
         const w = 320;
         const h = Math.round((img.naturalHeight / img.naturalWidth) * w);
         canvas.width = w;
@@ -92,7 +91,7 @@ export const CamPage: React.FC = () => {
         const data = imgData.data;
         const totalPixels = w * h;
 
-        // Render Initial Image on Main Interactive Canvas
+        // Render Initial Canvas
         if (mainCanvasRef.current) {
             const mainCtx = mainCanvasRef.current.getContext('2d');
             if (mainCtx) {
@@ -103,150 +102,139 @@ export const CamPage: React.FC = () => {
         }
 
         setTimeout(() => {
-            // 1. Color Quantization for Seed Clustering
-            const k = 14; // 14 Organic Color Families
+            // 1. Fine-grained Color Cluster Quantization (K = 18 Color Families)
+            const k = 18;
             const centroids = initializeCentroids(data, k);
             const assignments = assignPixelsToCentroids(data, centroids, totalPixels);
 
-            // 2. Connected-Component Flood Fill for Organic Shapes (No Boxes!)
-            const visited = new Uint8Array(totalPixels);
-            const extractedShapes: OrganicColorShape[] = [];
-            let shapeCounter = 1;
+            // 2. EXHAUSTIVE PIXEL GROUPING (EVERY SINGLE PIXEL IS ASSIGNED - ZERO RESIDUE)
+            const clusterPixelsMap: number[][] = Array.from({ length: k }, () => []);
+            const clusterSumX = new Float64Array(k);
+            const clusterSumY = new Float64Array(k);
+            const clusterSumR = new Float64Array(k);
+            const clusterSumG = new Float64Array(k);
+            const clusterSumB = new Float64Array(k);
 
-            // Sequential Reading Order Scan: Top-Left to Bottom-Right
+            // Sequential Reading Order Traversal: Top-Left to Bottom-Right
             for (let i = 0; i < totalPixels; i++) {
-                if (visited[i]) continue;
+                const cIdx = assignments[i];
+                clusterPixelsMap[cIdx].push(i);
 
-                const targetCluster = assignments[i];
-                const shapePixelList: number[] = [];
-                const queue: number[] = [i];
-                visited[i] = 1;
+                const cx = i % w;
+                const cy = Math.floor(i / w);
+                clusterSumX[cIdx] += cx;
+                clusterSumY[cIdx] += cy;
 
-                let sumX = 0, sumY = 0;
-                let sumR = 0, sumG = 0, sumB = 0;
-
-                while (queue.length > 0) {
-                    const currentIdx = queue.pop()!;
-                    shapePixelList.push(currentIdx);
-
-                    const cx = currentIdx % w;
-                    const cy = Math.floor(currentIdx / w);
-                    sumX += cx;
-                    sumY += cy;
-
-                    const px4 = currentIdx * 4;
-                    sumR += data[px4];
-                    sumG += data[px4 + 1];
-                    sumB += data[px4 + 2];
-
-                    // 4-Connected Neighbors (Up, Down, Left, Right)
-                    const neighbors = [
-                        cx > 0 ? currentIdx - 1 : -1,
-                        cx < w - 1 ? currentIdx + 1 : -1,
-                        cy > 0 ? currentIdx - w : -1,
-                        cy < h - 1 ? currentIdx + w : -1,
-                    ];
-
-                    for (const nIdx of neighbors) {
-                        if (nIdx >= 0 && !visited[nIdx] && assignments[nIdx] === targetCluster) {
-                            visited[nIdx] = 1;
-                            queue.push(nIdx);
-                        }
-                    }
-                }
-
-                // Filter out tiny noise pixels (keep organic shapes >= 0.1% surface)
-                const count = shapePixelList.length;
-                const pct = parseFloat(((count / totalPixels) * 100).toFixed(2));
-
-                if (pct >= 0.10) {
-                    const avgR = Math.round(sumR / count);
-                    const avgG = Math.round(sumG / count);
-                    const avgB = Math.round(sumB / count);
-                    const hex = rgbToHex(avgR, avgG, avgB);
-                    const lab = rgbToLab(avgR, avgG, avgB);
-
-                    const midiNote = 42 + Math.round((lab.L / 100) * 36);
-                    const noteName = midiToNoteName(midiNote);
-                    const freqHz = Math.round(440 * Math.pow(2, (midiNote - 69) / 12));
-                    const shapeName = getOrganicShapeDescription(avgR, avgG, avgB, lab);
-
-                    extractedShapes.push({
-                        idNumber: shapeCounter,
-                        idCode: `#${String(shapeCounter).padStart(3, '0')}`,
-                        name: `${shapeName} (${pct}%)`,
-                        r: avgR, g: avgG, b: avgB, hex,
-                        percentage: pct,
-                        pixelCount: count,
-                        L: Math.round(lab.L),
-                        a: Math.round(lab.a),
-                        b_val: Math.round(lab.b),
-                        centroidX: parseFloat(((sumX / count / w) * 100).toFixed(1)),
-                        centroidY: parseFloat(((sumY / count / h) * 100).toFixed(1)),
-                        pixelIndices: new Int32Array(shapePixelList),
-                        isDetached: false,
-                        midiNote,
-                        noteName,
-                        frequencyHz: freqHz
-                    });
-
-                    shapeCounter++;
-                }
+                const px4 = i * 4;
+                clusterSumR[cIdx] += data[px4];
+                clusterSumG[cIdx] += data[px4 + 1];
+                clusterSumB[cIdx] += data[px4 + 2];
             }
 
-            setShapes(extractedShapes);
+            // Create Color Groups for 100.0% Exhaustive Pixel Coverage
+            const generatedGroups: PixelColorGroup[] = [];
+            let idCounter = 1;
+
+            // Sort clusters by first pixel appearance (book-reading order)
+            const sortedClusterIndices = Array.from({ length: k }, (_, i) => i)
+                .filter(i => clusterPixelsMap[i].length > 0)
+                .sort((a, b) => clusterPixelsMap[a][0] - clusterPixelsMap[b][0]);
+
+            sortedClusterIndices.forEach((cIdx) => {
+                const pxList = clusterPixelsMap[cIdx];
+                const count = pxList.length;
+                const pct = parseFloat(((count / totalPixels) * 100).toFixed(2));
+
+                const avgR = Math.round(clusterSumR[cIdx] / count);
+                const avgG = Math.round(clusterSumG[cIdx] / count);
+                const avgB = Math.round(clusterSumB[cIdx] / count);
+                const hex = rgbToHex(avgR, avgG, avgB);
+                const lab = rgbToLab(avgR, avgG, avgB);
+
+                const avgX = clusterSumX[cIdx] / count;
+                const avgY = clusterSumY[cIdx] / count;
+                const centroidXPct = parseFloat(((avgX / w) * 100).toFixed(1));
+                const centroidYPct = parseFloat(((avgY / h) * 100).toFixed(1));
+
+                const midiNote = 42 + Math.round((lab.L / 100) * 36);
+                const noteName = midiToNoteName(midiNote);
+                const freqHz = Math.round(440 * Math.pow(2, (midiNote - 69) / 12));
+                const groupName = getColorDescription(avgR, avgG, avgB, lab);
+
+                generatedGroups.push({
+                    idNumber: idCounter,
+                    idCode: `#${String(idCounter).padStart(3, '0')}`,
+                    name: `${groupName} (${pct}%)`,
+                    r: avgR, g: avgG, b: avgB, hex,
+                    percentage: pct,
+                    pixelCount: count,
+                    L: Math.round(lab.L),
+                    a: Math.round(lab.a),
+                    b_val: Math.round(lab.b),
+                    centroidX: centroidXPct,
+                    centroidY: centroidYPct,
+                    pixelIndices: new Int32Array(pxList),
+                    isDetached: false,
+                    midiNote,
+                    noteName,
+                    frequencyHz: freqHz
+                });
+
+                idCounter++;
+            });
+
+            setGroups(generatedGroups);
             setIsDeconstructing(false);
-            setScanStepMessage(`✅ Estratte ${extractedShapes.length} Forme Organiche di Colore. Pronti allo stacco.`);
-            if (extractedShapes.length > 0) {
-                setSelectedShape(extractedShapes[0]);
+            setScanStepMessage(`✅ 100% Superficie Mappata (${totalPixels} pixel). Nessun residuo.`);
+            if (generatedGroups.length > 0) {
+                setSelectedGroup(generatedGroups[0]);
             }
         }, 150);
     };
 
-    // Run Sequential "Stacco Forme Organiche" Animation (Turns exact shape WHITE!)
-    const startOrganicDeconstruction = () => {
-        if (shapes.length === 0 || isDeconstructing) return;
+    // Run Real-Time Pixel-by-Pixel Stacco Animation (Turns canvas 100% PURE WHITE)
+    const startPixelByPixelDeconstruction = () => {
+        if (groups.length === 0 || isDeconstructing) return;
 
         setIsDeconstructing(true);
-        setScanStepMessage("Stacco progressivo forme organiche verso la Tela Bianca...");
+        setScanStepMessage("Stacco pixel per pixel in corso (Zero Residuo)...");
 
         if (deconstructionTimerRef.current) clearInterval(deconstructionTimerRef.current);
 
-        let step = currentStepIndex >= shapes.length ? 0 : currentStepIndex;
+        let step = currentStepIndex >= groups.length ? 0 : currentStepIndex;
 
         deconstructionTimerRef.current = setInterval(() => {
-            if (step >= shapes.length) {
+            if (step >= groups.length) {
                 clearInterval(deconstructionTimerRef.current);
                 setIsDeconstructing(false);
-                setScanStepMessage("✅ Quadro 100% Staccato: Convertito in Tela Bianca Organica.");
+                setScanStepMessage("✅ Destrutturazione Pixel-by-Pixel 100% Completata: Tela Bianca Pura.");
                 return;
             }
 
-            const currentShape = shapes[step];
-            if (currentShape) {
-                // Peel exact organic shape off the main canvas (turn those exact pixels WHITE!)
-                peelShapeToWhiteCanvas(currentShape);
+            const currentGroup = groups[step];
+            if (currentGroup) {
+                // Turn ALL pixels of this group to pure White (#FFFFFF) on canvas
+                detachGroupPixelsToWhite(currentGroup);
 
-                // Mark shape as detached in state
-                setShapes(prev => {
+                setGroups(prev => {
                     const next = [...prev];
                     next[step] = { ...next[step], isDetached: true };
                     return next;
                 });
 
-                setSelectedShape(currentShape);
-                playShapeAudio(currentShape.frequencyHz);
+                setSelectedGroup(currentGroup);
+                playGroupAudio(currentGroup.frequencyHz);
             }
 
             setCurrentStepIndex(step + 1);
-            setProgressPct(Math.round(((step + 1) / shapes.length) * 100));
+            setProgressPct(Math.round(((step + 1) / groups.length) * 100));
 
             step++;
-        }, 220); // 220ms per organic shape peel
+        }, 180); // 180ms step interval for smooth pixel peel
     };
 
-    // Turn Exact Organic Shape Pixels to Pure White Canvas
-    const peelShapeToWhiteCanvas = (shape: OrganicColorShape) => {
+    // Turn Exact Pixels of Group to Pure White Canvas
+    const detachGroupPixelsToWhite = (group: PixelColorGroup) => {
         if (!mainCanvasRef.current) return;
         const canvas = mainCanvasRef.current;
         const ctx = canvas.getContext('2d');
@@ -256,27 +244,23 @@ export const CamPage: React.FC = () => {
         const imgData = ctx.getImageData(0, 0, w, h);
         const data = imgData.data;
 
-        // Turn only pixels belonging to this exact organic shape into pure WHITE
-        const indices = shape.pixelIndices;
+        const indices = group.pixelIndices;
         for (let i = 0; i < indices.length; i++) {
             const px = indices[i] * 4;
             data[px] = 255;     // White R
             data[px + 1] = 255; // White G
             data[px + 2] = 255; // White B
-            data[px + 3] = 255;
+            data[px + 3] = 255; // Opaque
         }
 
         ctx.putImageData(imgData, 0, 0);
 
-        // Draw organic perimeter stroke and ID label
-        ctx.strokeStyle = '#38bdf8';
-        ctx.lineWidth = 1;
+        // Draw pin ID label at centroid
         ctx.fillStyle = '#0284c7';
         ctx.font = 'bold 9px monospace';
-
-        const labelX = (shape.centroidX / 100) * w;
-        const labelY = (shape.centroidY / 100) * h;
-        ctx.fillText(shape.idCode, labelX - 10, labelY + 3);
+        const labelX = (group.centroidX / 100) * w;
+        const labelY = (group.centroidY / 100) * h;
+        ctx.fillText(group.idCode, labelX - 10, labelY + 3);
     };
 
     // Stop Animation
@@ -288,12 +272,12 @@ export const CamPage: React.FC = () => {
         setIsDeconstructing(false);
     };
 
-    // Reset Deconstruction (Restore Original Painting)
+    // Reset Canvas to Original Painting
     const resetDeconstruction = () => {
         stopDeconstruction();
         setCurrentStepIndex(0);
         setProgressPct(0);
-        setShapes(prev => prev.map(s => ({ ...s, isDetached: false })));
+        setGroups(prev => prev.map(g => ({ ...g, isDetached: false })));
 
         if (originalImageRef.current && mainCanvasRef.current) {
             const img = originalImageRef.current;
@@ -304,11 +288,11 @@ export const CamPage: React.FC = () => {
                 ctx.drawImage(img, 0, 0, w, h);
             }
         }
-        if (shapes.length > 0) setSelectedShape(shapes[0]);
+        if (groups.length > 0) setSelectedGroup(groups[0]);
     };
 
-    // Play Audio Note for Organic Shape
-    const playShapeAudio = (freqHz: number) => {
+    // Play Audio Note
+    const playGroupAudio = (freqHz: number) => {
         try {
             if (!audioCtxRef.current) {
                 const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -326,19 +310,19 @@ export const CamPage: React.FC = () => {
 
             gain.gain.setValueAtTime(0.001, now);
             gain.gain.linearRampToValueAtTime(0.18, now + 0.02);
-            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
 
             osc.connect(gain);
             gain.connect(ctx.destination);
 
             osc.start(now);
-            osc.stop(now + 0.32);
+            osc.stop(now + 0.3);
         } catch (e) {
             console.warn("Audio play error:", e);
         }
     };
 
-    // Processing Helpers
+    // Color Processing Helpers
     const initializeCentroids = (data: Uint8ClampedArray, k: number) => {
         const centroids = [];
         const step = Math.floor(data.length / 4 / k);
@@ -390,14 +374,14 @@ export const CamPage: React.FC = () => {
         return `${names[midi % 12]}${Math.floor(midi / 12) - 1}`;
     };
 
-    const getOrganicShapeDescription = (r: number, g: number, b: number, lab: { L: number, a: number, b: number }) => {
-        if (r > 120 && g < 100 && b < 100) return "Forma Organica Rossa / Scarlatto";
-        if (b > 120 && r < 110) return "Forma Organica Blu / Azzurro Nuvola";
-        if (r > 140 && g > 120 && b < 90) return "Forma Organica Gialla / Luce";
-        if (g > 110 && r < 120) return "Forma Organica Verde / Vestito";
-        if (lab.L < 25) return "Forma Organica Scura / Ombra";
-        if (lab.L > 80) return "Forma Organica Chiara / Bianco";
-        return "Forma Organica Cromatica";
+    const getColorDescription = (r: number, g: number, b: number, lab: { L: number, a: number, b: number }) => {
+        if (r > 120 && g < 100 && b < 100) return "Gruppo Rosso / Scarlatto";
+        if (b > 120 && r < 110) return "Gruppo Blu / Cielo";
+        if (r > 140 && g > 120 && b < 90) return "Gruppo Giallo / Oro";
+        if (g > 110 && r < 120) return "Gruppo Verde / Smeraldo";
+        if (lab.L < 25) return "Gruppo Ombra / Scuri";
+        if (lab.L > 80) return "Gruppo Luce / Bianchi";
+        return "Gruppo Cromatico";
     };
 
     useEffect(() => {
@@ -418,15 +402,15 @@ export const CamPage: React.FC = () => {
                     <div className="flex items-center gap-3 mb-2">
                         <span className="px-3 py-1 bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 rounded-full text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5">
                             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
-                            Stacco Forme Organiche di Colore (Nessun Riquadro)
+                            Stacco Pixel-by-Pixel (100.0% Copertura - Zero Residuo)
                         </span>
-                        <span className="text-xs text-white/50 font-mono">Organic Flood-Fill Peeling</span>
+                        <span className="text-xs text-white/50 font-mono">Exhaustive Pixel Matrix</span>
                     </div>
                     <h1 className="text-3xl font-black font-display text-white tracking-tight">
-                        Inseguimento & <span className="text-cyan-400">Stacco Forme Organiche</span>
+                        Stacco <span className="text-cyan-400">Pixel per Pixel</span> dal Quadro
                     </h1>
                     <p className="text-sm text-white/70 mt-1 max-w-2xl">
-                        Il sistema insegue le reali forme organiche del colore (vestiti verdi, nuvole blu, mantelli rossi, volti) e le stacca una ad una dal quadro lasciando la tela bianca.
+                        Scansione esaustiva pixel per pixel: ogni singolo pixel dell'opera viene catalogato, associato ad una nota basale e staccato verso la tela bianca con zero residuo.
                     </p>
                 </div>
 
@@ -442,17 +426,17 @@ export const CamPage: React.FC = () => {
             {!uploadedImageUrl ? (
                 <div className="bg-slate-950/60 backdrop-blur-xl p-16 rounded-2xl border border-dashed border-cyan-500/30 text-center space-y-4">
                     <div className="w-20 h-20 bg-cyan-500/10 border border-cyan-500/30 rounded-full flex items-center justify-center mx-auto text-cyan-400 text-3xl">
-                        <i className="fas fa-wand-magic-sparkles"></i>
+                        <i className="fas fa-[#38bdf8] fa-border-all"></i>
                     </div>
                     <h3 className="text-xl font-bold text-white">Nessun Quadro Caricato</h3>
                     <p className="text-sm text-white/60 max-w-md mx-auto">
-                        Clicca sul pulsante in alto <strong>"Carica Immagine Opera"</strong> per avviare l'inseguimento e lo stacco delle forme organiche di colore.
+                        Clicca sul pulsante in alto <strong>"Carica Immagine Opera"</strong> per avviare lo stacco pixel per pixel a zero residuo.
                     </p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
-                    {/* LEFT: MAIN CANVAS FOR ORGANIC SHAPE PEELING TO WHITE (7 COLS) */}
+                    {/* LEFT: MAIN CANVAS FOR PIXEL BY PIXEL WHITE PEEL (7 COLS) */}
                     <div className="lg:col-span-7 flex flex-col gap-6">
                         <div className="bg-slate-950/80 backdrop-blur-xl p-6 rounded-2xl border border-white/10 shadow-2xl space-y-4">
                             <div className="flex items-center justify-between border-b border-white/10 pb-3">
@@ -460,52 +444,52 @@ export const CamPage: React.FC = () => {
                                     <i className="fas fa-microscope"></i> Opera: {uploadedFileName}
                                 </span>
                                 <span className="text-xs font-mono text-emerald-400 font-bold">
-                                    {currentStepIndex}/{shapes.length} Forme Organiche Staccate ({progressPct}%)
+                                    {currentStepIndex}/{groups.length} Gruppi Pixel Staccati ({progressPct}%)
                                 </span>
                             </div>
 
-                            {/* Canvas Container with Real-Time Organic White Peel */}
+                            {/* Canvas Container for Real-Time Pixel-by-Pixel White Canvas Peel */}
                             <div className="relative rounded-xl overflow-hidden border border-white/10 aspect-video bg-white flex items-center justify-center shadow-inner">
-                                {/* Hidden Original Image for Reference */}
+                                {/* Hidden Original Reference Image */}
                                 <img
                                     ref={originalImageRef}
                                     src={uploadedImageUrl}
                                     alt="Originale"
                                     className="hidden"
-                                    onLoad={extractOrganicColorShapes}
+                                    onLoad={analyzePixelByPixelExhaustive}
                                 />
 
-                                {/* Interactive Canvas showing exact organic shape peeling to WHITE */}
+                                {/* Interactive Canvas showing exact pixel-by-pixel peeling to WHITE */}
                                 <canvas
                                     ref={mainCanvasRef}
                                     className="w-full h-full object-cover shadow-2xl"
                                 />
 
-                                {/* ORGANIC SHAPE PIN BADGES OVERLAY */}
-                                {shapes.map((s) => {
-                                    const isSelected = selectedShape?.idCode === s.idCode;
+                                {/* PIXEL GROUP ID BADGES OVERLAY */}
+                                {groups.map((g) => {
+                                    const isSelected = selectedGroup?.idCode === g.idCode;
                                     return (
                                         <div
-                                            key={s.idCode}
-                                            style={{ left: `${s.centroidX}%`, top: `${s.centroidY}%` }}
+                                            key={g.idCode}
+                                            style={{ left: `${g.centroidX}%`, top: `${g.centroidY}%` }}
                                             onClick={() => {
-                                                setSelectedShape(s);
-                                                playShapeAudio(s.frequencyHz);
+                                                setSelectedGroup(g);
+                                                playGroupAudio(g.frequencyHz);
                                             }}
                                             className={`absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-all duration-300 pointer-events-auto z-10 ${
                                                 isSelected ? 'scale-110 z-20' : 'opacity-85 hover:opacity-100'
                                             }`}
                                         >
                                             <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded backdrop-blur-md font-mono text-[9px] font-bold shadow-xl border transition-all ${
-                                                s.isDetached
-                                                    ? 'bg-white/90 border-slate-400 text-slate-800 shadow-md'
+                                                g.isDetached
+                                                    ? 'bg-white/95 border-slate-400 text-slate-800 shadow-md ring-1 ring-slate-300'
                                                     : isSelected
                                                         ? 'bg-black/90 border-amber-400 text-amber-300 ring-2 ring-amber-400/50'
                                                         : 'bg-black/80 border-cyan-400/60 text-cyan-200'
                                             }`}>
-                                                <span className="w-2 h-2 rounded-full border border-white/40" style={{ backgroundColor: s.hex }}></span>
-                                                <span>{s.idCode}</span>
-                                                <span className="text-[8px] opacity-70">({s.percentage}%)</span>
+                                                <span className="w-2 h-2 rounded-full border border-white/40" style={{ backgroundColor: g.hex }}></span>
+                                                <span>{g.idCode}</span>
+                                                <span className="text-[8px] opacity-70">({g.percentage}%)</span>
                                             </div>
                                         </div>
                                     );
@@ -514,7 +498,7 @@ export const CamPage: React.FC = () => {
                                 {isDeconstructing && (
                                     <div className="absolute top-3 left-3 bg-black/80 backdrop-blur-md border border-cyan-500/40 px-3 py-1 rounded-full text-[10px] font-mono text-cyan-300 font-bold flex items-center gap-2 pointer-events-none z-30 animate-pulse">
                                         <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
-                                        Stacco Forme Organiche in corso ({progressPct}%)
+                                        Stacco Pixel per Pixel in corso ({progressPct}%)
                                     </div>
                                 )}
                             </div>
@@ -522,8 +506,8 @@ export const CamPage: React.FC = () => {
                             {/* CONTROLS */}
                             <div className="flex items-center justify-between gap-4 pt-2">
                                 <button
-                                    onClick={isDeconstructing ? stopDeconstruction : startOrganicDeconstruction}
-                                    disabled={shapes.length === 0}
+                                    onClick={isDeconstructing ? stopDeconstruction : startPixelByPixelDeconstruction}
+                                    disabled={groups.length === 0}
                                     className={`flex-1 py-4 rounded-xl font-bold uppercase text-xs tracking-wider transition-all flex items-center justify-center gap-2 ${
                                         isDeconstructing
                                             ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
@@ -531,7 +515,7 @@ export const CamPage: React.FC = () => {
                                     }`}
                                 >
                                     <i className={`fas ${isDeconstructing ? 'fa-pause' : 'fa-play'}`}></i>
-                                    {isDeconstructing ? 'Pausa Stacco' : 'Avvia Inseguimento & Stacco Forme Organiche'}
+                                    {isDeconstructing ? 'Pausa Stacco' : 'Avvia Stacco Pixel per Pixel (Zero Residuo)'}
                                 </button>
 
                                 <button
@@ -544,66 +528,67 @@ export const CamPage: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* RIGHT: EXTRACTED ORGANIC SHAPES REGISTRY (5 COLS) */}
+                    {/* RIGHT: EXHAUSTIVE PIXEL GROUPS REGISTRY (5 COLS) */}
                     <div className="lg:col-span-5 flex flex-col gap-6">
                         <div className="bg-slate-950/80 backdrop-blur-xl p-6 rounded-2xl border border-white/10 shadow-2xl space-y-4 font-mono">
                             <div className="flex items-center justify-between border-b border-white/10 pb-3">
                                 <span className="text-xs text-cyan-400 font-bold uppercase tracking-wider">
-                                    📋 Forme Organiche Estratte ({currentStepIndex}/{shapes.length})
+                                    📋 Gruppi Pixel Mappati ({currentStepIndex}/{groups.length})
                                 </span>
-                                <span className="text-xs text-white/50">Flood-Fill Organico</span>
+                                <span className="text-xs text-emerald-400 font-bold">100.0% Copertura</span>
                             </div>
 
-                            {/* SELECTED SHAPE TELEMETRY */}
-                            {selectedShape && (
+                            {/* SELECTED GROUP TELEMETRY */}
+                            {selectedGroup && (
                                 <div className="bg-cyan-950/40 border border-cyan-500/40 p-4 rounded-xl space-y-2 animate-fade-in text-xs">
                                     <div className="flex items-center justify-between border-b border-cyan-500/20 pb-2">
                                         <div className="flex items-center gap-2">
-                                            <span className="w-3.5 h-3.5 rounded border border-white/40" style={{ backgroundColor: selectedShape.hex }}></span>
-                                            <span className="text-amber-300 font-bold text-sm">{selectedShape.idCode}</span>
+                                            <span className="w-3.5 h-3.5 rounded border border-white/40" style={{ backgroundColor: selectedGroup.hex }}></span>
+                                            <span className="text-amber-300 font-bold text-sm">{selectedGroup.idCode}</span>
                                         </div>
-                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${selectedShape.isDetached ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-white/10 text-white/60'}`}>
-                                            {selectedShape.isDetached ? 'Staccato (Tela Bianca)' : 'Sul Quadro'}
+                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${selectedGroup.isDetached ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-white/10 text-white/60'}`}>
+                                            {selectedGroup.isDetached ? 'Staccato (Tela Bianca)' : 'Sul Quadro'}
                                         </span>
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-2 text-[10px] text-white/80 pt-1">
-                                        <div className="col-span-2 text-white font-bold">{selectedShape.name}</div>
-                                        <div>Colore HEX: <strong>{selectedShape.hex}</strong></div>
-                                        <div>CIE LAB: <strong>L*:{selectedShape.L} a*:{selectedShape.a} b*:{selectedShape.b_val}</strong></div>
-                                        <div className="col-span-2">Nota Basale: <strong className="text-amber-300">{selectedShape.noteName} ({selectedShape.frequencyHz} Hz)</strong></div>
+                                        <div className="col-span-2 text-white font-bold">{selectedGroup.name}</div>
+                                        <div>Pixel Totali: <strong>{selectedGroup.pixelCount} px</strong></div>
+                                        <div>Copertura: <strong>{selectedGroup.percentage}%</strong></div>
+                                        <div>CIE LAB: <strong>L*:{selectedGroup.L} a*:{selectedGroup.a} b*:{selectedGroup.b_val}</strong></div>
+                                        <div>Nota Basale: <strong className="text-amber-300">{selectedGroup.noteName} ({selectedGroup.frequencyHz} Hz)</strong></div>
                                     </div>
                                 </div>
                             )}
 
-                            {/* EXTRACTED ORGANIC SHAPES LIST */}
+                            {/* EXHAUSTIVE PIXEL GROUPS LIST */}
                             <div className="space-y-1.5 max-h-[360px] overflow-y-auto pr-1">
-                                {shapes.map((s) => {
-                                    const isSelected = selectedShape?.idCode === s.idCode;
+                                {groups.map((g) => {
+                                    const isSelected = selectedGroup?.idCode === g.idCode;
                                     return (
                                         <div
-                                            key={s.idCode}
+                                            key={g.idCode}
                                             onClick={() => {
-                                                setSelectedShape(s);
-                                                playShapeAudio(s.frequencyHz);
+                                                setSelectedGroup(g);
+                                                playGroupAudio(g.frequencyHz);
                                             }}
                                             className={`p-2.5 rounded-lg border transition-all cursor-pointer flex items-center justify-between text-xs ${
                                                 isSelected
                                                     ? 'bg-cyan-950/80 border-amber-400 ring-1 ring-amber-400'
-                                                    : s.isDetached
+                                                    : g.isDetached
                                                         ? 'bg-white/10 border-white/10 text-white/90'
                                                         : 'bg-white/5 border-white/5 text-white/40 opacity-60'
                                             }`}
                                         >
                                             <div className="flex items-center gap-2">
-                                                <span className="w-3 h-3 rounded border border-white/30" style={{ backgroundColor: s.hex }}></span>
-                                                <span className="font-bold text-amber-300">{s.idCode}</span>
-                                                <span className="text-[10px] text-white/70 truncate max-w-[140px]">{s.name}</span>
+                                                <span className="w-3 h-3 rounded border border-white/30" style={{ backgroundColor: g.hex }}></span>
+                                                <span className="font-bold text-amber-300">{g.idCode}</span>
+                                                <span className="text-[10px] text-white/70 truncate max-w-[140px]">{g.name}</span>
                                             </div>
 
                                             <div className="flex items-center gap-3">
-                                                <span className="text-[10px] text-cyan-300 font-bold">{s.noteName} ({s.frequencyHz}Hz)</span>
-                                                <i className={`fas ${s.isDetached ? 'fa-check text-emerald-400' : 'fa-clock text-white/30'} text-xs`}></i>
+                                                <span className="text-[10px] text-cyan-300 font-bold">{g.noteName} ({g.frequencyHz}Hz)</span>
+                                                <i className={`fas ${g.isDetached ? 'fa-check text-emerald-400' : 'fa-clock text-white/30'} text-xs`}></i>
                                             </div>
                                         </div>
                                     );
