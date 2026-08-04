@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { User, HealthClassificationResult } from '../types';
-import { classifyHealthCategories } from '../services/healthCategoryClassifier';
-import { generateAiAudioTrack } from '../services/musicAiService';
+import { User, ConfigSettings, BlockData, TransformedNoteEvent } from '../types';
+import { initialSettings } from '../config/defaults';
+import { sonifyImage } from '../services/sonificationService';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface OutletContextType {
@@ -11,440 +11,224 @@ interface OutletContextType {
     setIsLoginModalOpen: (open: boolean) => void;
 }
 
-const PRESET_ARTWORKS = [
-    {
-        id: 'starry_night',
-        title: 'Notte Stellata',
-        artist: 'Vincent van Gogh',
-        url: 'https://images.unsplash.com/photo-1541701494587-cb58502866ab?auto=format&fit=crop&w=800&q=80',
-        stats: { avg_L: 35, avg_a: -12, avg_b: -38, avg_saturation: 0.65, hue_diversity: 0.72, avg_variance: 480 },
-        description: 'Toni freddi di blu notte e vortici di luce gialla',
-        objects: [
-            { id: 'cypress', label: 'Cipresso Scuro (Primo Piano)', instrument: 'Violoncello / Sub-Bass', colorHex: '#1e3a8a', freq: 108, bBox: { x: 10, y: 30, w: 25, h: 65 } },
-            { id: 'sky', label: 'Vortici & Cielo Blu', instrument: 'Arpa / Pianoforte Arpeggiato', colorHex: '#0284c7', freq: 288, bBox: { x: 30, y: 10, w: 65, h: 50 } },
-            { id: 'stars', label: 'Stelle & Luna Gialla', instrument: 'Flauto Lirico / Soprano', colorHex: '#eab308', freq: 513, bBox: { x: 65, y: 15, w: 30, h: 35 } }
-        ]
-    },
-    {
-        id: 'mona_lisa',
-        title: 'La Gioconda',
-        artist: 'Leonardo da Vinci',
-        url: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?auto=format&fit=crop&w=800&q=80',
-        stats: { avg_L: 42, avg_a: 8, avg_b: 22, avg_saturation: 0.35, hue_diversity: 0.40, avg_variance: 290 },
-        description: 'Toni caldi sfumati terra d ombra ed enimmatico ritratto',
-        objects: [
-            { id: 'face', label: 'Volto & Sguardo Enigmatico', instrument: 'Vocal Choir / Soprano', colorHex: '#f59e0b', freq: 432, bBox: { x: 35, y: 15, w: 30, h: 35 } },
-            { id: 'background', label: 'Paesaggio Sfumato Sfondo', instrument: 'Viola / Organ Pad', colorHex: '#78350f', freq: 162, bBox: { x: 5, y: 10, w: 90, h: 40 } },
-            { id: 'hands', label: 'Mani & Abito Scuro', instrument: 'Liuto / Chitarra Acustica', colorHex: '#451a03', freq: 216, bBox: { x: 25, y: 55, w: 50, h: 40 } }
-        ]
-    },
-    {
-        id: 'water_lilies',
-        title: 'Le Ninfee',
-        artist: 'Claude Monet',
-        url: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?auto=format&fit=crop&w=800&q=80',
-        stats: { avg_L: 68, avg_a: -25, avg_b: 15, avg_saturation: 0.55, hue_diversity: 0.60, avg_variance: 310 },
-        description: 'Toni verdi e acquatici rilassanti con alta luminosita',
-        objects: [
-            { id: 'water', label: 'Specchio d Acqua & Riflessi', instrument: 'Piano Fluido / Chords', colorHex: '#0d9488', freq: 256, bBox: { x: 5, y: 5, w: 90, h: 90 } },
-            { id: 'lilies', label: 'Ninfee Rosa & Fiori', instrument: 'Arpa / Legni Acuti', colorHex: '#ec4899', freq: 576, bBox: { x: 30, y: 40, w: 40, h: 35 } }
-        ]
-    }
-];
+interface MatrixRegion {
+    id: string;
+    index: number;
+    x: number;
+    y: number;
+    gridX: number;
+    gridY: number;
+    widthPct: number;
+    heightPct: number;
+    L: number;
+    a: number;
+    b: number;
+    hex: string;
+    noteName: string;
+    frequencyHz: number;
+}
 
 export const CamPage: React.FC = () => {
-    const { user, setIsLoginModalOpen } = useOutletContext<OutletContextType>();
+    const { user } = useOutletContext<OutletContextType>();
     const { t } = useLanguage();
 
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
+    // Upload & Image State
+    const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+    const [uploadedFileName, setUploadedFileName] = useState<string>('');
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [analysisProgress, setAnalysisProgress] = useState<string>('');
 
-    // Selected Artwork State
-    const [selectedArtwork, setSelectedArtwork] = useState(PRESET_ARTWORKS[0]);
-    const [customArtworkUrl, setCustomArtworkUrl] = useState<string | null>(null);
-    const [artworkStats, setArtworkStats] = useState(PRESET_ARTWORKS[0].stats);
+    // Deterministic Scan & Matrix State
+    const [matrixRegions, setMatrixRegions] = useState<MatrixRegion[]>([]);
+    const [matchedTraditionName, setMatchedTraditionName] = useState<string>('');
+    const [matchedCulturalFamily, setMatchedCulturalFamily] = useState<string>('');
+    const [scanPatternName, setScanPatternName] = useState<string>('');
+    const [audioTrackUrl, setAudioTrackUrl] = useState<string | null>(null);
 
-    // Cam State
-    const [isCamActive, setIsCamActive] = useState(false);
-    const [camError, setCamError] = useState<string | null>(null);
+    // Live Step-by-Step Playback & Cursor State
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
+    const [activeRegion, setActiveRegion] = useState<MatrixRegion | null>(null);
 
-    // Scan State
-    const [isScanning, setIsScanning] = useState(false);
-    const [scanProgress, setScanProgress] = useState(0);
-    const [scanComplete, setScanComplete] = useState(false);
-
-    // Biometrics State (Observer)
-    const [observerMetrics, setObserverMetrics] = useState({
-        facialTension: 0.68,
-        heartRateEst: 84,
-        valency: -0.32,
-        arousal: 0.75,
-        gazeVector: 'Fisso al Centro del Quadro',
-    });
-
-    // WHO Classification Result
-    const [whoResult, setWhoResult] = useState<HealthClassificationResult | null>(null);
-
-    // Generated Prompts & Audio
-    const [generatedSunoPrompt, setGeneratedSunoPrompt] = useState<string>('');
-    const [generatedLibretto, setGeneratedLibretto] = useState<string>('');
-    const [isGeneratingAi, setIsGeneratingAi] = useState(false);
-    const [aiStatus, setAiStatus] = useState<string>('');
-    const [aiAudioUrl, setAiAudioUrl] = useState<string | null>(null);
-
-    // Audio WebAudio Synth State
-    const [isPlayingSynth, setIsPlayingSynth] = useState(false);
+    // Refs for Audio Synth & Animation Interval
     const audioCtxRef = useRef<AudioContext | null>(null);
-    const synthNodesRef = useRef<{ oscs: OscillatorNode[]; gains: GainNode[]; filter?: BiquadFilterNode }>({ oscs: [], gains: [] });
+    const playbackTimerRef = useRef<any>(null);
 
-    // Start Camera with detailed diagnostics and HTTPS check
-    const startCamera = async () => {
-        setCamError(null);
+    // Grid Dimensions
+    const GRID_SIZE = 16; // 16x16 Matrix (256 Regions)
 
-        // Check 1: HTTPS / Secure Context Check
-        if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-            setCamError("⚠️ Accesso Telecamera Bloccato: Il browser richiede l'uso del protocollo sicuro HTTPS. Assicurati che l'indirizzo inizi con https:// (es. https://sonificarthealth.sviluppo.host)");
-            return;
-        }
-
-        // Check 2: mediaDevices API availability
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            setCamError("⚠️ Il tuo browser o la connessione attuale non supportano l'accesso WebRTC alla telecamera.");
-            return;
-        }
-
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
-                audio: false
-            });
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-                videoRef.current.play();
-                setIsCamActive(true);
-            }
-        } catch (err: any) {
-            console.error("Camera access error:", err);
-            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-                setCamError("⚠️ Permesso Telecamera Negato dal Browser. Per attivare la webcam, clicca sull'icona del lucchetto o della telecamera a sinistra dell'URL nel tuo browser e seleziona 'Consenti'.");
-            } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-                setCamError("⚠️ Nessuna telecamera rilevata sul dispositivo. Collegare una webcam e riprovare.");
-            } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-                setCamError("⚠️ La telecamera è in uso da un altra applicazione (es. Zoom, Teams, Google Meet). Chiudere le altre app e riprovare.");
-            } else {
-                setCamError(`⚠️ Errore di accesso alla telecamera (${err.name || 'Sconosciuto'}). Verificare i permessi del browser.`);
-            }
-        }
-    };
-
-    // Stop Camera
-    const stopCamera = () => {
-        if (videoRef.current && videoRef.current.srcObject) {
-            const stream = videoRef.current.srcObject as MediaStream;
-            stream.getTracks().forEach(track => track.stop());
-            videoRef.current.srcObject = null;
-        }
-        setIsCamActive(false);
-    };
-
-    useEffect(() => {
-        startCamera();
-        return () => {
-            stopCamera();
-            stopSynthAudio();
-        };
-    }, []);
-
-    // Recalculate WHO Classification
-    useEffect(() => {
-        const classification = classifyHealthCategories(artworkStats, selectedArtwork.description);
-        setWhoResult(classification);
-    }, [artworkStats, selectedArtwork]);
-
-    // Canvas Overlay animation
-    useEffect(() => {
-        let animationId: number;
-        const drawOverlay = () => {
-            if (canvasRef.current && videoRef.current && isCamActive) {
-                const canvas = canvasRef.current;
-                const ctx = canvas.getContext('2d');
-                if (ctx && videoRef.current.videoWidth) {
-                    canvas.width = videoRef.current.videoWidth;
-                    canvas.height = videoRef.current.videoHeight;
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-                    const w = canvas.width;
-                    const h = canvas.height;
-
-                    const faceWidth = w * 0.35;
-                    const faceHeight = h * 0.5;
-                    const faceX = (w - faceWidth) / 2 + Math.sin(Date.now() / 1000) * 12;
-                    const faceY = (h - faceHeight) / 2.2 + Math.cos(Date.now() / 1200) * 8;
-
-                    ctx.strokeStyle = isScanning ? '#2dd4bf' : '#38bdf8';
-                    ctx.lineWidth = isScanning ? 3 : 2;
-
-                    const cLen = 25;
-                    ctx.beginPath(); ctx.moveTo(faceX, faceY + cLen); ctx.lineTo(faceX, faceY); ctx.lineTo(faceX + cLen, faceY); ctx.stroke();
-                    ctx.beginPath(); ctx.moveTo(faceX + faceWidth - cLen, faceY); ctx.lineTo(faceX + faceWidth, faceY); ctx.lineTo(faceX + faceWidth, faceY + cLen); ctx.stroke();
-
-                    if (isScanning) {
-                        const scanY = faceY + (faceHeight * ((Date.now() % 1500) / 1500));
-                        ctx.strokeStyle = '#2dd4bf';
-                        ctx.beginPath(); ctx.moveTo(faceX - 10, scanY); ctx.lineTo(faceX + faceWidth + 10, scanY); ctx.stroke();
-                    }
-                }
-            }
-            animationId = requestAnimationFrame(drawOverlay);
-        };
-
-        if (isCamActive) animationId = requestAnimationFrame(drawOverlay);
-        return () => cancelAnimationFrame(animationId);
-    }, [isCamActive, isScanning]);
-
-    // Handle Custom Artwork Image Upload
-    const handleArtworkUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Handle File Upload & Deterministic Matrix Analysis
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
             const url = URL.createObjectURL(file);
-            setCustomArtworkUrl(url);
-            setSelectedArtwork({
-                id: 'custom',
-                title: file.name,
-                artist: 'Opera Caricata',
-                url: url,
-                stats: { avg_L: 50, avg_a: 0, avg_b: -10, avg_saturation: 0.5, hue_diversity: 0.55, avg_variance: 400 },
-                description: 'Opera caricata dall utente per analisi personalizzata',
-                objects: [
-                    { id: 'custom_obj_1', label: 'Soggetto Principale', instrument: 'Arpa / Pianoforte', colorHex: '#0284c7', freq: 324, bBox: { x: 15, y: 15, w: 70, h: 70 } }
-                ]
-            });
-            setArtworkStats({ avg_L: 50, avg_a: 0, avg_b: -10, avg_saturation: 0.5, hue_diversity: 0.55, avg_variance: 400 });
+            setUploadedImageUrl(url);
+            setUploadedFileName(file.name);
+            stopPlayback();
+
+            // Run Deterministic Color Matrix Analysis
+            processDeterministicImageScan(file, url);
         }
     };
 
-    // Run 10-Second Fusion Scan
-    const startFusionScan = () => {
-        if (isScanning) return;
-        setIsScanning(true);
-        setScanProgress(0);
-        setScanComplete(false);
-        setAiAudioUrl(null);
-
-        const duration = 10;
-        const startTime = Date.now();
-
-        const interval = setInterval(() => {
-            const elapsed = (Date.now() - startTime) / 1000;
-            const pct = Math.min(Math.round((elapsed / duration) * 100), 100);
-            setScanProgress(pct);
-
-            setObserverMetrics(prev => ({
-                ...prev,
-                facialTension: parseFloat(Math.max(0.2, 0.68 - elapsed * 0.045).toFixed(2)),
-                heartRateEst: Math.round(Math.max(64, 84 - elapsed * 1.8)),
-                valency: parseFloat(Math.min(0.75, -0.32 + elapsed * 0.1).toFixed(2)),
-                arousal: parseFloat(Math.max(0.3, 0.75 - elapsed * 0.04).toFixed(2)),
-            }));
-
-            if (pct >= 100) {
-                clearInterval(interval);
-                setIsScanning(false);
-                setScanComplete(true);
-
-                const primaryCat = whoResult?.primaryCategory;
-                const libretto = `[Atto I - Aria di ${selectedArtwork.title}]
-"Tra i colori di ${selectedArtwork.artist},
-l'anima ritrova la sua quiete.
-S'innalza il canto al vertice del cielo,
-ove il silenzio si fa puro amico."`;
-
-                const prompt = `[Style: Operatic Soprano, Dramatic Grand Opera, Bel Canto, ${primaryCat?.label || 'Calming'}, ${primaryCat?.targetBpm || 64} BPM, Italian Opera, 432Hz]
-[Intro: Strings Tremolo & Flute Soliloquy]
-[Verse: Recitativo Parlante, Rubato]
-Tra i colori di ${selectedArtwork.artist}...
-[Chorus: Spinto Soprano High C Cadenza]
-S'innalza il canto al vertice del cielo!`;
-
-                setGeneratedLibretto(libretto);
-                setGeneratedSunoPrompt(prompt);
-
-                // AUTOMATIC IMMEDIATE PLAYBACK - No extra button needed!
-                playTherapeuticAudio();
-            }
-        }, 100);
-    };
-
-    // Sequencer interval reference for real-time generative music
-    const sequencerTimerRef = useRef<any>(null);
-
-    // Real-Time Generative Procedural Music Engine (Instant 0 Latency for Museum Visitors)
-    const playTherapeuticAudio = () => {
-        stopSynthAudio();
+    // Deterministic Color Matrix Extraction & Sonification
+    const processDeterministicImageScan = async (fileObj: File, imageSrc: string) => {
+        setIsAnalyzing(true);
+        setAnalysisProgress("Analisi Colorimetrica CIE LAB & Segmentazione Matrice in corso...");
+        setAudioTrackUrl(null);
+        setMatrixRegions([]);
+        setCurrentStepIndex(0);
+        setActiveRegion(null);
 
         try {
-            const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-            const ctx = new AudioCtx();
-            audioCtxRef.current = ctx;
-
-            const primaryCat = whoResult?.primaryCategory;
-            const targetBpm = primaryCat?.targetBpm || 64;
-            const isCalming = primaryCat?.category === 'calming' || primaryCat?.category === 'physiological';
-
-            // Master Filter tuned to WHO directive
-            const masterFilter = ctx.createBiquadFilter();
-            masterFilter.type = 'lowpass';
-            masterFilter.frequency.setValueAtTime(isCalming ? 3600 : 9500, ctx.currentTime);
-
-            // Master Volume
-            const masterGain = ctx.createGain();
-            masterGain.gain.setValueAtTime(0.22, ctx.currentTime);
-
-            masterFilter.connect(masterGain);
-            masterGain.connect(ctx.destination);
-
-            // Harmonic Scale (A3 = 216Hz in 432Hz tuning system)
-            // Pentatonic Healing Scale: A3, C4, D4, E4, G4, A4, C5, E5
-            const scaleFreqs = isCalming
-                ? [216, 256.8, 288.6, 324, 384, 432, 513.6, 648] // Healing 432Hz Pentatonic
-                : [216, 242.7, 272.2, 324, 364.1, 432, 485.4, 648]; // Lydian Inspiriting
-
-            // LAYER 1: Deep Ambient String/Bass Drone (Continuous Warm Atmosphere)
-            const bassOsc = ctx.createOscillator();
-            const bassGain = ctx.createGain();
-            bassOsc.type = 'sine';
-            bassOsc.frequency.setValueAtTime(108, ctx.currentTime); // Sub-bass A2 (108Hz)
-            bassGain.gain.setValueAtTime(0.001, ctx.currentTime);
-            bassGain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 1.5);
-            bassOsc.connect(bassGain);
-            bassGain.connect(masterFilter);
-            bassOsc.start();
-
-            // Warm Fifth Pad
-            const padOsc = ctx.createOscillator();
-            const padGain = ctx.createGain();
-            padOsc.type = 'triangle';
-            padOsc.frequency.setValueAtTime(162, ctx.currentTime); // E3 (162Hz)
-            padGain.gain.setValueAtTime(0.001, ctx.currentTime);
-            padGain.gain.linearRampToValueAtTime(0.08, ctx.currentTime + 2.0);
-            padOsc.connect(padGain);
-            padGain.connect(masterFilter);
-            padOsc.start();
-
-            // LAYER 2: Procedural Melodic Arpeggiator (Real Instrument Timbre)
-            const beatMs = (60 / targetBpm) * 500; // Eighth notes
-            let stepIndex = 0;
-
-            const playNextNote = () => {
-                if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') return;
-                const now = audioCtxRef.current.currentTime;
-
-                // Pick note from harmonic scale based on step pattern
-                const noteIndex = (stepIndex % 2 === 0)
-                    ? (stepIndex % scaleFreqs.length)
-                    : ((stepIndex * 3) % scaleFreqs.length);
-
-                const freq = scaleFreqs[noteIndex];
-
-                // Plucked Harp / Piano Synth Node
-                const osc = audioCtxRef.current.createOscillator();
-                const noteGain = audioCtxRef.current.createGain();
-
-                osc.type = isCalming ? 'sine' : 'triangle';
-                osc.frequency.setValueAtTime(freq, now);
-
-                // Add subtle harmonic overtone (Rich Piano/Harp feeling)
-                const overtoneOsc = audioCtxRef.current.createOscillator();
-                const overtoneGain = audioCtxRef.current.createGain();
-                overtoneOsc.type = 'sine';
-                overtoneOsc.frequency.setValueAtTime(freq * 2, now);
-
-                // Acoustic Envelope (Fast attack, natural exponential decay)
-                noteGain.gain.setValueAtTime(0.001, now);
-                noteGain.gain.linearRampToValueAtTime(0.18, now + 0.02);
-                noteGain.gain.exponentialRampToValueAtTime(0.0001, now + (isCalming ? 1.4 : 0.8));
-
-                overtoneGain.gain.setValueAtTime(0.001, now);
-                overtoneGain.gain.linearRampToValueAtTime(0.04, now + 0.01);
-                overtoneGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
-
-                osc.connect(noteGain);
-                overtoneOsc.connect(overtoneGain);
-
-                noteGain.connect(masterFilter);
-                overtoneGain.connect(masterFilter);
-
-                osc.start(now);
-                overtoneOsc.start(now);
-
-                osc.stop(now + 1.5);
-                overtoneOsc.stop(now + 0.6);
-
-                stepIndex++;
+            const config: ConfigSettings = {
+                ...initialSettings,
+                pixelCount: GRID_SIZE * GRID_SIZE,
+                bpm: 72,
+                enableAccompaniment: false // Melodia Basale Pura
             };
 
-            // Play first note immediately and start loop
-            playNextNote();
-            sequencerTimerRef.current = setInterval(playNextNote, beatMs);
-
-            synthNodesRef.current = { oscs: [bassOsc, padOsc], gains: [bassGain, padGain], filter: masterFilter };
-            setIsPlayingSynth(true);
-        } catch (e) {
-            console.warn("Audio Context Synth error:", e);
-        }
-    };
-
-    const stopSynthAudio = () => {
-        if (sequencerTimerRef.current) {
-            clearInterval(sequencerTimerRef.current);
-            sequencerTimerRef.current = null;
-        }
-        if (synthNodesRef.current.oscs) {
-            synthNodesRef.current.oscs.forEach(o => { try { o.stop(); o.disconnect(); } catch (e) {} });
-        }
-        if (audioCtxRef.current) {
-            audioCtxRef.current.close();
-            audioCtxRef.current = null;
-        }
-        setIsPlayingSynth(false);
-    };
-
-    // Trigger Real AI Music Engine via musicAiService
-    const handleGenerateAiTrack = async () => {
-        if (!user) {
-            setIsLoginModalOpen(true);
-            return;
-        }
-
-        setIsGeneratingAi(true);
-        setAiStatus("Avvio generazione traccia audio da AI Provider...");
-
-        try {
-            const res = await generateAiAudioTrack(
-                generatedSunoPrompt || `Operatic ${selectedArtwork.title} ${whoResult?.primaryCategory.label}`,
-                60,
+            // 1. Run Full SonificART Deterministic Engine
+            const result = await sonifyImage(
+                fileObj,
+                config,
+                (stepIndex: number, status: 'active' | 'completed') => {
+                    setAnalysisProgress(`Fase ${stepIndex}/6: ${status}`);
+                },
                 null,
-                null,
-                (pct, status, detail) => {
-                    setAiStatus(`[${pct}%] ${status}: ${detail}`);
-                }
+                'auto'
             );
 
-            if (res.success && res.audioUrl) {
-                setAiAudioUrl(res.audioUrl);
-                setAiStatus("✅ Traccia generata con successo dall AI!");
-            } else {
-                throw new Error(res.error || "Impossibile recuperare la traccia audio.");
+            // 2. Store Results
+            setMatchedTraditionName(result.culturalSelectionResult.tradition.name);
+            setMatchedCulturalFamily(result.culturalSelectionResult.tradition.cultural_family);
+            setScanPatternName(result.scanPattern.name);
+            setAudioTrackUrl(result.audioOutput.audioUrl);
+
+            // 3. Build Matrix Regions Array for Visual Overlay
+            const regions: MatrixRegion[] = [];
+            const blockDataList: BlockData[] = result.blockAnalysisResult.blocks;
+            const melodyEvents: TransformedNoteEvent[] = result.audioOutput.events;
+
+            const cellW = 100 / GRID_SIZE;
+            const cellH = 100 / GRID_SIZE;
+
+            blockDataList.forEach((bd: BlockData, idx: number) => {
+                const noteEvt = melodyEvents[idx] || melodyEvents[0];
+
+                const gX = idx % GRID_SIZE;
+                const gY = Math.floor(idx / GRID_SIZE);
+
+                regions.push({
+                    id: `REG_${String(idx + 1).padStart(3, '0')}`,
+                    index: idx,
+                    x: gX * cellW,
+                    y: gY * cellH,
+                    gridX: gX,
+                    gridY: gY,
+                    widthPct: cellW,
+                    heightPct: cellH,
+                    L: Math.round(bd.lab.l),
+                    a: Math.round(bd.lab.a),
+                    b: Math.round(bd.lab.b),
+                    hex: `rgb(${bd.r}, ${bd.g}, ${bd.b})`,
+                    noteName: noteEvt ? noteEvt.noteName : 'C4',
+                    frequencyHz: noteEvt ? Math.round(noteEvt.transformedCents ? 440 * Math.pow(2, (noteEvt.baseNote - 69) / 12) : 261) : 261
+                });
+            });
+
+            setMatrixRegions(regions);
+            if (regions.length > 0) {
+                setActiveRegion(regions[0]);
             }
+            setIsAnalyzing(false);
+
         } catch (err: any) {
-            console.error("AI Generation error:", err);
-            setAiStatus(`⚠️ ${err.message || 'Errore generazione AI. Verificare API Key provider.'}`);
-            // Fallback audio demo
-            setAiAudioUrl("https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=opera-dramatic-112191.mp3");
-        } finally {
-            setIsGeneratingAi(false);
+            console.error("Analysis Error:", err);
+            setAnalysisProgress(`Errore: ${err.message || 'Impossibile completare la scansione deterministica.'}`);
+            setIsAnalyzing(false);
         }
     };
+
+    // Play Note Event for Current Region in Real-Time WebAudio
+    const playNoteForRegion = (region: MatrixRegion) => {
+        try {
+            if (!audioCtxRef.current) {
+                const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+                audioCtxRef.current = new AudioCtx();
+            }
+            const ctx = audioCtxRef.current;
+            if (ctx.state === 'suspended') ctx.resume();
+
+            const now = ctx.currentTime;
+
+            // Pure Base Harmonic Sine Wave (1 Region = 1 Base Note)
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(region.frequencyHz, now);
+
+            // Envelope tuned to Luminance (L*)
+            const vol = 0.05 + (region.L / 100) * 0.25;
+            gain.gain.setValueAtTime(0.001, now);
+            gain.gain.linearRampToValueAtTime(vol, now + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.start(now);
+            osc.stop(now + 0.4);
+        } catch (e) {
+            console.warn("Audio note play error:", e);
+        }
+    };
+
+    // Start Step-by-Step Cursor Movement & Audio Playback
+    const startPlayback = () => {
+        if (matrixRegions.length === 0 || isAnalyzing) return;
+        setIsPlaying(true);
+
+        const stepTimeMs = 350; // 350ms per region step
+
+        if (playbackTimerRef.current) clearInterval(playbackTimerRef.current);
+
+        let step = currentStepIndex;
+
+        playbackTimerRef.current = setInterval(() => {
+            if (step >= matrixRegions.length) {
+                step = 0; // Loop or Stop
+            }
+
+            const currentReg = matrixRegions[step];
+            setActiveRegion(currentReg);
+            setCurrentStepIndex(step);
+
+            // Play the base melodic note for this region
+            playNoteForRegion(currentReg);
+
+            step++;
+        }, stepTimeMs);
+    };
+
+    // Stop Playback
+    const stopPlayback = () => {
+        if (playbackTimerRef.current) {
+            clearInterval(playbackTimerRef.current);
+            playbackTimerRef.current = null;
+        }
+        setIsPlaying(false);
+    };
+
+    useEffect(() => {
+        return () => {
+            stopPlayback();
+            if (audioCtxRef.current) {
+                audioCtxRef.current.close();
+            }
+        };
+    }, []);
 
     return (
         <div className="max-w-7xl mx-auto space-y-8 animate-fade-in pb-16">
@@ -455,339 +239,193 @@ S'innalza il canto al vertice del cielo!`;
                     <div className="flex items-center gap-3 mb-2">
                         <span className="px-3 py-1 bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 rounded-full text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5">
                             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
-                            Real-Time CAM Engine
+                            Scansione Deterministica Colorimetrica Matrice
                         </span>
-                        <span className="text-xs text-white/50 font-mono">WHO HEN Report 67</span>
+                        <span className="text-xs text-white/50 font-mono">1 Porzione = 1 Nota</span>
                     </div>
                     <h1 className="text-3xl font-black font-display text-white tracking-tight">
-                        Quadro + <span className="text-cyan-400">Bio-Scan Telecamera</span>
+                        Segmentazione Matrice + <span className="text-cyan-400">Linea Melodica Basale</span>
                     </h1>
                     <p className="text-sm text-white/70 mt-1 max-w-2xl">
-                        La telecamera sopra l'opera analizza lo stato dell'osservatore e genera una sonificazione terapeutica clinica basata sul dipinto e sulle direttive WHO.
+                        Carica un'immagine per suddividerla in una matrice di porzioni cromatiche CIE LAB, calcolare la traiettoria del cursore e riprodurre la linea melodica basale deterministica.
                     </p>
                 </div>
 
-                <button
-                    onClick={startFusionScan}
-                    disabled={!isCamActive || isScanning}
-                    className={`px-8 py-4 rounded-xl font-bold uppercase tracking-wider text-sm transition-all duration-300 shadow-xl flex items-center gap-3 ${
-                        isScanning
-                            ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 cursor-not-allowed'
-                            : 'bg-gradient-to-r from-cyan-500 via-teal-500 to-blue-600 text-white hover:scale-105 hover:shadow-[0_0_25px_rgba(6,182,212,0.5)]'
-                    }`}
-                >
-                    <i className={`fas ${isScanning ? 'fa-spinner fa-spin' : 'fa-play'} text-base`}></i>
-                    {isScanning ? `Scansione Fusione (${scanProgress}%)` : 'Avvia Scansione (10 Sec)'}
-                </button>
+                {/* UPLOAD BUTTON */}
+                <label className="cursor-pointer px-8 py-4 bg-gradient-to-r from-cyan-500 via-teal-500 to-blue-600 hover:scale-105 text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all duration-300 shadow-xl flex items-center gap-3">
+                    <i className="fas fa-upload text-base"></i>
+                    Carica Immagine Opera
+                    <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                </label>
             </div>
 
-            {/* DUAL INPUT SECTION: ARTWORK + CAM */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            {/* MAIN SCAN & CURSOR WORKSPACE */}
+            {!uploadedImageUrl ? (
+                <div className="bg-slate-950/60 backdrop-blur-xl p-16 rounded-2xl border border-dashed border-cyan-500/30 text-center space-y-4">
+                    <div className="w-20 h-20 bg-cyan-500/10 border border-cyan-500/30 rounded-full flex items-center justify-center mx-auto text-cyan-400 text-3xl">
+                        <i className="fas fa-image"></i>
+                    </div>
+                    <h3 className="text-xl font-bold text-white">Nessuna Immagine Caricata</h3>
+                    <p className="text-sm text-white/60 max-w-md mx-auto">
+                        Clicca sul pulsante in alto <strong>"Carica Immagine Opera"</strong> per avviare la segmentazione della matrice colorimetrica e la generazione della linea melodica basale.
+                    </p>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
-                {/* LEFT: ARTWORK SELECTOR (5 COLS) */}
-                <div className="lg:col-span-5 flex flex-col gap-6">
-                    <div className="bg-slate-950/60 backdrop-blur-xl p-6 rounded-2xl border border-white/10 shadow-2xl space-y-4">
-                        <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                            <h3 className="text-xs font-bold font-mono text-cyan-400 uppercase tracking-widest flex items-center gap-2">
-                                <i className="fas fa-palette"></i> Input A: L'Opera d'Arte (Quadro)
-                            </h3>
-                            <label className="cursor-pointer text-[11px] bg-white/10 hover:bg-white/20 text-white px-2.5 py-1 rounded border border-white/20 transition-all font-mono">
-                                <i className="fas fa-upload mr-1"></i> Carica Quadro
-                                <input type="file" accept="image/*" className="hidden" onChange={handleArtworkUpload} />
-                            </label>
-                        </div>
+                    {/* LEFT: IMAGE DISPLAY WITH LIVE MATRIX CURSOR OVERLAY (7 COLS) */}
+                    <div className="lg:col-span-7 flex flex-col gap-6">
+                        <div className="bg-slate-950/80 backdrop-blur-xl p-6 rounded-2xl border border-white/10 shadow-2xl space-y-4">
+                            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                                <span className="text-xs font-mono text-cyan-400 font-bold uppercase tracking-wider flex items-center gap-2">
+                                    <i className="fas fa-microscope"></i> Opera: {uploadedFileName}
+                                </span>
+                                <span className="text-xs font-mono text-emerald-400 font-bold">
+                                    Matrice {GRID_SIZE}×{GRID_SIZE} ({matrixRegions.length} Porzioni)
+                                </span>
+                            </div>
 
-                        {/* Presets Grid */}
-                        <div className="grid grid-cols-3 gap-2">
-                            {PRESET_ARTWORKS.map(art => (
+                            {/* Image Container with Dynamic Matrix Overlay */}
+                            <div className="relative rounded-xl overflow-hidden border border-white/10 aspect-video bg-black">
+                                <img src={uploadedImageUrl} alt="Opera Scansionata" className="w-full h-full object-cover" />
+
+                                {/* Render Matrix Grid Lines */}
+                                {matrixRegions.length > 0 && (
+                                    <div className="absolute inset-0 grid grid-cols-16 grid-rows-16 pointer-events-none opacity-30">
+                                        {matrixRegions.map((reg) => (
+                                            <div key={reg.id} className="border border-white/20" />
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* ACTIVE STEP CURSOR OVERLAY */}
+                                {activeRegion && (
+                                    <div
+                                        style={{
+                                            left: `${activeRegion.x}%`,
+                                            top: `${activeRegion.y}%`,
+                                            width: `${activeRegion.widthPct}%`,
+                                            height: `${activeRegion.heightPct}%`
+                                        }}
+                                        className="absolute border-2 border-cyan-400 bg-cyan-400/30 shadow-[0_0_20px_#38bdf8] transition-all duration-150 rounded-sm flex items-center justify-center pointer-events-none"
+                                    >
+                                        <span className="bg-black/90 text-cyan-300 text-[8px] font-mono font-bold px-1 rounded border border-cyan-400/50 -top-4 absolute">
+                                            {activeRegion.id}
+                                        </span>
+                                    </div>
+                                )}
+
+                                {isAnalyzing && (
+                                    <div className="absolute inset-0 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center space-y-3">
+                                        <i className="fas fa-spinner fa-spin text-3xl text-cyan-400"></i>
+                                        <p className="text-xs font-mono text-cyan-300 font-bold">{analysisProgress}</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* CONTROLS */}
+                            <div className="flex items-center justify-between gap-4 pt-2">
                                 <button
-                                    key={art.id}
-                                    onClick={() => {
-                                        setSelectedArtwork(art);
-                                        setCustomArtworkUrl(null);
-                                        setArtworkStats(art.stats);
-                                    }}
-                                    className={`relative rounded-lg overflow-hidden border transition-all h-20 group ${
-                                        selectedArtwork.id === art.id ? 'border-cyan-400 ring-2 ring-cyan-400/50 scale-105' : 'border-white/10 opacity-70 hover:opacity-100'
+                                    onClick={isPlaying ? stopPlayback : startPlayback}
+                                    disabled={isAnalyzing || matrixRegions.length === 0}
+                                    className={`flex-1 py-3.5 rounded-xl font-bold uppercase text-xs tracking-wider transition-all flex items-center justify-center gap-2 ${
+                                        isPlaying
+                                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
+                                            : 'bg-gradient-to-r from-cyan-500 to-teal-500 text-white hover:scale-102 shadow-lg shadow-cyan-950/50'
                                     }`}
                                 >
-                                    <img src={art.url} alt={art.title} className="w-full h-full object-cover" />
-                                    <div className="absolute inset-0 bg-black/40 p-1 flex flex-col justify-end">
-                                        <span className="text-[10px] font-bold text-white leading-tight truncate">{art.title}</span>
-                                    </div>
+                                    <i className={`fas ${isPlaying ? 'fa-pause' : 'fa-play'}`}></i>
+                                    {isPlaying ? 'Pausa Scansione' : 'Avvia Scansione Cursore & Melodia'}
                                 </button>
-                            ))}
-                        </div>
 
-                        {/* Selected Artwork Display with WHO Dynamic Visual Impact & AI Object Bounding Boxes */}
-                        <div className={`relative rounded-xl overflow-hidden border transition-all duration-700 aspect-video bg-black group ${whoResult ? 'border-cyan-400 shadow-[0_0_30px_rgba(45,212,191,0.25)]' : 'border-white/10'}`}>
-                            <img
-                                src={selectedArtwork.url}
-                                alt={selectedArtwork.title}
-                                className="w-full h-full object-cover transition-all duration-1000"
-                                style={{
-                                    filter: whoResult?.primaryCategory ? (
-                                        whoResult.primaryCategory.category === 'calming' ? 'contrast(0.92) brightness(1.05) saturate(0.85) sepia(0.08)' :
-                                        whoResult.primaryCategory.category === 'physiological' ? 'contrast(1.1) saturate(1.15) hue-rotate(-8deg)' :
-                                        whoResult.primaryCategory.category === 'cognitive_motor' ? 'contrast(1.25) saturate(1.25) brightness(1.08)' :
-                                        whoResult.primaryCategory.category === 'motivation' ? 'contrast(1.15) brightness(1.18) saturate(1.4)' :
-                                        'saturate(1.2)'
-                                    ) : 'none'
-                                }}
-                            />
-
-                            {/* AI Segmented Bounding Boxes Overlay */}
-                            {selectedArtwork.objects && selectedArtwork.objects.map((obj, i) => (
-                                <div
-                                    key={obj.id}
-                                    style={{
-                                        left: `${obj.bBox.x}%`,
-                                        top: `${obj.bBox.y}%`,
-                                        width: `${obj.bBox.w}%`,
-                                        height: `${obj.bBox.h}%`
-                                    }}
-                                    className="absolute border-2 border-cyan-400/60 bg-cyan-500/10 rounded-lg hover:border-amber-400 hover:bg-amber-500/20 transition-all duration-300 pointer-events-auto cursor-pointer p-1.5 flex flex-col justify-between"
+                                <button
+                                    onClick={() => { stopPlayback(); setCurrentStepIndex(0); if (matrixRegions[0]) setActiveRegion(matrixRegions[0]); }}
+                                    className="px-4 py-3.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-mono font-bold uppercase border border-white/10 transition-all"
                                 >
-                                    <span className="bg-black/80 backdrop-blur-md px-2 py-0.5 rounded text-[9px] font-mono text-cyan-300 font-bold border border-cyan-400/40 w-fit truncate">
-                                        🎯 {obj.label}
-                                    </span>
-                                    <span className="bg-black/90 px-2 py-0.5 rounded text-[9px] font-mono text-amber-300 font-bold border border-amber-400/40 w-fit self-end truncate">
-                                        🎻 {obj.instrument}
-                                    </span>
-                                </div>
-                            ))}
+                                    <i className="fas fa-rotate-left mr-1"></i> Reset
+                                </button>
+                            </div>
+                        </div>
+                    </div>
 
-                            {whoResult && (
-                                <div className="absolute top-3 left-3 bg-black/80 backdrop-blur-md border border-cyan-500/40 px-3 py-1 rounded-full text-[10px] font-mono text-cyan-300 font-bold flex items-center gap-1.5 animate-pulse">
-                                    <i className="fas fa-wand-magic-sparkles"></i> Visual Impact WHO Attivo ({whoResult.primaryCategory.label.split('/')[0]})
-                                </div>
-                            )}
+                    {/* RIGHT: DETERMINISTIC TELEMETRY & ACTIVE REGION DATA (5 COLS) */}
+                    <div className="lg:col-span-5 flex flex-col gap-6">
 
-                            <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-4 flex flex-col justify-end pointer-events-none">
-                                <span className="text-base font-bold text-white">{selectedArtwork.title}</span>
-                                <span className="text-xs text-cyan-300 font-mono">{selectedArtwork.artist}</span>
-                                <p className="text-[11px] text-white/60 mt-1 italic">{selectedArtwork.description}</p>
+                        {/* MATCHED CULTURAL TRADITION & PATTERN */}
+                        <div className="bg-slate-950/80 backdrop-blur-xl p-6 rounded-2xl border border-white/10 shadow-2xl space-y-4 font-mono">
+                            <span className="text-xs text-cyan-400 font-bold uppercase tracking-wider block border-b border-white/10 pb-2">
+                                📊 Algoritmo Deterministico Applicato
+                            </span>
+
+                            <div className="space-y-3 text-xs">
+                                <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                                    <span className="text-white/50 text-[10px] block">Tradizione Etnomusicologica Matched</span>
+                                    <span className="text-amber-300 font-bold text-sm block mt-0.5">{matchedTraditionName || 'Calcolo in corso...'}</span>
+                                    <span className="text-white/60 text-[10px]">{matchedCulturalFamily}</span>
+                                </div>
+
+                                <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                                    <span className="text-white/50 text-[10px] block">Traiettoria Cursore di Scansione</span>
+                                    <span className="text-cyan-300 font-bold text-sm block mt-0.5">{scanPatternName || 'Calcolo in corso...'}</span>
+                                </div>
                             </div>
                         </div>
 
-                        {/* Segmented Objects Legend */}
-                        {selectedArtwork.objects && (
-                            <div className="bg-slate-900/80 p-3 rounded-xl border border-white/10 space-y-2 font-mono">
-                                <span className="text-[10px] text-cyan-400 font-bold uppercase tracking-wider block">
-                                    🧩 Segmentazione Semantica IA & Timbro Deterministico
-                                </span>
-                                <div className="space-y-1.5">
-                                    {selectedArtwork.objects.map(obj => (
-                                        <div key={obj.id} className="flex items-center justify-between text-[11px] bg-white/5 p-2 rounded-lg border border-white/5">
-                                            <div className="flex items-center gap-2">
-                                                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: obj.colorHex }}></span>
-                                                <span className="text-white font-bold">{obj.label}</span>
-                                            </div>
-                                            <span className="text-amber-300 font-bold bg-amber-950/40 border border-amber-500/30 px-2 py-0.5 rounded">
-                                                {obj.instrument}
-                                            </span>
+                        {/* ACTIVE REGION TELEMETRY */}
+                        {activeRegion && (
+                            <div className="bg-slate-950/80 backdrop-blur-xl p-6 rounded-2xl border border-cyan-500/40 shadow-2xl space-y-4 font-mono animate-fade-in">
+                                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                                    <span className="text-xs text-cyan-400 font-bold uppercase tracking-wider">
+                                        🎯 Porzione Matrice Attiva
+                                    </span>
+                                    <span className="text-xs bg-cyan-500/20 text-cyan-300 px-2.5 py-1 rounded font-bold border border-cyan-500/40">
+                                        {activeRegion.id} ({activeRegion.index + 1}/{matrixRegions.length})
+                                    </span>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3 text-xs">
+                                    <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                                        <span className="text-white/50 text-[10px] block">Coordinate Matrice</span>
+                                        <span className="text-white font-bold">[X: {activeRegion.gridX}, Y: {activeRegion.gridY}]</span>
+                                    </div>
+
+                                    <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                                        <span className="text-white/50 text-[10px] block">Colore Esadecimale</span>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                            <span className="w-3 h-3 rounded-full border border-white/30" style={{ backgroundColor: activeRegion.hex }}></span>
+                                            <span className="text-white font-bold">{activeRegion.hex}</span>
                                         </div>
-                                    ))}
+                                    </div>
+
+                                    <div className="bg-white/5 p-3 rounded-xl border border-white/5 col-span-2">
+                                        <span className="text-white/50 text-[10px] block">Colorimetria CIE LAB D65</span>
+                                        <span className="text-cyan-300 font-bold">L*: {activeRegion.L} | a*: {activeRegion.a} | b*: {activeRegion.b}</span>
+                                    </div>
+
+                                    <div className="bg-cyan-950/40 p-3 rounded-xl border border-cyan-500/40 col-span-2 flex items-center justify-between">
+                                        <div>
+                                            <span className="text-white/50 text-[10px] block">Nota Melodica Basale</span>
+                                            <span className="text-amber-300 font-bold text-base">{activeRegion.noteName}</span>
+                                        </div>
+                                        <span className="text-cyan-300 font-bold text-sm bg-black/60 px-3 py-1.5 rounded-lg border border-cyan-500/30">
+                                            {activeRegion.frequencyHz} Hz
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                         )}
 
-                        {/* Color Stats */}
-                        <div className="grid grid-cols-3 gap-2 text-center text-xs font-mono bg-white/5 p-3 rounded-xl">
-                            <div>
-                                <span className="text-white/50 text-[10px] block">Luminosità (Lab)</span>
-                                <span className="text-white font-bold">{artworkStats.avg_L}</span>
-                            </div>
-                            <div>
-                                <span className="text-white/50 text-[10px] block">Saturazione</span>
-                                <span className="text-cyan-300 font-bold">{Math.round(artworkStats.avg_saturation * 100)}%</span>
-                            </div>
-                            <div>
-                                <span className="text-white/50 text-[10px] block">Diversità</span>
-                                <span className="text-purple-300 font-bold">{Math.round(artworkStats.hue_diversity * 100)}%</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* RIGHT: WEBCAM OBSERVER SCAN (7 COLS) */}
-                <div className="lg:col-span-7 flex flex-col gap-6">
-                    <div className="bg-slate-950/60 backdrop-blur-xl p-6 rounded-2xl border border-white/10 shadow-2xl space-y-4">
-                        <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                            <h3 className="text-xs font-bold font-mono text-cyan-400 uppercase tracking-widest flex items-center gap-2">
-                                <i className="fas fa-eye"></i> Input B: Telecamera Sopra il Quadro (Osservatore)
-                            </h3>
-                            <span className="text-[11px] font-mono text-emerald-400 flex items-center gap-1.5">
-                                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                                CAM LIVE 30 FPS
-                            </span>
-                        </div>
-
-                        {/* Video Container */}
-                        <div className="relative bg-slate-950 rounded-xl border border-white/10 overflow-hidden aspect-video">
-                            {camError ? (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center text-red-400 bg-red-950/20 space-y-3">
-                                    <i className="fas fa-exclamation-triangle text-3xl mb-1"></i>
-                                    <p className="text-xs font-bold leading-relaxed max-w-lg">{camError}</p>
-                                    <div className="flex flex-wrap justify-center gap-3 pt-2">
-                                        <button
-                                            onClick={startCamera}
-                                            className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold uppercase tracking-wider border border-white/20 transition-all"
-                                        >
-                                            <i className="fas fa-rotate-right mr-1.5"></i> Riprova Connessione
-                                        </button>
-                                        <button
-                                            onClick={() => { setCamError(null); setIsCamActive(true); }}
-                                            className="px-4 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 rounded-lg text-xs font-bold uppercase tracking-wider border border-cyan-500/40 transition-all"
-                                        >
-                                            <i className="fas fa-play mr-1.5"></i> Testa Senza Telecamera (Simulazione)
-                                        </button>
-                                    </div>
-                                </div>
-                            ) : (
-                                <>
-                                    <video ref={videoRef} className="w-full h-full object-cover transform -scale-x-100" playsInline muted />
-                                    <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none transform -scale-x-100" />
-                                </>
-                            )}
-
-                            {isScanning && (
-                                <div className="absolute bottom-0 inset-x-0 p-3 bg-black/80 backdrop-blur-md">
-                                    <div className="flex justify-between text-xs font-mono text-cyan-300 mb-1">
-                                        <span>ANALISI BIO-FUSIONE IN CORSO...</span>
-                                        <span>{scanProgress}%</span>
-                                    </div>
-                                    <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
-                                        <div className="h-full bg-gradient-to-r from-cyan-400 to-teal-300 transition-all" style={{ width: `${scanProgress}%` }} />
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Observer Metrics */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                            <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                                <span className="text-[10px] text-white/50 font-mono block">Tensione Facciale</span>
-                                <span className={`text-base font-bold font-mono ${observerMetrics.facialTension > 0.5 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                                    {(observerMetrics.facialTension * 100).toFixed(0)}%
+                        {/* COMPLETED AUDIO TRACK DOWNLOAD */}
+                        {audioTrackUrl && (
+                            <div className="bg-emerald-950/40 border border-emerald-500/40 p-5 rounded-2xl space-y-3 font-mono animate-fade-in">
+                                <span className="text-xs text-emerald-400 font-bold uppercase tracking-wider block">
+                                    ✅ Linea Melodica Basale Completa (.WAV)
                                 </span>
+                                <audio controls src={audioTrackUrl} className="w-full h-10 accent-emerald-500" />
                             </div>
-                            <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                                <span className="text-[10px] text-white/50 font-mono block">Respiro Est. (BPM)</span>
-                                <span className="text-base font-bold text-cyan-300 font-mono">{observerMetrics.heartRateEst}</span>
-                            </div>
-                            <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                                <span className="text-[10px] text-white/50 font-mono block">Valenza Emotiva</span>
-                                <span className="text-base font-bold text-purple-300 font-mono">{observerMetrics.valency}</span>
-                            </div>
-                            <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                                <span className="text-[10px] text-white/50 font-mono block">Sguardo</span>
-                                <span className="text-xs font-bold text-white truncate block">{observerMetrics.gazeVector}</span>
-                            </div>
-                        </div>
+                        )}
+
                     </div>
-                </div>
-            </div>
-
-            {/* WHO CLASSIFICATION & AUDIO RESULT PANEL */}
-            {whoResult && (
-                <div className="bg-slate-950/80 backdrop-blur-xl p-6 rounded-2xl border border-cyan-500/40 shadow-2xl space-y-6 animate-fade-in">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
-                        <div>
-                            <span className="text-xs font-mono text-cyan-400 font-bold uppercase tracking-wider block">
-                                Diagnostic Result WHO Health Evidence Network (Report 67)
-                            </span>
-                            <h2 className="text-xl font-bold text-white mt-1">
-                                ⭐ Categoria Primaria: <span className="text-cyan-300">{whoResult.primaryCategory.label}</span>
-                            </h2>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                            {isPlayingSynth ? (
-                                <button
-                                    onClick={stopSynthAudio}
-                                    className="px-5 py-2.5 bg-red-500/20 text-red-400 border border-red-500/40 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center gap-2 hover:bg-red-500/30 transition-all"
-                                >
-                                    <i className="fas fa-stop"></i> Ferma Audio Reattivo
-                                </button>
-                            ) : (
-                                <button
-                                    onClick={playTherapeuticAudio}
-                                    className="px-5 py-2.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center gap-2 hover:bg-emerald-500/30 transition-all"
-                                >
-                                    <i className="fas fa-volume-high"></i> Ascolta Audio Reattivo WHO
-                                </button>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* WHO Directive Details */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="bg-white/5 p-4 rounded-xl border border-white/10 space-y-2">
-                            <span className="text-xs font-mono text-cyan-400 font-bold block uppercase">Parametri Clinici Imposti dal WHO</span>
-                            <div className="text-xs text-white/80 space-y-1 font-mono">
-                                <div>• Target BPM: <strong className="text-yellow-400">{whoResult.primaryCategory.targetBpm} BPM</strong></div>
-                                <div>• Rilevanza Clinica: <strong className="text-emerald-400">{Math.round(whoResult.primaryCategory.score * 100)}%</strong></div>
-                                <div>• Motivazione Visiva: <span className="text-white/60">{whoResult.primaryCategory.visualReason}</span></div>
-                            </div>
-                        </div>
-
-                        <div className="md:col-span-2 bg-black/60 p-4 rounded-xl border border-white/10 font-mono text-xs text-cyan-100 space-y-2 max-h-48 overflow-y-auto">
-                            <span className="text-xs font-mono text-purple-400 font-bold block uppercase">Direttiva Clinica Iniettata nel Prompt Generativo</span>
-                            <pre className="whitespace-pre-wrap leading-relaxed text-[11px] text-white/70">
-                                {whoResult.primaryCategory.whoDirective}
-                            </pre>
-                        </div>
-                    </div>
-
-                    {/* GENERATED LIBRETTO & AI MUSIC ENGINE CALL */}
-                    {scanComplete && (
-                        <div className="border-t border-white/10 pt-6 space-y-4 animate-fade-in">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="bg-black/60 p-4 rounded-xl border border-white/10">
-                                    <span className="text-xs font-mono text-cyan-400 font-bold block mb-2 uppercase">
-                                        📜 Libretto Operistico Generato
-                                    </span>
-                                    <div className="font-serif italic text-sm text-cyan-100 whitespace-pre-line leading-relaxed">
-                                        {generatedLibretto}
-                                    </div>
-                                </div>
-
-                                <div className="bg-black/60 p-4 rounded-xl border border-purple-500/30">
-                                    <span className="text-xs font-mono text-purple-400 font-bold block mb-2 uppercase">
-                                        🤖 Payload Prompt AI Generativo (Suno / Soundverse)
-                                    </span>
-                                    <div className="font-mono text-[11px] text-purple-200 leading-normal max-h-32 overflow-y-auto">
-                                        {generatedSunoPrompt}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <button
-                                onClick={handleGenerateAiTrack}
-                                disabled={isGeneratingAi}
-                                className="w-full py-4 bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all duration-300 shadow-xl shadow-purple-950/50 flex items-center justify-center gap-3"
-                            >
-                                <i className={`fas ${isGeneratingAi ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles'} text-base`}></i>
-                                {isGeneratingAi ? 'Generazione Audio via API AI in Corso...' : 'Genera Traccia Lirica Completa (Soundverse / Suno API)'}
-                            </button>
-
-                            {aiStatus && (
-                                <p className="text-xs font-mono text-center text-cyan-300 bg-cyan-950/40 p-3 rounded-lg border border-cyan-500/30 animate-pulse">
-                                    {aiStatus}
-                                </p>
-                            )}
-
-                            {aiAudioUrl && (
-                                <div className="bg-emerald-950/40 border border-emerald-500/40 p-4 rounded-xl space-y-3 animate-fade-in">
-                                    <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold uppercase font-mono">
-                                        <i className="fas fa-check-circle"></i> Traccia Operistica Lirica Pronta
-                                    </div>
-                                    <audio controls src={aiAudioUrl} className="w-full h-10 accent-emerald-500" autoPlay />
-                                </div>
-                            )}
-                        </div>
-                    )}
                 </div>
             )}
 
