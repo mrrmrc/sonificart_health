@@ -9,9 +9,11 @@ interface OutletContextType {
     setIsLoginModalOpen: (open: boolean) => void;
 }
 
-export interface ColorimeterArea {
+export interface ColorPerimeter {
     id: string;
-    label: string;
+    family: 'red' | 'blue' | 'yellow' | 'green' | 'earth' | 'neutral';
+    familyLabel: string;
+    name: string;
     r: number;
     g: number;
     b: number;
@@ -21,8 +23,10 @@ export interface ColorimeterArea {
     L: number;
     a: number;
     b_val: number;
-    centroidX: number; // Percentage X position on image (0-100%)
-    centroidY: number; // Percentage Y position on image (0-100%)
+    centroidX: number; // 0-100%
+    centroidY: number; // 0-100%
+    bBox: { minX: number; minY: number; maxX: number; maxY: number };
+    maskPixels: Uint8Array; // Binary mask for exact pixel perimeter
     midiNote: number;
     noteName: string;
     frequencyHz: number;
@@ -39,15 +43,16 @@ export const CamPage: React.FC = () => {
     const [scanStepMessage, setScanStepMessage] = useState<string>('');
     const [scanProgressPct, setScanProgressPct] = useState<number>(0);
 
-    // Digital Colorimeter Data State
-    const [discoveredAreas, setDiscoveredAreas] = useState<ColorimeterArea[]>([]);
-    const [activeAreaId, setActiveAreaId] = useState<string | null>(null);
-    const [probePos, setProbePos] = useState<{ x: number; y: number } | null>(null);
+    // Color Perimeter Data State
+    const [perimeters, setPerimeters] = useState<ColorPerimeter[]>([]);
+    const [selectedPerimeterId, setSelectedPerimeterId] = useState<string | null>(null);
+    const [filterFamily, setFilterFamily] = useState<string>('all');
 
     // Canvas & Image Refs
     const originalImageRef = useRef<HTMLImageElement>(null);
-    const colorimeterCanvasRef = useRef<HTMLCanvasElement>(null);
+    const canvasOverlayRef = useRef<HTMLCanvasElement>(null);
     const audioCtxRef = useRef<AudioContext | null>(null);
+    const sampleDimensionsRef = useRef<{ w: number; h: number }>({ w: 320, h: 200 });
 
     // Handle Image Upload
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -56,138 +61,214 @@ export const CamPage: React.FC = () => {
             const url = URL.createObjectURL(file);
             setUploadedImageUrl(url);
             setUploadedFileName(file.name);
-            setDiscoveredAreas([]);
-            setActiveAreaId(null);
-            setProbePos(null);
+            setPerimeters([]);
+            setSelectedPerimeterId(null);
         }
     };
 
-    // Run Real-Time Digital Colorimeter Scanning & Pin Marking
-    const startDigitalColorimeterScan = () => {
+    // Run Full-Resolution Connected-Component Color Perimeter Segmentation
+    const startMeticulousPerimeterScan = () => {
         if (!originalImageRef.current || !uploadedImageUrl || isScanning) return;
 
         setIsScanning(true);
         setScanProgressPct(0);
-        setDiscoveredAreas([]);
-        setActiveAreaId(null);
-        setScanStepMessage("Inizializzazione Colorimetro Digitale CIE LAB D65...");
+        setPerimeters([]);
+        setSelectedPerimeterId(null);
+        setScanStepMessage("Inizializzazione Colorimetro per Perimetri di Colore...");
 
         const img = originalImageRef.current;
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        const sampleW = 200;
+        // High resolution analysis for micro-perimeters
+        const sampleW = 320;
         const sampleH = Math.round((img.naturalHeight / img.naturalWidth) * sampleW);
         canvas.width = sampleW;
         canvas.height = sampleH;
-        ctx.drawImage(img, 0, 0, sampleW, sampleH);
+        sampleDimensionsRef.current = { w: sampleW, h: sampleH };
 
+        ctx.drawImage(img, 0, 0, sampleW, sampleH);
         const imgData = ctx.getImageData(0, 0, sampleW, sampleH);
         const data = imgData.data;
         const totalPixels = sampleW * sampleH;
 
-        // Perform Color Clustering & Centroid Discovery
-        const k = 6;
-        let centroids = initializeCentroids(data, k);
-        let assignments = new Int32Array(totalPixels);
+        setTimeout(() => {
+            setScanStepMessage("Scansione della superficie pixel per pixel (CIE LAB $\\Delta E$)...");
+            setScanProgressPct(20);
 
-        for (let iter = 0; iter < 6; iter++) {
-            assignments = assignPixelsToCentroids(data, centroids, totalPixels);
-            centroids = updateCentroids(data, assignments, k, totalPixels);
-        }
-
-        // Calculate Pixel Counts & Centroids (X,Y) per cluster
-        const clusterCounts = new Int32Array(k);
-        const clusterSumX = new Float64Array(k);
-        const clusterSumY = new Float64Array(k);
-
-        for (let i = 0; i < totalPixels; i++) {
-            const clusterIdx = assignments[i];
-            clusterCounts[clusterIdx]++;
-            const pxX = i % sampleW;
-            const pxY = Math.floor(i / sampleW);
-            clusterSumX[clusterIdx] += pxX;
-            clusterSumY[clusterIdx] += pxY;
-        }
-
-        // Sort Clusters by Surface Area Descending
-        const sortedIndices = Array.from({ length: k }, (_, i) => i)
-            .filter(i => clusterCounts[i] > 0)
-            .sort((a, b) => clusterCounts[b] - clusterCounts[a]);
-
-        const allCalculatedAreas: ColorimeterArea[] = sortedIndices.map((cIdx, rank) => {
-            const count = clusterCounts[cIdx];
-            const pct = parseFloat(((count / totalPixels) * 100).toFixed(1));
-            const c = centroids[cIdx];
-            const r = Math.round(c.r);
-            const g = Math.round(c.g);
-            const b = Math.round(c.b);
-            const hex = rgbToHex(r, g, b);
-
-            const avgX = clusterSumX[cIdx] / count;
-            const avgY = clusterSumY[cIdx] / count;
-            const centroidXPct = parseFloat(((avgX / sampleW) * 100).toFixed(1));
-            const centroidYPct = parseFloat(((avgY / sampleH) * 100).toFixed(1));
-
-            const lab = rgbToLab(r, g, b);
-            const midiNote = 48 + Math.round((lab.L / 100) * 24);
-            const noteName = midiToNoteName(midiNote);
-            const freqHz = Math.round(440 * Math.pow(2, (midiNote - 69) / 12));
-
-            return {
-                id: `COLOR_${String(rank + 1).padStart(2, '0')}`,
-                label: getColorName(r, g, b, lab),
-                r, g, b, hex,
-                percentage: pct,
-                pixelCount: count,
-                L: Math.round(lab.L),
-                a: Math.round(lab.a),
-                b_val: Math.round(lab.b),
-                centroidX: centroidXPct,
-                centroidY: centroidYPct,
-                midiNote,
-                noteName,
-                frequencyHz: freqHz
-            };
-        });
-
-        // ANIMATED STEP-BY-STEP PINNING: Discover and Pin Areas One by One!
-        let step = 0;
-        const totalSteps = allCalculatedAreas.length;
-
-        const interval = setInterval(() => {
-            if (step >= totalSteps) {
-                clearInterval(interval);
-                setIsScanning(false);
-                setProbePos(null);
-                setScanStepMessage("✅ Marcatura Colorimetrica Completata con Successo.");
-                if (allCalculatedAreas.length > 0) {
-                    setActiveAreaId(allCalculatedAreas[0].id);
-                }
-                return;
+            // 1. Convert image to CIE LAB Array
+            const labArray = new Float32Array(totalPixels * 3);
+            for (let i = 0; i < totalPixels; i++) {
+                const px = i * 4;
+                const lab = rgbToLab(data[px], data[px + 1], data[px + 2]);
+                labArray[i * 3] = lab.L;
+                labArray[i * 3 + 1] = lab.a;
+                labArray[i * 3 + 2] = lab.b;
             }
 
-            const currentArea = allCalculatedAreas[step];
+            setScanStepMessage("Identificazione e Scontorno delle Isole/Perimetri Cromatici...");
+            setScanProgressPct(50);
 
-            // Move Probe Crosshair to Centroid
-            setProbePos({ x: currentArea.centroidX, y: currentArea.centroidY });
-            setScanStepMessage(`Rilevamento ed Analisi Area [${currentArea.id}]: ${currentArea.label}...`);
-            setScanProgressPct(Math.round(((step + 1) / totalSteps) * 100));
+            // 2. Fine-grained Color Quantization (Fine Delta-E Clustering)
+            // Extract distinct color seeds
+            const k = 16; // 16 Fine Color Clusters
+            const centroids = initializeCentroids(data, k);
+            const assignments = assignPixelsToCentroids(data, centroids, totalPixels);
 
-            // Pin Area
-            setDiscoveredAreas(prev => [...prev, currentArea]);
-            setActiveAreaId(currentArea.id);
+            // 3. Connected Component Analysis (Extract Perimeters/Islands)
+            const extractedPerimeters: ColorPerimeter[] = [];
+            const visited = new Uint8Array(totalPixels);
 
-            // Play Colorimeter Audio Pip for this area
-            playColorimeterAudioPip(currentArea.frequencyHz);
+            let perimeterCount = 0;
 
-            step++;
-        }, 1200); // 1.2 seconds per color area pin
+            for (let i = 0; i < totalPixels; i++) {
+                if (visited[i] || assignments[i] < 0) continue;
+
+                const clusterIdx = assignments[i];
+                const mask = new Uint8Array(totalPixels);
+                const queue: number[] = [i];
+                visited[i] = 1;
+                mask[i] = 1;
+
+                let count = 0;
+                let sumX = 0, sumY = 0;
+                let sumR = 0, sumG = 0, sumB = 0;
+                let minX = sampleW, minY = sampleH, maxX = 0, maxY = 0;
+
+                while (queue.length > 0) {
+                    const currentIdx = queue.pop()!;
+                    const cX = currentIdx % sampleW;
+                    const cY = Math.floor(currentIdx / sampleW);
+
+                    count++;
+                    sumX += cX;
+                    sumY += cY;
+
+                    const px4 = currentIdx * 4;
+                    sumR += data[px4];
+                    sumG += data[px4 + 1];
+                    sumB += data[px4 + 2];
+
+                    if (cX < minX) minX = cX;
+                    if (cX > maxX) maxX = cX;
+                    if (cY < minY) minY = cY;
+                    if (cY > maxY) maxY = cY;
+
+                    // Check 4-connected neighbors
+                    const neighbors = [
+                        cX > 0 ? currentIdx - 1 : -1,
+                        cX < sampleW - 1 ? currentIdx + 1 : -1,
+                        cY > 0 ? currentIdx - sampleW : -1,
+                        cY < sampleH - 1 ? currentIdx + sampleW : -1,
+                    ];
+
+                    for (const nIdx of neighbors) {
+                        if (nIdx >= 0 && !visited[nIdx] && assignments[nIdx] === clusterIdx) {
+                            visited[nIdx] = 1;
+                            mask[nIdx] = 1;
+                            queue.push(nIdx);
+                        }
+                    }
+                }
+
+                // Keep perimeters with surface area > 0.15% of canvas (filter noise)
+                const pct = parseFloat(((count / totalPixels) * 100).toFixed(2));
+                if (pct >= 0.15) {
+                    perimeterCount++;
+                    const avgR = Math.round(sumR / count);
+                    const avgG = Math.round(sumG / count);
+                    const avgB = Math.round(sumB / count);
+                    const hex = rgbToHex(avgR, avgG, avgB);
+                    const lab = rgbToLab(avgR, avgG, avgB);
+
+                    const familyInfo = classifyColorFamily(avgR, avgG, avgB, lab);
+                    const midiNote = 42 + Math.round((lab.L / 100) * 36);
+                    const noteName = midiToNoteName(midiNote);
+                    const freqHz = Math.round(440 * Math.pow(2, (midiNote - 69) / 12));
+
+                    extractedPerimeters.push({
+                        id: `PERIMETER_${String(perimeterCount).padStart(3, '0')}`,
+                        family: familyInfo.family,
+                        familyLabel: familyInfo.label,
+                        name: `${familyInfo.label} (${hex})`,
+                        r: avgR, g: avgG, b: avgB, hex,
+                        percentage: pct,
+                        pixelCount: count,
+                        L: Math.round(lab.L),
+                        a: Math.round(lab.a),
+                        b_val: Math.round(lab.b),
+                        centroidX: parseFloat(((sumX / count / sampleW) * 100).toFixed(1)),
+                        centroidY: parseFloat(((sumY / count / sampleH) * 100).toFixed(1)),
+                        bBox: { minX, minY, maxX, maxY },
+                        maskPixels: mask,
+                        midiNote,
+                        noteName,
+                        frequencyHz: freqHz
+                    });
+                }
+            }
+
+            // Sort perimeters by surface area descending
+            extractedPerimeters.sort((a, b) => b.percentage - a.percentage);
+
+            setScanProgressPct(100);
+            setScanStepMessage(`✅ Estratti ${extractedPerimeters.length} Perimetri di Colore Meticolosi.`);
+            setPerimeters(extractedPerimeters);
+            setIsScanning(false);
+
+            if (extractedPerimeters.length > 0) {
+                setSelectedPerimeterId(extractedPerimeters[0].id);
+                drawPerimeterOutline(extractedPerimeters[0]);
+            }
+        }, 150);
     };
 
-    // Play Colorimeter Audio Pip
-    const playColorimeterAudioPip = (freqHz: number) => {
+    // Draw Exact Pixel Contour Outline for Selected Color Perimeter
+    const drawPerimeterOutline = (perimeter: ColorPerimeter | null) => {
+        if (!canvasOverlayRef.current || !originalImageRef.current) return;
+        const canvas = canvasOverlayRef.current;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const { w, h } = sampleDimensionsRef.current;
+        canvas.width = w;
+        canvas.height = h;
+
+        ctx.clearRect(0, 0, w, h);
+
+        if (!perimeter) return;
+
+        const mask = perimeter.maskPixels;
+        const outData = ctx.createImageData(w, h);
+        const data = outData.data;
+
+        // Highlight exact mask pixels with perimeter glow & stroke
+        for (let i = 0; i < mask.length; i++) {
+            if (mask[i] === 1) {
+                const px = i * 4;
+                data[px] = perimeter.r;
+                data[px + 1] = perimeter.g;
+                data[px + 2] = perimeter.b;
+                data[px + 3] = 210; // Semi-transparent overlay
+            }
+        }
+
+        ctx.putImageData(outData, 0, 0);
+
+        // Draw Contour Border Stroke around perimeter
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(
+            perimeter.bBox.minX,
+            perimeter.bBox.minY,
+            perimeter.bBox.maxX - perimeter.bBox.minX,
+            perimeter.bBox.maxY - perimeter.bBox.minY
+        );
+    };
+
+    // Play Note for Selected Perimeter
+    const playPerimeterAudio = (p: ColorPerimeter) => {
         try {
             if (!audioCtxRef.current) {
                 const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -201,19 +282,19 @@ export const CamPage: React.FC = () => {
             const gain = ctx.createGain();
 
             osc.type = 'sine';
-            osc.frequency.setValueAtTime(freqHz, now);
+            osc.frequency.setValueAtTime(p.frequencyHz, now);
 
             gain.gain.setValueAtTime(0.001, now);
-            gain.gain.linearRampToValueAtTime(0.18, now + 0.02);
-            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+            gain.gain.linearRampToValueAtTime(0.2, now + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
 
             osc.connect(gain);
             gain.connect(ctx.destination);
 
             osc.start(now);
-            osc.stop(now + 0.38);
+            osc.stop(now + 0.42);
         } catch (e) {
-            console.warn("Audio Pip error:", e);
+            console.warn("Audio play error:", e);
         }
     };
 
@@ -244,15 +325,6 @@ export const CamPage: React.FC = () => {
         return assignments;
     };
 
-    const updateCentroids = (data: Uint8ClampedArray, assignments: Int32Array, k: number, totalPixels: number) => {
-        const sums = Array.from({ length: k }, () => ({ r: 0, g: 0, b: 0, count: 0 }));
-        for (let i = 0; i < totalPixels; i++) {
-            const px = i * 4, c = assignments[i];
-            sums[c].r += data[px]; sums[c].g += data[px + 1]; sums[c].b += data[px + 2]; sums[c].count++;
-        }
-        return sums.map(s => s.count > 0 ? { r: s.r / s.count, g: s.g / s.count, b: s.b / s.count } : { r: 128, g: 128, b: 128 });
-    };
-
     const rgbToHex = (r: number, g: number, b: number) => '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
 
     const rgbToLab = (r: number, g: number, b: number) => {
@@ -278,16 +350,17 @@ export const CamPage: React.FC = () => {
         return `${names[midi % 12]}${Math.floor(midi / 12) - 1}`;
     };
 
-    const getColorName = (r: number, g: number, b: number, lab: { L: number, a: number, b: number }) => {
-        if (lab.L < 22) return "Zona Scura / Ombra";
-        if (lab.L > 82) return "Zona Luminosa / Luce";
-        if (Math.abs(lab.a) < 12 && Math.abs(lab.b) < 12) return "Zona Neutra";
-        if (lab.b < -18) return "Zona Blu / Azzurro";
-        if (lab.b > 20 && lab.a > 10) return "Zona Giallo / Oro";
-        if (lab.a < -15) return "Zona Verde";
-        if (lab.a > 20) return "Zona Rosso / Terra";
-        return "Zona Cromatica Media";
+    const classifyColorFamily = (r: number, g: number, b: number, lab: { L: number, a: number, b: number }): { family: ColorPerimeter['family'], label: string } => {
+        if (r > 120 && g < 100 && b < 100) return { family: 'red', label: 'Rosso / Scarlatto / Tunica' };
+        if (b > 120 && r < 110) return { family: 'blue', label: 'Blu / Azzurro / Cielo' };
+        if (r > 140 && g > 120 && b < 90) return { family: 'yellow', label: 'Giallo / Oro / Luce' };
+        if (g > 110 && r < 120) return { family: 'green', label: 'Verde / Vegetazione' };
+        if (lab.L < 25) return { family: 'neutral', label: 'Ombra Scura / Fondo' };
+        if (lab.L > 80) return { family: 'yellow', label: 'Luce Brillante' };
+        return { family: 'earth', label: 'Terra d Ombra / Bruno' };
     };
+
+    const filteredPerimeters = perimeters.filter(p => filterFamily === 'all' || p.family === filterFamily);
 
     return (
         <div className="max-w-7xl mx-auto space-y-8 animate-fade-in pb-16">
@@ -298,15 +371,15 @@ export const CamPage: React.FC = () => {
                     <div className="flex items-center gap-3 mb-2">
                         <span className="px-3 py-1 bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 rounded-full text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5">
                             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
-                            Colorimetro Digitale CIE LAB D65
+                            Colorimetro a Scansione Perimetrica Meticolosa
                         </span>
-                        <span className="text-xs text-white/50 font-mono">Real-Time Area Pinning</span>
+                        <span className="text-xs text-white/50 font-mono">Connected Component CIE LAB</span>
                     </div>
                     <h1 className="text-3xl font-black font-display text-white tracking-tight">
-                        Marcatura Visiva <span className="text-cyan-400">Aree di Colore</span>
+                        Scontorno & Marcatura <span className="text-cyan-400">Perimetri di Colore</span>
                     </h1>
                     <p className="text-sm text-white/70 mt-1 max-w-2xl">
-                        Carica un'opera d'arte ed avvia la scansione: il Colorimetro Digitale esaminerà la superficie e marchierà direttamente sul quadro ciascuna area di colore con il suo ID ed i suoi valori esatti.
+                        Scansione ad alta precisione: individua ogni singola isola perimetrale di colore (es. tunica rossa, mantello, cielo, croce) e ne marca lo scontorno visivo ed i dati colorimetrici esatti.
                     </p>
                 </div>
 
@@ -322,29 +395,29 @@ export const CamPage: React.FC = () => {
             {!uploadedImageUrl ? (
                 <div className="bg-slate-950/60 backdrop-blur-xl p-16 rounded-2xl border border-dashed border-cyan-500/30 text-center space-y-4">
                     <div className="w-20 h-20 bg-cyan-500/10 border border-cyan-500/30 rounded-full flex items-center justify-center mx-auto text-cyan-400 text-3xl">
-                        <i className="fas fa-crosshair"></i>
+                        <i className="fas fa-[#38bdf8] fa-crop-simple"></i>
                     </div>
                     <h3 className="text-xl font-bold text-white">Nessun Quadro Caricato</h3>
                     <p className="text-sm text-white/60 max-w-md mx-auto">
-                        Clicca sul pulsante in alto <strong>"Carica Immagine Opera"</strong> per abilitare la marcatura diretta delle aree di colore con il Colorimetro Digitale.
+                        Clicca sul pulsante in alto <strong>"Carica Immagine Opera"</strong> per avviare lo scontorno meticoloso di ogni perimetro di colore.
                     </p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
-                    {/* LEFT: ARTWORK DISPLAY WITH REAL-TIME PINS & PROBE (7 COLS) */}
+                    {/* LEFT: ARTWORK & PERIMETER OUTLINE CANVAS DISPLAY (7 COLS) */}
                     <div className="lg:col-span-7 flex flex-col gap-6">
                         <div className="bg-slate-950/80 backdrop-blur-xl p-6 rounded-2xl border border-white/10 shadow-2xl space-y-4">
                             <div className="flex items-center justify-between border-b border-white/10 pb-3">
                                 <span className="text-xs font-mono text-cyan-400 font-bold uppercase tracking-wider flex items-center gap-2">
-                                    <i className="fas fa-eye"></i> Opera: {uploadedFileName}
+                                    <i className="fas fa-microscope"></i> Opera: {uploadedFileName}
                                 </span>
                                 <span className="text-xs font-mono text-emerald-400 font-bold">
-                                    {discoveredAreas.length} Aree Marcate sull'Opera
+                                    {perimeters.length} Perimetri Cromatici Estratti
                                 </span>
                             </div>
 
-                            {/* Image Container with COLORIMETER PINS PINNED DIRECTLY ON THE CANVAS */}
+                            {/* Image Container with Exact Pixel Perimeter Outline Canvas */}
                             <div className="relative rounded-xl overflow-hidden border border-white/10 aspect-video bg-black flex items-center justify-center">
                                 <img
                                     ref={originalImageRef}
@@ -353,53 +426,43 @@ export const CamPage: React.FC = () => {
                                     className="w-full h-full object-cover"
                                 />
 
-                                {/* COLORIMETER PROBE RETICLE ANIMATION */}
-                                {probePos && (
-                                    <div
-                                        style={{ left: `${probePos.x}%`, top: `${probePos.y}%` }}
-                                        className="absolute w-12 h-12 -ml-6 -mt-6 border-2 border-cyan-400 rounded-full animate-ping pointer-events-none flex items-center justify-center shadow-[0_0_25px_#38bdf8]"
-                                    >
-                                        <div className="w-2 h-2 bg-cyan-400 rounded-full"></div>
-                                    </div>
-                                )}
+                                {/* Perimeter Outline Canvas Overlay */}
+                                <canvas
+                                    ref={canvasOverlayRef}
+                                    className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                                />
 
-                                {/* VISIBLE COLORIMETER PINS PINNED DIRECTLY OVER THE ARTWORK COLOR AREAS */}
-                                {discoveredAreas.map((area) => {
-                                    const isActive = area.id === activeAreaId;
+                                {/* PIN MARKERS FOR EACH PERIMETER */}
+                                {filteredPerimeters.map((p) => {
+                                    const isSelected = p.id === selectedPerimeterId;
                                     return (
                                         <div
-                                            key={area.id}
-                                            style={{ left: `${area.centroidX}%`, top: `${area.centroidY}%` }}
+                                            key={p.id}
+                                            style={{ left: `${p.centroidX}%`, top: `${p.centroidY}%` }}
                                             onClick={() => {
-                                                setActiveAreaId(area.id);
-                                                playColorimeterAudioPip(area.frequencyHz);
+                                                setSelectedPerimeterId(p.id);
+                                                drawPerimeterOutline(p);
+                                                playPerimeterAudio(p);
                                             }}
-                                            className={`absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-all duration-300 z-10 group ${
-                                                isActive ? 'scale-110 z-20' : 'opacity-85 hover:opacity-100 hover:scale-105'
+                                            className={`absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-all duration-300 z-10 ${
+                                                isSelected ? 'scale-110 z-20' : 'opacity-85 hover:opacity-100'
                                             }`}
                                         >
-                                            {/* COLOR TAG / BADGE PINNED ON ARTWORK */}
-                                            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg backdrop-blur-md font-mono shadow-2xl border transition-all ${
-                                                isActive
-                                                    ? 'bg-black/90 border-amber-400 text-amber-300 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(251,191,36,0.5)]'
-                                                    : 'bg-slate-950/80 border-cyan-400/60 text-cyan-200 hover:border-cyan-300'
+                                            <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded backdrop-blur-md font-mono text-[9px] font-bold shadow-xl border transition-all ${
+                                                isSelected
+                                                    ? 'bg-black/90 border-amber-400 text-amber-300 ring-2 ring-amber-400/50 shadow-[0_0_20px_#f59e0b]'
+                                                    : 'bg-black/80 border-cyan-400/60 text-cyan-200 hover:border-cyan-300'
                                             }`}>
-                                                <span className="w-2.5 h-2.5 rounded-full border border-white/40 shadow" style={{ backgroundColor: area.hex }}></span>
-                                                <span className="text-[10px] font-bold tracking-wider">{area.id}</span>
-                                                <span className="text-[9px] text-white/70 bg-white/10 px-1 rounded">{area.percentage}%</span>
-                                            </div>
-
-                                            {/* HOVER TOOLTIP METRICS */}
-                                            <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-slate-950/95 border border-cyan-400 text-[9px] font-mono text-cyan-100 px-3 py-1.5 rounded-md whitespace-nowrap shadow-2xl pointer-events-none z-30">
-                                                <div>CIE LAB: L*:{area.L} a*:{area.a} b*:{area.b_val}</div>
-                                                <div>HEX: {area.hex} | Nota: {area.noteName}</div>
+                                                <span className="w-2 h-2 rounded-full border border-white/40" style={{ backgroundColor: p.hex }}></span>
+                                                <span>{p.id}</span>
+                                                <span className="text-white/60">({p.percentage}%)</span>
                                             </div>
                                         </div>
                                     );
                                 })}
 
                                 {isScanning && (
-                                    <div className="absolute bottom-0 inset-x-0 p-3 bg-black/85 backdrop-blur-md border-t border-cyan-500/30">
+                                    <div className="absolute bottom-0 inset-x-0 p-3 bg-black/90 backdrop-blur-md border-t border-cyan-500/30">
                                         <div className="flex justify-between text-xs font-mono text-cyan-300 mb-1">
                                             <span>{scanStepMessage}</span>
                                             <span>{scanProgressPct}%</span>
@@ -411,9 +474,9 @@ export const CamPage: React.FC = () => {
                                 )}
                             </div>
 
-                            {/* TRIGGER SCAN BUTTON */}
+                            {/* TRIGGER FULL SCAN BUTTON */}
                             <button
-                                onClick={startDigitalColorimeterScan}
+                                onClick={startMeticulousPerimeterScan}
                                 disabled={isScanning}
                                 className={`w-full py-4 rounded-xl font-bold uppercase text-xs tracking-wider transition-all duration-300 shadow-xl flex items-center justify-center gap-3 ${
                                     isScanning
@@ -421,59 +484,72 @@ export const CamPage: React.FC = () => {
                                         : 'bg-gradient-to-r from-cyan-500 via-teal-500 to-blue-600 text-white hover:scale-102 hover:shadow-[0_0_25px_rgba(6,182,212,0.4)]'
                                 }`}
                             >
-                                <i className={`fas ${isScanning ? 'fa-spinner fa-spin' : 'fa-crosshair'} text-base`}></i>
-                                {isScanning ? 'Scansione Colorimetrica in Corso...' : 'Avvia Scansione Colorimetro & Marcatura Aree sull Opera'}
+                                <i className={`fas ${isScanning ? 'fa-spinner fa-spin' : 'fa-vector-square'} text-base`}></i>
+                                {isScanning ? 'Scansione Meticolosa Perimetri in Corso...' : 'Avvia Scansione Meticolosa & Scontorno Perimetri di Colore'}
                             </button>
                         </div>
                     </div>
 
-                    {/* RIGHT: COLORIMETER TELEMETRY BREAKDOWN (5 COLS) */}
+                    {/* RIGHT: PERIMETER REGISTRY TELEMETRY (5 COLS) */}
                     <div className="lg:col-span-5 flex flex-col gap-6">
                         <div className="bg-slate-950/80 backdrop-blur-xl p-6 rounded-2xl border border-white/10 shadow-2xl space-y-4 font-mono">
                             <div className="flex items-center justify-between border-b border-white/10 pb-3">
                                 <span className="text-xs text-cyan-400 font-bold uppercase tracking-wider">
-                                    📊 Registro Telemetrico Colorimetro ({discoveredAreas.length})
+                                    📋 Registro Perimetri Marcati ({filteredPerimeters.length})
                                 </span>
-                                <span className="text-xs text-white/50">CIE LAB D65</span>
+                                <span className="text-xs text-white/50">Connected Component</span>
                             </div>
 
-                            {discoveredAreas.length === 0 ? (
+                            {/* Filter Buttons */}
+                            {perimeters.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 pb-2 border-b border-white/5 text-[10px]">
+                                    <button onClick={() => setFilterFamily('all')} className={`px-2 py-1 rounded ${filterFamily === 'all' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'bg-white/5 text-white/60'}`}>Tutti ({perimeters.length})</button>
+                                    <button onClick={() => setFilterFamily('red')} className={`px-2 py-1 rounded ${filterFamily === 'red' ? 'bg-red-500/20 text-red-300 border border-red-500/40' : 'bg-white/5 text-white/60'}`}>Rossi</button>
+                                    <button onClick={() => setFilterFamily('blue')} className={`px-2 py-1 rounded ${filterFamily === 'blue' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40' : 'bg-white/5 text-white/60'}`}>Blu</button>
+                                    <button onClick={() => setFilterFamily('yellow')} className={`px-2 py-1 rounded ${filterFamily === 'yellow' ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/40' : 'bg-white/5 text-white/60'}`}>Gialli/Ori</button>
+                                    <button onClick={() => setFilterFamily('green')} className={`px-2 py-1 rounded ${filterFamily === 'green' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-white/5 text-white/60'}`}>Verdi</button>
+                                    <button onClick={() => setFilterFamily('earth')} className={`px-2 py-1 rounded ${filterFamily === 'earth' ? 'bg-amber-800/20 text-amber-300 border border-amber-800/40' : 'bg-white/5 text-white/60'}`}>Terre</button>
+                                </div>
+                            )}
+
+                            {perimeters.length === 0 ? (
                                 <p className="text-xs text-white/50 italic text-center py-6">
-                                    Clicca su <strong>"Avvia Scansione Colorimetro"</strong> a sinistra per vedere la marcatura passo dopo passo delle aree di colore sul quadro.
+                                    Clicca su <strong>"Avvia Scansione Meticolosa & Scontorno Perimetri"</strong> per isolare ogni singola porzione di colore sull'opera.
                                 </p>
                             ) : (
                                 <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
-                                    {discoveredAreas.map((area) => {
-                                        const isActive = area.id === activeAreaId;
+                                    {filteredPerimeters.map((p) => {
+                                        const isSelected = p.id === selectedPerimeterId;
                                         return (
                                             <div
-                                                key={area.id}
+                                                key={p.id}
                                                 onClick={() => {
-                                                    setActiveAreaId(area.id);
-                                                    playColorimeterAudioPip(area.frequencyHz);
+                                                    setSelectedPerimeterId(p.id);
+                                                    drawPerimeterOutline(p);
+                                                    playPerimeterAudio(p);
                                                 }}
                                                 className={`p-3.5 rounded-xl border transition-all cursor-pointer space-y-2 ${
-                                                    isActive
+                                                    isSelected
                                                         ? 'bg-cyan-950/60 border-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.25)] ring-1 ring-amber-400'
                                                         : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/20'
                                                 }`}
                                             >
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-2.5">
-                                                        <span className="w-3.5 h-3.5 rounded border border-white/30" style={{ backgroundColor: area.hex }}></span>
-                                                        <span className="text-xs font-bold text-amber-300">{area.id}</span>
-                                                        <span className="text-xs text-white font-medium">{area.label}</span>
+                                                        <span className="w-3.5 h-3.5 rounded border border-white/30" style={{ backgroundColor: p.hex }}></span>
+                                                        <span className="text-xs font-bold text-amber-300">{p.id}</span>
+                                                        <span className="text-xs text-white font-medium truncate max-w-[180px]">{p.name}</span>
                                                     </div>
                                                     <span className="text-xs font-bold text-cyan-300 bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-500/30">
-                                                        {area.percentage}% Superficie
+                                                        {p.percentage}% Sup.
                                                     </span>
                                                 </div>
 
                                                 <div className="grid grid-cols-2 gap-2 text-[10px] text-white/70 pt-1 border-t border-white/5">
-                                                    <div>CIE LAB: <strong className="text-cyan-200">L*:{area.L} a*:{area.a} b*:{area.b_val}</strong></div>
-                                                    <div>Colore HEX: <strong className="text-white">{area.hex}</strong></div>
-                                                    <div>Nota Basale: <strong className="text-amber-300">{area.noteName}</strong></div>
-                                                    <div>Frequenza: <strong className="text-emerald-300">{area.frequencyHz} Hz</strong></div>
+                                                    <div>CIE LAB: <strong className="text-cyan-200">L*:{p.L} a*:{p.a} b*:{p.b_val}</strong></div>
+                                                    <div>Hex: <strong className="text-white">{p.hex}</strong></div>
+                                                    <div>Nota Basale: <strong className="text-amber-300">{p.noteName}</strong></div>
+                                                    <div>Frequenza: <strong className="text-emerald-300">{p.frequencyHz} Hz</strong></div>
                                                 </div>
                                             </div>
                                         );
