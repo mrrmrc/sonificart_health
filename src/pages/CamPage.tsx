@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { User, ConfigSettings, BlockData, TransformedNoteEvent } from '../types';
-import { initialSettings } from '../config/defaults';
-import { sonifyImage } from '../services/sonificationService';
+import { User } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface OutletContextType {
@@ -11,147 +9,201 @@ interface OutletContextType {
     setIsLoginModalOpen: (open: boolean) => void;
 }
 
-interface MatrixRegion {
+export interface ColorRegion {
     id: string;
-    index: number;
-    x: number;
-    y: number;
-    gridX: number;
-    gridY: number;
-    widthPct: number;
-    heightPct: number;
-    L: number;
-    a: number;
+    name: string;
+    r: number;
+    g: number;
     b: number;
     hex: string;
+    percentage: number;
+    pixelCount: number;
+    L: number;
+    a: number;
+    b_val: number;
+    midiNote: number;
     noteName: string;
     frequencyHz: number;
+    maskCanvasDataUrl?: string;
 }
 
 export const CamPage: React.FC = () => {
     const { user } = useOutletContext<OutletContextType>();
     const { t } = useLanguage();
 
-    // Upload & Image State
+    // Image Upload State
     const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
     const [uploadedFileName, setUploadedFileName] = useState<string>('');
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisProgress, setAnalysisProgress] = useState<string>('');
 
-    // Deterministic Scan & Matrix State
-    const [matrixRegions, setMatrixRegions] = useState<MatrixRegion[]>([]);
-    const [matchedTraditionName, setMatchedTraditionName] = useState<string>('');
-    const [matchedCulturalFamily, setMatchedCulturalFamily] = useState<string>('');
-    const [scanPatternName, setScanPatternName] = useState<string>('');
-    const [audioTrackUrl, setAudioTrackUrl] = useState<string | null>(null);
+    // Meticulous Color Segmentation State
+    const [colorRegions, setColorRegions] = useState<ColorRegion[]>([]);
+    const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<'all' | 'segmented'>('segmented');
 
-    // Live Step-by-Step Playback & Cursor State
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
-    const [activeRegion, setActiveRegion] = useState<MatrixRegion | null>(null);
+    // Canvas Refs for Real Segmentation Rendering
+    const originalImageRef = useRef<HTMLImageElement>(null);
+    const segmentationCanvasRef = useRef<HTMLCanvasElement>(null);
 
-    // Refs for Audio Synth & Animation Interval
+    // Audio Playback Ref
     const audioCtxRef = useRef<AudioContext | null>(null);
-    const playbackTimerRef = useRef<any>(null);
 
-    // Grid Dimensions
-    const GRID_SIZE = 16; // 16x16 Matrix (256 Regions)
-
-    // Handle File Upload & Deterministic Matrix Analysis
+    // Handle Image Upload
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
             const url = URL.createObjectURL(file);
             setUploadedImageUrl(url);
             setUploadedFileName(file.name);
-            stopPlayback();
-
-            // Run Deterministic Color Matrix Analysis
-            processDeterministicImageScan(file, url);
+            setColorRegions([]);
+            setSelectedRegionId(null);
         }
     };
 
-    // Deterministic Color Matrix Extraction & Sonification
-    const processDeterministicImageScan = async (fileObj: File, imageSrc: string) => {
+    // Trigger Meticulous Color Segmentation Analysis when Image Loads
+    const runMeticulousColorSegmentation = () => {
+        if (!originalImageRef.current || !uploadedImageUrl) return;
+
         setIsAnalyzing(true);
-        setAnalysisProgress("Analisi Colorimetrica CIE LAB & Segmentazione Matrice in corso...");
-        setAudioTrackUrl(null);
-        setMatrixRegions([]);
-        setCurrentStepIndex(0);
-        setActiveRegion(null);
+        setAnalysisProgress("Estrazione meticolosa delle aree di colore in corso...");
 
-        try {
-            const config: ConfigSettings = {
-                ...initialSettings,
-                pixelCount: GRID_SIZE * GRID_SIZE,
-                bpm: 72,
-                enableAccompaniment: false // Melodia Basale Pura
-            };
+        const img = originalImageRef.current;
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
 
-            // 1. Run Full SonificART Deterministic Engine
-            const result = await sonifyImage(
-                fileObj,
-                config,
-                (stepIndex: number, status: 'active' | 'completed') => {
-                    setAnalysisProgress(`Fase ${stepIndex}/6: ${status}`);
-                },
-                null,
-                'auto'
-            );
+        if (!ctx) return;
 
-            // 2. Store Results
-            setMatchedTraditionName(result.culturalSelectionResult.tradition.name);
-            setMatchedCulturalFamily(result.culturalSelectionResult.tradition.cultural_family);
-            setScanPatternName(result.scanPattern.name);
-            setAudioTrackUrl(result.audioOutput.audioUrl);
+        // Downscale for fast & accurate clustering
+        const sampleW = 256;
+        const sampleH = Math.round((img.naturalHeight / img.naturalWidth) * sampleW);
+        canvas.width = sampleW;
+        canvas.height = sampleH;
 
-            // 3. Build Matrix Regions Array for Visual Overlay
-            const regions: MatrixRegion[] = [];
-            const blockDataList: BlockData[] = result.blockAnalysisResult.blocks;
-            const melodyEvents: TransformedNoteEvent[] = result.audioOutput.events;
+        ctx.drawImage(img, 0, 0, sampleW, sampleH);
+        const imageData = ctx.getImageData(0, 0, sampleW, sampleH);
+        const data = imageData.data;
+        const totalPixels = sampleW * sampleH;
 
-            const cellW = 100 / GRID_SIZE;
-            const cellH = 100 / GRID_SIZE;
+        // K-Means Color Quantization (K=7 Color Clusters)
+        setTimeout(() => {
+            const k = 7;
+            let centroids = initializeCentroids(data, k);
 
-            blockDataList.forEach((bd: BlockData, idx: number) => {
-                const noteEvt = melodyEvents[idx] || melodyEvents[0];
+            // Run K-Means iterations
+            let assignments = new Int32Array(totalPixels);
+            for (let iter = 0; iter < 8; iter++) {
+                assignments = assignPixelsToCentroids(data, centroids, totalPixels);
+                centroids = updateCentroids(data, assignments, k, totalPixels);
+            }
 
-                const gX = idx % GRID_SIZE;
-                const gY = Math.floor(idx / GRID_SIZE);
+            // Count pixel distribution per cluster
+            const clusterCounts = new Int32Array(k);
+            for (let i = 0; i < totalPixels; i++) {
+                clusterCounts[assignments[i]]++;
+            }
 
-                regions.push({
-                    id: `REG_${String(idx + 1).padStart(3, '0')}`,
-                    index: idx,
-                    x: gX * cellW,
-                    y: gY * cellH,
-                    gridX: gX,
-                    gridY: gY,
-                    widthPct: cellW,
-                    heightPct: cellH,
-                    L: Math.round(bd.lab.l),
-                    a: Math.round(bd.lab.a),
-                    b: Math.round(bd.lab.b),
-                    hex: `rgb(${bd.r}, ${bd.g}, ${bd.b})`,
-                    noteName: noteEvt ? noteEvt.noteName : 'C4',
-                    frequencyHz: noteEvt ? Math.round(noteEvt.transformedCents ? 440 * Math.pow(2, (noteEvt.baseNote - 69) / 12) : 261) : 261
+            // Create Meticulous Color Regions Array
+            const extractedRegions: ColorRegion[] = [];
+
+            // Sort clusters by surface area (percentage) descending
+            const sortedClusterIndices = Array.from({ length: k }, (_, i) => i)
+                .sort((a, b) => clusterCounts[b] - clusterCounts[a]);
+
+            sortedClusterIndices.forEach((cIdx, rank) => {
+                const count = clusterCounts[cIdx];
+                if (count === 0) return;
+
+                const pct = parseFloat(((count / totalPixels) * 100).toFixed(1));
+                const c = centroids[cIdx];
+                const r = Math.round(c.r);
+                const g = Math.round(c.g);
+                const b = Math.round(c.b);
+                const hex = rgbToHex(r, g, b);
+
+                // Convert RGB to CIE LAB (D65 Standard)
+                const lab = rgbToLab(r, g, b);
+
+                // Deterministic Base Note (Mapped to L* and Hue)
+                const midiNote = 48 + Math.round((lab.L / 100) * 24); // C3 to C5
+                const noteName = midiToNoteName(midiNote);
+                const freqHz = Math.round(440 * Math.pow(2, (midiNote - 69) / 12));
+
+                const colorName = getColorDescription(r, g, b, lab);
+
+                extractedRegions.push({
+                    id: `COLOR_AREA_${rank + 1}`,
+                    name: `Area ${rank + 1}: ${colorName}`,
+                    r, g, b, hex,
+                    percentage: pct,
+                    pixelCount: count,
+                    L: Math.round(lab.L),
+                    a: Math.round(lab.a),
+                    b_val: Math.round(lab.b),
+                    midiNote,
+                    noteName,
+                    frequencyHz: freqHz
                 });
             });
 
-            setMatrixRegions(regions);
-            if (regions.length > 0) {
-                setActiveRegion(regions[0]);
+            setColorRegions(extractedRegions);
+            setIsAnalyzing(false);
+            if (extractedRegions.length > 0) {
+                setSelectedRegionId(extractedRegions[0].id);
+                renderSegmentationMask(imageData, assignments, centroids, extractedRegions[0].id, extractedRegions);
             }
-            setIsAnalyzing(false);
-
-        } catch (err: any) {
-            console.error("Analysis Error:", err);
-            setAnalysisProgress(`Errore: ${err.message || 'Impossibile completare la scansione deterministica.'}`);
-            setIsAnalyzing(false);
-        }
+        }, 100);
     };
 
-    // Play Note Event for Current Region in Real-Time WebAudio
-    const playNoteForRegion = (region: MatrixRegion) => {
+    // Render Organic Segmentation Mask on Canvas Overlay
+    const renderSegmentationMask = (
+        imgData: ImageData,
+        assignments: Int32Array,
+        centroids: Array<{ r: number; g: number; b: number }>,
+        highlightId: string | null,
+        regions: ColorRegion[]
+    ) => {
+        if (!segmentationCanvasRef.current || !originalImageRef.current) return;
+
+        const canvas = segmentationCanvasRef.current;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const w = imgData.width;
+        const h = imgData.height;
+        canvas.width = w;
+        canvas.height = h;
+
+        const outData = ctx.createImageData(w, h);
+        const src = imgData.data;
+        const dest = outData.data;
+
+        // Find index of highlighted region
+        const targetIndex = regions.findIndex(r => r.id === highlightId);
+
+        for (let i = 0; i < assignments.length; i++) {
+            const clusterIdx = assignments[i];
+            const px = i * 4;
+
+            if (highlightId === null || clusterIdx === targetIndex) {
+                dest[px] = src[px];       // R
+                dest[px + 1] = src[px + 1]; // G
+                dest[px + 2] = src[px + 2]; // B
+                dest[px + 3] = 255;         // Opaque
+            } else {
+                // Dim non-selected color areas to highlight selected area
+                dest[px] = Math.round(src[px] * 0.2);
+                dest[px + 1] = Math.round(src[px + 1] * 0.2);
+                dest[px + 2] = Math.round(src[px + 2] * 0.2);
+                dest[px + 3] = 160;
+            }
+        }
+
+        ctx.putImageData(outData, 0, 0);
+    };
+
+    // Play Pure Tone for Selected Color Region
+    const playRegionAudio = (region: ColorRegion) => {
         try {
             if (!audioCtxRef.current) {
                 const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -161,74 +213,115 @@ export const CamPage: React.FC = () => {
             if (ctx.state === 'suspended') ctx.resume();
 
             const now = ctx.currentTime;
-
-            // Pure Base Harmonic Sine Wave (1 Region = 1 Base Note)
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
 
             osc.type = 'sine';
             osc.frequency.setValueAtTime(region.frequencyHz, now);
 
-            // Envelope tuned to Luminance (L*)
-            const vol = 0.05 + (region.L / 100) * 0.25;
             gain.gain.setValueAtTime(0.001, now);
-            gain.gain.linearRampToValueAtTime(vol, now + 0.02);
-            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+            gain.gain.linearRampToValueAtTime(0.2, now + 0.03);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
 
             osc.connect(gain);
             gain.connect(ctx.destination);
 
             osc.start(now);
-            osc.stop(now + 0.4);
+            osc.stop(now + 0.5);
         } catch (e) {
-            console.warn("Audio note play error:", e);
+            console.warn("Audio play error:", e);
         }
     };
 
-    // Start Step-by-Step Cursor Movement & Audio Playback
-    const startPlayback = () => {
-        if (matrixRegions.length === 0 || isAnalyzing) return;
-        setIsPlaying(true);
-
-        const stepTimeMs = 350; // 350ms per region step
-
-        if (playbackTimerRef.current) clearInterval(playbackTimerRef.current);
-
-        let step = currentStepIndex;
-
-        playbackTimerRef.current = setInterval(() => {
-            if (step >= matrixRegions.length) {
-                step = 0; // Loop or Stop
-            }
-
-            const currentReg = matrixRegions[step];
-            setActiveRegion(currentReg);
-            setCurrentStepIndex(step);
-
-            // Play the base melodic note for this region
-            playNoteForRegion(currentReg);
-
-            step++;
-        }, stepTimeMs);
-    };
-
-    // Stop Playback
-    const stopPlayback = () => {
-        if (playbackTimerRef.current) {
-            clearInterval(playbackTimerRef.current);
-            playbackTimerRef.current = null;
+    // Helper: K-Means Initial Centroids
+    const initializeCentroids = (data: Uint8ClampedArray, k: number) => {
+        const centroids = [];
+        const step = Math.floor(data.length / 4 / k);
+        for (let i = 0; i < k; i++) {
+            const idx = (i * step) * 4;
+            centroids.push({ r: data[idx], g: data[idx + 1], b: data[idx + 2] });
         }
-        setIsPlaying(false);
+        return centroids;
     };
 
-    useEffect(() => {
-        return () => {
-            stopPlayback();
-            if (audioCtxRef.current) {
-                audioCtxRef.current.close();
+    // Helper: K-Means Distance Assign
+    const assignPixelsToCentroids = (data: Uint8ClampedArray, centroids: Array<{ r: number; g: number; b: number }>, totalPixels: number) => {
+        const assignments = new Int32Array(totalPixels);
+        for (let i = 0; i < totalPixels; i++) {
+            const px = i * 4;
+            const r = data[px];
+            const g = data[px + 1];
+            const b = data[px + 2];
+
+            let minDist = Infinity;
+            let closestCluster = 0;
+
+            for (let c = 0; c < centroids.length; c++) {
+                const dr = r - centroids[c].r;
+                const dg = g - centroids[c].g;
+                const db = b - centroids[c].b;
+                const dist = dr * dr + dg * dg + db * db;
+                if (dist < minDist) {
+                    minDist = dist;
+                    closestCluster = c;
+                }
             }
-        };
-    }, []);
+            assignments[i] = closestCluster;
+        }
+        return assignments;
+    };
+
+    // Helper: Update Centroids
+    const updateCentroids = (data: Uint8ClampedArray, assignments: Int32Array, k: number, totalPixels: number) => {
+        const sums = Array.from({ length: k }, () => ({ r: 0, g: 0, b: 0, count: 0 }));
+        for (let i = 0; i < totalPixels; i++) {
+            const px = i * 4;
+            const c = assignments[i];
+            sums[c].r += data[px];
+            sums[c].g += data[px + 1];
+            sums[c].b += data[px + 2];
+            sums[c].count++;
+        }
+        return sums.map(s => s.count > 0 ? { r: s.r / s.count, g: s.g / s.count, b: s.b / s.count } : { r: 128, g: 128, b: 128 });
+    };
+
+    // Color Converter Helpers
+    const rgbToHex = (r: number, g: number, b: number) => '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+
+    const rgbToLab = (r: number, g: number, b: number) => {
+        let r1 = r / 255, g1 = g / 255, b1 = b / 255;
+        r1 = r1 > 0.04045 ? Math.pow((r1 + 0.055) / 1.055, 2.4) : r1 / 12.92;
+        g1 = g1 > 0.04045 ? Math.pow((g1 + 0.055) / 1.055, 2.4) : g1 / 12.92;
+        b1 = b1 > 0.04045 ? Math.pow((b1 + 0.055) / 1.055, 2.4) : b1 / 12.92;
+
+        let x = (r1 * 0.4124 + g1 * 0.3576 + b1 * 0.1805) * 100;
+        let y = (r1 * 0.2126 + g1 * 0.7152 + b1 * 0.0722) * 100;
+        let z = (r1 * 0.0193 + g1 * 0.1192 + b1 * 0.9505) * 100;
+
+        x /= 95.047; y /= 100.000; z /= 108.883;
+        x = x > 0.008856 ? Math.pow(x, 1 / 3) : (7.787 * x) + 16 / 116;
+        y = y > 0.008856 ? Math.pow(y, 1 / 3) : (7.787 * y) + 16 / 116;
+        z = z > 0.008856 ? Math.pow(z, 1 / 3) : (7.787 * z) + 16 / 116;
+
+        return { L: (116 * y) - 16, a: 500 * (x - y), b: 200 * (y - z) };
+    };
+
+    const midiToNoteName = (midi: number) => {
+        const names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const octave = Math.floor(midi / 12) - 1;
+        return `${names[midi % 12]}${octave}`;
+    };
+
+    const getColorDescription = (r: number, g: number, b: number, lab: { L: number, a: number, b: number }) => {
+        if (lab.L < 20) return "Toni Scuri / Nero Profondo";
+        if (lab.L > 85) return "Luminoso / Bianco e Luce";
+        if (Math.abs(lab.a) < 10 && Math.abs(lab.b) < 10) return "Grigio Neutro";
+        if (lab.b < -20) return "Blu Notte / Cobalto";
+        if (lab.b > 20 && lab.a > 10) return "Giallo Caldo / Oro";
+        if (lab.a < -15) return "Verde Smeraldo / Vegetale";
+        if (lab.a > 20) return "Rosso / Terra d'Ombra";
+        return "Tonalità Cromatica Media";
+    };
 
     return (
         <div className="max-w-7xl mx-auto space-y-8 animate-fade-in pb-16">
@@ -239,15 +332,15 @@ export const CamPage: React.FC = () => {
                     <div className="flex items-center gap-3 mb-2">
                         <span className="px-3 py-1 bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 rounded-full text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5">
                             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
-                            Scansione Deterministica Colorimetrica Matrice
+                            Segmentazione Colorimetrica Meticolosa
                         </span>
-                        <span className="text-xs text-white/50 font-mono">1 Porzione = 1 Nota</span>
+                        <span className="text-xs text-white/50 font-mono">CIE LAB D65 Cluster Engine</span>
                     </div>
                     <h1 className="text-3xl font-black font-display text-white tracking-tight">
-                        Segmentazione Matrice + <span className="text-cyan-400">Linea Melodica Basale</span>
+                        Estrazione Meticolosa <span className="text-cyan-400">Aree di Colore</span>
                     </h1>
                     <p className="text-sm text-white/70 mt-1 max-w-2xl">
-                        Carica un'immagine per suddividerla in una matrice di porzioni cromatiche CIE LAB, calcolare la traiettoria del cursore e riprodurre la linea melodica basale deterministica.
+                        Carica un quadro per consentire all'IA di identificare, scontornare ed analizzare con precisione meticolosa le singole regioni di colore e la loro traduzione sonora.
                     </p>
                 </div>
 
@@ -259,61 +352,59 @@ export const CamPage: React.FC = () => {
                 </label>
             </div>
 
-            {/* MAIN SCAN & CURSOR WORKSPACE */}
+            {/* MAIN WORKSPACE */}
             {!uploadedImageUrl ? (
                 <div className="bg-slate-950/60 backdrop-blur-xl p-16 rounded-2xl border border-dashed border-cyan-500/30 text-center space-y-4">
                     <div className="w-20 h-20 bg-cyan-500/10 border border-cyan-500/30 rounded-full flex items-center justify-center mx-auto text-cyan-400 text-3xl">
-                        <i className="fas fa-image"></i>
+                        <i className="fas fa-palette"></i>
                     </div>
-                    <h3 className="text-xl font-bold text-white">Nessuna Immagine Caricata</h3>
+                    <h3 className="text-xl font-bold text-white">Nessun Quadro Caricato</h3>
                     <p className="text-sm text-white/60 max-w-md mx-auto">
-                        Clicca sul pulsante in alto <strong>"Carica Immagine Opera"</strong> per avviare la segmentazione della matrice colorimetrica e la generazione della linea melodica basale.
+                        Clicca sul pulsante in alto <strong>"Carica Immagine Opera"</strong> per avviare l'identificazione e la segmentazione meticolosa delle aree di colore.
                     </p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
-                    {/* LEFT: IMAGE DISPLAY WITH LIVE MATRIX CURSOR OVERLAY (7 COLS) */}
+                    {/* LEFT: ARTWORK & SEGMENTATION MASK DISPLAY (7 COLS) */}
                     <div className="lg:col-span-7 flex flex-col gap-6">
                         <div className="bg-slate-950/80 backdrop-blur-xl p-6 rounded-2xl border border-white/10 shadow-2xl space-y-4">
                             <div className="flex items-center justify-between border-b border-white/10 pb-3">
                                 <span className="text-xs font-mono text-cyan-400 font-bold uppercase tracking-wider flex items-center gap-2">
                                     <i className="fas fa-microscope"></i> Opera: {uploadedFileName}
                                 </span>
-                                <span className="text-xs font-mono text-emerald-400 font-bold">
-                                    Matrice {GRID_SIZE}×{GRID_SIZE} ({matrixRegions.length} Porzioni)
-                                </span>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => setActiveTab('segmented')}
+                                        className={`px-3 py-1 rounded text-xs font-mono font-bold transition-all ${activeTab === 'segmented' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'text-white/50 hover:text-white'}`}
+                                    >
+                                        Maschera Segmentata
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveTab('all')}
+                                        className={`px-3 py-1 rounded text-xs font-mono font-bold transition-all ${activeTab === 'all' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'text-white/50 hover:text-white'}`}
+                                    >
+                                        Originale
+                                    </button>
+                                </div>
                             </div>
 
-                            {/* Image Container with Dynamic Matrix Overlay */}
-                            <div className="relative rounded-xl overflow-hidden border border-white/10 aspect-video bg-black">
-                                <img src={uploadedImageUrl} alt="Opera Scansionata" className="w-full h-full object-cover" />
+                            {/* Image Container with Canvas Mask Overlay */}
+                            <div className="relative rounded-xl overflow-hidden border border-white/10 aspect-video bg-black flex items-center justify-center">
+                                {/* Hidden Original Image for Analysis */}
+                                <img
+                                    ref={originalImageRef}
+                                    src={uploadedImageUrl}
+                                    alt="Opera Scansionata"
+                                    className={`w-full h-full object-cover ${activeTab === 'all' ? 'block' : 'hidden'}`}
+                                    onLoad={runMeticulousColorSegmentation}
+                                />
 
-                                {/* Render Matrix Grid Lines */}
-                                {matrixRegions.length > 0 && (
-                                    <div className="absolute inset-0 grid grid-cols-16 grid-rows-16 pointer-events-none opacity-30">
-                                        {matrixRegions.map((reg) => (
-                                            <div key={reg.id} className="border border-white/20" />
-                                        ))}
-                                    </div>
-                                )}
-
-                                {/* ACTIVE STEP CURSOR OVERLAY */}
-                                {activeRegion && (
-                                    <div
-                                        style={{
-                                            left: `${activeRegion.x}%`,
-                                            top: `${activeRegion.y}%`,
-                                            width: `${activeRegion.widthPct}%`,
-                                            height: `${activeRegion.heightPct}%`
-                                        }}
-                                        className="absolute border-2 border-cyan-400 bg-cyan-400/30 shadow-[0_0_20px_#38bdf8] transition-all duration-150 rounded-sm flex items-center justify-center pointer-events-none"
-                                    >
-                                        <span className="bg-black/90 text-cyan-300 text-[8px] font-mono font-bold px-1 rounded border border-cyan-400/50 -top-4 absolute">
-                                            {activeRegion.id}
-                                        </span>
-                                    </div>
-                                )}
+                                {/* Segmentation Mask Canvas */}
+                                <canvas
+                                    ref={segmentationCanvasRef}
+                                    className={`w-full h-full object-cover ${activeTab === 'segmented' ? 'block' : 'hidden'}`}
+                                />
 
                                 {isAnalyzing && (
                                     <div className="absolute inset-0 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center space-y-3">
@@ -323,109 +414,80 @@ export const CamPage: React.FC = () => {
                                 )}
                             </div>
 
-                            {/* CONTROLS */}
-                            <div className="flex items-center justify-between gap-4 pt-2">
-                                <button
-                                    onClick={isPlaying ? stopPlayback : startPlayback}
-                                    disabled={isAnalyzing || matrixRegions.length === 0}
-                                    className={`flex-1 py-3.5 rounded-xl font-bold uppercase text-xs tracking-wider transition-all flex items-center justify-center gap-2 ${
-                                        isPlaying
-                                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
-                                            : 'bg-gradient-to-r from-cyan-500 to-teal-500 text-white hover:scale-102 shadow-lg shadow-cyan-950/50'
-                                    }`}
-                                >
-                                    <i className={`fas ${isPlaying ? 'fa-pause' : 'fa-play'}`}></i>
-                                    {isPlaying ? 'Pausa Scansione' : 'Avvia Scansione Cursore & Melodia'}
-                                </button>
-
-                                <button
-                                    onClick={() => { stopPlayback(); setCurrentStepIndex(0); if (matrixRegions[0]) setActiveRegion(matrixRegions[0]); }}
-                                    className="px-4 py-3.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-mono font-bold uppercase border border-white/10 transition-all"
-                                >
-                                    <i className="fas fa-rotate-left mr-1"></i> Reset
-                                </button>
-                            </div>
+                            <p className="text-[11px] text-white/50 font-mono italic text-center">
+                                💡 Clicca su un'area di colore nella lista a destra per isolarla ed ascoltarne la nota basale deterministica.
+                            </p>
                         </div>
                     </div>
 
-                    {/* RIGHT: DETERMINISTIC TELEMETRY & ACTIVE REGION DATA (5 COLS) */}
+                    {/* RIGHT: METICULOUS COLOR REGIONS BREAKDOWN (5 COLS) */}
                     <div className="lg:col-span-5 flex flex-col gap-6">
-
-                        {/* MATCHED CULTURAL TRADITION & PATTERN */}
                         <div className="bg-slate-950/80 backdrop-blur-xl p-6 rounded-2xl border border-white/10 shadow-2xl space-y-4 font-mono">
-                            <span className="text-xs text-cyan-400 font-bold uppercase tracking-wider block border-b border-white/10 pb-2">
-                                📊 Algoritmo Deterministico Applicato
-                            </span>
+                            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                                <span className="text-xs text-cyan-400 font-bold uppercase tracking-wider">
+                                    🎨 Aree di Colore Individuate ({colorRegions.length})
+                                </span>
+                                <span className="text-xs text-white/50">CIE LAB D65</span>
+                            </div>
 
-                            <div className="space-y-3 text-xs">
-                                <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                                    <span className="text-white/50 text-[10px] block">Tradizione Etnomusicologica Matched</span>
-                                    <span className="text-amber-300 font-bold text-sm block mt-0.5">{matchedTraditionName || 'Calcolo in corso...'}</span>
-                                    <span className="text-white/60 text-[10px]">{matchedCulturalFamily}</span>
-                                </div>
+                            {/* Color Regions List */}
+                            <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                                {colorRegions.map((region) => {
+                                    const isSelected = region.id === selectedRegionId;
+                                    return (
+                                        <div
+                                            key={region.id}
+                                            onClick={() => {
+                                                setSelectedRegionId(region.id);
+                                                playRegionAudio(region);
+                                                if (originalImageRef.current) {
+                                                    // Re-render canvas mask for selected region
+                                                    const canvas = document.createElement('canvas');
+                                                    const ctx = canvas.getContext('2d');
+                                                    if (ctx) {
+                                                        const img = originalImageRef.current;
+                                                        canvas.width = 256;
+                                                        canvas.height = Math.round((img.naturalHeight / img.naturalWidth) * 256);
+                                                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                                                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-                                <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                                    <span className="text-white/50 text-[10px] block">Traiettoria Cursore di Scansione</span>
-                                    <span className="text-cyan-300 font-bold text-sm block mt-0.5">{scanPatternName || 'Calcolo in corso...'}</span>
-                                </div>
+                                                        // Re-assign for single region highlight
+                                                        const centroids = colorRegions.map(r => ({ r: r.r, g: r.g, b: r.b }));
+                                                        const assignments = assignPixelsToCentroids(imageData.data, centroids, canvas.width * canvas.height);
+                                                        renderSegmentationMask(imageData, assignments, centroids, region.id, colorRegions);
+                                                    }
+                                                }
+                                            }}
+                                            className={`p-3.5 rounded-xl border transition-all cursor-pointer space-y-2 ${
+                                                isSelected
+                                                    ? 'bg-cyan-950/60 border-cyan-400 shadow-[0_0_20px_rgba(56,189,248,0.25)] ring-1 ring-cyan-400'
+                                                    : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/20'
+                                            }`}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <span className="w-5 h-5 rounded-lg border border-white/30 shadow-md shrink-0" style={{ backgroundColor: region.hex }}></span>
+                                                    <span className="text-xs font-bold text-white">{region.name}</span>
+                                                </div>
+                                                <span className="text-xs font-bold text-cyan-300 bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-500/30">
+                                                    {region.percentage}% Superficie
+                                                </span>
+                                            </div>
+
+                                            {/* Details Breakdown */}
+                                            <div className="grid grid-cols-2 gap-2 text-[10px] text-white/70 pt-1 border-t border-white/5">
+                                                <div>CIE LAB: <strong className="text-cyan-200">L*:{region.L} a*:{region.a} b*:{region.b_val}</strong></div>
+                                                <div>Colore Hex: <strong className="text-white">{region.hex}</strong></div>
+                                                <div>Nota Basale: <strong className="text-amber-300">{region.noteName} ({region.frequencyHz} Hz)</strong></div>
+                                                <div>Frequenza: <strong className="text-emerald-300">{region.frequencyHz} Hz</strong></div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
-
-                        {/* ACTIVE REGION TELEMETRY */}
-                        {activeRegion && (
-                            <div className="bg-slate-950/80 backdrop-blur-xl p-6 rounded-2xl border border-cyan-500/40 shadow-2xl space-y-4 font-mono animate-fade-in">
-                                <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                                    <span className="text-xs text-cyan-400 font-bold uppercase tracking-wider">
-                                        🎯 Porzione Matrice Attiva
-                                    </span>
-                                    <span className="text-xs bg-cyan-500/20 text-cyan-300 px-2.5 py-1 rounded font-bold border border-cyan-500/40">
-                                        {activeRegion.id} ({activeRegion.index + 1}/{matrixRegions.length})
-                                    </span>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-3 text-xs">
-                                    <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                                        <span className="text-white/50 text-[10px] block">Coordinate Matrice</span>
-                                        <span className="text-white font-bold">[X: {activeRegion.gridX}, Y: {activeRegion.gridY}]</span>
-                                    </div>
-
-                                    <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                                        <span className="text-white/50 text-[10px] block">Colore Esadecimale</span>
-                                        <div className="flex items-center gap-2 mt-0.5">
-                                            <span className="w-3 h-3 rounded-full border border-white/30" style={{ backgroundColor: activeRegion.hex }}></span>
-                                            <span className="text-white font-bold">{activeRegion.hex}</span>
-                                        </div>
-                                    </div>
-
-                                    <div className="bg-white/5 p-3 rounded-xl border border-white/5 col-span-2">
-                                        <span className="text-white/50 text-[10px] block">Colorimetria CIE LAB D65</span>
-                                        <span className="text-cyan-300 font-bold">L*: {activeRegion.L} | a*: {activeRegion.a} | b*: {activeRegion.b}</span>
-                                    </div>
-
-                                    <div className="bg-cyan-950/40 p-3 rounded-xl border border-cyan-500/40 col-span-2 flex items-center justify-between">
-                                        <div>
-                                            <span className="text-white/50 text-[10px] block">Nota Melodica Basale</span>
-                                            <span className="text-amber-300 font-bold text-base">{activeRegion.noteName}</span>
-                                        </div>
-                                        <span className="text-cyan-300 font-bold text-sm bg-black/60 px-3 py-1.5 rounded-lg border border-cyan-500/30">
-                                            {activeRegion.frequencyHz} Hz
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* COMPLETED AUDIO TRACK DOWNLOAD */}
-                        {audioTrackUrl && (
-                            <div className="bg-emerald-950/40 border border-emerald-500/40 p-5 rounded-2xl space-y-3 font-mono animate-fade-in">
-                                <span className="text-xs text-emerald-400 font-bold uppercase tracking-wider block">
-                                    ✅ Linea Melodica Basale Completa (.WAV)
-                                </span>
-                                <audio controls src={audioTrackUrl} className="w-full h-10 accent-emerald-500" />
-                            </div>
-                        )}
-
                     </div>
+
                 </div>
             )}
 
