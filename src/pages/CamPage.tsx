@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { User } from '../types';
-import { useLanguage } from '../contexts/LanguageContext';
 
 interface OutletContextType {
     user: User | null;
@@ -9,387 +8,328 @@ interface OutletContextType {
     setIsLoginModalOpen: (open: boolean) => void;
 }
 
-export interface PixelColorGroup {
-    idNumber: number;
+interface ColorRegion {
+    id: number;
     idCode: string;
-    name: string;
     r: number;
     g: number;
     b: number;
     hex: string;
-    percentage: number;
+    pixelIndices: number[];
     pixelCount: number;
+    percentage: number;
+    centroidX: number;
+    centroidY: number;
     L: number;
     a: number;
     b_val: number;
-    centroidX: number; // 0-100%
-    centroidY: number; // 0-100%
-    pixelIndices: Int32Array; // Complete pixel array for 100% zero-residue coverage
-    isDetached: boolean;
-    midiNote: number;
     noteName: string;
     frequencyHz: number;
+    isDetached: boolean;
 }
+
+const COLOR_TOLERANCE = 28; // RGB distance tolerance for flood-fill
 
 export const CamPage: React.FC = () => {
     const { user } = useOutletContext<OutletContextType>();
-    const { t } = useLanguage();
 
-    // Image Upload State
     const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
     const [uploadedFileName, setUploadedFileName] = useState<string>('');
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isDeconstructing, setIsDeconstructing] = useState(false);
-    const [scanStepMessage, setScanStepMessage] = useState<string>('');
-    const [progressPct, setProgressPct] = useState<number>(0);
+    const [analyzeProgress, setAnalyzeProgress] = useState<string>('');
+    const [regions, setRegions] = useState<ColorRegion[]>([]);
+    const [currentStep, setCurrentStep] = useState(0);
+    const [selectedRegion, setSelectedRegion] = useState<ColorRegion | null>(null);
+    const [progressPct, setProgressPct] = useState(0);
+    const [totalPixels, setTotalPixels] = useState(0);
 
-    // Pixel Groups State
-    const [groups, setGroups] = useState<PixelColorGroup[]>([]);
-    const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
-    const [selectedGroup, setSelectedGroup] = useState<PixelColorGroup | null>(null);
-
-    // Canvas & Audio Refs
-    const originalImageRef = useRef<HTMLImageElement>(null);
-    const mainCanvasRef = useRef<HTMLCanvasElement>(null);
+    // THE ONE CANVAS — both renders on this (no img element visible at all)
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const pixelDataRef = useRef<Uint8ClampedArray | null>(null); // original image data backup
+    const imageDimRef = useRef({ w: 0, h: 0 });
     const audioCtxRef = useRef<AudioContext | null>(null);
-    const deconstructionTimerRef = useRef<any>(null);
-    const imageDimensionsRef = useRef<{ w: number; h: number }>({ w: 320, h: 200 });
+    const timerRef = useRef<any>(null);
+    const regionsRef = useRef<ColorRegion[]>([]);
 
-    // Handle Image Upload
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
-            const url = URL.createObjectURL(file);
-            setUploadedImageUrl(url);
             setUploadedFileName(file.name);
             stopDeconstruction();
-            setGroups([]);
-            setCurrentStepIndex(0);
-            setSelectedGroup(null);
+            setRegions([]);
+            regionsRef.current = [];
+            setCurrentStep(0);
+            setProgressPct(0);
+            setSelectedRegion(null);
+
+            const url = URL.createObjectURL(file);
+            setUploadedImageUrl(url);
+
+            // Load image into canvas immediately
+            const img = new Image();
+            img.onload = () => {
+                const MAX_W = 400;
+                const w = Math.min(img.naturalWidth, MAX_W);
+                const h = Math.round((img.naturalHeight / img.naturalWidth) * w);
+                imageDimRef.current = { w, h };
+
+                const canvas = canvasRef.current!;
+                canvas.width = w;
+                canvas.height = h;
+
+                const ctx = canvas.getContext('2d')!;
+                ctx.drawImage(img, 0, 0, w, h);
+
+                // Store a backup of the original pixel data
+                const imgData = ctx.getImageData(0, 0, w, h);
+                pixelDataRef.current = new Uint8ClampedArray(imgData.data);
+                setTotalPixels(w * h);
+
+                // Auto-start analysis
+                runFloodFillAnalysis(ctx, imgData, w, h);
+            };
+            img.src = url;
         }
     };
 
-    // Analyze 100.0% of Image Surface Pixel-by-Pixel (Zero Residue)
-    const analyzePixelByPixelExhaustive = () => {
-        if (!originalImageRef.current || !uploadedImageUrl) return;
+    // FLOOD-FILL CONNECTED COMPONENT ANALYSIS
+    // Scans top-left → bottom-right, finds first unvisited pixel, 
+    // flood-fills with tolerance to capture the whole connected organic shape,
+    // marks it with an ID, moves to next unvisited pixel.
+    const runFloodFillAnalysis = (
+        ctx: CanvasRenderingContext2D,
+        imgData: ImageData,
+        w: number,
+        h: number
+    ) => {
+        setIsAnalyzing(true);
+        setAnalyzeProgress("Analisi Flood-Fill in corso...");
 
-        setIsDeconstructing(true);
-        setScanStepMessage("Analisi pixel per pixel a copertura 100% (Zero Residuo)...");
-
-        const img = originalImageRef.current;
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        const w = 320;
-        const h = Math.round((img.naturalHeight / img.naturalWidth) * w);
-        canvas.width = w;
-        canvas.height = h;
-        imageDimensionsRef.current = { w, h };
-
-        ctx.drawImage(img, 0, 0, w, h);
-        const imgData = ctx.getImageData(0, 0, w, h);
         const data = imgData.data;
-        const totalPixels = w * h;
-
-        // Render Initial Canvas
-        if (mainCanvasRef.current) {
-            const mainCtx = mainCanvasRef.current.getContext('2d');
-            if (mainCtx) {
-                mainCanvasRef.current.width = w;
-                mainCanvasRef.current.height = h;
-                mainCtx.putImageData(imgData, 0, 0);
-            }
-        }
+        const totalPx = w * h;
+        const visited = new Uint8Array(totalPx);
 
         setTimeout(() => {
-            // 1. Fine-grained Color Cluster Quantization (K = 18 Color Families)
-            const k = 18;
-            const centroids = initializeCentroids(data, k);
-            const assignments = assignPixelsToCentroids(data, centroids, totalPixels);
+            const extractedRegions: ColorRegion[] = [];
+            let regionCounter = 1;
 
-            // 2. EXHAUSTIVE PIXEL GROUPING (EVERY SINGLE PIXEL IS ASSIGNED - ZERO RESIDUE)
-            const clusterPixelsMap: number[][] = Array.from({ length: k }, () => []);
-            const clusterSumX = new Float64Array(k);
-            const clusterSumY = new Float64Array(k);
-            const clusterSumR = new Float64Array(k);
-            const clusterSumG = new Float64Array(k);
-            const clusterSumB = new Float64Array(k);
+            // Iterative flood fill with tolerance
+            for (let startIdx = 0; startIdx < totalPx; startIdx++) {
+                if (visited[startIdx]) continue;
 
-            // Sequential Reading Order Traversal: Top-Left to Bottom-Right
-            for (let i = 0; i < totalPixels; i++) {
-                const cIdx = assignments[i];
-                clusterPixelsMap[cIdx].push(i);
+                const sr = data[startIdx * 4];
+                const sg = data[startIdx * 4 + 1];
+                const sb = data[startIdx * 4 + 2];
 
-                const cx = i % w;
-                const cy = Math.floor(i / w);
-                clusterSumX[cIdx] += cx;
-                clusterSumY[cIdx] += cy;
+                // BFS Flood Fill
+                const stack: number[] = [startIdx];
+                visited[startIdx] = 1;
+                const pixelList: number[] = [];
+                let sumX = 0, sumY = 0, sumR = 0, sumG = 0, sumB = 0;
 
-                const px4 = i * 4;
-                clusterSumR[cIdx] += data[px4];
-                clusterSumG[cIdx] += data[px4 + 1];
-                clusterSumB[cIdx] += data[px4 + 2];
-            }
+                while (stack.length > 0) {
+                    const idx = stack.pop()!;
+                    pixelList.push(idx);
 
-            // Create Color Groups for 100.0% Exhaustive Pixel Coverage
-            const generatedGroups: PixelColorGroup[] = [];
-            let idCounter = 1;
+                    const px = idx * 4;
+                    sumX += idx % w;
+                    sumY += Math.floor(idx / w);
+                    sumR += data[px];
+                    sumG += data[px + 1];
+                    sumB += data[px + 2];
 
-            // Sort clusters by first pixel appearance (book-reading order)
-            const sortedClusterIndices = Array.from({ length: k }, (_, i) => i)
-                .filter(i => clusterPixelsMap[i].length > 0)
-                .sort((a, b) => clusterPixelsMap[a][0] - clusterPixelsMap[b][0]);
+                    // Check 4 neighbors
+                    const x = idx % w;
+                    const y = Math.floor(idx / w);
+                    const neighbors = [
+                        x > 0 ? idx - 1 : -1,
+                        x < w - 1 ? idx + 1 : -1,
+                        y > 0 ? idx - w : -1,
+                        y < h - 1 ? idx + w : -1
+                    ];
 
-            sortedClusterIndices.forEach((cIdx) => {
-                const pxList = clusterPixelsMap[cIdx];
-                const count = pxList.length;
-                const pct = parseFloat(((count / totalPixels) * 100).toFixed(2));
+                    for (const n of neighbors) {
+                        if (n < 0 || visited[n]) continue;
+                        const npx = n * 4;
+                        const dr = data[npx] - sr;
+                        const dg = data[npx + 1] - sg;
+                        const db = data[npx + 2] - sb;
+                        const dist = Math.sqrt(dr * dr + dg * dg + db * db);
+                        if (dist <= COLOR_TOLERANCE) {
+                            visited[n] = 1;
+                            stack.push(n);
+                        }
+                    }
+                }
 
-                const avgR = Math.round(clusterSumR[cIdx] / count);
-                const avgG = Math.round(clusterSumG[cIdx] / count);
-                const avgB = Math.round(clusterSumB[cIdx] / count);
-                const hex = rgbToHex(avgR, avgG, avgB);
+                const count = pixelList.length;
+                // Only catalog regions >= 0.05% of surface (avoid single isolated pixels)
+                if (count < Math.max(3, Math.floor(totalPx * 0.0005))) continue;
+
+                const avgR = Math.round(sumR / count);
+                const avgG = Math.round(sumG / count);
+                const avgB = Math.round(sumB / count);
+                const hex = '#' + [avgR, avgG, avgB].map(x => x.toString(16).padStart(2, '0')).join('');
                 const lab = rgbToLab(avgR, avgG, avgB);
+                const midi = 42 + Math.round((lab.L / 100) * 36);
+                const freq = Math.round(440 * Math.pow(2, (midi - 69) / 12));
 
-                const avgX = clusterSumX[cIdx] / count;
-                const avgY = clusterSumY[cIdx] / count;
-                const centroidXPct = parseFloat(((avgX / w) * 100).toFixed(1));
-                const centroidYPct = parseFloat(((avgY / h) * 100).toFixed(1));
-
-                const midiNote = 42 + Math.round((lab.L / 100) * 36);
-                const noteName = midiToNoteName(midiNote);
-                const freqHz = Math.round(440 * Math.pow(2, (midiNote - 69) / 12));
-                const groupName = getColorDescription(avgR, avgG, avgB, lab);
-
-                generatedGroups.push({
-                    idNumber: idCounter,
-                    idCode: `#${String(idCounter).padStart(3, '0')}`,
-                    name: `${groupName} (${pct}%)`,
+                extractedRegions.push({
+                    id: regionCounter,
+                    idCode: `#${String(regionCounter).padStart(3, '0')}`,
                     r: avgR, g: avgG, b: avgB, hex,
-                    percentage: pct,
+                    pixelIndices: pixelList,
                     pixelCount: count,
+                    percentage: parseFloat(((count / totalPx) * 100).toFixed(2)),
+                    centroidX: parseFloat(((sumX / count / w) * 100).toFixed(1)),
+                    centroidY: parseFloat(((sumY / count / h) * 100).toFixed(1)),
                     L: Math.round(lab.L),
                     a: Math.round(lab.a),
                     b_val: Math.round(lab.b),
-                    centroidX: centroidXPct,
-                    centroidY: centroidYPct,
-                    pixelIndices: new Int32Array(pxList),
-                    isDetached: false,
-                    midiNote,
-                    noteName,
-                    frequencyHz: freqHz
+                    noteName: midiToNote(midi),
+                    frequencyHz: freq,
+                    isDetached: false
                 });
-
-                idCounter++;
-            });
-
-            setGroups(generatedGroups);
-            setIsDeconstructing(false);
-            setScanStepMessage(`✅ 100% Superficie Mappata (${totalPixels} pixel). Nessun residuo.`);
-            if (generatedGroups.length > 0) {
-                setSelectedGroup(generatedGroups[0]);
+                regionCounter++;
             }
-        }, 150);
+
+            regionsRef.current = extractedRegions;
+            setRegions(extractedRegions);
+            setIsAnalyzing(false);
+            setAnalyzeProgress(`✅ ${extractedRegions.length} regioni organiche estratte (100% copertura)`);
+            if (extractedRegions.length > 0) setSelectedRegion(extractedRegions[0]);
+        }, 100);
     };
 
-    // Run Real-Time Pixel-by-Pixel Stacco Animation (Turns canvas 100% PURE WHITE)
-    const startPixelByPixelDeconstruction = () => {
-        if (groups.length === 0 || isDeconstructing) return;
-
+    // ANIMATE STACCO: for each region, turn its exact pixels WHITE on the canvas
+    const startDeconstruction = () => {
+        if (regionsRef.current.length === 0 || isDeconstructing) return;
         setIsDeconstructing(true);
-        setScanStepMessage("Stacco pixel per pixel in corso (Zero Residuo)...");
 
-        if (deconstructionTimerRef.current) clearInterval(deconstructionTimerRef.current);
+        let step = currentStep >= regionsRef.current.length ? 0 : currentStep;
+        if (step === 0) {
+            // Restore original image first
+            restoreOriginal();
+        }
 
-        let step = currentStepIndex >= groups.length ? 0 : currentStepIndex;
-
-        deconstructionTimerRef.current = setInterval(() => {
-            if (step >= groups.length) {
-                clearInterval(deconstructionTimerRef.current);
+        timerRef.current = setInterval(() => {
+            const rList = regionsRef.current;
+            if (step >= rList.length) {
+                clearInterval(timerRef.current);
                 setIsDeconstructing(false);
-                setScanStepMessage("✅ Destrutturazione Pixel-by-Pixel 100% Completata: Tela Bianca Pura.");
                 return;
             }
 
-            const currentGroup = groups[step];
-            if (currentGroup) {
-                // Turn ALL pixels of this group to pure White (#FFFFFF) on canvas
-                detachGroupPixelsToWhite(currentGroup);
+            const region = rList[step];
 
-                setGroups(prev => {
-                    const next = [...prev];
-                    next[step] = { ...next[step], isDetached: true };
-                    return next;
-                });
+            // Turn exact pixels WHITE on the canvas
+            const canvas = canvasRef.current;
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    const { w, h } = imageDimRef.current;
+                    const imgData = ctx.getImageData(0, 0, w, h);
+                    const d = imgData.data;
+                    for (const idx of region.pixelIndices) {
+                        d[idx * 4] = 255;
+                        d[idx * 4 + 1] = 255;
+                        d[idx * 4 + 2] = 255;
+                        d[idx * 4 + 3] = 255;
+                    }
+                    ctx.putImageData(imgData, 0, 0);
 
-                setSelectedGroup(currentGroup);
-                playGroupAudio(currentGroup.frequencyHz);
+                    // Draw ID label at centroid
+                    const lx = (region.centroidX / 100) * w;
+                    const ly = (region.centroidY / 100) * h;
+                    ctx.font = `bold ${Math.max(8, Math.min(14, Math.sqrt(region.pixelCount) * 0.3))}px monospace`;
+                    ctx.fillStyle = '#0369a1';
+                    ctx.fillText(region.idCode, lx - 12, ly + 4);
+                }
             }
 
-            setCurrentStepIndex(step + 1);
-            setProgressPct(Math.round(((step + 1) / groups.length) * 100));
+            playTone(region.frequencyHz);
+            setSelectedRegion({ ...region, isDetached: true });
+            setCurrentStep(step + 1);
+            setProgressPct(Math.round(((step + 1) / rList.length) * 100));
 
             step++;
-        }, 180); // 180ms step interval for smooth pixel peel
+        }, 150);
     };
 
-    // Turn Exact Pixels of Group to Pure White Canvas
-    const detachGroupPixelsToWhite = (group: PixelColorGroup) => {
-        if (!mainCanvasRef.current) return;
-        const canvas = mainCanvasRef.current;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        const { w, h } = imageDimensionsRef.current;
-        const imgData = ctx.getImageData(0, 0, w, h);
-        const data = imgData.data;
-
-        const indices = group.pixelIndices;
-        for (let i = 0; i < indices.length; i++) {
-            const px = indices[i] * 4;
-            data[px] = 255;     // White R
-            data[px + 1] = 255; // White G
-            data[px + 2] = 255; // White B
-            data[px + 3] = 255; // Opaque
-        }
-
-        ctx.putImageData(imgData, 0, 0);
-
-        // Draw pin ID label at centroid
-        ctx.fillStyle = '#0284c7';
-        ctx.font = 'bold 9px monospace';
-        const labelX = (group.centroidX / 100) * w;
-        const labelY = (group.centroidY / 100) * h;
-        ctx.fillText(group.idCode, labelX - 10, labelY + 3);
-    };
-
-    // Stop Animation
     const stopDeconstruction = () => {
-        if (deconstructionTimerRef.current) {
-            clearInterval(deconstructionTimerRef.current);
-            deconstructionTimerRef.current = null;
+        if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
         }
         setIsDeconstructing(false);
     };
 
-    // Reset Canvas to Original Painting
-    const resetDeconstruction = () => {
-        stopDeconstruction();
-        setCurrentStepIndex(0);
-        setProgressPct(0);
-        setGroups(prev => prev.map(g => ({ ...g, isDetached: false })));
-
-        if (originalImageRef.current && mainCanvasRef.current) {
-            const img = originalImageRef.current;
-            const canvas = mainCanvasRef.current;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-                const { w, h } = imageDimensionsRef.current;
-                ctx.drawImage(img, 0, 0, w, h);
-            }
-        }
-        if (groups.length > 0) setSelectedGroup(groups[0]);
+    const restoreOriginal = () => {
+        const canvas = canvasRef.current;
+        const backup = pixelDataRef.current;
+        if (!canvas || !backup) return;
+        const { w, h } = imageDimRef.current;
+        const ctx = canvas.getContext('2d')!;
+        const imgData = ctx.createImageData(w, h);
+        imgData.data.set(backup);
+        ctx.putImageData(imgData, 0, 0);
     };
 
-    // Play Audio Note
-    const playGroupAudio = (freqHz: number) => {
+    const handleReset = () => {
+        stopDeconstruction();
+        setCurrentStep(0);
+        setProgressPct(0);
+        restoreOriginal();
+        if (regionsRef.current.length > 0) setSelectedRegion(regionsRef.current[0]);
+    };
+
+    const playTone = (freqHz: number) => {
         try {
             if (!audioCtxRef.current) {
-                const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-                audioCtxRef.current = new AudioCtx();
+                audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
             }
             const ctx = audioCtxRef.current;
             if (ctx.state === 'suspended') ctx.resume();
-
             const now = ctx.currentTime;
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
-
             osc.type = 'sine';
             osc.frequency.setValueAtTime(freqHz, now);
-
             gain.gain.setValueAtTime(0.001, now);
-            gain.gain.linearRampToValueAtTime(0.18, now + 0.02);
-            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
-
+            gain.gain.linearRampToValueAtTime(0.15, now + 0.015);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
             osc.connect(gain);
             gain.connect(ctx.destination);
-
             osc.start(now);
-            osc.stop(now + 0.3);
-        } catch (e) {
-            console.warn("Audio play error:", e);
-        }
+            osc.stop(now + 0.22);
+        } catch (_) {}
     };
-
-    // Color Processing Helpers
-    const initializeCentroids = (data: Uint8ClampedArray, k: number) => {
-        const centroids = [];
-        const step = Math.floor(data.length / 4 / k);
-        for (let i = 0; i < k; i++) {
-            const idx = (i * step) * 4;
-            centroids.push({ r: data[idx], g: data[idx + 1], b: data[idx + 2] });
-        }
-        return centroids;
-    };
-
-    const assignPixelsToCentroids = (data: Uint8ClampedArray, centroids: Array<{ r: number; g: number; b: number }>, totalPixels: number) => {
-        const assignments = new Int32Array(totalPixels);
-        for (let i = 0; i < totalPixels; i++) {
-            const px = i * 4;
-            const r = data[px], g = data[px + 1], b = data[px + 2];
-            let minDist = Infinity, closest = 0;
-            for (let c = 0; c < centroids.length; c++) {
-                const dr = r - centroids[c].r, dg = g - centroids[c].g, db = b - centroids[c].b;
-                const dist = dr * dr + dg * dg + db * db;
-                if (dist < minDist) { minDist = dist; closest = c; }
-            }
-            assignments[i] = closest;
-        }
-        return assignments;
-    };
-
-    const rgbToHex = (r: number, g: number, b: number) => '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
 
     const rgbToLab = (r: number, g: number, b: number) => {
         let r1 = r / 255, g1 = g / 255, b1 = b / 255;
         r1 = r1 > 0.04045 ? Math.pow((r1 + 0.055) / 1.055, 2.4) : r1 / 12.92;
         g1 = g1 > 0.04045 ? Math.pow((g1 + 0.055) / 1.055, 2.4) : g1 / 12.92;
         b1 = b1 > 0.04045 ? Math.pow((b1 + 0.055) / 1.055, 2.4) : b1 / 12.92;
-
         let x = (r1 * 0.4124 + g1 * 0.3576 + b1 * 0.1805) * 100;
         let y = (r1 * 0.2126 + g1 * 0.7152 + b1 * 0.0722) * 100;
         let z = (r1 * 0.0193 + g1 * 0.1192 + b1 * 0.9505) * 100;
-
-        x /= 95.047; y /= 100.000; z /= 108.883;
-        x = x > 0.008856 ? Math.pow(x, 1 / 3) : (7.787 * x) + 16 / 116;
-        y = y > 0.008856 ? Math.pow(y, 1 / 3) : (7.787 * y) + 16 / 116;
-        z = z > 0.008856 ? Math.pow(z, 1 / 3) : (7.787 * z) + 16 / 116;
-
-        return { L: (116 * y) - 16, a: 500 * (x - y), b: 200 * (y - z) };
+        x /= 95.047; y /= 100; z /= 108.883;
+        x = x > 0.008856 ? Math.pow(x, 1 / 3) : 7.787 * x + 16 / 116;
+        y = y > 0.008856 ? Math.pow(y, 1 / 3) : 7.787 * y + 16 / 116;
+        z = z > 0.008856 ? Math.pow(z, 1 / 3) : 7.787 * z + 16 / 116;
+        return { L: 116 * y - 16, a: 500 * (x - y), b: 200 * (y - z) };
     };
 
-    const midiToNoteName = (midi: number) => {
-        const names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-        return `${names[midi % 12]}${Math.floor(midi / 12) - 1}`;
-    };
-
-    const getColorDescription = (r: number, g: number, b: number, lab: { L: number, a: number, b: number }) => {
-        if (r > 120 && g < 100 && b < 100) return "Gruppo Rosso / Scarlatto";
-        if (b > 120 && r < 110) return "Gruppo Blu / Cielo";
-        if (r > 140 && g > 120 && b < 90) return "Gruppo Giallo / Oro";
-        if (g > 110 && r < 120) return "Gruppo Verde / Smeraldo";
-        if (lab.L < 25) return "Gruppo Ombra / Scuri";
-        if (lab.L > 80) return "Gruppo Luce / Bianchi";
-        return "Gruppo Cromatico";
+    const midiToNote = (midi: number) => {
+        const n = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        return `${n[midi % 12]}${Math.floor(midi / 12) - 1}`;
     };
 
     useEffect(() => {
         return () => {
             stopDeconstruction();
-            if (audioCtxRef.current) {
-                audioCtxRef.current.close();
-            }
+            audioCtxRef.current?.close();
         };
     }, []);
 
@@ -402,22 +342,19 @@ export const CamPage: React.FC = () => {
                     <div className="flex items-center gap-3 mb-2">
                         <span className="px-3 py-1 bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 rounded-full text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5">
                             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
-                            Stacco Pixel-by-Pixel (100.0% Copertura - Zero Residuo)
+                            Flood-Fill Organico · Stacco Pixel-per-Pixel
                         </span>
-                        <span className="text-xs text-white/50 font-mono">Exhaustive Pixel Matrix</span>
                     </div>
                     <h1 className="text-3xl font-black font-display text-white tracking-tight">
-                        Stacco <span className="text-cyan-400">Pixel per Pixel</span> dal Quadro
+                        Scontorno & <span className="text-cyan-400">Stacco dal Quadro</span>
                     </h1>
                     <p className="text-sm text-white/70 mt-1 max-w-2xl">
-                        Scansione esaustiva pixel per pixel: ogni singolo pixel dell'opera viene catalogato, associato ad una nota basale e staccato verso la tela bianca con zero residuo.
+                        Il sistema insegue il colore forma per forma (mantello, nuvola, erba...) e lo stacca rivelando la tela bianca. Zero residui.
                     </p>
                 </div>
-
-                {/* UPLOAD BUTTON */}
                 <label className="cursor-pointer px-8 py-4 bg-gradient-to-r from-cyan-500 via-teal-500 to-blue-600 hover:scale-105 text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all duration-300 shadow-xl flex items-center gap-3">
                     <i className="fas fa-upload text-base"></i>
-                    Carica Immagine Opera
+                    Carica Opera
                     <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
                 </label>
             </div>
@@ -425,181 +362,154 @@ export const CamPage: React.FC = () => {
             {/* MAIN WORKSPACE */}
             {!uploadedImageUrl ? (
                 <div className="bg-slate-950/60 backdrop-blur-xl p-16 rounded-2xl border border-dashed border-cyan-500/30 text-center space-y-4">
-                    <div className="w-20 h-20 bg-cyan-500/10 border border-cyan-500/30 rounded-full flex items-center justify-center mx-auto text-cyan-400 text-3xl">
-                        <i className="fas fa-[#38bdf8] fa-border-all"></i>
+                    <div className="w-20 h-20 bg-cyan-500/10 border border-cyan-500/30 rounded-full flex items-center justify-center mx-auto text-cyan-400 text-4xl">
+                        <i className="fas fa-wand-magic-sparkles"></i>
                     </div>
-                    <h3 className="text-xl font-bold text-white">Nessun Quadro Caricato</h3>
-                    <p className="text-sm text-white/60 max-w-md mx-auto">
-                        Clicca sul pulsante in alto <strong>"Carica Immagine Opera"</strong> per avviare lo stacco pixel per pixel a zero residuo.
-                    </p>
+                    <h3 className="text-xl font-bold text-white">Carica un quadro per avviare il Colorimetro Organico</h3>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
-                    {/* LEFT: MAIN CANVAS FOR PIXEL BY PIXEL WHITE PEEL (7 COLS) */}
-                    <div className="lg:col-span-7 flex flex-col gap-6">
+                    {/* LEFT: THE CANVAS IS THE ONLY VISIBLE SURFACE (7 COLS) */}
+                    <div className="lg:col-span-7 flex flex-col gap-4">
                         <div className="bg-slate-950/80 backdrop-blur-xl p-6 rounded-2xl border border-white/10 shadow-2xl space-y-4">
                             <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                                <span className="text-xs font-mono text-cyan-400 font-bold uppercase tracking-wider flex items-center gap-2">
-                                    <i className="fas fa-microscope"></i> Opera: {uploadedFileName}
+                                <span className="text-xs font-mono text-cyan-400 font-bold uppercase tracking-wider">
+                                    <i className="fas fa-microscope mr-2"></i>{uploadedFileName}
                                 </span>
                                 <span className="text-xs font-mono text-emerald-400 font-bold">
-                                    {currentStepIndex}/{groups.length} Gruppi Pixel Staccati ({progressPct}%)
+                                    {currentStep}/{regions.length} Forme Staccate ({progressPct}%)
                                 </span>
                             </div>
 
-                            {/* Canvas Container for Real-Time Pixel-by-Pixel White Canvas Peel */}
-                            <div className="relative rounded-xl overflow-hidden border border-white/10 aspect-video bg-white flex items-center justify-center shadow-inner">
-                                {/* Hidden Original Reference Image */}
-                                <img
-                                    ref={originalImageRef}
-                                    src={uploadedImageUrl}
-                                    alt="Originale"
-                                    className="hidden"
-                                    onLoad={analyzePixelByPixelExhaustive}
-                                />
-
-                                {/* Interactive Canvas showing exact pixel-by-pixel peeling to WHITE */}
+                            {/* THE SINGLE CANVAS — image drawn here, turns white pixel-by-pixel */}
+                            <div className="relative rounded-xl overflow-hidden border border-white/10 bg-white" style={{ aspectRatio: `${imageDimRef.current.w || 16}/${imageDimRef.current.h || 9}` }}>
                                 <canvas
-                                    ref={mainCanvasRef}
-                                    className="w-full h-full object-cover shadow-2xl"
+                                    ref={canvasRef}
+                                    className="w-full h-full object-contain"
                                 />
 
-                                {/* PIXEL GROUP ID BADGES OVERLAY */}
-                                {groups.map((g) => {
-                                    const isSelected = selectedGroup?.idCode === g.idCode;
-                                    return (
-                                        <div
-                                            key={g.idCode}
-                                            style={{ left: `${g.centroidX}%`, top: `${g.centroidY}%` }}
-                                            onClick={() => {
-                                                setSelectedGroup(g);
-                                                playGroupAudio(g.frequencyHz);
-                                            }}
-                                            className={`absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-all duration-300 pointer-events-auto z-10 ${
-                                                isSelected ? 'scale-110 z-20' : 'opacity-85 hover:opacity-100'
-                                            }`}
-                                        >
-                                            <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded backdrop-blur-md font-mono text-[9px] font-bold shadow-xl border transition-all ${
-                                                g.isDetached
-                                                    ? 'bg-white/95 border-slate-400 text-slate-800 shadow-md ring-1 ring-slate-300'
-                                                    : isSelected
-                                                        ? 'bg-black/90 border-amber-400 text-amber-300 ring-2 ring-amber-400/50'
-                                                        : 'bg-black/80 border-cyan-400/60 text-cyan-200'
-                                            }`}>
-                                                <span className="w-2 h-2 rounded-full border border-white/40" style={{ backgroundColor: g.hex }}></span>
-                                                <span>{g.idCode}</span>
-                                                <span className="text-[8px] opacity-70">({g.percentage}%)</span>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
+                                {isAnalyzing && (
+                                    <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center gap-3">
+                                        <i className="fas fa-spinner fa-spin text-3xl text-cyan-400"></i>
+                                        <p className="text-xs font-mono text-cyan-300 font-bold">{analyzeProgress}</p>
+                                    </div>
+                                )}
 
                                 {isDeconstructing && (
-                                    <div className="absolute top-3 left-3 bg-black/80 backdrop-blur-md border border-cyan-500/40 px-3 py-1 rounded-full text-[10px] font-mono text-cyan-300 font-bold flex items-center gap-2 pointer-events-none z-30 animate-pulse">
-                                        <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
-                                        Stacco Pixel per Pixel in corso ({progressPct}%)
+                                    <div className="absolute bottom-3 left-3 right-3 bg-black/80 backdrop-blur-md border border-cyan-500/40 px-3 py-2 rounded-xl text-[10px] font-mono text-cyan-300 font-bold">
+                                        <div className="flex justify-between mb-1">
+                                            <span>Stacco Forma {currentStep}/{regions.length}</span>
+                                            <span>{progressPct}%</span>
+                                        </div>
+                                        <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                                            <div className="h-full bg-gradient-to-r from-cyan-400 to-teal-300 transition-all duration-150" style={{ width: `${progressPct}%` }} />
+                                        </div>
                                     </div>
                                 )}
                             </div>
 
                             {/* CONTROLS */}
-                            <div className="flex items-center justify-between gap-4 pt-2">
+                            <div className="flex gap-3 pt-1">
                                 <button
-                                    onClick={isDeconstructing ? stopDeconstruction : startPixelByPixelDeconstruction}
-                                    disabled={groups.length === 0}
-                                    className={`flex-1 py-4 rounded-xl font-bold uppercase text-xs tracking-wider transition-all flex items-center justify-center gap-2 ${
+                                    onClick={isDeconstructing ? stopDeconstruction : startDeconstruction}
+                                    disabled={regions.length === 0 || isAnalyzing}
+                                    className={`flex-1 py-3.5 rounded-xl font-bold uppercase text-xs tracking-wider transition-all flex items-center justify-center gap-2 ${
                                         isDeconstructing
-                                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
-                                            : 'bg-gradient-to-r from-cyan-500 via-teal-500 to-blue-600 text-white hover:scale-102 shadow-xl shadow-cyan-950/50'
+                                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                            : 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:scale-102 shadow-lg'
                                     }`}
                                 >
                                     <i className={`fas ${isDeconstructing ? 'fa-pause' : 'fa-play'}`}></i>
-                                    {isDeconstructing ? 'Pausa Stacco' : 'Avvia Stacco Pixel per Pixel (Zero Residuo)'}
+                                    {isDeconstructing ? 'Pausa' : 'Avvia Stacco Forme Organiche'}
                                 </button>
-
                                 <button
-                                    onClick={resetDeconstruction}
-                                    className="px-5 py-4 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-mono font-bold uppercase border border-white/10 transition-all"
+                                    onClick={handleReset}
+                                    className="px-5 py-3.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-mono font-bold uppercase border border-white/10 transition-all"
                                 >
-                                    <i className="fas fa-rotate-left mr-1.5"></i> Ripristina Quadro
+                                    <i className="fas fa-rotate-left mr-1.5"></i>Reset
                                 </button>
                             </div>
                         </div>
                     </div>
 
-                    {/* RIGHT: EXHAUSTIVE PIXEL GROUPS REGISTRY (5 COLS) */}
+                    {/* RIGHT: LIVE TELEMETRY & REGION REGISTRY (5 COLS) */}
                     <div className="lg:col-span-5 flex flex-col gap-6">
-                        <div className="bg-slate-950/80 backdrop-blur-xl p-6 rounded-2xl border border-white/10 shadow-2xl space-y-4 font-mono">
+                        {/* Active Region Telemetry */}
+                        {selectedRegion && (
+                            <div className="bg-slate-950/80 backdrop-blur-xl p-5 rounded-2xl border border-cyan-500/40 shadow-2xl font-mono space-y-3 animate-fade-in">
+                                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-4 h-4 rounded border border-white/40" style={{ backgroundColor: selectedRegion.hex }}></span>
+                                        <span className="text-amber-300 font-bold text-sm">{selectedRegion.idCode}</span>
+                                    </div>
+                                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase border ${
+                                        selectedRegion.isDetached
+                                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                            : 'bg-white/10 text-white/50 border-white/10'
+                                    }`}>
+                                        {selectedRegion.isDetached ? '✓ Staccato' : 'Sul Quadro'}
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 text-[10px] text-white/80">
+                                    <div>Pixel: <strong className="text-white">{selectedRegion.pixelCount.toLocaleString()} px</strong></div>
+                                    <div>Copertura: <strong className="text-cyan-300">{selectedRegion.percentage}%</strong></div>
+                                    <div>HEX: <strong className="text-white">{selectedRegion.hex}</strong></div>
+                                    <div>Nota: <strong className="text-amber-300">{selectedRegion.noteName} · {selectedRegion.frequencyHz}Hz</strong></div>
+                                    <div className="col-span-2">CIE LAB: <strong className="text-cyan-200">L*:{selectedRegion.L} a*:{selectedRegion.a} b*:{selectedRegion.b_val}</strong></div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Region Registry */}
+                        <div className="bg-slate-950/80 backdrop-blur-xl p-5 rounded-2xl border border-white/10 shadow-2xl font-mono space-y-3 flex-1">
                             <div className="flex items-center justify-between border-b border-white/10 pb-3">
                                 <span className="text-xs text-cyan-400 font-bold uppercase tracking-wider">
-                                    📋 Gruppi Pixel Mappati ({currentStepIndex}/{groups.length})
+                                    Forme Organiche Trovate ({regions.length})
                                 </span>
-                                <span className="text-xs text-emerald-400 font-bold">100.0% Copertura</span>
+                                <span className="text-xs text-emerald-400 font-bold">{analyzeProgress && !isAnalyzing ? `✓ ${regions.length} forme` : isAnalyzing ? '⏳ Analisi...' : ''}</span>
                             </div>
 
-                            {/* SELECTED GROUP TELEMETRY */}
-                            {selectedGroup && (
-                                <div className="bg-cyan-950/40 border border-cyan-500/40 p-4 rounded-xl space-y-2 animate-fade-in text-xs">
-                                    <div className="flex items-center justify-between border-b border-cyan-500/20 pb-2">
-                                        <div className="flex items-center gap-2">
-                                            <span className="w-3.5 h-3.5 rounded border border-white/40" style={{ backgroundColor: selectedGroup.hex }}></span>
-                                            <span className="text-amber-300 font-bold text-sm">{selectedGroup.idCode}</span>
-                                        </div>
-                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${selectedGroup.isDetached ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-white/10 text-white/60'}`}>
-                                            {selectedGroup.isDetached ? 'Staccato (Tela Bianca)' : 'Sul Quadro'}
-                                        </span>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-2 text-[10px] text-white/80 pt-1">
-                                        <div className="col-span-2 text-white font-bold">{selectedGroup.name}</div>
-                                        <div>Pixel Totali: <strong>{selectedGroup.pixelCount} px</strong></div>
-                                        <div>Copertura: <strong>{selectedGroup.percentage}%</strong></div>
-                                        <div>CIE LAB: <strong>L*:{selectedGroup.L} a*:{selectedGroup.a} b*:{selectedGroup.b_val}</strong></div>
-                                        <div>Nota Basale: <strong className="text-amber-300">{selectedGroup.noteName} ({selectedGroup.frequencyHz} Hz)</strong></div>
-                                    </div>
+                            {regions.length === 0 ? (
+                                <p className="text-xs text-white/40 italic text-center py-4">
+                                    Carica un'immagine per avviare l'analisi organica...
+                                </p>
+                            ) : (
+                                <div className="space-y-1.5 max-h-[440px] overflow-y-auto pr-1">
+                                    {regions.map((reg, idx) => {
+                                        const isDetached = idx < currentStep;
+                                        const isCurrent = idx === currentStep - 1;
+                                        const isSelected = selectedRegion?.idCode === reg.idCode;
+                                        return (
+                                            <div
+                                                key={reg.idCode}
+                                                onClick={() => setSelectedRegion(reg)}
+                                                className={`p-2.5 rounded-lg border cursor-pointer transition-all flex items-center justify-between text-[10px] ${
+                                                    isSelected || isCurrent
+                                                        ? 'bg-cyan-950/80 border-amber-400 ring-1 ring-amber-400'
+                                                        : isDetached
+                                                            ? 'bg-white/8 border-white/10 text-white/80'
+                                                            : 'bg-white/3 border-white/5 text-white/30'
+                                                }`}
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <span className="w-3 h-3 rounded border border-white/20" style={{ backgroundColor: reg.hex }}></span>
+                                                    <span className="font-bold text-amber-300">{reg.idCode}</span>
+                                                    <span className="text-white/60">{reg.percentage}% · {reg.pixelCount.toLocaleString()}px</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-cyan-300">{reg.noteName}</span>
+                                                    <i className={`fas text-xs ${isDetached ? 'fa-check text-emerald-400' : 'fa-hourglass text-white/20'}`}></i>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             )}
-
-                            {/* EXHAUSTIVE PIXEL GROUPS LIST */}
-                            <div className="space-y-1.5 max-h-[360px] overflow-y-auto pr-1">
-                                {groups.map((g) => {
-                                    const isSelected = selectedGroup?.idCode === g.idCode;
-                                    return (
-                                        <div
-                                            key={g.idCode}
-                                            onClick={() => {
-                                                setSelectedGroup(g);
-                                                playGroupAudio(g.frequencyHz);
-                                            }}
-                                            className={`p-2.5 rounded-lg border transition-all cursor-pointer flex items-center justify-between text-xs ${
-                                                isSelected
-                                                    ? 'bg-cyan-950/80 border-amber-400 ring-1 ring-amber-400'
-                                                    : g.isDetached
-                                                        ? 'bg-white/10 border-white/10 text-white/90'
-                                                        : 'bg-white/5 border-white/5 text-white/40 opacity-60'
-                                            }`}
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                <span className="w-3 h-3 rounded border border-white/30" style={{ backgroundColor: g.hex }}></span>
-                                                <span className="font-bold text-amber-300">{g.idCode}</span>
-                                                <span className="text-[10px] text-white/70 truncate max-w-[140px]">{g.name}</span>
-                                            </div>
-
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-[10px] text-cyan-300 font-bold">{g.noteName} ({g.frequencyHz}Hz)</span>
-                                                <i className={`fas ${g.isDetached ? 'fa-check text-emerald-400' : 'fa-clock text-white/30'} text-xs`}></i>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
                         </div>
                     </div>
-
                 </div>
             )}
-
         </div>
     );
 };
