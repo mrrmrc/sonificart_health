@@ -18,7 +18,12 @@ const PRESET_ARTWORKS = [
         artist: 'Vincent van Gogh',
         url: 'https://images.unsplash.com/photo-1541701494587-cb58502866ab?auto=format&fit=crop&w=800&q=80',
         stats: { avg_L: 35, avg_a: -12, avg_b: -38, avg_saturation: 0.65, hue_diversity: 0.72, avg_variance: 480 },
-        description: 'Toni freddi di blu notte e vortici di luce gialla'
+        description: 'Toni freddi di blu notte e vortici di luce gialla',
+        objects: [
+            { id: 'cypress', label: 'Cipresso Scuro (Primo Piano)', instrument: 'Violoncello / Sub-Bass', colorHex: '#1e3a8a', freq: 108, bBox: { x: 10, y: 30, w: 25, h: 65 } },
+            { id: 'sky', label: 'Vortici & Cielo Blu', instrument: 'Arpa / Pianoforte Arpeggiato', colorHex: '#0284c7', freq: 288, bBox: { x: 30, y: 10, w: 65, h: 50 } },
+            { id: 'stars', label: 'Stelle & Luna Gialla', instrument: 'Flauto Lirico / Soprano', colorHex: '#eab308', freq: 513, bBox: { x: 65, y: 15, w: 30, h: 35 } }
+        ]
     },
     {
         id: 'mona_lisa',
@@ -26,7 +31,12 @@ const PRESET_ARTWORKS = [
         artist: 'Leonardo da Vinci',
         url: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?auto=format&fit=crop&w=800&q=80',
         stats: { avg_L: 42, avg_a: 8, avg_b: 22, avg_saturation: 0.35, hue_diversity: 0.40, avg_variance: 290 },
-        description: 'Toni caldi sfumati terra d ombra ed enimmatico ritratto'
+        description: 'Toni caldi sfumati terra d ombra ed enimmatico ritratto',
+        objects: [
+            { id: 'face', label: 'Volto & Sguardo Enigmatico', instrument: 'Vocal Choir / Soprano', colorHex: '#f59e0b', freq: 432, bBox: { x: 35, y: 15, w: 30, h: 35 } },
+            { id: 'background', label: 'Paesaggio Sfumato Sfondo', instrument: 'Viola / Organ Pad', colorHex: '#78350f', freq: 162, bBox: { x: 5, y: 10, w: 90, h: 40 } },
+            { id: 'hands', label: 'Mani & Abito Scuro', instrument: 'Liuto / Chitarra Acustica', colorHex: '#451a03', freq: 216, bBox: { x: 25, y: 55, w: 50, h: 40 } }
+        ]
     },
     {
         id: 'water_lilies',
@@ -34,7 +44,11 @@ const PRESET_ARTWORKS = [
         artist: 'Claude Monet',
         url: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?auto=format&fit=crop&w=800&q=80',
         stats: { avg_L: 68, avg_a: -25, avg_b: 15, avg_saturation: 0.55, hue_diversity: 0.60, avg_variance: 310 },
-        description: 'Toni verdi e acquatici rilassanti con alta luminosita'
+        description: 'Toni verdi e acquatici rilassanti con alta luminosita',
+        objects: [
+            { id: 'water', label: 'Specchio d Acqua & Riflessi', instrument: 'Piano Fluido / Chords', colorHex: '#0d9488', freq: 256, bBox: { x: 5, y: 5, w: 90, h: 90 } },
+            { id: 'lilies', label: 'Ninfee Rosa & Fiori', instrument: 'Arpa / Legni Acuti', colorHex: '#ec4899', freq: 576, bBox: { x: 30, y: 40, w: 40, h: 35 } }
+        ]
     }
 ];
 
@@ -200,7 +214,10 @@ export const CamPage: React.FC = () => {
                 artist: 'Opera Caricata',
                 url: url,
                 stats: { avg_L: 50, avg_a: 0, avg_b: -10, avg_saturation: 0.5, hue_diversity: 0.55, avg_variance: 400 },
-                description: 'Opera caricata dall utente per analisi personalizzata'
+                description: 'Opera caricata dall utente per analisi personalizzata',
+                objects: [
+                    { id: 'custom_obj_1', label: 'Soggetto Principale', instrument: 'Arpa / Pianoforte', colorHex: '#0284c7', freq: 324, bBox: { x: 15, y: 15, w: 70, h: 70 } }
+                ]
             });
             setArtworkStats({ avg_L: 50, avg_a: 0, avg_b: -10, avg_saturation: 0.5, hue_diversity: 0.55, avg_variance: 400 });
         }
@@ -502,8 +519,8 @@ S'innalza il canto al vertice del cielo!`;
                             ))}
                         </div>
 
-                        {/* Selected Artwork Display with WHO Dynamic Visual Impact */}
-                        <div className={`relative rounded-xl overflow-hidden border transition-all duration-700 aspect-video bg-black ${whoResult ? 'border-cyan-400 shadow-[0_0_30px_rgba(45,212,191,0.25)]' : 'border-white/10'}`}>
+                        {/* Selected Artwork Display with WHO Dynamic Visual Impact & AI Object Bounding Boxes */}
+                        <div className={`relative rounded-xl overflow-hidden border transition-all duration-700 aspect-video bg-black group ${whoResult ? 'border-cyan-400 shadow-[0_0_30px_rgba(45,212,191,0.25)]' : 'border-white/10'}`}>
                             <img
                                 src={selectedArtwork.url}
                                 alt={selectedArtwork.title}
@@ -518,17 +535,62 @@ S'innalza il canto al vertice del cielo!`;
                                     ) : 'none'
                                 }}
                             />
+
+                            {/* AI Segmented Bounding Boxes Overlay */}
+                            {selectedArtwork.objects && selectedArtwork.objects.map((obj, i) => (
+                                <div
+                                    key={obj.id}
+                                    style={{
+                                        left: `${obj.bBox.x}%`,
+                                        top: `${obj.bBox.y}%`,
+                                        width: `${obj.bBox.w}%`,
+                                        height: `${obj.bBox.h}%`
+                                    }}
+                                    className="absolute border-2 border-cyan-400/60 bg-cyan-500/10 rounded-lg hover:border-amber-400 hover:bg-amber-500/20 transition-all duration-300 pointer-events-auto cursor-pointer p-1.5 flex flex-col justify-between"
+                                >
+                                    <span className="bg-black/80 backdrop-blur-md px-2 py-0.5 rounded text-[9px] font-mono text-cyan-300 font-bold border border-cyan-400/40 w-fit truncate">
+                                        🎯 {obj.label}
+                                    </span>
+                                    <span className="bg-black/90 px-2 py-0.5 rounded text-[9px] font-mono text-amber-300 font-bold border border-amber-400/40 w-fit self-end truncate">
+                                        🎻 {obj.instrument}
+                                    </span>
+                                </div>
+                            ))}
+
                             {whoResult && (
                                 <div className="absolute top-3 left-3 bg-black/80 backdrop-blur-md border border-cyan-500/40 px-3 py-1 rounded-full text-[10px] font-mono text-cyan-300 font-bold flex items-center gap-1.5 animate-pulse">
                                     <i className="fas fa-wand-magic-sparkles"></i> Visual Impact WHO Attivo ({whoResult.primaryCategory.label.split('/')[0]})
                                 </div>
                             )}
-                            <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-4 flex flex-col justify-end">
+
+                            <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-4 flex flex-col justify-end pointer-events-none">
                                 <span className="text-base font-bold text-white">{selectedArtwork.title}</span>
                                 <span className="text-xs text-cyan-300 font-mono">{selectedArtwork.artist}</span>
                                 <p className="text-[11px] text-white/60 mt-1 italic">{selectedArtwork.description}</p>
                             </div>
                         </div>
+
+                        {/* Segmented Objects Legend */}
+                        {selectedArtwork.objects && (
+                            <div className="bg-slate-900/80 p-3 rounded-xl border border-white/10 space-y-2 font-mono">
+                                <span className="text-[10px] text-cyan-400 font-bold uppercase tracking-wider block">
+                                    🧩 Segmentazione Semantica IA & Timbro Deterministico
+                                </span>
+                                <div className="space-y-1.5">
+                                    {selectedArtwork.objects.map(obj => (
+                                        <div key={obj.id} className="flex items-center justify-between text-[11px] bg-white/5 p-2 rounded-lg border border-white/5">
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: obj.colorHex }}></span>
+                                                <span className="text-white font-bold">{obj.label}</span>
+                                            </div>
+                                            <span className="text-amber-300 font-bold bg-amber-950/40 border border-amber-500/30 px-2 py-0.5 rounded">
+                                                {obj.instrument}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Color Stats */}
                         <div className="grid grid-cols-3 gap-2 text-center text-xs font-mono bg-white/5 p-3 rounded-xl">
