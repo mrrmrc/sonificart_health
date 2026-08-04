@@ -64,6 +64,12 @@ export const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, isAdmin, userCredits
                         <ActiveIndicator isActive={currentView === 'landing'} />
                     </button>
 
+                    <button onClick={() => navigate('/cam')} className={`${navLinkClass('cam')} text-cyan-400 hover:text-cyan-300 flex items-center gap-1.5 font-extrabold`}>
+                        <i className="fas fa-video text-xs text-cyan-400 animate-pulse"></i>
+                        CAM
+                        <ActiveIndicator isActive={currentView === 'cam'} />
+                    </button>
+
                     <button onClick={onGoProClick} className={`${navLinkClass('landing')} text-brand-accent hover:text-brand-accent-light flex items-center gap-2`}>
                         {t('nav.access')}
                         <ActiveIndicator isActive={false} />
@@ -167,6 +173,9 @@ export const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, isAdmin, userCredits
                     <div className="p-4 space-y-2">
                         <button onClick={() => { navigate('/'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg notranslate">
                             Home
+                        </button>
+                        <button onClick={() => { navigate('/cam'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-cyan-400 font-bold bg-white/5 rounded-lg border border-cyan-500/30 flex items-center gap-2">
+                            <i className="fas fa-video text-cyan-400 animate-pulse"></i> CAM (Real-Time Opera & WHO)
                         </button>
                         <button onClick={() => { onGoProClick(); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-brand-accent font-bold bg-white/5 rounded-lg border border-brand-accent/20">
                             {t('nav.access')}

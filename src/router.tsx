@@ -11,6 +11,7 @@ import { MuseumPage } from "./pages/MuseumPage";
 import { PerformancePage } from "./pages/PerformancePage";
 import { ErrorPage } from "./components/ErrorPage";
 import { ComparePage } from "./pages/ComparePage";
+import { CamPage } from "./pages/CamPage";
 
 export const router = createBrowserRouter([
     {
@@ -20,6 +21,7 @@ export const router = createBrowserRouter([
         children: [
             { index: true, element: <LandingPageWrapper /> },
             { path: "sonification", element: <SonificationPage /> },
+            { path: "cam", element: <CamPage /> },
             { path: "showcase", element: <ShowcasePage /> },
             { path: "verification", element: <VerificationPage /> },
             { path: "compare", element: <ComparePage /> },
@@ -32,3 +34,4 @@ export const router = createBrowserRouter([
         ],
     },
 ]);
+
