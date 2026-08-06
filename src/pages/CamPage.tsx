@@ -61,6 +61,7 @@ const InfoCard: React.FC<{ title: string, icon: string, children: React.ReactNod
 );
 
 export const CamPage: React.FC = () => {
+    const [activePromptTab, setActivePromptTab] = useState<'suno' | 'udio' | 'soundverse'>('suno');
     const { user, setUser, isUnlimited, setIsLoginModalOpen, setIsRequestAccessOpen } = useOutletContext<OutletContextType>();
 
     const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
@@ -1547,8 +1548,11 @@ export const CamPage: React.FC = () => {
                                     <span className="flex items-center gap-2"><i className="fas fa-robot"></i> Prompt AI Compositivo</span>
                                     <button 
                                         onClick={() => {
-                                            const prompt = finalResult.musicGenerationPrompt?.soundverse_prompt || finalResult.musicGenerationPrompt?.technical_parameters || '';
-                                            navigator.clipboard.writeText(prompt);
+                                            let promptToCopy = '';
+                                            if (activePromptTab === 'suno') promptToCopy = (finalResult.musicGenerationPrompt?.suno_prompt || '') + '\n\n' + (finalResult.musicGenerationPrompt?.suno_lyrics || '');
+                                            if (activePromptTab === 'udio') promptToCopy = finalResult.musicGenerationPrompt?.udio_prompt || '';
+                                            if (activePromptTab === 'soundverse') promptToCopy = finalResult.musicGenerationPrompt?.soundverse_prompt || finalResult.musicGenerationPrompt?.technical_parameters || '';
+                                            navigator.clipboard.writeText(promptToCopy);
                                             alert("Prompt copiato negli appunti!");
                                         }}
                                         className="px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500/40 text-purple-200 rounded text-[10px] font-bold border border-purple-500/40 transition-colors"
@@ -1556,12 +1560,58 @@ export const CamPage: React.FC = () => {
                                         <i className="fas fa-copy"></i> COPIA
                                     </button>
                                 </h3>
-                                <p className="text-[10px] text-white/50 mb-4">
-                                    Incolla questo prompt in Soundverse AI o Suno per generare l'arrangiamento finale mantenendo l'intento terapeutico.
+                                
+                                {/* SELETTORE TAB PROMPT */}
+                                <div className="flex flex-wrap items-center gap-2 mb-4 border-b border-white/10 pb-3 mt-2">
+                                    <button
+                                        onClick={() => setActivePromptTab('suno')}
+                                        className={`px-3 py-1.5 rounded-full text-[10px] font-black tracking-wider transition-all shadow-lg ${activePromptTab === 'suno' ? 'bg-purple-500 text-white' : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white'}`}
+                                    >
+                                        <i className="fas fa-bolt mr-1.5"></i> SUNO
+                                    </button>
+                                    <button
+                                        onClick={() => setActivePromptTab('udio')}
+                                        className={`px-3 py-1.5 rounded-full text-[10px] font-black tracking-wider transition-all shadow-lg ${activePromptTab === 'udio' ? 'bg-blue-500 text-white' : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white'}`}
+                                    >
+                                        <i className="fas fa-wave-square mr-1.5"></i> UDIO
+                                    </button>
+                                    <button
+                                        onClick={() => setActivePromptTab('soundverse')}
+                                        className={`px-3 py-1.5 rounded-full text-[10px] font-black tracking-wider transition-all shadow-lg ${activePromptTab === 'soundverse' ? 'bg-emerald-500 text-black' : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white'}`}
+                                    >
+                                        <i className="fas fa-compact-disc mr-1.5"></i> SOUNDVERSE
+                                    </button>
+                                </div>
+
+                                <p className="text-[10px] text-white/50 mb-3">
+                                    {activePromptTab === 'suno' && "Copia e incolla in Suno per generare il brano con una timeline terapeutica precisa."}
+                                    {activePromptTab === 'udio' && "Copia e incolla in Udio (Modalità Manuale) per texture sonore e sub-bassi psicoacustici."}
+                                    {activePromptTab === 'soundverse' && "Prompt analitico usato nativamente per Soundverse AI."}
                                 </p>
+
                                 <div className="bg-black/60 rounded-lg p-4 flex-grow border border-white/5 overflow-y-auto max-h-[300px]">
-                                    <pre className="text-xs text-purple-100 font-mono whitespace-pre-wrap">
-                                        {finalResult.musicGenerationPrompt?.soundverse_prompt || finalResult.musicGenerationPrompt?.technical_parameters || 'Prompt non disponibile.'}
+                                    <pre className="text-[11px] text-purple-100 font-mono whitespace-pre-wrap leading-relaxed">
+                                        {activePromptTab === 'suno' && (
+                                            <>
+                                                <span className="text-purple-300 font-bold block mb-2">// SUNO PROMPT & TIMELINE</span>
+                                                {finalResult.musicGenerationPrompt?.suno_prompt || 'Prompt non disponibile.'}
+                                                <br /><br />
+                                                <span className="text-purple-400 font-bold block mb-1">Lyrics / Struttura Temporale:</span>
+                                                {finalResult.musicGenerationPrompt?.suno_lyrics || ''}
+                                            </>
+                                        )}
+                                        {activePromptTab === 'udio' && (
+                                            <>
+                                                <span className="text-blue-300 font-bold block mb-2">// UDIO PROMPT</span>
+                                                {finalResult.musicGenerationPrompt?.udio_prompt || 'Prompt non disponibile.'}
+                                            </>
+                                        )}
+                                        {activePromptTab === 'soundverse' && (
+                                            <>
+                                                <span className="text-emerald-300 font-bold block mb-2">// SOUNDVERSE PROMPT</span>
+                                                {finalResult.musicGenerationPrompt?.soundverse_prompt || finalResult.musicGenerationPrompt?.technical_parameters || 'Prompt non disponibile.'}
+                                            </>
+                                        )}
                                     </pre>
                                 </div>
                             </div>
