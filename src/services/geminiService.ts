@@ -361,7 +361,7 @@ SVOLGIMENTO (PARADIGMA AI COMPOSER):
 Non sei vincolato da una traduzione matematica nota-per-nota pixel-per-pixel. Agisci invece come un compositore umano/AI che valuta l'opera d'arte nella sua totalità (contenuto visivo, colori, atmosfera, carica emotiva) e compone un'opera musicale originale perfettamente orientata al benessere ed all'obiettivo medico identificato, basandosi sulla linea melodica estratta dall'opera.
 
 DATI DI INPUT:
-- OPERA D'ARTE (SOGGETTO VISIVO): "${imageDescription}"
+- ANALISI VISIVA ORIGINALE: "${imageDescription}" (USALA SOLO PER ESTRARRE I COLORI, MATERIALI E L'UMORE. ASSOLUTAMENTE VIETATO MENZIONARE IL SOGGETTO FIGURATIVO O STORICO NEI PROMPT MUSICALI)
 - TRADIZIONE E CARATTERE MUSICALE: '${tradition.name}' (Profilo: '${tradition.character}')
 - LINEA MELODICA ESTRATTA DAI PIXEL DELL'OPERA: "${melodyNotesSequence || 'D4 - E4 - G4 - A4 - C5'}"
 - BPM CLINICO TARGET WHO: ${configBpm} BPM
@@ -369,9 +369,15 @@ DATI DI INPUT:
 - STATISTICHE CROMATICHE: Saturazione ${(analysisStats.avg_saturation * 100).toFixed(0)}%, Diversità cromatica ${(analysisStats.hue_diversity * 100).toFixed(0)}%
 ${healthSection}
 
+DIVIETO ASSOLUTO DI INTERPRETAZIONE FIGURATIVA O SOGGETTIVA:
+E' severamente vietato inserire riferimenti letterali al soggetto dell'opera (es. Crocifissione, paesaggio, persone, oggetti storici/religiosi) nei prompt musicali (suno_prompt, udio_prompt, soundverse_prompt). L'AI Composer è uno strumento clinico matematico: 0 improvvisazioni e 0 interpretazioni. Le istruzioni da inviare ai motori audio devono basarsi ESCLUSIVAMENTE su:
+1. La linea melodica esatta fornita.
+2. Le direttive cliniche e psicoacustiche WHO.
+3. I colori e gli umori astratti (es. "Scuro", "Luminoso", "Etereo"), tradotti in timbri.
+
 REQUISITI DI SINFONIA PITTORICO-CLINICA & INGEGNERIA NEURO-ACUSTICA VISCERALE (MANDATORI PER TUTTE LE AI):
-1. **Genere Musicale 100% Dinamico (NESSUN BOILERPLATE O FRASI FISSE)**:
-   NON usare mai la frase fissa "Cinematic Health Composition". Definisci invece un GENERE MUSICALE 100% DINAMICO derivato dallo stile pittorico dell'opera (es. "Impressionist Atmospheric Ambient", "Baroque Chiaroscuro Orchestral", "Avant-Garde Minimalist Polyrhythmic", "Traditional Asian Zen Meditation", "Modernist Emotional Soundscape").
+1. **Genere Musicale 100% Dinamico ma Astratto (NESSUN BOILERPLATE O FRASI FISSE)**:
+   NON usare mai la frase fissa "Cinematic Health Composition". Definisci invece un GENERE MUSICALE 100% DINAMICO derivato dall'umore astratto dell'opera (es. "Atmospheric Ambient", "Chiaroscuro Orchestral", "Avant-Garde Minimalist Polyrhythmic", "Modernist Emotional Soundscape"). Niente riferimenti storici o religiosi.
 
 2. **Ingegneria Neuro-Acustica Viscerale, Infrasuoni & Audio Spaziale Olografico (MANDATORIO IN TUTTI I PROMPT)**:
    Per scatenare l'esperienza di catarsi estetica (Sindrome di Stendhal) e far entrare l'ascoltatore dentro l'opera, INCLUDI ESPLICITAMENTE in ciascun prompt i seguenti tag di psicoacustica e produzione audio:
@@ -380,16 +386,16 @@ REQUISITI DI SINFONIA PITTORICO-CLINICA & INGEGNERIA NEURO-ACUSTICA VISCERALE (M
    - Immersione Spaziale: "3D Holographic Binaural Soundstage, Wide Spatial Audio Movement, Ethereal Atmospheric Depth"
    - Impatto Emotivo: "Stendhal Aesthetic Chill Engine, Deep Emotional Catharsis"
 
-3. **Inclusione della Linea Melodica Estratta e dello Stile Visivo**:
-   Includi la LINEA MELODICA ESTRATTA ("${melodyNotesSequence || 'D4 - E4 - G4 - A4'}") ed il SOGGETTO VISIVO ("${imageDescription}").
+3. **Inclusione della Linea Melodica Estratta**:
+   Includi la LINEA MELODICA ESTRATTA ("${melodyNotesSequence || 'D4 - E4 - G4 - A4'}"). NESSUNA menzione testuale al soggetto visivo.
 
 4. **Formattazione dei Prompt per i Motori AI**:
    - **soundverse_prompt**:
-     "Visual Theme: [Stile Pittorico & Soggetto dell'Opera] | Reference Melody Theme: [${melodyNotesSequence || 'Main Motif'}] | Genre: [Genere Musicale Dinamico Adattivo] | Neuro-Acoustics & Spatial FX: Sub-Bass Infrasound (24Hz), Hidden Binaural Theta Wave (6Hz), 432Hz Tuning, 3D Holographic Stereo Panning, Deep Spatial Reverb | Style: Holistic ${healthClassification?.primaryCategory.label || 'Wellness'} | Mood: [Atmosfera Emozionale e Chiaroscuro] | Tempo: ${configBpm} BPM | Instruments: [Strumenti Clinici WHO ed evocativi dell'epoca/stile dell'opera] | Duration: ${durationSeconds.toFixed(0)}s"
-   - **suno_prompt**: Inizia con: "[Duration: ${durationSeconds.toFixed(0)}s], [${configBpm} BPM], [Genre: Genere Musicale Dinamico], [Visual Style: Stile Pittorico], [Melodic Motif: ${melodyNotesSequence || 'Main Motif'}], [Production FX: Sub-Bass 24Hz Infrasound, 432Hz Tuning, 3D Binaural Panning, Holographic Ambient Reverb], [Subject: ${imageDescription}], [Strictly Instrumental]". Termina con: "[Outro: Dissolve at ${durationSeconds.toFixed(0)}s], [End at ${durationSeconds.toFixed(0)}s], [Silence], [End]".
-   - **udio_prompt**: Tag descrittivi che combinano il genere dinamico, lo stile pittorico, la linea melodica (${melodyNotesSequence}), i tag psicoacustici (24hz sub-bass, 432hz tuning, binaural theta wave, 3d spatial audio), ${configBpm} BPM e la strumentazione clinica WHO.
-   - **suno_lyrics (MANDATORIO STRUTTURATO E ALLINEATO CON WHO)**: Genera la TIMELINE TEMPORALE ALLINEATA AL 100% CON LE DIRETTIVE CLINICHE WHO E CON IL PROMPT PRINCIPALE. DEVE contenere esplicitamente la Categoria WHO ("${healthClassification?.primaryCategory.label || 'Wellness'}"), il Tempo WHO (${configBpm} BPM), il motivo delle note, lo stile visivo ed i tag neuro-acustici. Esempio obbligatorio:
-     "[0:00] [Intro: Ethereal 24Hz Sub-Bass Ambient, 432Hz Base Tuning, WHO Target: ${healthClassification?.primaryCategory.label || 'Wellness'} (${configBpm} BPM), Motif: ${melodyNotesSequence || 'Main Theme'}]\n[0:25] [Section A: Main Visual Theme & Strings Crescendo, 3D Spatial Panning]\n[1:00] [Section B: Visceral Resonant Textures & WHO Entrainment Rhythm at ${configBpm} BPM]\n[1:45] [Climax: Full Orchestral Catharsis & High Stendhal Aesthetic Chill]\n[${(durationSeconds * 0.85).toFixed(0)}s] [Outro: Dissolve into Sub-Bass Ambient Silence]\n[${durationSeconds.toFixed(0)}s] [End]"
+     "Visual Color Mood: [Atmosfera Emozionale e Chiaroscuro] | Reference Melody Theme: [${melodyNotesSequence || 'Main Motif'}] | Genre: [Genere Musicale Dinamico Astratto] | Neuro-Acoustics & Spatial FX: Sub-Bass Infrasound (24Hz), Hidden Binaural Theta Wave (6Hz), 432Hz Tuning, 3D Holographic Stereo Panning, Deep Spatial Reverb | Style: Strict Holistic ${healthClassification?.primaryCategory.label || 'Wellness'} | Tempo: ${configBpm} BPM | Instruments: [Strumenti Clinici WHO ed evocativi dell'umore] | Duration: ${durationSeconds.toFixed(0)}s"
+   - **suno_prompt**: Inizia con: "[Duration: ${durationSeconds.toFixed(0)}s], [${configBpm} BPM], [Genre: Genere Musicale Astratto], [Color Mood: Atmosfera Emozionale Astratta], [Melodic Motif: ${melodyNotesSequence || 'Main Motif'}], [Production FX: Sub-Bass 24Hz Infrasound, 432Hz Tuning, 3D Binaural Panning, Holographic Ambient Reverb], [WHO Target: ${healthClassification?.primaryCategory.label || 'Wellness'}], [Strictly Instrumental, No Vocals, No Choirs]". Termina con: "[Outro: Dissolve at ${durationSeconds.toFixed(0)}s], [End at ${durationSeconds.toFixed(0)}s], [Silence], [End]".
+   - **udio_prompt**: Tag descrittivi che combinano il genere dinamico (es. ambient, orchestral), l'atmosfera cromatica astratta, la linea melodica (${melodyNotesSequence}), i tag psicoacustici (24hz sub-bass, 432hz tuning, binaural theta wave, 3d spatial audio), ${configBpm} BPM e la strumentazione clinica WHO. Assolutamente nessun riferimento a temi figurativi, storici o religiosi.
+   - **suno_lyrics (MANDATORIO STRUTTURATO E ALLINEATO CON WHO)**: Genera la TIMELINE TEMPORALE ALLINEATA AL 100% CON LE DIRETTIVE CLINICHE WHO E CON IL PROMPT PRINCIPALE. DEVE contenere esplicitamente la Categoria WHO ("${healthClassification?.primaryCategory.label || 'Wellness'}"), il Tempo WHO (${configBpm} BPM), il motivo delle note e i tag neuro-acustici. NESSUN riferimento al quadro visivo. Esempio obbligatorio:
+     "[0:00] [Intro: Ethereal 24Hz Sub-Bass Ambient, 432Hz Base Tuning, WHO Target: ${healthClassification?.primaryCategory.label || 'Wellness'} (${configBpm} BPM), Motif: ${melodyNotesSequence || 'Main Theme'}]\n[0:25] [Section A: Strings Crescendo, 3D Spatial Panning]\n[1:00] [Section B: Visceral Resonant Textures & WHO Entrainment Rhythm at ${configBpm} BPM]\n[1:45] [Climax: Full Orchestral Catharsis & High Stendhal Aesthetic Chill]\n[${(durationSeconds * 0.85).toFixed(0)}s] [Outro: Dissolve into Sub-Bass Ambient Silence]\n[${durationSeconds.toFixed(0)}s] [End]"
 
 5. **Analisi Semantico-Iconografica dell'Opera (MANDATORIO per semantic_analysis)**:
    Fornisci l'oggetto JSON semantic_analysis che spiega l'impatto visivo sul suono:
