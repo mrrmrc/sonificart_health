@@ -4,9 +4,19 @@ import { User } from '../types';
 
 interface OutletContextType {
     user: User | null;
+    setUser: (user: User | null) => void;
     isUnlimited: boolean;
     setIsLoginModalOpen: (open: boolean) => void;
+    setIsRequestAccessOpen: (open: boolean) => void;
 }
+
+import { getCulturalTraditions, selectCulturalTradition, determineCulturalScanPattern, generateScanSequence, mapPixelToNote, transformNote, processOrganicAI } from '../services/sonificationService';
+import { audioBufferToWav } from '../utils/wavExport';
+import saveAs from 'file-saver';
+import { ResultsDashboard } from '../components/ResultsDashboard';
+import { ProcessingView } from '../components/ProcessingView';
+import { SonificationResult, ProcessingStep, ConfigSettings, TransformedNoteEvent } from '../types';
+import { calculateSHA256, bufferToHex } from '../utils/cryptoUtils';
 
 interface ColorRegion {
     id: number;
@@ -20,249 +30,681 @@ interface ColorRegion {
     percentage: number;
     centroidX: number;
     centroidY: number;
+    minX: number;
+    maxX: number;
+    minY: number;
+    maxY: number;
     L: number;
     a: number;
     b_val: number;
     noteName: string;
     frequencyHz: number;
     isDetached: boolean;
+    depthLayer: 'background' | 'middleground' | 'foreground';
 }
 
-const COLOR_TOLERANCE = 28; // RGB distance tolerance for flood-fill
+// ─────────────────────────────────────────────────────────────────────────────
+//  PARAMETRI DI SCANSIONE (ora dinamici via UI)
+// ─────────────────────────────────────────────────────────────────────────────
+
 
 export const CamPage: React.FC = () => {
-    const { user } = useOutletContext<OutletContextType>();
+    const { user, setUser, isUnlimited, setIsLoginModalOpen, setIsRequestAccessOpen } = useOutletContext<OutletContextType>();
 
     const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
     const [uploadedFileName, setUploadedFileName] = useState<string>('');
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [isDeconstructing, setIsDeconstructing] = useState(false);
-    const [analyzeProgress, setAnalyzeProgress] = useState<string>('');
-    const [regions, setRegions] = useState<ColorRegion[]>([]);
-    const [currentStep, setCurrentStep] = useState(0);
-    const [selectedRegion, setSelectedRegion] = useState<ColorRegion | null>(null);
-    const [progressPct, setProgressPct] = useState(0);
-    const [totalPixels, setTotalPixels] = useState(0);
+    const [isAnalyzing, setIsAnalyzing]           = useState(false);
+    const [animationMode, setAnimationMode]       = useState<'idle' | 'detach' | 'attach' | 'listen-all'>('idle');
+    const [analyzeProgress, setAnalyzeProgress]   = useState<string>('');
+    const [regions, setRegions]                   = useState<ColorRegion[]>([]);
+    const [currentStep, setCurrentStep]           = useState(0);
+    const [selectedRegion, setSelectedRegion]     = useState<ColorRegion | null>(null);
+    const [progressPct, setProgressPct]           = useState(0);
+    const [totalPixels, setTotalPixels]           = useState(0);
+    const [scanPct, setScanPct]                   = useState(0);   // progresso scansione analisi
+    const [liveSonificationData, setLiveSonificationData] = useState<{tradition: string, pattern: string, note: string, hex: string} | null>(null);
+    const [isExporting, setIsExporting] = useState(false);
 
-    // THE ONE CANVAS — both renders on this (no img element visible at all)
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const pixelDataRef = useRef<Uint8ClampedArray | null>(null); // original image data backup
-    const imageDimRef = useRef({ w: 0, h: 0 });
-    const audioCtxRef = useRef<AudioContext | null>(null);
-    const timerRef = useRef<any>(null);
-    const regionsRef = useRef<ColorRegion[]>([]);
+    // --- AI & WHO STATES ---
+    const [originalFile, setOriginalFile] = useState<File | null>(null);
+    const [finalResult, setFinalResult] = useState<SonificationResult | null>(null);
+    const [isAiProcessing, setIsAiProcessing] = useState(false);
+    const [aiProcessingSteps, setAiProcessingSteps] = useState<ProcessingStep[]>([
+        { id: 1, name: "Vision AI & Analisi Organica", status: 'pending' },
+        { id: 2, name: "Classificazione Clinica WHO", status: 'pending' },
+        { id: 3, name: "Generazione Prompt Olistico", status: 'pending' },
+        { id: 4, name: "Assemblaggio Certificato Forense (SAC)", status: 'pending' }
+    ]);
+    const [config, setConfig] = useState<ConfigSettings>({
+        pixelCount: 512*512, bpm: 108, noteDurationSeconds: 0.1, targetDurationSeconds: 180,
+        osc: { enabled: false, host: 'localhost', port: 8080 },
+        enableAccompaniment: true, melodyInstrument: 'triangle', accompanimentInstrument: 'sine',
+        useHealthAgent: true
+    });
 
+    // Parametri dinamici scollamento e 3D
+    const [colorTolerance, setColorTolerance] = useState(45);
+    const [minRegionPx, setMinRegionPx] = useState(80);
+    const [enable3DScan, setEnable3DScan] = useState(false);
+
+    const canvasRef      = useRef<HTMLCanvasElement>(null);
+    const cursorCanvasRef = useRef<HTMLCanvasElement>(null); // Nuovo canvas per il cursore in sovraimpressione
+    const pixelDataRef   = useRef<Uint8ClampedArray | null>(null);
+    const imageDimRef    = useRef({ w: 0, h: 0 });
+    const audioCtxRef    = useRef<AudioContext | null>(null);
+    const timerRef       = useRef<any>(null);
+    const listenAllAbort = useRef<boolean>(false);
+    const regionsRef     = useRef<ColorRegion[]>([]);
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  CARICAMENTO IMMAGINE
+    // ─────────────────────────────────────────────────────────────────────────
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
+            setOriginalFile(file);
             setUploadedFileName(file.name);
-            stopDeconstruction();
+            stopAnimation();
             setRegions([]);
             regionsRef.current = [];
             setCurrentStep(0);
             setProgressPct(0);
+            setScanPct(0);
             setSelectedRegion(null);
 
             const url = URL.createObjectURL(file);
             setUploadedImageUrl(url);
 
-            // Load image into canvas immediately
             const img = new Image();
             img.onload = () => {
-                const MAX_W = 400;
+                // Risoluzione massima 600px — più dettaglio, copertura completa
+                const MAX_W = 600;
                 const w = Math.min(img.naturalWidth, MAX_W);
                 const h = Math.round((img.naturalHeight / img.naturalWidth) * w);
                 imageDimRef.current = { w, h };
 
                 const canvas = canvasRef.current!;
-                canvas.width = w;
+                canvas.width  = w;
                 canvas.height = h;
+
+                const cCanvas = cursorCanvasRef.current;
+                if (cCanvas) {
+                    cCanvas.width = w;
+                    cCanvas.height = h;
+                }
 
                 const ctx = canvas.getContext('2d')!;
                 ctx.drawImage(img, 0, 0, w, h);
 
-                // Store a backup of the original pixel data
                 const imgData = ctx.getImageData(0, 0, w, h);
                 pixelDataRef.current = new Uint8ClampedArray(imgData.data);
                 setTotalPixels(w * h);
 
-                // Auto-start analysis
-                runFloodFillAnalysis(ctx, imgData, w, h);
+                runFullScanAnalysis(imgData, w, h);
             };
             img.src = url;
         }
     };
 
-    // FLOOD-FILL CONNECTED COMPONENT ANALYSIS
-    // Scans top-left → bottom-right, finds first unvisited pixel, 
-    // flood-fills with tolerance to capture the whole connected organic shape,
-    // marks it with an ID, moves to next unvisited pixel.
-    const runFloodFillAnalysis = (
-        ctx: CanvasRenderingContext2D,
-        imgData: ImageData,
-        w: number,
-        h: number
-    ) => {
+    // ─────────────────────────────────────────────────────────────────────────
+    //  ANALISI ORGANICA DETERMINISTICA (Flood Fill Colorimetrico 100% Copertura)
+    // ─────────────────────────────────────────────────────────────────────────
+    const runFullScanAnalysis = (imgData: ImageData, w: number, h: number, overrideTol?: number, overrideMinPx?: number) => {
         setIsAnalyzing(true);
-        setAnalyzeProgress("Analisi Flood-Fill in corso...");
+        setAnalyzeProgress('Scansione organica delle forme in corso...');
+        setScanPct(0);
 
-        const data = imgData.data;
-        const totalPx = w * h;
-        const visited = new Uint8Array(totalPx);
-
+        // Usiamo un setTimeout per permettere a React di renderizzare il loading spinner
         setTimeout(() => {
+            const data = imgData.data;
+            const totalPx = w * h;
+            const regionIdMap = new Int32Array(totalPx); // 0 = non visitato
+            
             const extractedRegions: ColorRegion[] = [];
+            const regionRefMap: ColorRegion[] = []; // O(1) lookup per ID
+            
             let regionCounter = 1;
-
-            // Iterative flood fill with tolerance
-            for (let startIdx = 0; startIdx < totalPx; startIdx++) {
-                if (visited[startIdx]) continue;
-
-                const sr = data[startIdx * 4];
-                const sg = data[startIdx * 4 + 1];
-                const sb = data[startIdx * 4 + 2];
-
-                // BFS Flood Fill
-                const stack: number[] = [startIdx];
-                visited[startIdx] = 1;
+            const BFS_COLOR_TOLERANCE = overrideTol !== undefined ? overrideTol : colorTolerance;
+            const BFS_MIN_REGION_PX = overrideMinPx !== undefined ? overrideMinPx : minRegionPx;
+            
+            // Per BFS/DFS
+            const stack = new Int32Array(totalPx);
+            let stackSize = 0;
+            
+            for (let i = 0; i < totalPx; i++) {
+                if (regionIdMap[i] !== 0) continue; // Già processato
+                
+                // Inizia nuova forma
+                stack[0] = i;
+                stackSize = 1;
+                regionIdMap[i] = regionCounter;
+                
+                const cpx = i * 4;
+                const seedR = data[cpx];
+                const seedG = data[cpx + 1];
+                const seedB = data[cpx + 2];
+                
                 const pixelList: number[] = [];
-                let sumX = 0, sumY = 0, sumR = 0, sumG = 0, sumB = 0;
-
-                while (stack.length > 0) {
-                    const idx = stack.pop()!;
-                    pixelList.push(idx);
-
-                    const px = idx * 4;
-                    sumX += idx % w;
-                    sumY += Math.floor(idx / w);
-                    sumR += data[px];
-                    sumG += data[px + 1];
-                    sumB += data[px + 2];
-
-                    // Check 4 neighbors
-                    const x = idx % w;
-                    const y = Math.floor(idx / w);
+                let sumR = 0, sumG = 0, sumB = 0;
+                let sumX = 0, sumY = 0;
+                let minX = w, maxX = 0, minY = h, maxY = 0;
+                
+                let adjacentRegionId = 0; // Per assorbire gli orfani
+                
+                while (stackSize > 0) {
+                    const cur = stack[--stackSize];
+                    pixelList.push(cur);
+                    
+                    const cx = cur % w;
+                    const cy = Math.floor(cur / w);
+                    const curPx = cur * 4;
+                    const cR = data[curPx];
+                    const cG = data[curPx + 1];
+                    const cB = data[curPx + 2];
+                    
+                    sumR += cR; sumG += cG; sumB += cB;
+                    sumX += cx; sumY += cy;
+                    if (cx < minX) minX = cx;
+                    if (cx > maxX) maxX = cx;
+                    if (cy < minY) minY = cy;
+                    if (cy > maxY) maxY = cy;
+                    
+                    // 4-connettività
                     const neighbors = [
-                        x > 0 ? idx - 1 : -1,
-                        x < w - 1 ? idx + 1 : -1,
-                        y > 0 ? idx - w : -1,
-                        y < h - 1 ? idx + w : -1
+                        cx > 0 ? cur - 1 : -1,
+                        cx < w - 1 ? cur + 1 : -1,
+                        cy > 0 ? cur - w : -1,
+                        cy < h - 1 ? cur + w : -1
                     ];
-
+                    
                     for (const n of neighbors) {
-                        if (n < 0 || visited[n]) continue;
-                        const npx = n * 4;
-                        const dr = data[npx] - sr;
-                        const dg = data[npx + 1] - sg;
-                        const db = data[npx + 2] - sb;
-                        const dist = Math.sqrt(dr * dr + dg * dg + db * db);
-                        if (dist <= COLOR_TOLERANCE) {
-                            visited[n] = 1;
-                            stack.push(n);
+                        if (n === -1) continue;
+                        
+                        const nId = regionIdMap[n];
+                        if (nId > 0 && nId !== regionCounter) {
+                            // Trovato un vicino già assegnato a un'altra regione
+                            if (adjacentRegionId === 0) adjacentRegionId = nId;
+                            continue;
+                        }
+                        
+                        if (nId === 0) {
+                            const npx = n * 4;
+                            const dr = data[npx] - seedR;
+                            const dg = data[npx + 1] - seedG;
+                            const db = data[npx + 2] - seedB;
+                            const dist = Math.sqrt(dr * dr + dg * dg + db * db);
+                            
+                            if (dist <= BFS_COLOR_TOLERANCE) {
+                                regionIdMap[n] = regionCounter; // Marca subito
+                                stack[stackSize++] = n;
+                            }
                         }
                     }
                 }
-
+                
                 const count = pixelList.length;
-                // Only catalog regions >= 0.05% of surface (avoid single isolated pixels)
-                if (count < Math.max(3, Math.floor(totalPx * 0.0005))) continue;
-
-                const avgR = Math.round(sumR / count);
-                const avgG = Math.round(sumG / count);
-                const avgB = Math.round(sumB / count);
-                const hex = '#' + [avgR, avgG, avgB].map(x => x.toString(16).padStart(2, '0')).join('');
-                const lab = rgbToLab(avgR, avgG, avgB);
-                const midi = 42 + Math.round((lab.L / 100) * 36);
-                const freq = Math.round(440 * Math.pow(2, (midi - 69) / 12));
-
-                extractedRegions.push({
-                    id: regionCounter,
-                    idCode: `#${String(regionCounter).padStart(3, '0')}`,
-                    r: avgR, g: avgG, b: avgB, hex,
-                    pixelIndices: pixelList,
-                    pixelCount: count,
-                    percentage: parseFloat(((count / totalPx) * 100).toFixed(2)),
-                    centroidX: parseFloat(((sumX / count / w) * 100).toFixed(1)),
-                    centroidY: parseFloat(((sumY / count / h) * 100).toFixed(1)),
-                    L: Math.round(lab.L),
-                    a: Math.round(lab.a),
-                    b_val: Math.round(lab.b),
-                    noteName: midiToNote(midi),
-                    frequencyHz: freq,
-                    isDetached: false
-                });
-                regionCounter++;
+                
+                // Se la regione è troppo piccola e ha un vicino, viene ASSORBITA in O(1)
+                if (count < BFS_MIN_REGION_PX && adjacentRegionId > 0) {
+                    const targetReg = regionRefMap[adjacentRegionId];
+                    if (targetReg) {
+                        for (let p = 0; p < count; p++) {
+                            const px = pixelList[p];
+                            targetReg.pixelIndices.push(px);
+                            regionIdMap[px] = adjacentRegionId;
+                        }
+                        targetReg.pixelCount += count;
+                        // Aggiorna Bounding Box del target
+                        if (minX < targetReg.minX) targetReg.minX = minX;
+                        if (maxX > targetReg.maxX) targetReg.maxX = maxX;
+                        if (minY < targetReg.minY) targetReg.minY = minY;
+                        if (maxY > targetReg.maxY) targetReg.maxY = maxY;
+                        
+                        continue; // Non incrementiamo il contatore e passiamo oltre
+                    }
+                }
+                
+                // Crea nuova regione
+                if (count > 0) {
+                    const avgR = Math.round(sumR / count);
+                    const avgG = Math.round(sumG / count);
+                    const avgB = Math.round(sumB / count);
+                    const hex = '#' + [avgR, avgG, avgB].map(v => v.toString(16).padStart(2, '0')).join('');
+                    const lab = rgbToLab(avgR, avgG, avgB);
+                    const hsv = rgbToHsv(avgR, avgG, avgB);
+                    
+                    let baseNote = 0;
+                    if (hsv.s > 0.3) {
+                        const hAngle = hsv.h;
+                        if (hAngle >= 0 && hAngle < 45) baseNote = 0;
+                        else if (hAngle >= 45 && hAngle < 75) baseNote = 2;
+                        else if (hAngle >= 75 && hAngle < 105) baseNote = 4;
+                        else if (hAngle >= 105 && hAngle < 135) baseNote = 5;
+                        else if (hAngle >= 135 && hAngle < 195) baseNote = 7;
+                        else if (hAngle >= 195 && hAngle < 255) baseNote = 9;
+                        else if (hAngle >= 255 && hAngle < 315) baseNote = 11;
+                        else baseNote = 0;
+                    } else {
+                        const vVal = hsv.v;
+                        if (vVal <= 36) baseNote = 0;
+                        else if (vVal <= 73) baseNote = 2;
+                        else if (vVal <= 109) baseNote = 4;
+                        else if (vVal <= 145) baseNote = 5;
+                        else if (vVal <= 182) baseNote = 7;
+                        else if (vVal <= 218) baseNote = 9;
+                        else baseNote = 11;
+                    }
+                    
+                    const octaveOffset = Math.floor((lab.l / 100) * 3) - 1;
+                    const midi = 60 + baseNote + (octaveOffset * 12);
+                    const freq = Math.round(440 * Math.pow(2, (midi - 69) / 12));
+                    
+                    const newRegion: ColorRegion = {
+                        id: regionCounter,
+                        idCode: `#${String(extractedRegions.length + 1).padStart(4, '0')}`,
+                        r: avgR, g: avgG, b: avgB, hex,
+                        pixelIndices: pixelList,
+                        pixelCount: count,
+                        percentage: parseFloat(((count / totalPx) * 100).toFixed(2)),
+                        centroidX: parseFloat(((sumX / count / w) * 100).toFixed(1)),
+                        centroidY: parseFloat(((sumY / count / h) * 100).toFixed(1)),
+                        minX, maxX, minY, maxY,
+                        L: Math.round(lab.l),
+                        a: Math.round(lab.a),
+                        b_val: Math.round(lab.b),
+                        noteName: midiToNote(midi),
+                        frequencyHz: freq,
+                        isDetached: false,
+                        depthLayer: 'middleground' // Placeholder
+                    };
+                    
+                    extractedRegions.push(newRegion);
+                    regionRefMap[regionCounter] = newRegion; // O(1) storage
+                    regionCounter++;
+                }
+            }
+            
+            // Ricalcolo percentuali per regioni che hanno assorbito orfani
+            for (const r of extractedRegions) {
+                r.percentage = parseFloat(((r.pixelCount / totalPx) * 100).toFixed(2));
+            }
+            
+            // Euristiche 3D Depth
+            for (const reg of extractedRegions) {
+                const touchesBorder = (reg.minX <= 5 || reg.maxX >= w - 5 || reg.minY <= 5 || reg.maxY >= h - 5);
+                const isHuge = reg.pixelCount > (w * h * 0.1); // > 10% dell'immagine
+                const cx = reg.centroidX;
+                const cy = reg.centroidY;
+                const distToCenter = Math.sqrt(Math.pow(cx - 50, 2) + Math.pow(cy - 50, 2));
+                
+                let score = 0;
+                if (touchesBorder) score -= 50;
+                if (isHuge) score -= 40;
+                if (distToCenter < 25) score += 30; // Al centro
+                
+                const max = Math.max(reg.r, reg.g, reg.b);
+                const min = Math.min(reg.r, reg.g, reg.b);
+                const saturation = max === 0 ? 0 : (max - min) / max;
+                if (saturation > 0.6) score += 20; // Colori vivi escono
+                
+                if (score < -20) {
+                    reg.depthLayer = 'background';
+                } else if (score > 10) {
+                    reg.depthLayer = 'foreground';
+                } else {
+                    reg.depthLayer = 'middleground';
+                }
             }
 
             regionsRef.current = extractedRegions;
             setRegions(extractedRegions);
             setIsAnalyzing(false);
-            setAnalyzeProgress(`✅ ${extractedRegions.length} regioni organiche estratte (100% copertura)`);
+            setScanPct(100);
+            setAnalyzeProgress(`✅ Scomposizione organica completata: ${extractedRegions.length} forme estratte`);
             if (extractedRegions.length > 0) setSelectedRegion(extractedRegions[0]);
-        }, 100);
+            
+        }, 100); // Piccolo delay per far apparire lo spinner
     };
 
-    // ANIMATE STACCO: for each region, turn its exact pixels WHITE on the canvas
-    const startDeconstruction = () => {
-        if (regionsRef.current.length === 0 || isDeconstructing) return;
-        setIsDeconstructing(true);
+    const handleRecalculate = (overrideTol?: number, overrideMinPx?: number) => {
+        if (!pixelDataRef.current || !canvasRef.current) return;
+        const { w, h } = imageDimRef.current;
+        const imgData = new ImageData(new Uint8ClampedArray(pixelDataRef.current), w, h);
+        runFullScanAnalysis(imgData, w, h, overrideTol, overrideMinPx);
+    };
 
-        let step = currentStep >= regionsRef.current.length ? 0 : currentStep;
-        if (step === 0) {
-            // Restore original image first
-            restoreOriginal();
+    // ─────────────────────────────────────────────────────────────────────────
+    //  DECOSTRUCTION & RECONSTRUCTION ANIMATION
+    // ─────────────────────────────────────────────────────────────────────────
+    const startDetach = () => {
+        if (regionsRef.current.length === 0 || animationMode !== 'idle') return;
+        
+        const rList = regionsRef.current;
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const { w, h } = imageDimRef.current;
+        const imgData  = ctx.getImageData(0, 0, w, h);
+        const d        = imgData.data;
+
+        for (const region of rList) {
+            for (const idx of region.pixelIndices) {
+                d[idx * 4]     = 255;
+                d[idx * 4 + 1] = 255;
+                d[idx * 4 + 2] = 255;
+                d[idx * 4 + 3] = 255;
+            }
         }
+        ctx.putImageData(imgData, 0, 0);
+
+        const newRegions = rList.map(r => ({ ...r, isDetached: true }));
+        setRegions(newRegions);
+        regionsRef.current = newRegions;
+        setProgressPct(100);
+        setCurrentStep(rList.length);
+        if (newRegions.length > 0) setSelectedRegion(newRegions[0]);
+    };
+
+    const startAttach = () => {
+        if (regionsRef.current.length === 0 || animationMode !== 'idle') return;
+        setAnimationMode('attach');
+
+        const canvas = canvasRef.current;
+        if (canvas) {
+            const ctx = canvas.getContext('2d')!;
+            const { w, h } = imageDimRef.current;
+            // Blank canvas to start reconstruction
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, w, h);
+        }
+
+        let step = 0;
+        setCurrentStep(0);
+        setProgressPct(0);
 
         timerRef.current = setInterval(() => {
             const rList = regionsRef.current;
             if (step >= rList.length) {
                 clearInterval(timerRef.current);
-                setIsDeconstructing(false);
+                setAnimationMode('idle');
                 return;
             }
 
             const region = rList[step];
-
-            // Turn exact pixels WHITE on the canvas
-            const canvas = canvasRef.current;
             if (canvas) {
                 const ctx = canvas.getContext('2d');
-                if (ctx) {
+                const backup = pixelDataRef.current;
+                if (ctx && backup) {
                     const { w, h } = imageDimRef.current;
-                    const imgData = ctx.getImageData(0, 0, w, h);
-                    const d = imgData.data;
+                    const imgData  = ctx.getImageData(0, 0, w, h);
+                    const d        = imgData.data;
+                    
+                    // Ripristina i pixel originali
                     for (const idx of region.pixelIndices) {
-                        d[idx * 4] = 255;
-                        d[idx * 4 + 1] = 255;
-                        d[idx * 4 + 2] = 255;
-                        d[idx * 4 + 3] = 255;
+                        d[idx * 4]     = backup[idx * 4];
+                        d[idx * 4 + 1] = backup[idx * 4 + 1];
+                        d[idx * 4 + 2] = backup[idx * 4 + 2];
+                        d[idx * 4 + 3] = backup[idx * 4 + 3];
                     }
                     ctx.putImageData(imgData, 0, 0);
-
-                    // Draw ID label at centroid
-                    const lx = (region.centroidX / 100) * w;
-                    const ly = (region.centroidY / 100) * h;
-                    ctx.font = `bold ${Math.max(8, Math.min(14, Math.sqrt(region.pixelCount) * 0.3))}px monospace`;
-                    ctx.fillStyle = '#0369a1';
-                    ctx.fillText(region.idCode, lx - 12, ly + 4);
                 }
             }
 
             playTone(region.frequencyHz);
-            setSelectedRegion({ ...region, isDetached: true });
+            setSelectedRegion({ ...region, isDetached: false });
             setCurrentStep(step + 1);
             setProgressPct(Math.round(((step + 1) / rList.length) * 100));
-
             step++;
-        }, 150);
+        }, 120);
     };
 
-    const stopDeconstruction = () => {
+    const startListenAll = async () => {
+        if (regionsRef.current.length === 0 || animationMode !== 'idle') return;
+        setAnimationMode('listen-all');
+        listenAllAbort.current = false;
+
+        const canvas = canvasRef.current;
+        if (canvas) {
+            const ctx = canvas.getContext('2d')!;
+            const { w, h } = imageDimRef.current;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, w, h);
+        }
+
+        let regionsToPlay = [...regionsRef.current];
+        if (enable3DScan) {
+            const depthOrder = { background: 0, middleground: 1, foreground: 2 };
+            regionsToPlay.sort((a, b) => depthOrder[a.depthLayer] - depthOrder[b.depthLayer]);
+        }
+
+        for (let i = 0; i < regionsToPlay.length; i++) {
+            if (listenAllAbort.current) break;
+            const region = regionsToPlay[i];
+            
+            // Seleziona la regione così si illumina e si aggiorna la telemetria
+            setSelectedRegion({ ...region, isDetached: true });
+            setCurrentStep(i + 1);
+            setProgressPct(Math.round(((i + 1) / regionsToPlay.length) * 100));
+
+            await playRegionDeepSound(region);
+        }
+
+        if (!listenAllAbort.current) {
+            setAnimationMode('idle');
+        }
+    };
+
+    const exportAudioWav = async () => {
+        if (regionsRef.current.length === 0 || animationMode !== 'idle' || isExporting) return;
+        setIsExporting(true);
+
+        try {
+            const sampleRate = 44100;
+            const estimatedDurationSeconds = regionsRef.current.length * 16 * 0.12;
+            const totalLength = sampleRate * (estimatedDurationSeconds + 2); 
+            const offlineCtx = new window.OfflineAudioContext(1, totalLength, sampleRate);
+            const { w } = imageDimRef.current;
+            
+            let regionsToPlay = [...regionsRef.current];
+            if (enable3DScan) {
+                const depthOrder = { background: 0, middleground: 1, foreground: 2 };
+                regionsToPlay.sort((a, b) => depthOrder[a.depthLayer] - depthOrder[b.depthLayer]);
+            }
+
+            const NOTE_DURATION = 0.12; 
+            let globalTimeOffset = 0; 
+
+            const organicEvents: TransformedNoteEvent[] = [];
+            let sumL = 0, sumA = 0, sumB = 0, sumSat = 0, sumHueDiv = 0, sumVar = 0;
+
+            for (const region of regionsToPlay) {
+                const hsv = rgbToHsv(region.r, region.g, region.b);
+                const shapeSizePct = region.pixelCount / (imageDimRef.current.w * imageDimRef.current.h);
+                const dynamicHueDiversity = Math.min(1.0, shapeSizePct * 5 + (region.id % 10) / 20);
+
+                const stats = {
+                    avg_L: region.L,
+                    avg_a: region.a,
+                    avg_b: region.b_val,
+                    avg_saturation: hsv.s,
+                    hue_diversity: dynamicHueDiversity,
+                    avg_variance: region.pixelCount > 1000 ? 500 : 50
+                };
+
+                sumL += stats.avg_L; sumA += stats.avg_a; sumB += stats.avg_b; 
+                sumSat += stats.avg_saturation; sumHueDiv += stats.hue_diversity; sumVar += stats.avg_variance;
+
+                const traditions = await getCulturalTraditions();
+                const { tradition } = selectCulturalTradition(stats as any, traditions, false);
+                const { pattern } = determineCulturalScanPattern(tradition.cultural_family);
+
+                const NOTE_DURATION = 0.12; 
+                const NOTES_PER_SHAPE = 16;
+                const targetBlockSize = Math.max(1, Math.round(Math.sqrt(region.pixelCount / NOTES_PER_SHAPE)));
+                
+                const blockSize = targetBlockSize;
+                const gridW = Math.max(1, Math.ceil((region.maxX - region.minX) / blockSize));
+                const gridH = Math.max(1, Math.ceil((region.maxY - region.minY) / blockSize));
+                
+                const scanSequence = generateScanSequence(gridW, gridH, pattern);
+                const shapePixels = new Set(region.pixelIndices);
+                const backup = pixelDataRef.current!;
+                
+                for (const blockIdx of scanSequence) {
+                    const gx = blockIdx % gridW;
+                    const gy = Math.floor(blockIdx / gridW);
+                    
+                    const startX = region.minX + gx * blockSize;
+                    const startY = region.minY + gy * blockSize;
+                    const endX = startX + blockSize;
+                    const endY = startY + blockSize;
+                    
+                    let sumR=0, sumG=0, sumB=0, count=0;
+                    
+                    for (let y = startY; y < endY; y++) {
+                        for (let x = startX; x < endX; x++) {
+                            const pIdx = y * w + x;
+                            if (shapePixels.has(pIdx)) {
+                                const dataIdx = pIdx * 4;
+                                sumR += backup[dataIdx];
+                                sumG += backup[dataIdx+1];
+                                sumB += backup[dataIdx+2];
+                                count++;
+                            }
+                        }
+                    }
+
+                    if (count > 0) {
+                        const avgR = sumR / count;
+                        const avgG = sumG / count;
+                        const avgB = sumB / count;
+                        
+                        const bHsv = rgbToHsv(avgR, avgG, avgB);
+                        const bLab = rgbToLab(avgR, avgG, avgB);
+                        const blockData = {
+                            r: avgR,
+                            g: avgG,
+                            b: avgB,
+                            hue: bHsv.h,
+                            saturation: bHsv.s,
+                            lightness: bHsv.v / 255,
+                            lab: bLab,
+                            position: { x: gx, y: gy }
+                        };
+
+                        const mapped = mapPixelToNote(blockData as any);
+                        const transformed = transformNote({ blockData, mapping: mapped } as any, tradition);
+                        
+                        let pitchShift = 0;
+                        if (enable3DScan) {
+                            if (region.depthLayer === 'background') pitchShift = -24;
+                            else if (region.depthLayer === 'middleground') pitchShift = -12;
+                        }
+
+                        let freq = 440 * Math.pow(2, ((transformed.midiFloat + pitchShift) - 69) / 12);
+                        const vol = transformed.velocity / 127;
+
+                        const osc = offlineCtx.createOscillator();
+                        const gain = offlineCtx.createGain();
+                        
+                        if (enable3DScan) {
+                            if (region.depthLayer === 'background') osc.type = 'sine';
+                            else if (region.depthLayer === 'foreground') osc.type = 'sawtooth';
+                            else osc.type = 'triangle';
+                        } else {
+                            osc.type = tradition.cultural_family === 'Middle Eastern' ? 'sawtooth' : 
+                                       tradition.cultural_family === 'East Asian' ? 'sine' : 'triangle';
+                        }
+                        if (!isFinite(freq)) {
+                            console.error("DEBUG NAN FREQ exportAudioWav", { freq, transformed, mapped, blockData });
+                            freq = 440;
+                        }
+                        osc.frequency.setValueAtTime(freq, globalTimeOffset);
+                        gain.gain.setValueAtTime(0.001, globalTimeOffset);
+                        gain.gain.linearRampToValueAtTime(vol * 0.4, globalTimeOffset + 0.02);
+                        gain.gain.exponentialRampToValueAtTime(0.0001, globalTimeOffset + NOTE_DURATION + 0.05);
+                        
+                        osc.connect(gain);
+                        gain.connect(offlineCtx.destination);
+                        
+                        osc.start(globalTimeOffset);
+                        osc.stop(globalTimeOffset + NOTE_DURATION + 0.1);
+                        
+                        const completeEvent = {
+                            ...transformed,
+                            time: globalTimeOffset,
+                            duration: NOTE_DURATION
+                        } as TransformedNoteEvent;
+                        organicEvents.push(completeEvent);
+
+                        globalTimeOffset += NOTE_DURATION;
+                    }
+                }
+            }
+
+            const renderedBuffer = await offlineCtx.startRendering();
+            const wavBlob = audioBufferToWav(renderedBuffer);
+            
+            // --- AI & WHO INTEGRATION ---
+            setIsExporting(false);
+            setIsAiProcessing(true);
+
+            const n = regionsToPlay.length || 1;
+            const globalStats = {
+                avg_L: sumL/n, avg_a: sumA/n, avg_b: sumB/n, 
+                avg_saturation: sumSat/n, hue_diversity: sumHueDiv/n, avg_variance: sumVar/n
+            };
+
+            const traditions = await getCulturalTraditions();
+            const { tradition: mainTradition } = selectCulturalTradition(globalStats as any, traditions, false);
+
+            const emptyMidi = new Blob([''], { type: 'audio/midi' }); // Placeholder for now
+            const imgHash = bufferToHex(await calculateSHA256(await originalFile!.arrayBuffer()));
+            const audioHash = bufferToHex(await calculateSHA256(await wavBlob.arrayBuffer()));
+
+            const processResult = await processOrganicAI(
+                originalFile!,
+                config,
+                (step, status) => {
+                    setAiProcessingSteps(prev => prev.map((s, idx) => {
+                        if (idx < step - 1 && status === 'active') return { ...s, status: 'completed' };
+                        if (idx === step - 1) return { ...s, status };
+                        return s;
+                    }));
+                },
+                organicEvents,
+                globalTimeOffset,
+                wavBlob,
+                imgHash,
+                audioHash,
+                mainTradition,
+                globalStats,
+                canvasRef.current,
+                emptyMidi,
+                [] // scan sequence
+            );
+
+            setFinalResult(processResult);
+
+        } catch (e) {
+            console.error("Errore export WAV:", e);
+            alert("Errore durante la generazione dell'audio offline e AI.");
+        } finally {
+            setIsExporting(false);
+            setIsAiProcessing(false);
+        }
+    };
+
+    const stopAnimation = () => {
         if (timerRef.current) {
             clearInterval(timerRef.current);
             timerRef.current = null;
         }
-        setIsDeconstructing(false);
+        listenAllAbort.current = true;
+        setAnimationMode('idle');
     };
 
     const restoreOriginal = () => {
@@ -270,29 +712,32 @@ export const CamPage: React.FC = () => {
         const backup = pixelDataRef.current;
         if (!canvas || !backup) return;
         const { w, h } = imageDimRef.current;
-        const ctx = canvas.getContext('2d')!;
-        const imgData = ctx.createImageData(w, h);
+        const ctx      = canvas.getContext('2d')!;
+        const imgData  = ctx.createImageData(w, h);
         imgData.data.set(backup);
         ctx.putImageData(imgData, 0, 0);
     };
 
     const handleReset = () => {
-        stopDeconstruction();
+        stopAnimation();
         setCurrentStep(0);
         setProgressPct(0);
         restoreOriginal();
         if (regionsRef.current.length > 0) setSelectedRegion(regionsRef.current[0]);
     };
 
+    // ─────────────────────────────────────────────────────────────────────────
+    //  AUDIO
+    // ─────────────────────────────────────────────────────────────────────────
     const playTone = (freqHz: number) => {
         try {
             if (!audioCtxRef.current) {
                 audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
             }
-            const ctx = audioCtxRef.current;
+            const ctx  = audioCtxRef.current;
             if (ctx.state === 'suspended') ctx.resume();
-            const now = ctx.currentTime;
-            const osc = ctx.createOscillator();
+            const now  = ctx.currentTime;
+            const osc  = ctx.createOscillator();
             const gain = ctx.createGain();
             osc.type = 'sine';
             osc.frequency.setValueAtTime(freqHz, now);
@@ -306,6 +751,211 @@ export const CamPage: React.FC = () => {
         } catch (_) {}
     };
 
+    const playRegionDeepSound = async (region: ColorRegion): Promise<void> => {
+        return new Promise(async (resolve) => {
+            try {
+                if (!audioCtxRef.current) {
+                    audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+                }
+                const ctx = audioCtxRef.current;
+                if (ctx.state === 'suspended') ctx.resume();
+
+                // Ripristino visivo della forma sul canvas principale (Ricomposizione graduale)
+                const mainCanvas = canvasRef.current;
+                const backup = pixelDataRef.current;
+                if (mainCanvas && backup) {
+                    const mCtx = mainCanvas.getContext('2d');
+                    if (mCtx) {
+                        const { w, h } = imageDimRef.current;
+                        const imgData = mCtx.getImageData(0, 0, w, h);
+                        const d = imgData.data;
+                        for (const idx of region.pixelIndices) {
+                            d[idx * 4] = backup[idx * 4];
+                            d[idx * 4 + 1] = backup[idx * 4 + 1];
+                            d[idx * 4 + 2] = backup[idx * 4 + 2];
+                            d[idx * 4 + 3] = backup[idx * 4 + 3];
+                        }
+                        mCtx.putImageData(imgData, 0, 0);
+                    }
+                }
+
+                // 1. Statistiche base della forma
+                const hsv = rgbToHsv(region.r, region.g, region.b);
+                const shapeSizePct = region.pixelCount / (imageDimRef.current.w * imageDimRef.current.h);
+                const dynamicHueDiversity = Math.min(1.0, shapeSizePct * 5 + (region.id % 10) / 20);
+
+                const stats = {
+                    avg_L: region.L,
+                    avg_a: region.a,
+                    avg_b: region.b_val,
+                    avg_saturation: hsv.s,
+                    hue_diversity: dynamicHueDiversity,
+                    avg_variance: region.pixelCount > 1000 ? 500 : 50
+                };
+
+                // 2. Scelta Tradizione Culturale e Pattern
+                const traditions = await getCulturalTraditions();
+                const { tradition } = selectCulturalTradition(stats as any, traditions, false);
+                const { pattern, name: patternName } = determineCulturalScanPattern(tradition.cultural_family);
+
+                // 3. Generazione Micro-Griglia Dinamica basata sulla durata desiderata
+                const NOTE_DURATION = 0.12; 
+                const NOTES_PER_SHAPE = 16;
+                const targetBlockSize = Math.max(1, Math.round(Math.sqrt(region.pixelCount / NOTES_PER_SHAPE)));
+                const wImg = imageDimRef.current.w;
+                const hImg = imageDimRef.current.h;
+                
+                const blockSize = targetBlockSize;
+                const gridW = Math.max(1, Math.ceil((region.maxX - region.minX) / blockSize));
+                const gridH = Math.max(1, Math.ceil((region.maxY - region.minY) / blockSize));
+                
+                const scanSequence = generateScanSequence(gridW, gridH, pattern);
+                const shapePixels = new Set(region.pixelIndices);
+                const { w } = imageDimRef.current;
+                
+                // Set initial live data for UI
+                setLiveSonificationData({
+                    tradition: tradition.name,
+                    pattern: patternName,
+                    note: '-',
+                    hex: region.hex
+                });
+                
+                // Preparo il canvas del cursore
+                const cCtx = cursorCanvasRef.current?.getContext('2d');
+                if (cCtx) {
+                    cCtx.clearRect(0, 0, wImg, hImg);
+                }
+
+                const now = ctx.currentTime;
+                let currentTimeOffset = 0;
+                let eventsCount = 0;
+                
+                for (const blockIdx of scanSequence) {
+                    if (listenAllAbort.current) break;
+
+                    const gx = blockIdx % gridW;
+                    const gy = Math.floor(blockIdx / gridW);
+                    
+                    const startX = region.minX + gx * blockSize;
+                    const startY = region.minY + gy * blockSize;
+                    const endX = startX + blockSize;
+                    const endY = startY + blockSize;
+                    
+                    let sumR=0, sumG=0, sumB=0, count=0;
+                    
+                    for (let y = startY; y < endY; y++) {
+                        for (let x = startX; x < endX; x++) {
+                            const pIdx = y * w + x;
+                            if (shapePixels.has(pIdx)) {
+                                const dataIdx = pIdx * 4;
+                                sumR += pixelDataRef.current![dataIdx];
+                                sumG += pixelDataRef.current![dataIdx+1];
+                                sumB += pixelDataRef.current![dataIdx+2];
+                                count++;
+                            }
+                        }
+                    }
+                    
+                    if (count > 0) {
+                        const avgR = Math.round(sumR / count);
+                        const avgG = Math.round(sumG / count);
+                        const avgB = Math.round(sumB / count);
+                        const lab = rgbToLab(avgR, avgG, avgB);
+                        
+                        const blockData = {
+                            r: avgR, g: avgG, b: avgB,
+                            lab: { l: lab.l, a: lab.a, b: lab.b },
+                            variance: 50,
+                            isFiller: false
+                        } as any;
+                        
+                        const mapped = mapPixelToNote(blockData);
+                        const transformed = transformNote({ blockData, mapping: mapped } as any, tradition);
+                        
+                        let pitchShift = 0;
+                        if (enable3DScan) {
+                            if (region.depthLayer === 'background') pitchShift = -24; // Bassi profondi
+                            else if (region.depthLayer === 'middleground') pitchShift = -12; // Accompagnamento
+                        }
+
+                        let freq = 440 * Math.pow(2, ((transformed.midiFloat + pitchShift) - 69) / 12);
+                        const vol = transformed.velocity / 127;
+
+                        // Schedula audio
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        
+                        if (enable3DScan) {
+                            if (region.depthLayer === 'background') osc.type = 'sine'; // Suono morbido e basso
+                            else if (region.depthLayer === 'foreground') osc.type = 'sawtooth'; // Suono graffiante e visibile
+                            else osc.type = 'triangle';
+                        } else {
+                            osc.type = tradition.cultural_family === 'Middle Eastern' ? 'sawtooth' : 
+                                       tradition.cultural_family === 'East Asian' ? 'sine' : 'triangle';
+                        }
+                        
+                        if (!isFinite(freq)) {
+                            console.error("DEBUG NAN FREQ playRegionDeepSound", { freq, transformed, mapped, blockData });
+                            freq = 440;
+                        }
+                        osc.frequency.setValueAtTime(freq, now + currentTimeOffset);
+                        gain.gain.setValueAtTime(0.001, now + currentTimeOffset);
+                        gain.gain.linearRampToValueAtTime(vol * 0.4, now + currentTimeOffset + 0.02);
+                        gain.gain.exponentialRampToValueAtTime(0.0001, now + currentTimeOffset + NOTE_DURATION);
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        osc.start(now + currentTimeOffset);
+                        osc.stop(now + currentTimeOffset + NOTE_DURATION);
+                        
+                        // Schedula UI visiva (Cursore)
+                        setTimeout(() => {
+                            if (listenAllAbort.current) return;
+                            
+                            // Disegna cursore
+                            if (cCtx) {
+                                cCtx.clearRect(0, 0, wImg, hImg);
+                                cCtx.strokeStyle = '#22d3ee'; // cyan-400
+                                cCtx.lineWidth = 2;
+                                cCtx.strokeRect(startX, startY, blockSize, blockSize);
+                                cCtx.fillStyle = 'rgba(34, 211, 238, 0.3)';
+                                cCtx.fillRect(startX, startY, blockSize, blockSize);
+                            }
+                            
+                            const toHex = (c:number) => c.toString(16).padStart(2,'0');
+                            setLiveSonificationData({
+                                tradition: tradition.name,
+                                pattern: patternName,
+                                note: transformed.noteName,
+                                hex: `#${toHex(avgR)}${toHex(avgG)}${toHex(avgB)}`
+                            });
+                        }, currentTimeOffset * 1000);
+
+                        currentTimeOffset += NOTE_DURATION;
+                        eventsCount++;
+                    }
+                }
+                
+                if (eventsCount === 0) {
+                    resolve(); return;
+                }
+                
+                // Attendi la fine dell'esecuzione di questa forma
+                setTimeout(() => {
+                    if (cCtx) cCtx.clearRect(0, 0, wImg, hImg);
+                    setLiveSonificationData(null);
+                    resolve();
+                }, currentTimeOffset * 1000 + 100);
+            } catch (e) {
+                console.error("Errore sonificazione forma:", e);
+                resolve();
+            }
+        });
+    };
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  UTILITY COLORE
+    // ─────────────────────────────────────────────────────────────────────────
     const rgbToLab = (r: number, g: number, b: number) => {
         let r1 = r / 255, g1 = g / 255, b1 = b / 255;
         r1 = r1 > 0.04045 ? Math.pow((r1 + 0.055) / 1.055, 2.4) : r1 / 12.92;
@@ -318,7 +968,24 @@ export const CamPage: React.FC = () => {
         x = x > 0.008856 ? Math.pow(x, 1 / 3) : 7.787 * x + 16 / 116;
         y = y > 0.008856 ? Math.pow(y, 1 / 3) : 7.787 * y + 16 / 116;
         z = z > 0.008856 ? Math.pow(z, 1 / 3) : 7.787 * z + 16 / 116;
-        return { L: 116 * y - 16, a: 500 * (x - y), b: 200 * (y - z) };
+        return { l: 116 * y - 16, a: 500 * (x - y), b: 200 * (y - z) };
+    };
+
+    const rgbToHsv = (r: number, g: number, b: number) => {
+        r /= 255; g /= 255; b /= 255;
+        const max = Math.max(r, g, b), min = Math.min(r, g, b);
+        let h = 0, s = 0, v = max;
+        const d = max - min;
+        s = max === 0 ? 0 : d / max;
+        if (max !== min) {
+            switch (max) {
+                case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                case g: h = (b - r) / d + 2; break;
+                case b: h = (r - g) / d + 4; break;
+            }
+            h /= 6;
+        }
+        return { h: h * 360, s, v: v * 255 };
     };
 
     const midiToNote = (midi: number) => {
@@ -328,11 +995,14 @@ export const CamPage: React.FC = () => {
 
     useEffect(() => {
         return () => {
-            stopDeconstruction();
+            stopAnimation();
             audioCtxRef.current?.close();
         };
     }, []);
 
+    // ─────────────────────────────────────────────────────────────────────────
+    //  RENDER
+    // ─────────────────────────────────────────────────────────────────────────
     return (
         <div className="max-w-7xl mx-auto space-y-8 animate-fade-in pb-16">
 
@@ -342,15 +1012,31 @@ export const CamPage: React.FC = () => {
                     <div className="flex items-center gap-3 mb-2">
                         <span className="px-3 py-1 bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 rounded-full text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5">
                             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
-                            Flood-Fill Organico · Stacco Pixel-per-Pixel
+                            Scansione Sequenziale · Puzzle Pixel-per-Pixel
                         </span>
                     </div>
+
                     <h1 className="text-3xl font-black font-display text-white tracking-tight">
-                        Scontorno & <span className="text-cyan-400">Stacco dal Quadro</span>
+                        Scontorno &amp; <span className="text-cyan-400">Stacco dal Quadro</span>
                     </h1>
                     <p className="text-sm text-white/70 mt-1 max-w-2xl">
-                        Il sistema insegue il colore forma per forma (mantello, nuvola, erba...) e lo stacca rivelando la tela bianca. Zero residui.
+                        Scansione raster completa (top-left→bottom-right): ogni pixel è un tassello numerato.
+                        BFS neighbor-to-neighbor cattura ogni sfumatura cromatica. Copertura 100% garantita.
                     </p>
+                    
+                    {/* SONIFICAZIONE PROFONDA */}
+                    <div className="bg-slate-950/80 backdrop-blur-md rounded-2xl border border-cyan-900/50 p-5 shadow-inner mt-4">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-sm font-bold font-mono text-white tracking-wider flex items-center gap-2">
+                                <i className="fas fa-wave-square text-cyan-400"></i>
+                                SONIFICAZIONE SONIFICART INTEGRALE
+                            </h3>
+                        </div>
+                        
+                        <div className="text-sm text-slate-400 font-mono mb-4">
+                            Ogni forma viene analizzata come tela a sé stante: viene calcolata la Tradizione Culturale ottimale e applicato un pattern di lettura dinamico sulla sagoma. La risoluzione della griglia si adatta automaticamente in base alla durata impostata.
+                        </div>
+                    </div>
                 </div>
                 <label className="cursor-pointer px-8 py-4 bg-gradient-to-r from-cyan-500 via-teal-500 to-blue-600 hover:scale-105 text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all duration-300 shadow-xl flex items-center gap-3">
                     <i className="fas fa-upload text-base"></i>
@@ -366,12 +1052,16 @@ export const CamPage: React.FC = () => {
                         <i className="fas fa-wand-magic-sparkles"></i>
                     </div>
                     <h3 className="text-xl font-bold text-white">Carica un quadro per avviare il Colorimetro Organico</h3>
+                    <p className="text-sm text-white/50">
+                        La scansione percorre ogni pixel in ordine sequenziale — come i tasselli numerati di un puzzle —<br/>
+                        garantendo copertura totale senza lacune né residui.
+                    </p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
-                    {/* LEFT: THE CANVAS IS THE ONLY VISIBLE SURFACE (7 COLS) */}
-                    <div className="lg:col-span-7 flex flex-col gap-4">
+                    {/* LEFT: CANVAS (lg:col-span-8 or 9) */}
+                    <div className="lg:col-span-9 flex flex-col gap-4">
                         <div className="bg-slate-950/80 backdrop-blur-xl p-6 rounded-2xl border border-white/10 shadow-2xl space-y-4">
                             <div className="flex items-center justify-between border-b border-white/10 pb-3">
                                 <span className="text-xs font-mono text-cyan-400 font-bold uppercase tracking-wider">
@@ -382,46 +1072,96 @@ export const CamPage: React.FC = () => {
                                 </span>
                             </div>
 
-                            {/* THE SINGLE CANVAS — image drawn here, turns white pixel-by-pixel */}
-                            <div className="relative rounded-xl overflow-hidden border border-white/10 bg-white" style={{ aspectRatio: `${imageDimRef.current.w || 16}/${imageDimRef.current.h || 9}` }}>
-                                <canvas
-                                    ref={canvasRef}
-                                    className="w-full h-full object-contain"
-                                />
+                            {/* Barra progresso scansione (mostrata solo durante analisi) */}
+                            {isAnalyzing && (
+                                <div className="space-y-1.5">
+                                    <div className="flex justify-between text-[10px] font-mono text-cyan-300">
+                                        <span>{analyzeProgress}</span>
+                                        <span>{scanPct}%</span>
+                                    </div>
+                                    <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-gradient-to-r from-cyan-400 via-teal-300 to-blue-400 transition-all duration-200"
+                                            style={{ width: `${scanPct}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* CANVAS CONTAINER */}
+                            <div
+                                className="relative rounded-xl overflow-hidden border border-white/10 bg-black"
+                                style={{ aspectRatio: `${imageDimRef.current.w || 16}/${imageDimRef.current.h || 9}` }}
+                            >
+                                <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-contain" />
+                                {/* CANVAS CURSORE SOVRAPPOSTO */}
+                                <canvas ref={cursorCanvasRef} className="absolute inset-0 w-full h-full object-contain pointer-events-none" />
 
                                 {isAnalyzing && (
-                                    <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center gap-3">
+                                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center gap-3">
                                         <i className="fas fa-spinner fa-spin text-3xl text-cyan-400"></i>
-                                        <p className="text-xs font-mono text-cyan-300 font-bold">{analyzeProgress}</p>
+                                        <p className="text-xs font-mono text-cyan-300 font-bold">
+                                            Scansione sequenziale in corso… {scanPct}%
+                                        </p>
+                                        <p className="text-[10px] font-mono text-white/50">
+                                            Ogni pixel è un tassello — nessun buco possibile
+                                        </p>
                                     </div>
                                 )}
 
-                                {isDeconstructing && (
+                                {animationMode !== 'idle' && (
                                     <div className="absolute bottom-3 left-3 right-3 bg-black/80 backdrop-blur-md border border-cyan-500/40 px-3 py-2 rounded-xl text-[10px] font-mono text-cyan-300 font-bold">
                                         <div className="flex justify-between mb-1">
-                                            <span>Stacco Forma {currentStep}/{regions.length}</span>
+                                            <span>
+                                                {animationMode === 'detach' ? 'Stacco' : 
+                                                 animationMode === 'attach' ? 'Ricostruzione' : 
+                                                 'Ascolto'} Forma {currentStep}/{regions.length}
+                                            </span>
                                             <span>{progressPct}%</span>
                                         </div>
                                         <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                                            <div className="h-full bg-gradient-to-r from-cyan-400 to-teal-300 transition-all duration-150" style={{ width: `${progressPct}%` }} />
+                                            <div
+                                                className="h-full bg-gradient-to-r from-cyan-400 to-teal-300 transition-all duration-150"
+                                                style={{ width: `${progressPct}%` }}
+                                            />
                                         </div>
                                     </div>
                                 )}
                             </div>
 
                             {/* CONTROLS */}
-                            <div className="flex gap-3 pt-1">
+                            <div className="flex flex-wrap gap-3 pt-1">
                                 <button
-                                    onClick={isDeconstructing ? stopDeconstruction : startDeconstruction}
-                                    disabled={regions.length === 0 || isAnalyzing}
-                                    className={`flex-1 py-3.5 rounded-xl font-bold uppercase text-xs tracking-wider transition-all flex items-center justify-center gap-2 ${
-                                        isDeconstructing
+                                    onClick={animationMode === 'detach' ? stopAnimation : startDetach}
+                                    disabled={regions.length === 0 || isAnalyzing || animationMode === 'attach'}
+                                    className={`flex-1 min-w-[140px] py-3.5 rounded-xl font-bold uppercase text-xs tracking-wider transition-all flex items-center justify-center gap-2 ${
+                                        animationMode === 'detach'
                                             ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                                             : 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:scale-102 shadow-lg'
                                     }`}
                                 >
-                                    <i className={`fas ${isDeconstructing ? 'fa-pause' : 'fa-play'}`}></i>
-                                    {isDeconstructing ? 'Pausa' : 'Avvia Stacco Forme Organiche'}
+                                    <i className={`fas ${animationMode === 'detach' ? 'fa-pause' : 'fa-play'}`}></i>
+                                    {animationMode === 'detach' ? 'Pausa' : 'Avvia Analisi'}
+                                </button>
+                                <button
+                                    onClick={animationMode === 'attach' ? stopAnimation : startAttach}
+                                    disabled={regions.length === 0 || isAnalyzing || animationMode === 'detach'}
+                                    className={`flex-1 min-w-[140px] py-3.5 rounded-xl font-bold uppercase text-xs tracking-wider transition-all flex items-center justify-center gap-2 ${
+                                        animationMode === 'attach'
+                                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                            : 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:scale-102 shadow-lg'
+                                    }`}
+                                >
+                                    <i className={`fas ${animationMode === 'attach' ? 'fa-pause' : 'fa-puzzle-piece'}`}></i>
+                                    {animationMode === 'attach' ? 'Pausa' : 'Re-Incolla'}
+                                </button>
+                                <button
+                                    onClick={exportAudioWav}
+                                    disabled={regions.length === 0 || isAnalyzing || animationMode !== 'idle' || isExporting || isAiProcessing}
+                                    className="flex-1 min-w-[140px] py-3.5 rounded-xl font-bold uppercase text-xs tracking-wider transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-pink-500 to-rose-600 text-white hover:scale-102 shadow-lg disabled:opacity-50"
+                                >
+                                    {isExporting || isAiProcessing ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-brain"></i>}
+                                    {isExporting ? 'Rendering Audio...' : isAiProcessing ? 'Analisi AI...' : 'Genera AI, WHO e WAV'}
                                 </button>
                                 <button
                                     onClick={handleReset}
@@ -431,11 +1171,121 @@ export const CamPage: React.FC = () => {
                                 </button>
                             </div>
                         </div>
+                        
+                        {/* CONTROLLI DURATA STIMATA E SENSITIVITA */}
+                        {!isAnalyzing && regions.length > 0 && (
+                            <div className="bg-slate-950/80 backdrop-blur-xl p-6 rounded-2xl border border-white/10 shadow-xl space-y-4">
+                                <div className="text-sm font-bold font-mono text-white mb-2 flex items-center justify-between">
+                                    <span className="flex items-center gap-2">
+                                        <i className="fas fa-sliders text-cyan-400"></i> Dettaglio Analisi
+                                    </span>
+                                </div>
+                                
+                                <div className="flex justify-between items-center text-sm font-mono text-white bg-black/40 p-3 rounded-lg border border-white/5 mb-4">
+                                    <span>Durata Stimata Audio:</span>
+                                    <strong className="text-emerald-400 text-lg">
+                                        {Math.floor((regions.length * 16 * 0.12) / 60)}m {Math.floor((regions.length * 16 * 0.12) % 60)}s
+                                    </strong>
+                                </div>
+
+                                {/* PRESET BUTTONS */}
+                                <div className="flex gap-2 mb-4">
+                                    <button 
+                                        onClick={() => { setColorTolerance(20); setMinRegionPx(10); handleRecalculate(20, 10); }}
+                                        disabled={animationMode !== 'idle'}
+                                        className="flex-1 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded text-[9px] font-mono text-cyan-300 uppercase"
+                                    >Mosaico Dettagliato</button>
+                                    <button 
+                                        onClick={() => { setColorTolerance(45); setMinRegionPx(100); handleRecalculate(45, 100); }}
+                                        disabled={animationMode !== 'idle'}
+                                        className="flex-1 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded text-[9px] font-mono text-cyan-300 uppercase"
+                                    >Bilanciato</button>
+                                    <button 
+                                        onClick={() => { setColorTolerance(80); setMinRegionPx(500); handleRecalculate(80, 500); }}
+                                        disabled={animationMode !== 'idle'}
+                                        className="flex-1 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded text-[9px] font-mono text-cyan-300 uppercase"
+                                    >Macro-Aree Astratte</button>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <div className="flex justify-between text-xs font-mono text-white/70">
+                                        <span>Sensibilità Colore (Tolleranza)</span>
+                                        <span className="text-cyan-400">{colorTolerance}</span>
+                                    </div>
+                                    <input 
+                                        type="range" min="10" max="100" step="5"
+                                        value={colorTolerance}
+                                        onChange={(e) => setColorTolerance(parseInt(e.target.value))}
+                                        onMouseUp={() => handleRecalculate()}
+                                        onTouchEnd={() => handleRecalculate()}
+                                        className="w-full accent-cyan-500"
+                                        disabled={animationMode !== 'idle'}
+                                    />
+                                    <p className="text-[9px] text-white/40 leading-tight mt-1">Scegli se considerare il colore netto o frammentare includendo le minime sfumature.</p>
+                                </div>
+                                <div className="space-y-1 pt-2">
+                                    <div className="flex justify-between text-xs font-mono text-white/70">
+                                        <span>Dimensione Cursore Scansione (Filtro Rumore)</span>
+                                        <span className="text-cyan-400">{minRegionPx} px</span>
+                                    </div>
+                                    <input 
+                                        type="range" min="0" max="1000" step="10"
+                                        value={minRegionPx}
+                                        onChange={(e) => setMinRegionPx(parseInt(e.target.value))}
+                                        onMouseUp={() => handleRecalculate()}
+                                        onTouchEnd={() => handleRecalculate()}
+                                        className="w-full accent-teal-500"
+                                        disabled={animationMode !== 'idle'}
+                                    />
+                                    <p className="text-[9px] text-white/40 leading-tight mt-1">Più è piccolo più è preciso, più è grande più è grossolano ed esclude i piccoli dettagli.</p>
+                                </div>
+
+                                <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between">
+                                    <div className="flex flex-col">
+                                        <span className="text-xs font-bold text-white uppercase tracking-wider">Profondità 3D (Z-Index)</span>
+                                        <span className="text-[10px] text-white/50">Ordina l'ascolto (Sfondo → Primo Piano)</span>
+                                    </div>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                      <input type="checkbox" className="sr-only peer" checked={enable3DScan} onChange={() => setEnable3DScan(!enable3DScan)} disabled={animationMode !== 'idle'} />
+                                      <div className="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-500"></div>
+                                    </label>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
-                    {/* RIGHT: LIVE TELEMETRY & REGION REGISTRY (5 COLS) */}
-                    <div className="lg:col-span-5 flex flex-col gap-6">
-                        {/* Active Region Telemetry */}
+                    {/* RIGHT: TELEMETRIA & REGISTRO REGIONI (lg:col-span-3) */}
+                    <div className="lg:col-span-3 flex flex-col gap-6">
+
+                        {/* HUD TELEMETRIA LIVE (Spostato fuori dal canvas) */}
+                        {liveSonificationData && (
+                            <div className="bg-black/90 backdrop-blur-md border border-cyan-500/40 p-5 rounded-2xl shadow-2xl animate-fade-in flex flex-col gap-3">
+                                <div className="text-xs text-cyan-400 font-bold uppercase tracking-wider border-b border-cyan-500/30 pb-2 mb-1 flex items-center gap-2">
+                                    <i className="fas fa-satellite-dish animate-pulse"></i> Telemetria Live
+                                </div>
+                                <div className="text-sm font-mono text-white flex justify-between gap-4">
+                                    <span className="text-white/50">Tradizione:</span>
+                                    <strong className="text-amber-300 text-right">{liveSonificationData.tradition}</strong>
+                                </div>
+                                <div className="text-sm font-mono text-white flex justify-between gap-4">
+                                    <span className="text-white/50">Pattern:</span>
+                                    <strong className="text-cyan-300 text-right">{liveSonificationData.pattern}</strong>
+                                </div>
+                                <div className="text-sm font-mono text-white flex justify-between gap-4 items-center">
+                                    <span className="text-white/50">Pixel (HEX):</span>
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-4 h-4 rounded-sm border border-white/30" style={{backgroundColor: liveSonificationData.hex}}></div>
+                                        <strong className="text-white">{liveSonificationData.hex}</strong>
+                                    </div>
+                                </div>
+                                <div className="text-sm font-mono text-white flex justify-between gap-4">
+                                    <span className="text-white/50">Nota:</span>
+                                    <strong className="text-emerald-400 text-xl">{liveSonificationData.note}</strong>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Info copertura */}
                         {selectedRegion && (
                             <div className="bg-slate-950/80 backdrop-blur-xl p-5 rounded-2xl border border-cyan-500/40 shadow-2xl font-mono space-y-3 animate-fade-in">
                                 <div className="flex items-center justify-between border-b border-white/10 pb-3">
@@ -448,7 +1298,8 @@ export const CamPage: React.FC = () => {
                                             ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                                             : 'bg-white/10 text-white/50 border-white/10'
                                     }`}>
-                                        {selectedRegion.isDetached ? '✓ Staccato' : 'Sul Quadro'}
+                                        {selectedRegion.depthLayer === 'background' ? 'Sfondo' : 
+                                         selectedRegion.depthLayer === 'foreground' ? 'Primo Piano' : 'Medio Piano'}
                                     </span>
                                 </div>
                                 <div className="grid grid-cols-2 gap-2 text-[10px] text-white/80">
@@ -458,28 +1309,51 @@ export const CamPage: React.FC = () => {
                                     <div>Nota: <strong className="text-amber-300">{selectedRegion.noteName} · {selectedRegion.frequencyHz}Hz</strong></div>
                                     <div className="col-span-2">CIE LAB: <strong className="text-cyan-200">L*:{selectedRegion.L} a*:{selectedRegion.a} b*:{selectedRegion.b_val}</strong></div>
                                 </div>
+                                <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
+                                    <div className="flex gap-2">
+                                        <button 
+                                            onClick={() => playRegionDeepSound(selectedRegion)}
+                                            className="flex-1 py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 transition-all"
+                                        >
+                                            <i className="fas fa-play"></i> Singola
+                                        </button>
+                                        <button 
+                                            onClick={animationMode === 'listen-all' ? stopAnimation : startListenAll}
+                                            disabled={animationMode === 'detach' || animationMode === 'attach'}
+                                            className={`flex-[2] py-2.5 rounded-lg text-[11px] font-bold uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 transition-all ${
+                                                animationMode === 'listen-all'
+                                                    ? 'bg-rose-500/80 text-white'
+                                                    : 'bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white'
+                                            }`}
+                                        >
+                                            <i className={`fas ${animationMode === 'listen-all' ? 'fa-stop' : 'fa-list-ol'}`}></i> {animationMode === 'listen-all' ? 'Ferma' : 'Ascolta Tutte'}
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         )}
 
-                        {/* Region Registry */}
-                        <div className="bg-slate-950/80 backdrop-blur-xl p-5 rounded-2xl border border-white/10 shadow-2xl font-mono space-y-3 flex-1">
+                        {/* Registro Regioni */}
+                        <div className="bg-slate-950/80 backdrop-blur-xl p-5 rounded-2xl border border-white/10 shadow-2xl font-mono space-y-3 flex-1 h-[600px] flex-col flex">
                             <div className="flex items-center justify-between border-b border-white/10 pb-3">
                                 <span className="text-xs text-cyan-400 font-bold uppercase tracking-wider">
-                                    Forme Organiche Trovate ({regions.length})
+                                    Forme Organiche ({regions.length})
                                 </span>
-                                <span className="text-xs text-emerald-400 font-bold">{analyzeProgress && !isAnalyzing ? `✓ ${regions.length} forme` : isAnalyzing ? '⏳ Analisi...' : ''}</span>
+                                <span className="text-xs text-emerald-400 font-bold">
+                                    {analyzeProgress && !isAnalyzing ? `✓ ${regions.length} forme` : isAnalyzing ? `⏳ ${scanPct}%...` : ''}
+                                </span>
                             </div>
 
                             {regions.length === 0 ? (
                                 <p className="text-xs text-white/40 italic text-center py-4">
-                                    Carica un'immagine per avviare l'analisi organica...
+                                    {isAnalyzing ? 'Scansione in corso…' : 'Carica un\'immagine per avviare la scansione.'}
                                 </p>
                             ) : (
                                 <div className="space-y-1.5 max-h-[440px] overflow-y-auto pr-1">
                                     {regions.map((reg, idx) => {
-                                        const isDetached = idx < currentStep;
-                                        const isCurrent = idx === currentStep - 1;
-                                        const isSelected = selectedRegion?.idCode === reg.idCode;
+                                        const isDetached  = idx < currentStep;
+                                        const isCurrent   = idx === currentStep - 1;
+                                        const isSelected  = selectedRegion?.idCode === reg.idCode;
                                         return (
                                             <div
                                                 key={reg.idCode}
@@ -506,6 +1380,105 @@ export const CamPage: React.FC = () => {
                                     })}
                                 </div>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* IN-PAGE RESULTS DASHBOARD COMPACT */}
+            {isAiProcessing && (
+                <div className="mt-8 max-w-3xl mx-auto border border-cyan-500/30 rounded-xl overflow-hidden shadow-2xl">
+                    <ProcessingView steps={aiProcessingSteps} imageUrl={uploadedImageUrl} />
+                </div>
+            )}
+            
+            {finalResult && uploadedImageUrl && !isAiProcessing && (
+                <div className="mt-12 mb-20 animate-fade-in-up border border-cyan-500/30 bg-slate-950/80 backdrop-blur-xl rounded-2xl p-8 shadow-2xl">
+                    <h2 className="text-2xl font-bold mb-6 text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-emerald-400 flex items-center gap-3 border-b border-white/10 pb-4">
+                        <i className="fas fa-file-medical-alt text-cyan-400"></i>
+                        Referto Medico & Valigia Forense
+                    </h2>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        {/* LEFT COLUMN: WHO & DOWNLOADS */}
+                        <div className="space-y-6">
+                            {/* WHO CLASSIFICATION */}
+                            {finalResult.healthClassification && (
+                                <div className="bg-emerald-950/40 border border-emerald-500/30 rounded-xl p-5 relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 bg-emerald-500/20 px-3 py-1 rounded-bl-lg text-[10px] font-bold text-emerald-300 font-mono">
+                                        WHO REPORT 67
+                                    </div>
+                                    <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                        <i className="fas fa-heart-pulse"></i> Categoria Clinica
+                                    </h3>
+                                    <div className="text-xl font-black text-white mb-1">
+                                        {finalResult.healthClassification.primaryCategory.label}
+                                    </div>
+                                    <div className="text-xs text-emerald-200/70 italic mb-3">
+                                        {finalResult.healthClassification.primaryCategory.visualReason}
+                                    </div>
+                                    <div className="w-full bg-black/50 rounded-full h-1.5 mt-2 overflow-hidden border border-emerald-900">
+                                        <div 
+                                            className="bg-emerald-400 h-full rounded-full" 
+                                            style={{width: `${(finalResult.healthClassification.primaryCategory.score * 100)}%`}}
+                                        ></div>
+                                    </div>
+                                    <div className="text-[9px] text-emerald-500/70 text-right mt-1 font-mono">
+                                        Affidabilità: {(finalResult.healthClassification.primaryCategory.score * 100).toFixed(1)}%
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* DOWNLOADS */}
+                            <div className="bg-black/40 border border-white/10 rounded-xl p-5">
+                                <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+                                    <i className="fas fa-download text-cyan-400"></i> Esportazione
+                                </h3>
+                                <div className="flex flex-col gap-3">
+                                    <button 
+                                        onClick={() => saveAs(finalResult.audioOutput?.audioWavBlob!, `${uploadedFileName}_organico.wav`)}
+                                        className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/20 text-white rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all"
+                                    >
+                                        <i className="fas fa-file-audio text-amber-400 text-lg"></i>
+                                        Scarica Audio Originale (WAV)
+                                    </button>
+                                    <button 
+                                        onClick={() => saveAs(finalResult.sacContainer?.blob!, `${uploadedFileName}_certificato.sac`)}
+                                        className="w-full py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:scale-102 border border-cyan-400/50 text-white rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-lg"
+                                    >
+                                        <i className="fas fa-fingerprint text-white text-lg"></i>
+                                        Scarica Valigia Forense (.SAC)
+                                    </button>
+                                </div>
+                                <p className="text-[10px] text-white/40 mt-3 text-center">
+                                    Il file .SAC contiene il WAV, l'immagine originale e la firma crittografica SHA-256.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* RIGHT COLUMN: AI PROMPT */}
+                        <div className="bg-slate-900/80 border border-purple-500/30 rounded-xl p-5 flex flex-col h-full">
+                            <h3 className="text-sm font-bold text-purple-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+                                <span className="flex items-center gap-2"><i className="fas fa-robot"></i> Prompt AI Compositivo</span>
+                                <button 
+                                    onClick={() => {
+                                        const prompt = finalResult.musicGenerationPrompt?.soundverse_prompt || finalResult.musicGenerationPrompt?.technical_parameters || '';
+                                        navigator.clipboard.writeText(prompt);
+                                        alert("Prompt copiato negli appunti!");
+                                    }}
+                                    className="px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500/40 text-purple-200 rounded text-[10px] font-bold border border-purple-500/40 transition-colors"
+                                >
+                                    <i className="fas fa-copy"></i> COPIA
+                                </button>
+                            </h3>
+                            <p className="text-[10px] text-white/50 mb-4">
+                                Incolla questo prompt in Soundverse AI o Suno per generare l'arrangiamento finale mantenendo l'intento terapeutico.
+                            </p>
+                            <div className="bg-black/60 rounded-lg p-4 flex-grow border border-white/5 overflow-y-auto max-h-[300px]">
+                                <pre className="text-xs text-purple-100 font-mono whitespace-pre-wrap">
+                                    {finalResult.musicGenerationPrompt?.soundverse_prompt || finalResult.musicGenerationPrompt?.technical_parameters || 'Prompt non disponibile.'}
+                                </pre>
+                            </div>
                         </div>
                     </div>
                 </div>
