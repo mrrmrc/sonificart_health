@@ -48,6 +48,18 @@ interface ColorRegion {
 // ─────────────────────────────────────────────────────────────────────────────
 
 
+const InfoCard: React.FC<{ title: string, icon: string, children: React.ReactNode, className?: string }> = ({ title, icon, children, className }) => (
+    <div className={`bg-slate-900/80 border border-emerald-500/30 rounded-xl p-6 backdrop-blur-sm ${className || ''}`}>
+        <h4 className="text-lg font-bold text-white mb-4 flex items-center gap-3 border-b border-emerald-500/20 pb-3">
+            <div className="w-8 h-8 rounded bg-black/40 flex items-center justify-center border border-emerald-500/30 shadow-inner">
+                <i className={`fas ${icon} text-emerald-400 text-sm`}></i>
+            </div>
+            {title}
+        </h4>
+        {children}
+    </div>
+);
+
 export const CamPage: React.FC = () => {
     const { user, setUser, isUnlimited, setIsLoginModalOpen, setIsRequestAccessOpen } = useOutletContext<OutletContextType>();
 
@@ -1399,37 +1411,111 @@ export const CamPage: React.FC = () => {
                         Referto Medico & Valigia Forense
                     </h2>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        {/* LEFT COLUMN: WHO & DOWNLOADS */}
-                        <div className="space-y-6">
-                            {/* WHO CLASSIFICATION */}
-                            {finalResult.healthClassification && (
-                                <div className="bg-emerald-950/40 border border-emerald-500/30 rounded-xl p-5 relative overflow-hidden">
-                                    <div className="absolute top-0 right-0 bg-emerald-500/20 px-3 py-1 rounded-bl-lg text-[10px] font-bold text-emerald-300 font-mono">
-                                        WHO REPORT 67
+                    <div className="flex flex-col gap-8">
+                        {/* WHO CLASSIFICATION COMPLETA (INJECTED) */}
+                        {finalResult.healthClassification && (
+                            <InfoCard
+                                title="WHO Health Agent — Classificazione Terapeutica Visiva"
+                                icon="fa-heart-pulse"
+                                className="w-full relative overflow-hidden bg-gradient-to-br from-emerald-950/40 via-teal-950/20 to-black border-emerald-500/40 shadow-xl shadow-emerald-950/20"
+                            >
+                                <div className="space-y-6">
+                                    {/* INTESTAZIONE E CATEGORIA PRIMARIA */}
+                                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-emerald-500/10 p-4 rounded-xl border border-emerald-500/20">
+                                        <div className="space-y-1">
+                                            <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-wider">
+                                                <i className="fas fa-bullseye text-sm animate-pulse"></i>
+                                                Categoria Terapeutica Primaria Identificata
+                                            </div>
+                                            <h3 className="text-xl font-extrabold text-white flex items-center gap-3">
+                                                {finalResult.healthClassification.primaryCategory.label}
+                                                <span className="text-sm px-3 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-mono font-bold">
+                                                    {(finalResult.healthClassification.primaryCategory.score * 100).toFixed(0)}% Rilevanza
+                                                </span>
+                                            </h3>
+                                            <p className="text-xs text-emerald-200/80 italic">
+                                                {finalResult.healthClassification.primaryCategory.visualReason}
+                                            </p>
+                                        </div>
+                                        <div className="bg-black/40 px-4 py-2 rounded-lg border border-emerald-500/30 text-right">
+                                            <span className="text-[10px] text-gray-400 block uppercase font-bold">Linee Guida Attive</span>
+                                            <span className="text-xs font-mono font-bold text-emerald-300">
+                                                {finalResult.healthClassification.activeCategories.length} su 5 Categorie WHO
+                                            </span>
+                                        </div>
                                     </div>
-                                    <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider mb-2 flex items-center gap-2">
-                                        <i className="fas fa-heart-pulse"></i> Categoria Clinica
-                                    </h3>
-                                    <div className="text-xl font-black text-white mb-1">
-                                        {finalResult.healthClassification.primaryCategory.label}
+
+                                    {/* GRIGLIA BARRE DELLE 5 CATEGORIE WHO */}
+                                    <div>
+                                        <h5 className="text-xs uppercase font-bold text-gray-300 mb-3 flex items-center gap-2">
+                                            <i className="fas fa-chart-bar text-emerald-400"></i>
+                                            Profilo delle 5 Categorie WHO (Health Evidence Network Report 67)
+                                        </h5>
+                                        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                                            {finalResult.healthClassification.allScores.map((scoreObj) => {
+                                                const isActive = scoreObj.score >= 0.3;
+                                                const isPrimary = scoreObj.category === finalResult.healthClassification!.primaryCategory.category;
+                                                const pct = Math.round(scoreObj.score * 100);
+                                                return (
+                                                    <div
+                                                        key={scoreObj.category}
+                                                        className={`p-3 rounded-lg border transition-all ${
+                                                            isPrimary
+                                                                ? 'bg-emerald-500/20 border-emerald-400 shadow-md shadow-emerald-500/10'
+                                                                : isActive
+                                                                ? 'bg-teal-900/20 border-teal-500/30'
+                                                                : 'bg-black/30 border-white/5 opacity-50'
+                                                        }`}
+                                                    >
+                                                        <div className="flex justify-between items-center text-xs mb-1 font-bold">
+                                                            <span className={isPrimary ? 'text-emerald-300' : isActive ? 'text-teal-200' : 'text-gray-400'}>
+                                                                {scoreObj.label.split('/')[0]}
+                                                            </span>
+                                                            <span className="font-mono text-[11px]">{pct}%</span>
+                                                        </div>
+                                                        <div className="w-full bg-black/50 rounded-full h-1.5 mb-2 overflow-hidden border border-white/10">
+                                                            <div
+                                                                className={`h-full rounded-full transition-all duration-500 ${
+                                                                    isPrimary
+                                                                        ? 'bg-gradient-to-r from-emerald-400 to-teal-300'
+                                                                        : isActive
+                                                                        ? 'bg-teal-400'
+                                                                        : 'bg-gray-600'
+                                                                }`}
+                                                                style={{ width: `${pct}%` }}
+                                                            ></div>
+                                                        </div>
+                                                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono block text-center ${
+                                                            isPrimary
+                                                                ? 'bg-emerald-400 text-black font-bold'
+                                                                : isActive
+                                                                ? 'bg-teal-500/30 text-teal-300'
+                                                                : 'bg-white/5 text-gray-500'
+                                                        }`}>
+                                                            {isPrimary ? 'PRIMARIA' : isActive ? 'ATTIVA' : 'NON ATTIVA'}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
-                                    <div className="text-xs text-emerald-200/70 italic mb-3">
-                                        {finalResult.healthClassification.primaryCategory.visualReason}
-                                    </div>
-                                    <div className="w-full bg-black/50 rounded-full h-1.5 mt-2 overflow-hidden border border-emerald-900">
-                                        <div 
-                                            className="bg-emerald-400 h-full rounded-full" 
-                                            style={{width: `${(finalResult.healthClassification.primaryCategory.score * 100)}%`}}
-                                        ></div>
-                                    </div>
-                                    <div className="text-[9px] text-emerald-500/70 text-right mt-1 font-mono">
-                                        Affidabilità: {(finalResult.healthClassification.primaryCategory.score * 100).toFixed(1)}%
+
+                                    {/* DIRETTIVA WHO INIETTATA NEL PROMPT */}
+                                    <div className="bg-black/40 p-4 rounded-xl border border-white/10">
+                                        <h5 className="text-xs uppercase font-bold text-emerald-400 mb-2 flex items-center gap-2">
+                                            <i className="fas fa-file-medical-alt"></i>
+                                            Direttiva WHO Specificamente Inviata all'AI
+                                        </h5>
+                                        <p className="text-xs text-gray-300 font-mono leading-relaxed whitespace-pre-line bg-white/5 p-3 rounded-lg border border-white/5">
+                                            {finalResult.healthClassification.primaryCategory.whoDirective}
+                                        </p>
                                     </div>
                                 </div>
-                            )}
+                            </InfoCard>
+                        )}
 
-                            {/* DOWNLOADS */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            {/* DOWNLOADS (Moved here) */}
                             <div className="bg-black/40 border border-white/10 rounded-xl p-5">
                                 <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
                                     <i className="fas fa-download text-cyan-400"></i> Esportazione
@@ -1454,30 +1540,30 @@ export const CamPage: React.FC = () => {
                                     Il file .SAC contiene il WAV, l'immagine originale e la firma crittografica SHA-256.
                                 </p>
                             </div>
-                        </div>
 
-                        {/* RIGHT COLUMN: AI PROMPT */}
-                        <div className="bg-slate-900/80 border border-purple-500/30 rounded-xl p-5 flex flex-col h-full">
-                            <h3 className="text-sm font-bold text-purple-400 uppercase tracking-wider mb-2 flex items-center justify-between">
-                                <span className="flex items-center gap-2"><i className="fas fa-robot"></i> Prompt AI Compositivo</span>
-                                <button 
-                                    onClick={() => {
-                                        const prompt = finalResult.musicGenerationPrompt?.soundverse_prompt || finalResult.musicGenerationPrompt?.technical_parameters || '';
-                                        navigator.clipboard.writeText(prompt);
-                                        alert("Prompt copiato negli appunti!");
-                                    }}
-                                    className="px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500/40 text-purple-200 rounded text-[10px] font-bold border border-purple-500/40 transition-colors"
-                                >
-                                    <i className="fas fa-copy"></i> COPIA
-                                </button>
-                            </h3>
-                            <p className="text-[10px] text-white/50 mb-4">
-                                Incolla questo prompt in Soundverse AI o Suno per generare l'arrangiamento finale mantenendo l'intento terapeutico.
-                            </p>
-                            <div className="bg-black/60 rounded-lg p-4 flex-grow border border-white/5 overflow-y-auto max-h-[300px]">
-                                <pre className="text-xs text-purple-100 font-mono whitespace-pre-wrap">
-                                    {finalResult.musicGenerationPrompt?.soundverse_prompt || finalResult.musicGenerationPrompt?.technical_parameters || 'Prompt non disponibile.'}
-                                </pre>
+                            {/* RIGHT COLUMN: AI PROMPT */}
+                            <div className="bg-slate-900/80 border border-purple-500/30 rounded-xl p-5 flex flex-col h-full">
+                                <h3 className="text-sm font-bold text-purple-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+                                    <span className="flex items-center gap-2"><i className="fas fa-robot"></i> Prompt AI Compositivo</span>
+                                    <button 
+                                        onClick={() => {
+                                            const prompt = finalResult.musicGenerationPrompt?.soundverse_prompt || finalResult.musicGenerationPrompt?.technical_parameters || '';
+                                            navigator.clipboard.writeText(prompt);
+                                            alert("Prompt copiato negli appunti!");
+                                        }}
+                                        className="px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500/40 text-purple-200 rounded text-[10px] font-bold border border-purple-500/40 transition-colors"
+                                    >
+                                        <i className="fas fa-copy"></i> COPIA
+                                    </button>
+                                </h3>
+                                <p className="text-[10px] text-white/50 mb-4">
+                                    Incolla questo prompt in Soundverse AI o Suno per generare l'arrangiamento finale mantenendo l'intento terapeutico.
+                                </p>
+                                <div className="bg-black/60 rounded-lg p-4 flex-grow border border-white/5 overflow-y-auto max-h-[300px]">
+                                    <pre className="text-xs text-purple-100 font-mono whitespace-pre-wrap">
+                                        {finalResult.musicGenerationPrompt?.soundverse_prompt || finalResult.musicGenerationPrompt?.technical_parameters || 'Prompt non disponibile.'}
+                                    </pre>
+                                </div>
                             </div>
                         </div>
                     </div>
