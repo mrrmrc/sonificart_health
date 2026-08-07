@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { SonificationResult, TransformedNoteEvent, User, HealthClassificationResult } from '../types';
 import { classifyHealthCategories } from '../services/healthCategoryClassifier';
+import { classifyHealthCategoriesByAI } from '../services/geminiService';
 import { AudioPlayer } from './AudioPlayer';
 import { ScanPathOverlay } from './ScanPathOverlay';
 import { CursorHighlight } from './CursorHighlight';
@@ -554,17 +555,32 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
     const safeHash = correctedResult.imageHash || "unknown_hash";
     const safeDuration = correctedResult.audioOutput?.duration || 0;
 
-    const healthData: HealthClassificationResult | null = useMemo(() => {
+    const [healthData, setHealthData] = useState<HealthClassificationResult | null>(correctedResult.healthClassification || null);
+
+    useEffect(() => {
         if (correctedResult.healthClassification) {
-            return correctedResult.healthClassification;
+            setHealthData(correctedResult.healthClassification);
+            return;
         }
+        
         if (correctedResult.configUsed?.useHealthAgent && correctedResult.blockAnalysisResult?.globalStats) {
-            return classifyHealthCategories(
-                correctedResult.blockAnalysisResult.globalStats,
-                (correctedResult as any).description || ""
-            );
+            const fetchHealthData = async () => {
+                try {
+                    const data = await classifyHealthCategoriesByAI(
+                        correctedResult.blockAnalysisResult!.globalStats,
+                        (correctedResult as any).description || ""
+                    );
+                    setHealthData(data);
+                } catch (e) {
+                    console.warn("AI Matcher fail in dashboard, fallback matematico:", e);
+                    setHealthData(classifyHealthCategories(
+                        correctedResult.blockAnalysisResult!.globalStats,
+                        (correctedResult as any).description || ""
+                    ));
+                }
+            };
+            fetchHealthData();
         }
-        return null;
     }, [correctedResult]);
 
     const calculateImageRect = useCallback(() => {

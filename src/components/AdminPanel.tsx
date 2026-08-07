@@ -488,6 +488,7 @@ export const AdminPanel: React.FC = () => {
 
     // Agents State
     const [healthAgentPrompt, setHealthAgentPrompt] = useState('');
+    const [agentMatcherPrompt, setAgentMatcherPrompt] = useState('');
     const [healthAgentDocument, setHealthAgentDocument] = useState('');
     const [uploadingAgentDoc, setUploadingAgentDoc] = useState(false);
     const [knowledgeBase, setKnowledgeBase] = useState<Array<{url: string, filename: string, rules: string, extracting?: boolean}>>([]);
@@ -535,8 +536,10 @@ export const AdminPanel: React.FC = () => {
             }
             if (activeTab === 'agents') {
                 const promptRaw = await api.getAppSetting('agent_health_prompt');
+                const matcherPromptRaw = await api.getAppSetting('agent_matcher_prompt');
                 const docRaw = await api.getAppSetting('agent_health_document');
                 setHealthAgentPrompt(promptRaw.replace(/<[^>]*>?/gm, '').trim());
+                setAgentMatcherPrompt(matcherPromptRaw.replace(/<[^>]*>?/gm, '').trim());
                 setHealthAgentDocument(docRaw.replace(/<[^>]*>?/gm, '').trim());
                 try {
                     const kbRaw = await api.getAppSetting('agent_health_knowledge');
@@ -730,6 +733,7 @@ export const AdminPanel: React.FC = () => {
         setIsLoading(true);
         try {
             await api.updateAppSetting('agent_health_prompt', healthAgentPrompt);
+            await api.updateAppSetting('agent_matcher_prompt', agentMatcherPrompt);
             await api.updateAppSetting('agent_health_document', healthAgentDocument);
             await api.updateAppSetting('agent_health_knowledge', JSON.stringify(knowledgeBase));
             setConfirmModal({
@@ -1178,6 +1182,20 @@ export const AdminPanel: React.FC = () => {
             {activeTab === 'agents' && (
                 <div className="bg-[#1e1e2e] rounded-xl border border-white/10 p-6">
                     <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><i className="fas fa-robot text-brand-accent"></i> Configurazione Agenti AI</h3>
+
+                    <div className="bg-black/30 p-6 rounded-lg border border-white/10 mb-6">
+                        <h4 className="font-bold text-white mb-2">WHO Matcher Agent (Classificatore)</h4>
+                        <p className="text-xs text-gray-400 mb-4">L'agente che legge le statistiche visive dell'immagine e decide a quale categoria terapeutica assegnarla.</p>
+                        <div className="mb-6">
+                            <label className="text-xs font-bold text-brand-text-secondary uppercase mb-1 block">Prompt del Classificatore</label>
+                            <textarea 
+                                value={agentMatcherPrompt}
+                                onChange={e => setAgentMatcherPrompt(e.target.value)}
+                                className="w-full bg-black/50 border border-white/10 rounded p-3 text-white font-mono text-xs h-32 focus:border-brand-accent focus:outline-none"
+                                placeholder="Istruzioni per abbinare le statistiche visive (colori, luminosità) alle categorie WHO. Es: 'Se l'immagine ha colori blu, assegnala a Calming...'"
+                            />
+                        </div>
+                    </div>
                     
                     <div className="bg-black/30 p-6 rounded-lg border border-white/10 mb-6">
                         <h4 className="font-bold text-white mb-2">WHO Health Agent (Benessere)</h4>

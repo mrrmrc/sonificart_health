@@ -97,19 +97,20 @@ REQUISITI DI FUSIONE SEMANTICA (MANDATORI):
 3. **Atmosfera Contestuale**: L'atmosfera deve riflettere il luogo/soggetto dell'immagine.
 4. **FEDELTÀ AL RIFERIMENTO (CRITICO)**: Il prompt deve ordinare all'AI di restare estremamente fedele alla struttura armonica e ritmica del file WAV caricato. Usa tag come "[Very faithful to reference]", "[Maintain original melody]", "[Instrumental focus]".
 
-FORZATURA DURATA SUNO (CRITICO):
+FORZATURA DURATA SUNO E CONVERSIONE ACUSTICA (CRITICO):
 - Inizia SEMPRE con: "[Duration: ${durationSeconds.toFixed(0)}s], [Strictly ${durationSeconds.toFixed(0)} seconds limit], [Fast Ending], [No Extension], [Strictly Instrumental], [No Vocals]".
 - Termina SEMPRE con: "[Outro: Dissolve at ${durationSeconds.toFixed(0)}s], [End at ${durationSeconds.toFixed(0)}s], [Silence], [End]".
+- DIVIETO DI TESTO LETTERALE: Non inserire mai nel prompt di Suno o Udio frasi letterali della descrizione visiva. Traduci l'atmosfera in TAG MUSICALI (es. [Dark Cinematic], [Bright Orchestral]).
 
 STRUTTURA OUTPUT RICHIESTA (JSON):
 - **main_prompt_ita**: Descrizione poetica e tecnica che spieghi come la musicalità '${tradition.name}' descriva specificamente '${imageDescription}'.
 - **technical_parameters**: BPM, Chiave, Scala, e Strumentazione Ibrida suggerita.
 - **justification**: Spiegazione di come il soggetto visivo sia stato fuso con la tradizione musicale.
-- **suno_prompt**: Il mega-prompt di tag per Suno AI.
-- **udio_prompt**: Tag separati da virgola per Udio AI.
+- **suno_prompt**: Usa ESCLUSIVAMENTE tag acustici musicali standard. Formato: "[Duration: X], [BPM], [Genere Astratto], [Tag Acustici]". NESSUN RIFERIMENTO LETTERALE AL SOGGETTO.
+- **udio_prompt**: Tag acustici separati da virgola per Udio AI.
 - **soundverse_prompt**: Prompt formattato per Soundverse.ai. Formato: "Genre: [Genere] | Tempo: Auto BPM | Key: [Chiave] | Style: [Atmosfera] | Instruments: [Strumenti] | Reference Sync: [Maintain original scan melody] | Duration: ${durationSeconds.toFixed(0)}s".
 - **negative_prompt**: Elementi da evitare.
-- **suno_lyrics**: Marcatori temporali e tag strutturali strumentali ESCLUSIVAMENTE in parentesi quadre per obbligare la durata di ${durationSeconds.toFixed(0)} secondi.
+- **suno_lyrics**: Marcatori temporali. Usa solo tag strutturali dinamici, es. [0:00] [Intro: Deep Resonance].
 
 Rispondi SOLO con il JSON.`
     };
@@ -207,20 +208,29 @@ REQUISITI DI FUSIONE E SALUTE (MANDATORI):
 4. **FEDELTÀ AL RIFERIMENTO**: Il prompt deve ordinare all'AI di restare fedele alla struttura armonica e ritmica del file WAV caricato. Usa tag come "[Maintain original melody]", "[Instrumental focus]".
 ${healthSection}
 
+TABELLA DI CONVERSIONE DETERMINISTICA (CLINICO -> ACUSTICO/GENERE):
+È severamente vietato inserire termini clinici, psicologici o medici (es. "WHO Target", "Stress", "Therapy", "Binaural", "Infrasound", "Regolazione Fisiologica") nei prompt per Suno e Udio.
+Devi convertire in modo deterministico l'obiettivo clinico nei seguenti tag musicali standard:
+- [Obiettivo: Calming / Riduzione Stress] -> TRADUCI IN: [Soothing, Deep Drone, Slow Tempo, Cinematic Ambient, Resonant Low Strings, Meditative, Minimalist]
+- [Obiettivo: Regolazione Fisiologica / Dolore] -> TRADUCI IN: [Ethereal, Floating, Sustained Pads, Ambient Soundscape, Healing Hz, Soft Resonance, Drone]
+- [Obiettivo: Stimolazione Cognitiva / Motoria] -> TRADUCI IN: [Rhythmic, Ostinato, Minimalist Pulse, Clear Transients, Percussive Elements, Moderate Tempo, Focused]
+- [Obiettivo: Connessione Sociale / Emotiva] -> TRADUCI IN: [Warm, Orchestral, Expressive Cello, Emotional Cinematic, Harmonic Richness, Uplifting]
+- [Obiettivo: Energia / Motivazione] -> TRADUCI IN: [Energizing, Bright, Driving Rhythm, Dynamic Cinematic, Upbeat, Forward Momentum]
+
 FORZATURA E COMPLETEZZA PROMPT (MANDATORI):
-- suno_prompt: Inizia SEMPRE con: "[Duration: ${durationSeconds.toFixed(0)}s], [Strictly ${durationSeconds.toFixed(0)} seconds limit], [${configBpm} BPM], [Strict Tempo], [Strictly Instrumental], [No Vocals]". Includi la scala, gli strumenti clinici WHO, i filtri spettrali ed i tag di sincronizzazione alla melodia di riferimento. Termina con: "[Outro: Dissolve at ${durationSeconds.toFixed(0)}s], [End at ${durationSeconds.toFixed(0)}s], [Silence], [End]".
-- udio_prompt: Tag separati da virgola includendo ${configBpm} BPM, genere, strumentazione clinica e riferimento audio.
-- soundverse_prompt: Prompt strutturato per Soundverse.ai in formato: "Genre: Cinematic Health Ambient | Tempo: ${configBpm} BPM | Key: [Chiave/Scala] | Style: Mindful, ${healthClassification?.primaryCategory.label || 'Wellness'} | Instruments: [Strumenti Clinici WHO] | Spectrum: Low-pass filter <3.5kHz | Reference Sync: [Maintain original scan melody] | Duration: ${durationSeconds.toFixed(0)}s".
+- suno_prompt: Inizia SEMPRE con: "[Duration: ${durationSeconds.toFixed(0)}s], [Strictly ${durationSeconds.toFixed(0)} seconds limit], [${configBpm} BPM], [Strict Tempo], [Strictly Instrumental], [No Vocals]". Includi la traduzione acustica esatta dalla Tabella di Conversione per il target clinico corrente. Termina con: "[Outro: Dissolve at ${durationSeconds.toFixed(0)}s], [End at ${durationSeconds.toFixed(0)}s], [Silence], [End]".
+- udio_prompt: Tag separati da virgola includendo ${configBpm} BPM e i tag della Tabella di Conversione.
+- soundverse_prompt: Prompt strutturato per Soundverse.ai in formato: "Genre: Cinematic Ambient | Tempo: ${configBpm} BPM | Key: [Chiave/Scala] | Style: [Tag Acustico dalla Tabella] | Instruments: [Strumenti] | Reference Sync: [Maintain original scan melody] | Duration: ${durationSeconds.toFixed(0)}s".
 
 STRUTTURA OUTPUT RICHIESTA (JSON):
 - **main_prompt_ita**: Descrizione poetica e tecnica del brano.
 - **technical_parameters**: BPM, Chiave, Scala, e Strumentazione coerenti con le direttive WHO.
-- **justification**: Spiegazione di come il prompt rispetti le direttive WHO SPECIFICHE.
-- **suno_prompt**: Il mega-prompt di tag per Suno.
-- **udio_prompt**: Tag separati da virgola per Udio.
+- **justification**: Spiegazione di come il prompt rispetti le direttive WHO SPECIFICHE usando la tabella di conversione.
+- **suno_prompt**: Usa ESCLUSIVAMENTE la traduzione acustica dalla TABELLA. Formato: "[Duration: Xs], [BPM], [Genere Astratto], [Tag Acustici dalla Tabella]". NESSUN RIFERIMENTO MEDICO.
+- **udio_prompt**: Gli stessi tag acustici esatti separati da virgola. Nessun riferimento WHO.
 - **soundverse_prompt**: Il prompt strutturato per Soundverse.ai.
 - **negative_prompt**: Elementi da evitare (OBBLIGATORIAMENTE includere termini soporiferi o noiosi).
-- **suno_lyrics**: Marcatori temporali.
+- **suno_lyrics**: Marcatori temporali puramente musicali, es. [0:00] [Intro: Deep Drone and Soft Resonance]. Nessun riferimento testuale WHO.
 
 Rispondi SOLO con il JSON.`
     };
@@ -375,45 +385,50 @@ E' severamente vietato inserire riferimenti letterali al soggetto dell'opera (es
 2. Le direttive cliniche e psicoacustiche WHO.
 3. I colori e gli umori astratti (es. "Scuro", "Luminoso", "Etereo"), tradotti in timbri.
 
+TABELLA DI CONVERSIONE DETERMINISTICA (CLINICO -> ACUSTICO/GENERE):
+È severamente vietato inserire termini clinici, psicologici o medici (es. "WHO Target", "Stress", "Therapy", "Binaural", "Infrasound", "Regolazione Fisiologica") nei prompt per Suno e Udio.
+Devi convertire in modo deterministico l'obiettivo clinico nei seguenti tag musicali standard:
+- [Obiettivo: Calming / Riduzione Stress] -> TRADUCI IN: [Soothing, Deep Drone, Slow Tempo, Cinematic Ambient, Resonant Low Strings, Meditative, Minimalist]
+- [Obiettivo: Regolazione Fisiologica / Dolore] -> TRADUCI IN: [Ethereal, Floating, Sustained Pads, Ambient Soundscape, Healing Hz, Soft Resonance, Drone]
+- [Obiettivo: Stimolazione Cognitiva / Motoria] -> TRADUCI IN: [Rhythmic, Ostinato, Minimalist Pulse, Clear Transients, Percussive Elements, Moderate Tempo, Focused]
+- [Obiettivo: Connessione Sociale / Emotiva] -> TRADUCI IN: [Warm, Orchestral, Expressive Cello, Emotional Cinematic, Harmonic Richness, Uplifting]
+- [Obiettivo: Energia / Motivazione] -> TRADUCI IN: [Energizing, Bright, Driving Rhythm, Dynamic Cinematic, Upbeat, Forward Momentum]
+
 REQUISITI DI SINFONIA PITTORICO-CLINICA & INGEGNERIA NEURO-ACUSTICA VISCERALE (MANDATORI PER TUTTE LE AI):
 1. **Genere Musicale 100% Dinamico ma Astratto (NESSUN BOILERPLATE O FRASI FISSE)**:
-   NON usare mai la frase fissa "Cinematic Health Composition". Definisci invece un GENERE MUSICALE 100% DINAMICO derivato dall'umore astratto dell'opera (es. "Atmospheric Ambient", "Chiaroscuro Orchestral", "Avant-Garde Minimalist Polyrhythmic", "Modernist Emotional Soundscape"). Niente riferimenti storici o religiosi.
-
-2. **Ingegneria Neuro-Acustica Viscerale, Infrasuoni & Audio Spaziale Olografico (MANDATORIO IN TUTTI I PROMPT)**:
-   Per scatenare l'esperienza di catarsi estetica (Sindrome di Stendhal) e far entrare l'ascoltatore dentro l'opera, INCLUDI ESPLICITAMENTE in ciascun prompt i seguenti tag di psicoacustica e produzione audio:
-   - Infrasuoni & Sub-Bassi: "Sub-Bass Infrasound Resonances (24Hz), Somatosensory Visceral Sub-Bass"
-   - Frequenze Nascoste & Battimenti Binaurali: "Hidden Binaural Theta/Gamma Wave Entrainment (4Hz/40Hz), 432Hz Harmonic Base Tuning, 528Hz Solfeggio Frequency"
-   - Immersione Spaziale: "3D Holographic Binaural Soundstage, Wide Spatial Audio Movement, Ethereal Atmospheric Depth"
-   - Impatto Emotivo: "Stendhal Aesthetic Chill Engine, Deep Emotional Catharsis"
+   NON usare mai la frase fissa "Cinematic Health Composition". Definisci invece un GENERE MUSICALE 100% DINAMICO derivato dall'umore astratto dell'opera. Niente riferimenti storici o religiosi.
+   
+2. **Tabella di Conversione per Ingegneria Acustica (CRITICO)**:
+   Per l'impatto neuroacustico NON USARE i termini letterali "Binaural", "24Hz", "Stendhal". Usa i TAG ACUSTICI della tabella in base all'obiettivo WHO, fondendoli con tag atmosferici standard (es. "Deep Sub-bass", "Holographic Spatial Reverb", "Immersive Soundscape").
 
 3. **Inclusione della Linea Melodica Estratta**:
    Includi la LINEA MELODICA ESTRATTA ("${melodyNotesSequence || 'D4 - E4 - G4 - A4'}"). NESSUNA menzione testuale al soggetto visivo.
 
 4. **Formattazione dei Prompt per i Motori AI**:
    - **soundverse_prompt**:
-     "Visual Color Mood: [Atmosfera Emozionale e Chiaroscuro] | Reference Melody Theme: [${melodyNotesSequence || 'Main Motif'}] | Genre: [Genere Musicale Dinamico Astratto] | Neuro-Acoustics & Spatial FX: Sub-Bass Infrasound (24Hz), Hidden Binaural Theta Wave (6Hz), 432Hz Tuning, 3D Holographic Stereo Panning, Deep Spatial Reverb | Style: Strict Holistic ${healthClassification?.primaryCategory.label || 'Wellness'} | Tempo: ${configBpm} BPM | Instruments: [Strumenti Clinici WHO ed evocativi dell'umore] | Duration: ${durationSeconds.toFixed(0)}s"
-   - **suno_prompt**: Inizia con: "[Duration: ${durationSeconds.toFixed(0)}s], [${configBpm} BPM], [Genre: Genere Musicale Astratto], [Color Mood: Atmosfera Emozionale Astratta], [Melodic Motif: ${melodyNotesSequence || 'Main Motif'}], [Production FX: Sub-Bass 24Hz Infrasound, 432Hz Tuning, 3D Binaural Panning, Holographic Ambient Reverb], [WHO Target: ${healthClassification?.primaryCategory.label || 'Wellness'}], [Strictly Instrumental, No Vocals, No Choirs]". Termina con: "[Outro: Dissolve at ${durationSeconds.toFixed(0)}s], [End at ${durationSeconds.toFixed(0)}s], [Silence], [End]".
-   - **udio_prompt**: Tag descrittivi che combinano il genere dinamico (es. ambient, orchestral), l'atmosfera cromatica astratta, la linea melodica (${melodyNotesSequence}), i tag psicoacustici (24hz sub-bass, 432hz tuning, binaural theta wave, 3d spatial audio), ${configBpm} BPM e la strumentazione clinica WHO. Assolutamente nessun riferimento a temi figurativi, storici o religiosi.
-   - **suno_lyrics (MANDATORIO STRUTTURATO E ALLINEATO CON WHO)**: Genera la TIMELINE TEMPORALE ALLINEATA AL 100% CON LE DIRETTIVE CLINICHE WHO E CON IL PROMPT PRINCIPALE. DEVE contenere esplicitamente la Categoria WHO ("${healthClassification?.primaryCategory.label || 'Wellness'}"), il Tempo WHO (${configBpm} BPM), il motivo delle note e i tag neuro-acustici. NESSUN riferimento al quadro visivo. Esempio obbligatorio:
-     "[0:00] [Intro: Ethereal 24Hz Sub-Bass Ambient, 432Hz Base Tuning, WHO Target: ${healthClassification?.primaryCategory.label || 'Wellness'} (${configBpm} BPM), Motif: ${melodyNotesSequence || 'Main Theme'}]\n[0:25] [Section A: Strings Crescendo, 3D Spatial Panning]\n[1:00] [Section B: Visceral Resonant Textures & WHO Entrainment Rhythm at ${configBpm} BPM]\n[1:45] [Climax: Full Orchestral Catharsis & High Stendhal Aesthetic Chill]\n[${(durationSeconds * 0.85).toFixed(0)}s] [Outro: Dissolve into Sub-Bass Ambient Silence]\n[${durationSeconds.toFixed(0)}s] [End]"
+     "Visual Color Mood: [Atmosfera] | Reference Melody Theme: [${melodyNotesSequence || 'Main Motif'}] | Genre: [Genere Dinamico] | Spatial FX: 3D Holographic Stereo Panning, Deep Spatial Reverb | Style: [Tag Acustico dalla Tabella] | Tempo: ${configBpm} BPM | Instruments: [Strumenti] | Duration: ${durationSeconds.toFixed(0)}s"
+   - **suno_prompt**: Inizia con: "[Duration: ${durationSeconds.toFixed(0)}s], [${configBpm} BPM], [Genre: Genere Musicale Astratto], [Color Mood: Atmosfera Astratta], [Melodic Motif: ${melodyNotesSequence || 'Main Motif'}], [Production FX: Deep Sub-bass, Spatial Panning, Holographic Reverb]". Poi inserisci i TAG ACUSTICI DALLA TABELLA. Termina con: "[Strictly Instrumental, No Vocals, No Choirs], [Outro: Dissolve at ${durationSeconds.toFixed(0)}s], [End at ${durationSeconds.toFixed(0)}s], [Silence], [End]".
+   - **udio_prompt**: Tag acustici separati da virgola (genere, atmosfera, ${configBpm} BPM, tag della tabella, deep sub-bass, spatial audio). NESSUN RIFERIMENTO MEDICO O STORICO.
+   - **suno_lyrics (MANDATORIO PURAMENTE MUSICALE)**: Genera la TIMELINE TEMPORALE ALLINEATA AI TAG ACUSTICI DALLA TABELLA. NESSUN RIFERIMENTO MEDICO O AL WHO NEI LYRICS. Esempio obbligatorio:
+     "[0:00] [Intro: Ethereal Ambient and Deep Sub-bass, Tempo: ${configBpm} BPM]\n[0:25] [Section A: Strings Crescendo, Spatial Panning]\n[1:00] [Section B: Resonant Textures and Minimalist Pulse]\n[1:45] [Climax: Full Orchestral Catharsis]\n[${(durationSeconds * 0.85).toFixed(0)}s] [Outro: Dissolve into Sub-Bass Ambient Silence]\n[${durationSeconds.toFixed(0)}s] [End]"
 
 5. **Analisi Semantico-Iconografica dell'Opera (MANDATORIO per semantic_analysis)**:
    Fornisci l'oggetto JSON semantic_analysis che spiega l'impatto visivo sul suono:
-   - facial_expressions: Descrizione delle espressioni facciali o della carica emotiva dei soggetti visivi.
-   - materials_objects: Array di oggetti e materiali riconosciuti (es. ["Armature metalliche", "Cavalli", "Legno"]).
-   - natural_elements: Presenza di elementi naturali (es. "Cielo tempestoso", "Luce naturale", "Acqua").
-   - pictorial_style: Stile pittorico dell'opera (es. "Rinascimentale / Drammatico", "Impressionista", "Moderno Astratto").
+   - facial_expressions: Descrizione delle espressioni facciali o della carica emotiva.
+   - materials_objects: Array di oggetti e materiali riconosciuti.
+   - natural_elements: Presenza di elementi naturali.
+   - pictorial_style: Stile pittorico dell'opera.
    - acoustic_impact: Spiegazione trasparente dell'impatto acustico e psicoacustico.
 
 6. **Generazione Hotspot Visivi per l'HUD sull'Immagine (MANDATORIO 3-5 hotspots)**:
-   Fornisci l'array hotspots con 3-5 pin visivi localizzati nell'immagine:
+   Fornisci l'array hotspots con 3-5 pin visivi:
    - id: identificativo univoco (es. "pin_1", "pin_2").
-   - label: Titolo del pin (es. "Volti & Emozioni", "Armature Metalliche", "Luce & Chiaroscuro", "Target Clinico WHO").
+   - label: Titolo del pin (es. "Luce & Chiaroscuro", "Target Acustico").
    - category: uno tra "emotions", "materials", "style", "who_target".
-   - x_percent (15-85) e y_percent (15-85): posizione percentuale approssimativa dell'elemento.
-   - description: Cosa rileva la Vision AI in quel punto dell'opera.
-   - reasoning_step: Spiegazione del ragionamento dell'AI (es. "Fase 2: L'AI rileva forte drammaticità visiva e la associa ad un timbro di archi in registro grave con sub-bassi infrasintetici a 24Hz").
-   - acoustic_effect: Impatto acustico e psicoacustico (es. "Violoncello solo + Percussioni bronzee + Infrasuono 24Hz").
+   - x_percent (15-85) e y_percent (15-85): posizione percentuale.
+   - description: Cosa rileva la Vision AI.
+   - reasoning_step: Ragionamento (es. "Fase 2: L'AI rileva oscurità e la associa a timbro grave").
+   - acoustic_effect: Impatto acustico (es. "Violoncello + Riverbero").
 
 Rispondi SOLO con il JSON con campi: main_prompt_ita, technical_parameters, justification, suno_prompt, udio_prompt, soundverse_prompt, negative_prompt, suno_lyrics, semantic_analysis.`
     };
@@ -525,5 +540,126 @@ Rispondi SOLO con il JSON con campi: main_prompt_ita, technical_parameters, just
                 ]
             }
         };
+    }
+}
+
+export async function classifyHealthCategoriesByAI(
+    globalStats: BlockAnalysisResult['globalStats'],
+    imageDescription: string
+): Promise<HealthClassificationResult> {
+    const apiKey = await getGeminiApiKey();
+    if (!apiKey) {
+        throw new Error("Chiave API Google mancante.");
+    }
+
+    const ai = new GoogleGenAI({ apiKey: apiKey });
+
+    // Fetch the Matcher Agent configuration from the admin DB
+    const adminMatcherPromptRaw = await backendApi.getAppSetting('agent_matcher_prompt');
+    const adminMatcherPrompt = adminMatcherPromptRaw ? adminMatcherPromptRaw.replace(/<[^>]*>?/gm, '').trim() : '';
+
+    const defaultPrompt = `Se l'immagine ha colori freddi (blu/verde) e saturazione bassa, classificala come "calming".
+Se ha elevata varianza e colori neutri, "physiological".
+Se ha alta diversità cromatica e forte dettaglio, "cognitive_motor".
+Se ci sono persone o colori caldi (rosso/arancio), "social_emotional".
+Se ci sono contrasti forti, alta saturazione e dinamismo visivo, "motivation".`;
+
+    const instructions = adminMatcherPrompt || defaultPrompt;
+
+    const textPart = {
+        text: `RUOLO: Sei il WHO Matcher Agent (Classificatore Terapeutico AI).
+Il tuo compito è analizzare le statistiche visive di un'opera e abbinarle alla categoria medica WHO (Organizzazione Mondiale della Sanità) più adatta.
+
+DATI IN INGRESSO (OPERA VISIVA):
+- Descrizione / Soggetto: "\${imageDescription}"
+- Luminanza (Lightness): \${globalStats.avg_L.toFixed(1)}
+- Asse a* (Verde/Rosso): \${globalStats.avg_a.toFixed(1)}
+- Asse b* (Blu/Giallo): \${globalStats.avg_b.toFixed(1)}
+- Saturazione: \${(globalStats.avg_saturation * 100).toFixed(1)}%
+- Varianza (Contrasto/Dettaglio): \${globalStats.avg_variance.toFixed(1)}
+- Diversità Cromatica: \${(globalStats.hue_diversity * 100).toFixed(1)}%
+
+ISTRUZIONI DEL CLASSIFICATORE (DA RISPETTARE TASSATIVAMENTE):
+"\${instructions}"
+
+REGOLE DI SCORING:
+Assegna uno score da 0.0 a 1.0 a ciascuna delle 5 categorie WHO:
+1. calming (Calming / Riduzione Stress, Target BPM: 64)
+2. physiological (Regolazione Fisiologica e Dolore, Target BPM: 74)
+3. cognitive_motor (Stimolazione Cognitiva e Motoria, Target BPM: 108)
+4. social_emotional (Connessione Sociale ed Emotiva, Target BPM: 86)
+5. motivation (Energia e Motivazione, Target BPM: 118)
+
+Seleziona la categoria con lo score più alto come "primaryCategory". 
+Seleziona eventuali altre categorie con score >= 0.45 come "activeCategories".
+Restituisci un JSON coerente con la struttura HealthClassificationResult (es. promptFragment generato ad hoc con le direttive specifiche per quella categoria).
+
+RISPONDI SOLO CON UN JSON FORMATTATO. NON AGGIUNGERE TESTO.`
+    };
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: { parts: [textPart] },
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        primaryCategory: {
+                            type: Type.OBJECT,
+                            properties: {
+                                category: { type: Type.STRING },
+                                score: { type: Type.NUMBER },
+                                label: { type: Type.STRING },
+                                targetBpm: { type: Type.NUMBER },
+                                whoDirective: { type: Type.STRING },
+                                visualReason: { type: Type.STRING }
+                            },
+                            required: ["category", "score", "label", "targetBpm", "whoDirective", "visualReason"]
+                        },
+                        activeCategories: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    category: { type: Type.STRING },
+                                    score: { type: Type.NUMBER },
+                                    label: { type: Type.STRING },
+                                    targetBpm: { type: Type.NUMBER },
+                                    whoDirective: { type: Type.STRING },
+                                    visualReason: { type: Type.STRING }
+                                },
+                                required: ["category", "score", "label", "targetBpm", "whoDirective", "visualReason"]
+                            }
+                        },
+                        allScores: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    category: { type: Type.STRING },
+                                    score: { type: Type.NUMBER },
+                                    label: { type: Type.STRING },
+                                    targetBpm: { type: Type.NUMBER },
+                                    whoDirective: { type: Type.STRING },
+                                    visualReason: { type: Type.STRING }
+                                },
+                                required: ["category", "score", "label", "targetBpm", "whoDirective", "visualReason"]
+                            }
+                        },
+                        promptFragment: { type: Type.STRING }
+                    },
+                    required: ["primaryCategory", "activeCategories", "allScores", "promptFragment"]
+                }
+            }
+        });
+
+        const jsonText = response.text?.trim();
+        if (!jsonText) throw new Error("Risposta vuota da Gemini Matcher Agent");
+        return JSON.parse(jsonText) as HealthClassificationResult;
+    } catch (e) {
+        console.error("Errore Gemini WHO Matcher Agent:", e);
+        throw e; // Rilancia per far usare il fallback matematico al chiamante
     }
 }

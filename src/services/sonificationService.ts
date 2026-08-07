@@ -7,7 +7,7 @@ import {
 import { analyzeOriginalFile } from './forensicPackageService';
 import { NormalizationReport } from './imageNormalizationService';
 
-import { generateMusicPromptFromAnalysis, generateMusicPromptFromAnalysisHybrid, describeImageContent, generateHealthEvidencePrompt, generateAiComposerPrompt } from './geminiService';
+import { generateMusicPromptFromAnalysis, generateMusicPromptFromAnalysisHybrid, describeImageContent, generateHealthEvidencePrompt, generateAiComposerPrompt, classifyHealthCategoriesByAI } from './geminiService';
 import { classifyHealthCategories } from './healthCategoryClassifier';
 import { calculateSHA256, bufferToHex } from '../utils/cryptoUtils';
 import { exportMidi } from './midiService';
@@ -767,7 +767,12 @@ export async function sonifyImage(
     // Health Classification & Clinical BPM Auto-application
     let healthClassification: HealthClassificationResult | null = null;
     if (config.useHealthAgent) {
-        healthClassification = classifyHealthCategories(blockAnalysisResult.globalStats, imageDescription);
+        try {
+            healthClassification = await classifyHealthCategoriesByAI(blockAnalysisResult.globalStats, imageDescription);
+        } catch (e) {
+            console.warn("[SonificART Health] AI Classificatore fallito, uso fallback matematico:", e);
+            healthClassification = classifyHealthCategories(blockAnalysisResult.globalStats, imageDescription);
+        }
         config.bpm = healthClassification.primaryCategory.targetBpm;
         console.log('[SonificART Health] Classificazione WHO:', healthClassification.primaryCategory.label,
             `(${(healthClassification.primaryCategory.score * 100).toFixed(0)}%)`,
@@ -996,7 +1001,12 @@ async function sonifyImageArtisticOrHybrid(
     let healthClassification: HealthClassificationResult | null = null;
     if (config.useHealthAgent) {
         const descForClassification = paradigm === 'hybrid' ? imageDescription : 'Analisi Artistica';
-        healthClassification = classifyHealthCategories(blockAnalysisResult.globalStats, descForClassification);
+        try {
+            healthClassification = await classifyHealthCategoriesByAI(blockAnalysisResult.globalStats, descForClassification);
+        } catch (e) {
+            console.warn("[SonificART Health] AI Classificatore fallito, uso fallback matematico:", e);
+            healthClassification = classifyHealthCategories(blockAnalysisResult.globalStats, descForClassification);
+        }
         config.bpm = healthClassification.primaryCategory.targetBpm;
         console.log('[SonificART Health] Classificazione WHO (Artistico):', healthClassification.primaryCategory.label,
             `(${(healthClassification.primaryCategory.score * 100).toFixed(0)}%)`,
@@ -1225,9 +1235,10 @@ export async function processOrganicAI(
     let healthClassification = null;
     if (config.useHealthAgent) {
         try {
-            healthClassification = classifyHealthCategories(globalStats, imageDescription);
+            healthClassification = await classifyHealthCategoriesByAI(globalStats, imageDescription);
         } catch (e) {
-            console.warn("WHO classification fail:", e);
+            console.warn("WHO classification AI fail, fallback matematico:", e);
+            healthClassification = classifyHealthCategories(globalStats, imageDescription);
         }
     }
     progressCallback(2, 'completed');
