@@ -163,6 +163,12 @@ export interface BlockAnalysisResult {
         avg_saturation: number;
         hue_diversity: number;
         avg_variance: number;
+        dominantColors?: {
+            h: number;
+            s: number;
+            v: number;
+            percentage: number;
+        }[];
     }
 }
 

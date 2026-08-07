@@ -364,6 +364,16 @@ ${healthClassification.promptFragment}
 --- FINE CLASSIFICAZIONE WHO ---`
         : `Applica tutte le linee guida del WHO Health Evidence Network Report 67 per la composizione medica e terapeutica.`;
 
+    // Fetch the WHO-AI Orchestrator prompt (Conversion Table) from DB
+    const orchestratorPromptRaw = await backendApi.getAppSetting('agent_orchestrator_prompt');
+    const orchestratorPrompt = orchestratorPromptRaw 
+        ? orchestratorPromptRaw.replace(/<[^>]*>?/gm, '').trim() 
+        : `- [Obiettivo: Calming / Riduzione Stress] -> TRADUCI IN: [Soothing, Deep Drone, Slow Tempo, Cinematic Ambient, Resonant Low Strings, Meditative, Minimalist]
+- [Obiettivo: Regolazione Fisiologica / Dolore] -> TRADUCI IN: [Ethereal, Floating, Sustained Pads, Ambient Soundscape, Healing Hz, Soft Resonance, Drone]
+- [Obiettivo: Stimolazione Cognitiva / Motoria] -> TRADUCI IN: [Rhythmic, Ostinato, Minimalist Pulse, Clear Transients, Percussive Elements, Moderate Tempo, Focused]
+- [Obiettivo: Connessione Sociale / Emotiva] -> TRADUCI IN: [Warm, Orchestral, Expressive Cello, Emotional Cinematic, Harmonic Richness, Uplifting]
+- [Obiettivo: Energia / Motivazione] -> TRADUCI IN: [Energizing, Bright, Driving Rhythm, Dynamic Cinematic, Upbeat, Forward Momentum]`;
+
     const textPart = {
         text: `RUOLO: Sei un Maestro Compositore AI Senior e Neuroscienziato della Musica, specializzato nell'interpretazione OLISTICA delle opere d'arte visiva secondo i principi clinici del WHO (Health Evidence Network Report 67).
 
@@ -377,6 +387,7 @@ DATI DI INPUT:
 - BPM CLINICO TARGET WHO: ${configBpm} BPM
 - DURATA ESATTA DA RISPETTARE: ${durationSeconds.toFixed(0)} secondi.
 - STATISTICHE CROMATICHE: Saturazione ${(analysisStats.avg_saturation * 100).toFixed(0)}%, Diversità cromatica ${(analysisStats.hue_diversity * 100).toFixed(0)}%
+- PALETTE DOMINANTE ESTRATTA: ${analysisStats.dominantColors ? analysisStats.dominantColors.map(c => `[Tinta ${c.h}°, Saturazione ${Math.round(c.s*100)}%, Luminosità ${Math.round(c.v*100)}%] presente al ${c.percentage}%`).join(' | ') : 'N/D'}
 ${healthSection}
 
 DIVIETO ASSOLUTO DI INTERPRETAZIONE FIGURATIVA O SOGGETTIVA:
@@ -387,12 +398,9 @@ E' severamente vietato inserire riferimenti letterali al soggetto dell'opera (es
 
 TABELLA DI CONVERSIONE DETERMINISTICA (CLINICO -> ACUSTICO/GENERE):
 È severamente vietato inserire termini clinici, psicologici o medici (es. "WHO Target", "Stress", "Therapy", "Binaural", "Infrasound", "Regolazione Fisiologica") nei prompt per Suno e Udio.
-Devi convertire in modo deterministico l'obiettivo clinico nei seguenti tag musicali standard:
-- [Obiettivo: Calming / Riduzione Stress] -> TRADUCI IN: [Soothing, Deep Drone, Slow Tempo, Cinematic Ambient, Resonant Low Strings, Meditative, Minimalist]
-- [Obiettivo: Regolazione Fisiologica / Dolore] -> TRADUCI IN: [Ethereal, Floating, Sustained Pads, Ambient Soundscape, Healing Hz, Soft Resonance, Drone]
-- [Obiettivo: Stimolazione Cognitiva / Motoria] -> TRADUCI IN: [Rhythmic, Ostinato, Minimalist Pulse, Clear Transients, Percussive Elements, Moderate Tempo, Focused]
-- [Obiettivo: Connessione Sociale / Emotiva] -> TRADUCI IN: [Warm, Orchestral, Expressive Cello, Emotional Cinematic, Harmonic Richness, Uplifting]
-- [Obiettivo: Energia / Motivazione] -> TRADUCI IN: [Energizing, Bright, Driving Rhythm, Dynamic Cinematic, Upbeat, Forward Momentum]
+Devi convertire in modo deterministico l'obiettivo clinico e i colori dominanti della palette usando ESATTAMENTE queste istruzioni dell'Orchestratore WHO-AI:
+
+${orchestratorPrompt}
 
 REQUISITI DI SINFONIA PITTORICO-CLINICA & INGEGNERIA NEURO-ACUSTICA VISCERALE (MANDATORI PER TUTTE LE AI):
 1. **Genere Musicale 100% Dinamico ma Astratto (NESSUN BOILERPLATE O FRASI FISSE)**:
@@ -565,16 +573,17 @@ Se ci sono contrasti forti, alta saturazione e dinamismo visivo, "motivation".`;
 Il tuo compito è analizzare le statistiche visive di un'opera e abbinarle alla categoria medica WHO (Organizzazione Mondiale della Sanità) più adatta.
 
 DATI IN INGRESSO (OPERA VISIVA):
-- Descrizione / Soggetto: "\${imageDescription}"
-- Luminanza (Lightness): \${globalStats.avg_L.toFixed(1)}
-- Asse a* (Verde/Rosso): \${globalStats.avg_a.toFixed(1)}
-- Asse b* (Blu/Giallo): \${globalStats.avg_b.toFixed(1)}
-- Saturazione: \${(globalStats.avg_saturation * 100).toFixed(1)}%
-- Varianza (Contrasto/Dettaglio): \${globalStats.avg_variance.toFixed(1)}
-- Diversità Cromatica: \${(globalStats.hue_diversity * 100).toFixed(1)}%
+- Descrizione / Soggetto: "${imageDescription}"
+- Luminanza (Lightness): ${globalStats.avg_L.toFixed(1)}
+- Asse a* (Verde/Rosso): ${globalStats.avg_a.toFixed(1)}
+- Asse b* (Blu/Giallo): ${globalStats.avg_b.toFixed(1)}
+- Saturazione: ${(globalStats.avg_saturation * 100).toFixed(1)}%
+- Varianza (Contrasto/Dettaglio): ${globalStats.avg_variance.toFixed(1)}
+- Diversità Cromatica: ${(globalStats.hue_diversity * 100).toFixed(1)}%
+- Palette Dominante: ${globalStats.dominantColors ? globalStats.dominantColors.map(c => `[Hue ${c.h}°, Sat ${Math.round(c.s*100)}%, Val ${Math.round(c.v*100)}%] => ${c.percentage}% dell'opera`).join(' | ') : 'N/D'}
 
 ISTRUZIONI DEL CLASSIFICATORE (DA RISPETTARE TASSATIVAMENTE):
-"\${instructions}"
+"${instructions}"
 
 REGOLE DI SCORING:
 Assegna uno score da 0.0 a 1.0 a ciascuna delle 5 categorie WHO:

@@ -271,7 +271,9 @@ function analyzeBlocks(imageData: ImageData, pixelCount: number, imageBounds: { 
 
                 const blocks = [];
                 let totalL = 0, totalA = 0, totalB = 0, totalS = 0, totalVariance = 0, contentBlockCount = 0;
-                const hueCounts = {};
+                
+                // Track colors for dominant palette extraction
+                const hueStats = {}; // hueBin -> { count, sumS, sumV }
 
                 for (let gridY = 0; gridY < gridH; gridY++) {
                     for (let gridX = 0; gridX < gridW; gridX++) {
@@ -312,8 +314,14 @@ function analyzeBlocks(imageData: ImageData, pixelCount: number, imageBounds: { 
                             const hsv = rgbToHsv(avgR, avgG, avgB);
                             const lab = rgbToLab(avgR, avgG, avgB);
                             totalL += lab.l; totalA += lab.a; totalB += lab.b; totalS += hsv.s; totalVariance += variance;
+                            
+                            // Group by hue bin (0-350 in steps of 10)
                             const hueBin = Math.floor(hsv.h / 10) * 10;
-                            hueCounts[hueBin] = (hueCounts[hueBin] || 0) + 1;
+                            if (!hueStats[hueBin]) hueStats[hueBin] = { count: 0, sumS: 0, sumV: 0 };
+                            hueStats[hueBin].count += 1;
+                            hueStats[hueBin].sumS += hsv.s;
+                            hueStats[hueBin].sumV += hsv.v;
+                            
                             contentBlockCount++;
                             blocks.push({ r: avgR, g: avgG, b: avgB, position: { x: gridX, y: gridY }, hsv, lab, variance, isFiller: false });
                         } else {
@@ -322,19 +330,33 @@ function analyzeBlocks(imageData: ImageData, pixelCount: number, imageBounds: { 
                         }
                     }
                 }
-                const hueDiversity = Object.keys(hueCounts).length / 36;
+                
+                // Calculate hue diversity and dominant colors
+                const hueDiversity = Object.keys(hueStats).length / 36;
                 const safeContentBlockCount = contentBlockCount > 0 ? contentBlockCount : 1;
+                
+                // Extract top 3 dominant colors
+                const dominantColors = Object.keys(hueStats)
+                    .map(bin => ({
+                        h: parseInt(bin),
+                        s: hueStats[bin].sumS / hueStats[bin].count,
+                        v: hueStats[bin].sumV / hueStats[bin].count,
+                        percentage: Math.round((hueStats[bin].count / safeContentBlockCount) * 100)
+                    }))
+                    .sort((a, b) => b.percentage - a.percentage)
+                    .slice(0, 3); // Top 3 colors
+
                 return {
                     blocks,
                     totalPixelsAnalyzed: contentBlockCount * blockWidth * blockHeight, // Only content pixels
                     coveragePercentage: (contentBlockCount / (gridW * gridH)) * 100,
                     analysisMethod: 'Fixed Grid 32x32 (Framework v1.0)',
                     gridSize: gridSize, 
-                    // gridDimensions removed (square)
                     blockSize: blockWidth,
                     globalStats: { 
                         avg_L: totalL/safeContentBlockCount, avg_a: totalA/safeContentBlockCount, avg_b: totalB/safeContentBlockCount, 
                         avg_saturation: totalS/safeContentBlockCount, hue_diversity: hueDiversity, avg_variance: totalVariance / safeContentBlockCount,
+                        dominantColors
                     }
                 };
             }

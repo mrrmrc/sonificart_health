@@ -489,6 +489,7 @@ export const AdminPanel: React.FC = () => {
     // Agents State
     const [healthAgentPrompt, setHealthAgentPrompt] = useState('');
     const [agentMatcherPrompt, setAgentMatcherPrompt] = useState('');
+    const [agentOrchestratorPrompt, setAgentOrchestratorPrompt] = useState('');
     const [healthAgentDocument, setHealthAgentDocument] = useState('');
     const [uploadingAgentDoc, setUploadingAgentDoc] = useState(false);
     const [knowledgeBase, setKnowledgeBase] = useState<Array<{url: string, filename: string, rules: string, extracting?: boolean}>>([]);
@@ -547,9 +548,11 @@ export const AdminPanel: React.FC = () => {
             if (activeTab === 'agents') {
                 const promptRaw = await api.getAppSetting('agent_health_prompt');
                 const matcherPromptRaw = await api.getAppSetting('agent_matcher_prompt');
+                const orchestratorPromptRaw = await api.getAppSetting('agent_orchestrator_prompt');
                 const docRaw = await api.getAppSetting('agent_health_document');
                 setHealthAgentPrompt(promptRaw.replace(/<[^>]*>?/gm, '').trim());
                 setAgentMatcherPrompt(matcherPromptRaw.replace(/<[^>]*>?/gm, '').trim());
+                setAgentOrchestratorPrompt(orchestratorPromptRaw.replace(/<[^>]*>?/gm, '').trim());
                 setHealthAgentDocument(docRaw.replace(/<[^>]*>?/gm, '').trim());
                 try {
                     const kbRaw = await api.getAppSetting('agent_health_knowledge');
@@ -1256,6 +1259,30 @@ export const AdminPanel: React.FC = () => {
 4. Social/Emotional (BPM 86): Colori caldi (rosso/arancio), presenza di persone.
 5. Motivation (BPM 118): Contrasti forti, alta saturazione, dinamismo visivo.`}
                             </pre>
+                        </div>
+                    </div>
+
+                    <div className="bg-black/30 p-6 rounded-lg border border-white/10 mb-6">
+                        <div className="flex justify-between items-center mb-2">
+                            <div>
+                                <h4 className="font-bold text-white">WHO-AI Music Orchestrator</h4>
+                                <p className="text-xs text-gray-400">Traduci gli stati d'animo clinici in Tag Acustici per i generatori musicali (Suno/Soundverse).</p>
+                            </div>
+                            <i className="fas fa-music text-brand-accent text-2xl"></i>
+                        </div>
+                        <div className="mb-4 mt-4">
+                            <label className="text-xs font-bold text-brand-text-secondary uppercase mb-1 block">Tabella di Conversione Deterministica</label>
+                            <textarea 
+                                value={agentOrchestratorPrompt || `- [Obiettivo: Calming / Riduzione Stress] -> TRADUCI IN: [Soothing, Deep Drone, Slow Tempo, Cinematic Ambient, Resonant Low Strings, Meditative, Minimalist]
+- [Obiettivo: Regolazione Fisiologica / Dolore] -> TRADUCI IN: [Ethereal, Floating, Sustained Pads, Ambient Soundscape, Healing Hz, Soft Resonance, Drone]
+- [Obiettivo: Stimolazione Cognitiva / Motoria] -> TRADUCI IN: [Rhythmic, Ostinato, Minimalist Pulse, Clear Transients, Percussive Elements, Moderate Tempo, Focused]
+- [Obiettivo: Connessione Sociale / Emotiva] -> TRADUCI IN: [Warm, Orchestral, Expressive Cello, Emotional Cinematic, Harmonic Richness, Uplifting]
+- [Obiettivo: Energia / Motivazione] -> TRADUCI IN: [Energizing, Bright, Driving Rhythm, Dynamic Cinematic, Upbeat, Forward Momentum]`}
+                                onChange={e => setAgentOrchestratorPrompt(e.target.value)}
+                                className="w-full bg-black/50 border border-white/10 rounded p-4 text-white font-mono text-xs h-40 focus:border-brand-accent focus:outline-none"
+                                placeholder="Definisci i tag acustici..."
+                            />
+                            <p className="text-[10px] text-gray-500 mt-2">Usa questa tabella per orchestrare gli strumenti e il mood sonoro in base alle categorie WHO e ai Colori Dominanti identificati dal Matcher.</p>
                         </div>
                     </div>
                     
