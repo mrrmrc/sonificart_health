@@ -494,6 +494,16 @@ export const AdminPanel: React.FC = () => {
     const [knowledgeBase, setKnowledgeBase] = useState<Array<{url: string, filename: string, rules: string, extracting?: boolean}>>([]);
     const [extractingDocIndex, setExtractingDocIndex] = useState<number | null>(null);
 
+    // Conflict Resolution State
+    const [conflictResolution, setConflictResolution] = useState<{
+        isOpen: boolean;
+        contradictions: string[];
+        additions: string[];
+        mergedPrompt: string;
+        pendingUrl: string;
+        pendingKb: any[];
+    } | null>(null);
+
     // MODAL STATE
     const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean, title: string, message: string, onConfirm: () => void, type: 'info' | 'warning' | 'danger' | 'success', singleButton?: boolean }>({ isOpen: false, title: '', message: '', onConfirm: () => { }, type: 'info' });
 
@@ -756,16 +766,25 @@ export const AdminPanel: React.FC = () => {
             const newKb = [...knowledgeBase, newDoc];
             setKnowledgeBase(newKb);
             const newIndex = newKb.length - 1;
-            // Auto-extract rules
+            // Auto-extract rules and run conflict resolution
             try {
-                const { extractDirectivesFromPDF } = await import('../services/geminiService');
+                const { extractDirectivesFromPDF, assessRulesConflict } = await import('../services/geminiService');
                 const rules = await extractDirectivesFromPDF(url);
+                
+                // Instead of auto-saving, we run conflict assessment
+                const assessment = await assessRulesConflict(rules);
+                
                 const updatedKb = newKb.map((doc, i) => i === newIndex ? { ...doc, rules, extracting: false } : doc);
-                setKnowledgeBase(updatedKb);
-                // Auto-save to DB so changes are not lost
-                await api.updateAppSetting('agent_health_knowledge', JSON.stringify(updatedKb));
-                if (url) await api.updateAppSetting('agent_health_document', url);
-                if (rules) await api.updateAppSetting('agent_health_prompt', rules);
+                
+                setConflictResolution({
+                    isOpen: true,
+                    contradictions: assessment.contradictions,
+                    additions: assessment.additions,
+                    mergedPrompt: assessment.mergedPrompt,
+                    pendingUrl: url,
+                    pendingKb: updatedKb
+                });
+
             } catch (extractErr: any) {
                 console.error("Estrazione PDF fallita:", extractErr);
                 const updatedKb = newKb.map((doc, i) => i === newIndex ? { ...doc, rules: '⚠️ Estrazione fallita: ' + extractErr.message, extracting: false } : doc);
@@ -777,6 +796,44 @@ export const AdminPanel: React.FC = () => {
         } finally {
             setUploadingAgentDoc(false);
             e.target.value = '';
+        }
+    };
+
+    const handleApplyConflictResolution = async () => {
+        if (!conflictResolution) return;
+        setIsLoading(true);
+        try {
+            setKnowledgeBase(conflictResolution.pendingKb);
+            setHealthAgentPrompt(conflictResolution.mergedPrompt);
+            await api.updateAppSetting('agent_health_knowledge', JSON.stringify(conflictResolution.pendingKb));
+            await api.updateAppSetting('agent_health_document', conflictResolution.pendingUrl);
+            await api.updateAppSetting('agent_health_prompt', conflictResolution.mergedPrompt);
+            setConfirmModal({
+                isOpen: true, title: "Regole Aggiornate", message: "Il PDF è stato integrato e le regole sono state salvate.", type: 'success', singleButton: true, onConfirm: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+            });
+        } catch (e) {
+            alert("Errore durante il salvataggio dell'integrazione.");
+        } finally {
+            setIsLoading(false);
+            setConflictResolution(null);
+        }
+    };
+
+    const handleResetAgents = async () => {
+        if (!window.confirm("Sei sicuro di voler cancellare tutti i PDF e ripristinare il WHO Health Agent ai valori di base?")) return;
+        setIsLoading(true);
+        try {
+            await api.updateAppSetting('agent_health_prompt', '');
+            await api.updateAppSetting('agent_health_document', '');
+            await api.updateAppSetting('agent_health_knowledge', '[]');
+            setHealthAgentPrompt('');
+            setHealthAgentDocument('');
+            setKnowledgeBase([]);
+            alert("Agenti ripristinati con successo.");
+        } catch (e) {
+            alert("Errore durante il ripristino.");
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -1184,20 +1241,28 @@ export const AdminPanel: React.FC = () => {
                     <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><i className="fas fa-robot text-brand-accent"></i> Configurazione Agenti AI</h3>
 
                     <div className="bg-black/30 p-6 rounded-lg border border-white/10 mb-6">
-                        <h4 className="font-bold text-white mb-2">WHO Matcher Agent (Classificatore)</h4>
-                        <p className="text-xs text-gray-400 mb-4">L'agente che legge le statistiche visive dell'immagine e decide a quale categoria terapeutica assegnarla.</p>
-                        <div className="mb-6">
-                            <label className="text-xs font-bold text-brand-text-secondary uppercase mb-1 block">Prompt del Classificatore</label>
-                            <textarea 
-                                value={agentMatcherPrompt}
-                                onChange={e => setAgentMatcherPrompt(e.target.value)}
-                                className="w-full bg-black/50 border border-white/10 rounded p-3 text-white font-mono text-xs h-32 focus:border-brand-accent focus:outline-none"
-                                placeholder="Istruzioni per abbinare le statistiche visive (colori, luminosità) alle categorie WHO. Es: 'Se l'immagine ha colori blu, assegnala a Calming...'"
-                            />
+                        <div className="flex justify-between items-center mb-2">
+                            <div>
+                                <h4 className="font-bold text-white">WHO Matcher Agent (Classificatore)</h4>
+                                <p className="text-xs text-gray-400">Logica base certificata per l'abbinamento colori-terapia. <span className="text-brand-accent">Sola lettura per protezione certificazione.</span></p>
+                            </div>
+                            <i className="fas fa-lock text-brand-accent text-2xl"></i>
+                        </div>
+                        <div className="mb-4 mt-4">
+                            <pre className="w-full bg-black/50 border border-white/10 rounded p-4 text-gray-300 font-mono text-xs whitespace-pre-wrap overflow-auto">
+{`1. Calming (BPM 64): Colori freddi (blu/verde), bassa saturazione.
+2. Physiological (BPM 74): Elevata varianza, colori neutri.
+3. Cognitive/Motor (BPM 108): Alta diversità cromatica, forte dettaglio.
+4. Social/Emotional (BPM 86): Colori caldi (rosso/arancio), presenza di persone.
+5. Motivation (BPM 118): Contrasti forti, alta saturazione, dinamismo visivo.`}
+                            </pre>
                         </div>
                     </div>
                     
-                    <div className="bg-black/30 p-6 rounded-lg border border-white/10 mb-6">
+                    <div className="bg-black/30 p-6 rounded-lg border border-white/10 mb-6 relative">
+                        <button onClick={handleResetAgents} className="absolute top-6 right-6 text-xs bg-red-900/50 hover:bg-red-900/80 text-red-200 border border-red-500/30 px-3 py-1 rounded transition-colors" title="Cancella tutti i PDF e il prompt personalizzato">
+                            <i className="fas fa-undo mr-1"></i> Ripristina Default
+                        </button>
                         <h4 className="font-bold text-white mb-2">WHO Health Agent (Benessere)</h4>
                         <p className="text-xs text-gray-400 mb-4">Istruzioni specifiche e base di conoscenza RAG per l'agente del benessere.</p>
                         
@@ -1573,6 +1638,65 @@ export const AdminPanel: React.FC = () => {
                 onConfirm={confirmModal.onConfirm}
                 onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
             />
+
+            {/* CONFLICT RESOLUTION MODAL */}
+            {conflictResolution && conflictResolution.isOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+                    <div className="bg-[#1e1e2e] p-6 rounded-xl max-w-2xl w-full border border-yellow-500/30 space-y-4 max-h-[90vh] flex flex-col">
+                        <h3 className="text-xl font-bold text-yellow-400 flex items-center gap-2">
+                            <i className="fas fa-exclamation-triangle"></i> Valutazione Impatto Scientifico
+                        </h3>
+                        <p className="text-sm text-gray-300">
+                            Gemini ha analizzato il nuovo PDF e lo ha confrontato con le regole certificate di default.
+                        </p>
+                        
+                        <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+                            {conflictResolution.contradictions.length > 0 ? (
+                                <div className="bg-red-900/20 border border-red-500/30 p-4 rounded-lg">
+                                    <h4 className="text-red-400 font-bold mb-2"><i className="fas fa-times-circle mr-2"></i>Contraddizioni Rilevate (Ignorate)</h4>
+                                    <ul className="list-disc list-inside text-sm text-red-200/80 space-y-1">
+                                        {conflictResolution.contradictions.map((c, i) => <li key={i}>{c}</li>)}
+                                    </ul>
+                                </div>
+                            ) : (
+                                <div className="bg-green-900/20 border border-green-500/30 p-4 rounded-lg">
+                                    <h4 className="text-green-400 font-bold mb-2"><i className="fas fa-check-circle mr-2"></i>Nessuna Contraddizione</h4>
+                                    <p className="text-sm text-green-200/80">Il documento è in perfetta armonia con le regole base.</p>
+                                </div>
+                            )}
+
+                            {conflictResolution.additions.length > 0 && (
+                                <div className="bg-blue-900/20 border border-blue-500/30 p-4 rounded-lg">
+                                    <h4 className="text-blue-400 font-bold mb-2"><i className="fas fa-plus-circle mr-2"></i>Integrazioni Accettate</h4>
+                                    <ul className="list-disc list-inside text-sm text-blue-200/80 space-y-1">
+                                        {conflictResolution.additions.map((a, i) => <li key={i}>{a}</li>)}
+                                    </ul>
+                                </div>
+                            )}
+
+                            <div className="bg-black/50 border border-white/10 p-4 rounded-lg">
+                                <h4 className="text-white font-bold mb-2">Prompt Finale (Health Agent)</h4>
+                                <pre className="text-xs text-gray-400 font-mono whitespace-pre-wrap">{conflictResolution.mergedPrompt}</pre>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3 pt-4 border-t border-white/10 mt-4">
+                            <button
+                                onClick={() => setConflictResolution(null)}
+                                className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+                            >
+                                Annulla e Scarta PDF
+                            </button>
+                            <button
+                                onClick={handleApplyConflictResolution}
+                                className="px-4 py-2 text-sm bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded shadow-lg transition-colors"
+                            >
+                                Approva e Applica
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
-};
+};

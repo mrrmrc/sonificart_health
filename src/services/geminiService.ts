@@ -554,17 +554,11 @@ export async function classifyHealthCategoriesByAI(
 
     const ai = new GoogleGenAI({ apiKey: apiKey });
 
-    // Fetch the Matcher Agent configuration from the admin DB
-    const adminMatcherPromptRaw = await backendApi.getAppSetting('agent_matcher_prompt');
-    const adminMatcherPrompt = adminMatcherPromptRaw ? adminMatcherPromptRaw.replace(/<[^>]*>?/gm, '').trim() : '';
-
-    const defaultPrompt = `Se l'immagine ha colori freddi (blu/verde) e saturazione bassa, classificala come "calming".
+    const instructions = `Se l'immagine ha colori freddi (blu/verde) e saturazione bassa, classificala come "calming".
 Se ha elevata varianza e colori neutri, "physiological".
 Se ha alta diversità cromatica e forte dettaglio, "cognitive_motor".
 Se ci sono persone o colori caldi (rosso/arancio), "social_emotional".
 Se ci sono contrasti forti, alta saturazione e dinamismo visivo, "motivation".`;
-
-    const instructions = adminMatcherPrompt || defaultPrompt;
 
     const textPart = {
         text: `RUOLO: Sei il WHO Matcher Agent (Classificatore Terapeutico AI).
@@ -661,5 +655,76 @@ RISPONDI SOLO CON UN JSON FORMATTATO. NON AGGIUNGERE TESTO.`
     } catch (e) {
         console.error("Errore Gemini WHO Matcher Agent:", e);
         throw e; // Rilancia per far usare il fallback matematico al chiamante
+    }
+}
+
+export async function assessRulesConflict(newRules: string): Promise<{
+    contradictions: string[];
+    additions: string[];
+    mergedPrompt: string;
+}> {
+    const apiKey = await getGeminiApiKey();
+    if (!apiKey) {
+        throw new Error("Chiave API Google mancante.");
+    }
+
+    const ai = new GoogleGenAI({ apiKey: apiKey });
+
+    const baseCertifiedRules = `
+1. Calming (BPM 64): Colori freddi (blu/verde), bassa saturazione.
+2. Physiological (BPM 74): Elevata varianza, colori neutri.
+3. Cognitive/Motor (BPM 108): Alta diversità cromatica, forte dettaglio.
+4. Social/Emotional (BPM 86): Colori caldi (rosso/arancio), presenza di persone.
+5. Motivation (BPM 118): Contrasti forti, alta saturazione, dinamismo visivo.
+`;
+
+    const textPart = {
+        text: `RUOLO: Sei il revisore scientifico di SonificA.R.T. Health.
+Il tuo compito è analizzare delle nuove linee guida (estratte da un PDF medico) e confrontarle con le "Regole Base Certificate" del sistema.
+
+REGOLE BASE CERTIFICATE:
+\${baseCertifiedRules}
+
+NUOVE LINEE GUIDA:
+\${newRules}
+
+ISTRUZIONI:
+1. Trova eventuali CONTRADDIZIONI (es. il PDF associa il rosso alla calma, mentre la base lo associa alla socialità/energia).
+2. Trova le INTEGRAZIONI (nuove regole che non vanno in conflitto, es. uso di frequenze specifiche).
+3. Genera un PROMPT UNITO (mergedPrompt) che mantiene intatte le Regole Base, ma aggiunge in coda le Integrazioni in modo armonico, ignorando le regole in contraddizione colla base.
+
+RISPONDI SOLO CON UN JSON FORMATTATO (nessun testo fuori dal JSON):
+{
+  "contradictions": ["descrizione conflitto 1", ...],
+  "additions": ["descrizione integrazione 1", ...],
+  "mergedPrompt": "testo finale da usare come prompt per l'Health Agent"
+}
+`
+    };
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: { parts: [textPart] },
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        contradictions: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        additions: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        mergedPrompt: { type: Type.STRING }
+                    },
+                    required: ["contradictions", "additions", "mergedPrompt"]
+                }
+            }
+        });
+
+        const jsonText = response.text?.trim();
+        if (!jsonText) throw new Error("Risposta vuota per l'analisi dei conflitti");
+        return JSON.parse(jsonText);
+    } catch (e) {
+        console.error("Errore Gemini Conflict Assessment:", e);
+        throw e;
     }
 }
