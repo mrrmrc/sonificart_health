@@ -99,6 +99,9 @@ export const CamPage: React.FC = () => {
     const [colorTolerance, setColorTolerance] = useState(45);
     const [minRegionPx, setMinRegionPx] = useState(80);
     const [enable3DScan, setEnable3DScan] = useState(false);
+    
+    // Time-Stretching (Suno/Limit)
+    const [targetDurationMax, setTargetDurationMax] = useState<number>(0); // 0 = Naturale (Nessun limite)
 
     const canvasRef      = useRef<HTMLCanvasElement>(null);
     const cursorCanvasRef = useRef<HTMLCanvasElement>(null); // Nuovo canvas per il cursore in sovraimpressione
@@ -527,7 +530,13 @@ export const CamPage: React.FC = () => {
                 regionsToPlay.sort((a, b) => depthOrder[a.depthLayer] - depthOrder[b.depthLayer]);
             }
 
-            const NOTE_DURATION = 0.12; 
+            // Calcolo Time-Stretching
+            let globalNoteDuration = 0.12;
+            const naturalTotalDuration = regionsToPlay.length * 16 * 0.12;
+            if (targetDurationMax > 0 && naturalTotalDuration > targetDurationMax) {
+                globalNoteDuration = targetDurationMax / (regionsToPlay.length * 16);
+            }
+
             let globalTimeOffset = 0; 
 
             const organicEvents: TransformedNoteEvent[] = [];
@@ -554,7 +563,7 @@ export const CamPage: React.FC = () => {
                 const { tradition } = selectCulturalTradition(stats as any, traditions, false);
                 const { pattern } = determineCulturalScanPattern(tradition.cultural_family);
 
-                const NOTE_DURATION = 0.12; 
+                const NOTE_DURATION = globalNoteDuration; 
                 const NOTES_PER_SHAPE = 16;
                 const targetBlockSize = Math.max(1, Math.round(Math.sqrt(region.pixelCount / NOTES_PER_SHAPE)));
                 
@@ -1196,9 +1205,41 @@ export const CamPage: React.FC = () => {
                                 
                                 <div className="flex justify-between items-center text-sm font-mono text-white bg-black/40 p-3 rounded-lg border border-white/5 mb-4">
                                     <span>Durata Stimata Audio:</span>
-                                    <strong className="text-emerald-400 text-lg">
-                                        {Math.floor((regions.length * 16 * 0.12) / 60)}m {Math.floor((regions.length * 16 * 0.12) % 60)}s
+                                    <strong className="text-emerald-400 font-mono text-lg">
+                                        {Math.floor(
+                                            (targetDurationMax > 0 && ((regions.length * 16 * 0.12) > targetDurationMax)) 
+                                            ? targetDurationMax / 60 
+                                            : ((regions.length * 16 * 0.12) / 60)
+                                        )}m 
+                                        {' '}
+                                        {Math.floor(
+                                            (targetDurationMax > 0 && ((regions.length * 16 * 0.12) > targetDurationMax)) 
+                                            ? targetDurationMax % 60 
+                                            : ((regions.length * 16 * 0.12) % 60)
+                                        )}s
+                                        {targetDurationMax > 0 && ((regions.length * 16 * 0.12) > targetDurationMax) && (
+                                            <span className="text-[10px] text-amber-400 ml-2">(Compresso)</span>
+                                        )}
                                     </strong>
+                                </div>
+
+                                {/* TARGET DURATION SELECTOR */}
+                                <div className="space-y-1 mb-4">
+                                    <div className="flex justify-between text-xs font-mono text-white/70">
+                                        <span>Target Durata Massima</span>
+                                    </div>
+                                    <select 
+                                        className="w-full bg-black/50 border border-white/20 text-white text-xs p-1.5 rounded outline-none"
+                                        value={targetDurationMax}
+                                        onChange={(e) => setTargetDurationMax(Number(e.target.value))}
+                                        disabled={animationMode !== 'idle'}
+                                    >
+                                        <option value={0}>Naturale (Nessun limite)</option>
+                                        <option value={210}>Suno Safe (Max 3m 30s)</option>
+                                        <option value={120}>Radio Edit (Max 2m 0s)</option>
+                                        <option value={60}>Fast (Max 1m 0s)</option>
+                                    </select>
+                                    <p className="text-[9px] text-white/40 leading-tight mt-1">Comprime automaticamente la velocità per rientrare nel limite.</p>
                                 </div>
 
                                 {/* PRESET BUTTONS */}
@@ -1237,9 +1278,16 @@ export const CamPage: React.FC = () => {
                                     <p className="text-[9px] text-white/40 leading-tight mt-1">Scegli se considerare il colore netto o frammentare includendo le minime sfumature.</p>
                                 </div>
                                 <div className="space-y-1 pt-2">
-                                    <div className="flex justify-between text-xs font-mono text-white/70">
+                                    <div className="flex justify-between text-xs font-mono text-white/70 items-center">
                                         <span>Dimensione Cursore Scansione (Filtro Rumore)</span>
-                                        <span className="text-cyan-400">{minRegionPx} px</span>
+                                        <div className="flex items-center gap-2">
+                                            <div 
+                                                title="Le forme più piccole di questo quadrato verranno ignorate"
+                                                style={{ width: Math.max(2, Math.sqrt(minRegionPx)), height: Math.max(2, Math.sqrt(minRegionPx)) }} 
+                                                className="bg-teal-500/50 border border-teal-400 shadow-[0_0_5px_rgba(20,184,166,0.5)]"
+                                            ></div>
+                                            <span className="text-cyan-400 min-w-[50px] text-right">{minRegionPx} px</span>
+                                        </div>
                                     </div>
                                     <input 
                                         type="range" min="0" max="1000" step="10"
