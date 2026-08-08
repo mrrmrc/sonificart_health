@@ -572,7 +572,8 @@ export const CamPage: React.FC = () => {
 
                 const NOTE_DURATION = globalNoteDuration; 
                 const NOTES_PER_SHAPE = 16;
-                const targetBlockSize = Math.max(1, Math.round(Math.sqrt(region.pixelCount / NOTES_PER_SHAPE)));
+                const boundingBoxArea = Math.max(1, (region.maxX - region.minX + 1) * (region.maxY - region.minY + 1));
+                const targetBlockSize = Math.max(1, Math.round(Math.sqrt(boundingBoxArea / NOTES_PER_SHAPE)));
                 
                 const blockSize = targetBlockSize;
                 const gridW = Math.max(1, Math.ceil((region.maxX - region.minX) / blockSize));
