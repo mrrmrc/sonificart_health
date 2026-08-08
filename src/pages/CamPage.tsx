@@ -440,6 +440,13 @@ export const CamPage: React.FC = () => {
         let step = 0;
         setCurrentStep(0);
         setProgressPct(0);
+        
+        let stepDurationMs = 120;
+        const naturalTotalDuration = regionsRef.current.length * 16 * 0.12;
+        if (targetDurationMax > 0 && naturalTotalDuration > targetDurationMax) {
+            const compressionRatio = targetDurationMax / naturalTotalDuration;
+            stepDurationMs = 120 * compressionRatio;
+        }
 
         timerRef.current = setInterval(() => {
             const rList = regionsRef.current;
@@ -474,7 +481,7 @@ export const CamPage: React.FC = () => {
             setCurrentStep(step + 1);
             setProgressPct(Math.round(((step + 1) / rList.length) * 100));
             step++;
-        }, 120);
+        }, stepDurationMs);
     };
 
     const startListenAll = async () => {
@@ -821,7 +828,11 @@ export const CamPage: React.FC = () => {
                 const { pattern, name: patternName } = determineCulturalScanPattern(tradition.cultural_family);
 
                 // 3. Generazione Micro-Griglia Dinamica basata sulla durata desiderata
-                const NOTE_DURATION = 0.12; 
+                let NOTE_DURATION = 0.12; 
+                const naturalTotalDuration = regionsRef.current.length * 16 * 0.12;
+                if (targetDurationMax > 0 && naturalTotalDuration > targetDurationMax) {
+                    NOTE_DURATION = targetDurationMax / (regionsRef.current.length * 16);
+                }
                 const NOTES_PER_SHAPE = 16;
                 const targetBlockSize = Math.max(1, Math.round(Math.sqrt(region.pixelCount / NOTES_PER_SHAPE)));
                 const wImg = imageDimRef.current.w;
@@ -1280,13 +1291,18 @@ export const CamPage: React.FC = () => {
                                 <div className="space-y-1 pt-2">
                                     <div className="flex justify-between text-xs font-mono text-white/70 items-center">
                                         <span>Dimensione Cursore Scansione (Filtro Rumore)</span>
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-3">
                                             <div 
                                                 title="Le forme più piccole di questo quadrato verranno ignorate"
-                                                style={{ width: Math.max(2, Math.sqrt(minRegionPx)), height: Math.max(2, Math.sqrt(minRegionPx)) }} 
-                                                className="bg-teal-500/50 border border-teal-400 shadow-[0_0_5px_rgba(20,184,166,0.5)]"
+                                                style={{ 
+                                                    width: `${Math.max(2, Math.sqrt(minRegionPx))}px`, 
+                                                    height: `${Math.max(2, Math.sqrt(minRegionPx))}px`,
+                                                    minWidth: `${Math.max(2, Math.sqrt(minRegionPx))}px`,
+                                                    minHeight: `${Math.max(2, Math.sqrt(minRegionPx))}px`
+                                                }} 
+                                                className="bg-teal-500/50 border border-teal-400 shadow-[0_0_5px_rgba(20,184,166,0.5)] flex-shrink-0 rounded-sm"
                                             ></div>
-                                            <span className="text-cyan-400 min-w-[50px] text-right">{minRegionPx} px</span>
+                                            <span className="text-cyan-400 min-w-[50px] text-right font-bold">{minRegionPx} px</span>
                                         </div>
                                     </div>
                                     <input 

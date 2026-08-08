@@ -27,6 +27,10 @@ export const Footer: React.FC = () => {
                         &copy; {new Date().getFullYear()} SonificA.R.T. Framework. Tutti i diritti riservati.
                         <a href="mailto:mail@sonificart.com" className="opacity-50 ml-2 hover:opacity-100 hover:text-brand-accent transition-all">mail@sonificart.com</a>
                     </p>
+                    <p className="text-[10px] text-gray-600/50 mt-2 font-mono">
+                        Ultimo Deploy: {/* @ts-ignore */}
+                        {typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : 'Dev Environment'}
+                    </p>
                 </div>
             </footer>
 
