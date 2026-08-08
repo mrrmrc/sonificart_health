@@ -500,12 +500,12 @@ Rispondi SOLO con il JSON con campi: main_prompt_ita, technical_parameters, just
     } catch (e) {
         console.error("Errore Gemini AI Composer Prompt:", e);
         return {
-            main_prompt_ita: `Composizione Olistica Terapeutica WHO: ${imageDescription}`,
+            main_prompt_ita: `Composizione Olistica Terapeutica WHO`,
             technical_parameters: `${configBpm} BPM`,
-            justification: "Composizione AI basata sull'interpretazione olistica dell'opera d'arte.",
-            suno_prompt: `[Duration: ${durationSeconds.toFixed(0)}s], [${configBpm} BPM], [Visual Theme: ${imageDescription}], [Strictly Instrumental], [Holistic Composition]`,
-            udio_prompt: `visual theme: ${imageDescription}, holistic, therapeutic, instrumental, ${configBpm} bpm`,
-            soundverse_prompt: `Visual Theme: ${imageDescription} | Genre: Cinematic Health Composition | Tempo: ${configBpm} BPM | Style: Holistic Wellness | Instruments: Cello, Flute, Piano | Duration: ${durationSeconds.toFixed(0)}s`,
+            justification: "Composizione AI basata sull'interpretazione olistica dell'opera d'arte (FALLBACK DI SICUREZZA).",
+            suno_prompt: `[Duration: ${durationSeconds.toFixed(0)}s], [${configBpm} BPM], [Genre: Cinematic Abstract], [Color Mood: Ethereal Abstract], [Melodic Motif: ${melodyNotesSequence || 'D4 - E4'}], [Strictly Instrumental], [Holistic Composition]`,
+            udio_prompt: `cinematic abstract, holistic, therapeutic, instrumental, ${configBpm} bpm`,
+            soundverse_prompt: `Genre: Cinematic Health Composition | Tempo: ${configBpm} BPM | Style: Holistic Wellness | Instruments: Cello, Flute, Piano | Duration: ${durationSeconds.toFixed(0)}s`,
             negative_prompt: "lullaby, noisy, harsh",
             suno_lyrics: `[0:00] [Intro: Ethereal 24Hz Sub-Bass Ambient, 432Hz Base Tuning]\n[0:25] [Section A: Main Theme & Strings Crescendo]\n[1:00] [Section B: Visceral Resonant Textures & 3D Panning]\n[${(durationSeconds * 0.85).toFixed(0)}s] [Outro: Sub-Bass Ambient Dissolve]\n[${durationSeconds.toFixed(0)}s] [End]`,
             semantic_analysis: {
