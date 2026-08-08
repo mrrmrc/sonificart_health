@@ -583,28 +583,45 @@ export const CamPage: React.FC = () => {
                 const shapePixels = new Set(region.pixelIndices);
                 const backup = pixelDataRef.current!;
                 
+                // O(N) optimization: Map pixels directly to blocks instead of O(BoundingBox) grid scanning
+                const blockDataMap = new Map<number, { sumR: number, sumG: number, sumB: number, count: number }>();
+                
+                for (const pIdx of region.pixelIndices) {
+                    const x = pIdx % w;
+                    const y = Math.floor(pIdx / w);
+                    
+                    const gx = Math.floor((x - region.minX) / blockSize);
+                    const gy = Math.floor((y - region.minY) / blockSize);
+                    
+                    const safeGx = Math.max(0, Math.min(gridW - 1, gx));
+                    const safeGy = Math.max(0, Math.min(gridH - 1, gy));
+                    const blockIdx = safeGy * gridW + safeGx;
+                    
+                    let bData = blockDataMap.get(blockIdx);
+                    if (!bData) {
+                        bData = { sumR: 0, sumG: 0, sumB: 0, count: 0 };
+                        blockDataMap.set(blockIdx, bData);
+                    }
+                    
+                    const dataIdx = pIdx * 4;
+                    bData.sumR += backup[dataIdx];
+                    bData.sumG += backup[dataIdx + 1];
+                    bData.sumB += backup[dataIdx + 2];
+                    bData.count++;
+                }
+
                 for (const blockIdx of scanSequence) {
                     const gx = blockIdx % gridW;
                     const gy = Math.floor(blockIdx / gridW);
                     
-                    const startX = region.minX + gx * blockSize;
-                    const startY = region.minY + gy * blockSize;
-                    const endX = startX + blockSize;
-                    const endY = startY + blockSize;
+                    const bData = blockDataMap.get(blockIdx);
+                    let sumR = 0, sumG = 0, sumB = 0, count = 0;
                     
-                    let sumR=0, sumG=0, sumB=0, count=0;
-                    
-                    for (let y = startY; y < endY; y++) {
-                        for (let x = startX; x < endX; x++) {
-                            const pIdx = y * w + x;
-                            if (shapePixels.has(pIdx)) {
-                                const dataIdx = pIdx * 4;
-                                sumR += backup[dataIdx];
-                                sumG += backup[dataIdx+1];
-                                sumB += backup[dataIdx+2];
-                                count++;
-                            }
-                        }
+                    if (bData) {
+                        sumR = bData.sumR;
+                        sumG = bData.sumG;
+                        sumB = bData.sumB;
+                        count = bData.count;
                     }
 
                     if (count > 0) {
