@@ -549,6 +549,15 @@ export const CamPage: React.FC = () => {
             const organicEvents: TransformedNoteEvent[] = [];
             let sumL = 0, sumA = 0, sumB = 0, sumSat = 0, sumHueDiv = 0, sumVar = 0;
 
+            const canvas = canvasRef.current;
+            const ctx = canvas?.getContext('2d', { willReadFrequently: true });
+            let liveImgData: ImageData | null = null;
+            if (canvas && ctx && pixelDataRef.current) {
+                ctx.fillStyle = '#050B14'; // Sfondo blu scuro del tema
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                liveImgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            }
+
             for (const region of regionsToPlay) {
                 const hsv = rgbToHsv(region.r, region.g, region.b);
                 const shapeSizePct = region.pixelCount / (imageDimRef.current.w * imageDimRef.current.h);
@@ -608,6 +617,18 @@ export const CamPage: React.FC = () => {
                     bData.sumG += backup[dataIdx + 1];
                     bData.sumB += backup[dataIdx + 2];
                     bData.count++;
+                    
+                    if (liveImgData && backup) {
+                        liveImgData.data[dataIdx] = backup[dataIdx];
+                        liveImgData.data[dataIdx + 1] = backup[dataIdx + 1];
+                        liveImgData.data[dataIdx + 2] = backup[dataIdx + 2];
+                        liveImgData.data[dataIdx + 3] = 255;
+                    }
+                }
+
+                if (canvas && ctx && liveImgData) {
+                    ctx.putImageData(liveImgData, 0, 0);
+                    await new Promise(resolve => setTimeout(resolve, 5)); // Pausa di 5ms per frame
                 }
 
                 for (const blockIdx of scanSequence) {
