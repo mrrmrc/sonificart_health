@@ -198,8 +198,10 @@ export const api = {
         // JSON Fields
         formData.append('musicGenerationPrompt', JSON.stringify(result.musicGenerationPrompt));
         formData.append('configUsed', JSON.stringify(result.configUsed));
-        formData.append('configUsed', JSON.stringify(result.configUsed));
         formData.append('blockData', JSON.stringify(result.blockAnalysisResult));
+        if (result.healthClassification) {
+            formData.append('healthClassification', JSON.stringify(result.healthClassification));
+        }
 
         // Extended Metadata for Restore
         if (result.audioHash) formData.append('audioHash', result.audioHash);

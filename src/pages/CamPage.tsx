@@ -17,6 +17,7 @@ import { ResultsDashboard } from '../components/ResultsDashboard';
 import { ProcessingView } from '../components/ProcessingView';
 import { SonificationResult, ProcessingStep, ConfigSettings, TransformedNoteEvent } from '../types';
 import { calculateSHA256, bufferToHex } from '../utils/cryptoUtils';
+import { api } from '../services/api';
 
 interface ColorRegion {
     id: number;
@@ -77,6 +78,32 @@ export const CamPage: React.FC = () => {
     const [scanPct, setScanPct]                   = useState(0);   // progresso scansione analisi
     const [liveSonificationData, setLiveSonificationData] = useState<{tradition: string, pattern: string, note: string, hex: string} | null>(null);
     const [isExporting, setIsExporting] = useState(false);
+    
+    // --- SALVATAGGIO IN GALLERIA ---
+    const [workTitle, setWorkTitle] = useState('');
+    const [workDescription, setWorkDescription] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+    const [hasSaved, setHasSaved] = useState(false);
+
+    const handleSaveToGallery = async () => {
+        if (!user) {
+            setIsLoginModalOpen(true);
+            return;
+        }
+        if (!finalResult) return;
+        
+        setIsSaving(true);
+        try {
+            const titleToSave = workTitle.trim() || `Opera del ${new Date().toLocaleDateString()}`;
+            await api.saveSonification(finalResult, 'ai_composer', titleToSave, workDescription);
+            setHasSaved(true);
+        } catch (e: any) {
+            console.error(e);
+            alert(e.message || "Errore durante il salvataggio.");
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     // --- AI & WHO STATES ---
     const [originalFile, setOriginalFile] = useState<File | null>(null);
@@ -1629,30 +1656,71 @@ export const CamPage: React.FC = () => {
                         )}
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            {/* DOWNLOADS (Moved here) */}
-                            <div className="bg-black/40 border border-white/10 rounded-xl p-5">
-                                <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
-                                    <i className="fas fa-download text-cyan-400"></i> Esportazione
-                                </h3>
-                                <div className="flex flex-col gap-3">
-                                    <button 
-                                        onClick={() => saveAs(finalResult.audioOutput?.audioWavBlob!, `${uploadedFileName}_organico.wav`)}
-                                        className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/20 text-white rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all"
-                                    >
-                                        <i className="fas fa-file-audio text-amber-400 text-lg"></i>
-                                        Scarica Audio Originale (WAV)
-                                    </button>
-                                    <button 
-                                        onClick={() => saveAs(finalResult.sacContainer?.blob!, `${uploadedFileName}_certificato.sac`)}
-                                        className="w-full py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:scale-102 border border-cyan-400/50 text-white rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-lg"
-                                    >
-                                        <i className="fas fa-fingerprint text-white text-lg"></i>
-                                        Scarica Valigia Forense (.SAC)
-                                    </button>
+                            {/* LEFT COLUMN: SALVATAGGIO & DOWNLOADS */}
+                            <div className="flex flex-col gap-6">
+                                {/* SALVATAGGIO IN GALLERIA */}
+                                <div className="bg-black/40 border border-white/10 rounded-xl p-5 shadow-inner shadow-black/50">
+                                    <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+                                        <i className="fas fa-cloud-upload-alt text-emerald-400"></i> Salva in Galleria
+                                    </h3>
+                                    <div className="flex flex-col gap-3">
+                                        <input 
+                                            type="text" 
+                                            placeholder="Titolo dell'opera..."
+                                            value={workTitle}
+                                            onChange={(e) => setWorkTitle(e.target.value)}
+                                            className="w-full bg-white/5 border border-white/20 p-2.5 rounded-lg text-white text-sm outline-none focus:border-emerald-400/50 transition-all"
+                                        />
+                                        <textarea 
+                                            placeholder="Descrizione opzionale..."
+                                            value={workDescription}
+                                            onChange={(e) => setWorkDescription(e.target.value)}
+                                            className="w-full bg-white/5 border border-white/20 p-2.5 rounded-lg text-white text-sm outline-none focus:border-emerald-400/50 transition-all resize-none"
+                                            rows={2}
+                                        />
+                                        <button 
+                                            onClick={handleSaveToGallery}
+                                            disabled={isSaving || hasSaved}
+                                            className={`w-full py-3 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-lg ${
+                                                hasSaved 
+                                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50' 
+                                                : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:scale-[1.02] text-white border border-emerald-400/50'
+                                            }`}
+                                        >
+                                            {isSaving ? <i className="fas fa-spinner fa-spin text-lg"></i> : hasSaved ? <i className="fas fa-check text-lg"></i> : <i className="fas fa-save text-lg"></i>}
+                                            {isSaving ? 'Salvataggio...' : hasSaved ? 'Salvato in Galleria' : 'Salva Referto e Opera'}
+                                        </button>
+                                        <p className="text-[10px] text-white/40 mt-1 text-center">
+                                            Il salvataggio include la classificazione WHO, la valigia forense e il prompt AI in modo immutabile.
+                                        </p>
+                                    </div>
                                 </div>
-                                <p className="text-[10px] text-white/40 mt-3 text-center">
-                                    Il file .SAC contiene il WAV, l'immagine originale e la firma crittografica SHA-256.
-                                </p>
+
+                                {/* DOWNLOADS (Moved here) */}
+                                <div className="bg-black/40 border border-white/10 rounded-xl p-5">
+                                    <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+                                        <i className="fas fa-download text-cyan-400"></i> Esportazione
+                                    </h3>
+                                    <div className="flex flex-col gap-3">
+                                        <button 
+                                            onClick={() => saveAs(finalResult.audioOutput?.audioWavBlob!, `${uploadedFileName}_organico.wav`)}
+                                            className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/20 text-white rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all"
+                                        >
+                                            <i className="fas fa-file-audio text-amber-400 text-lg"></i>
+                                            Scarica Audio Originale (WAV)
+                                        </button>
+                                        <button 
+                                            onClick={() => saveAs(finalResult.sacContainer?.blob!, `${uploadedFileName}_certificato.sac`)}
+                                            className="w-full py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:scale-[1.02] border border-cyan-400/50 text-white rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-lg"
+                                        >
+                                            <i className="fas fa-fingerprint text-white text-lg"></i>
+                                            Scarica Valigia Forense (.SAC)
+                                        </button>
+                                    </div>
+                                    <p className="text-[10px] text-white/40 mt-3 text-center">
+                                        Il file .SAC contiene il WAV, l'immagine originale e la firma crittografica SHA-256.
+                                    </p>
+                                </div>
                             </div>
 
                             {/* RIGHT COLUMN: AI PROMPT */}
