@@ -548,6 +548,7 @@ export const CamPage: React.FC = () => {
 
             const organicEvents: TransformedNoteEvent[] = [];
             let sumL = 0, sumA = 0, sumB = 0, sumSat = 0, sumHueDiv = 0, sumVar = 0;
+            const appliedTraditionNames = new Set<string>();
 
             const canvas = canvasRef.current;
             const ctx = canvas?.getContext('2d', { willReadFrequently: true });
@@ -578,6 +579,7 @@ export const CamPage: React.FC = () => {
                 const traditions = await getCulturalTraditions();
                 const { tradition } = selectCulturalTradition(stats as any, traditions, false);
                 const { pattern } = determineCulturalScanPattern(tradition.cultural_family);
+                appliedTraditionNames.add(tradition.name);
 
                 const NOTE_DURATION = globalNoteDuration; 
                 const NOTES_PER_SHAPE = 16;
@@ -728,6 +730,10 @@ export const CamPage: React.FC = () => {
 
             const traditions = await getCulturalTraditions();
             const { tradition: mainTradition } = selectCulturalTradition(globalStats as any, traditions, false);
+
+            if (appliedTraditionNames.size > 0) {
+                mainTradition.name = Array.from(appliedTraditionNames).join(', ');
+            }
 
             const emptyMidi = new Blob([''], { type: 'audio/midi' }); // Placeholder for now
             const imgHash = bufferToHex(await calculateSHA256(await originalFile!.arrayBuffer()));

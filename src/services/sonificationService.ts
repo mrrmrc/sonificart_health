@@ -1270,10 +1270,16 @@ export async function processOrganicAI(
     const aiTradition = (await getCulturalTraditions()).find(t => t.id === 49 || t.name === "Cinematic Ambient") || DEFAULT_CINEMATIC_TRADITION;
 
     try {
-        const melodyNotesSequence = organicEvents
-            .slice(0, 16)
-            .map(e => e.noteName)
-            .join(' - ');
+        const uniqueNotes = [];
+        let lastNote = '';
+        for (const e of organicEvents) {
+            if (e.noteName !== lastNote) {
+                uniqueNotes.push(e.noteName);
+                lastNote = e.noteName;
+            }
+            if (uniqueNotes.length >= 16) break;
+        }
+        const melodyNotesSequence = uniqueNotes.join(' - ');
 
         if (config.useHealthAgent && healthClassification) {
             musicPrompt = await generateAiComposerPrompt(
