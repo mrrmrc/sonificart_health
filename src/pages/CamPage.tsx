@@ -553,6 +553,7 @@ export const CamPage: React.FC = () => {
             const canvas = canvasRef.current;
             const ctx = canvas?.getContext('2d', { willReadFrequently: true });
             let liveImgData: ImageData | null = null;
+            let lastRenderTime = performance.now();
             if (canvas && ctx && pixelDataRef.current) {
                 ctx.fillStyle = '#050B14'; // Sfondo blu scuro del tema
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -629,8 +630,11 @@ export const CamPage: React.FC = () => {
                 }
 
                 if (canvas && ctx && liveImgData) {
-                    ctx.putImageData(liveImgData, 0, 0);
-                    await new Promise(resolve => setTimeout(resolve, 5)); // Pausa di 5ms per frame
+                    if (performance.now() - lastRenderTime > 16) {
+                        ctx.putImageData(liveImgData, 0, 0);
+                        await new Promise(resolve => requestAnimationFrame(resolve));
+                        lastRenderTime = performance.now();
+                    }
                 }
 
                 for (const blockIdx of scanSequence) {
