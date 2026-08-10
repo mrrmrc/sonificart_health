@@ -7,7 +7,7 @@ import { SonificationResult, DashboardEntry, ShowcaseProject, User } from '../ty
 export const PerformancePage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const { user } = useOutletContext<{ user: User | null }>(); // Get User from Outlet Context
+    const { user, setHideSiteUI } = useOutletContext<any>(); // Get User and setHideSiteUI from Outlet Context
     const query = new URLSearchParams(window.location.search);
 
     // Admin/Edit Mode: True if Admin param OR if User is Logged In (Not a visitor)
@@ -16,6 +16,14 @@ export const PerformancePage: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [performanceData, setPerformanceData] = useState<{ result: SonificationResult, audioBlob: Blob, title: string, author: string, description: string, date: string } | null>(null);
     const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        // Nascondi sempre la UI del sito quando siamo nella pagina Performance
+        if (setHideSiteUI) setHideSiteUI(true);
+        return () => {
+            if (setHideSiteUI) setHideSiteUI(false);
+        };
+    }, [setHideSiteUI]);
 
     useEffect(() => {
         if (!id) {
