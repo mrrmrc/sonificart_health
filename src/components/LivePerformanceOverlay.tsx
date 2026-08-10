@@ -987,6 +987,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
 
                 {/* SETTINGS TOGGLE */}
                 {isKiosk ? (
+                    <>
                     <button
                         onClick={() => setIsSettingsOpen(!isSettingsOpen)}
                         className="absolute bottom-4 left-4 z-[9999] text-gray-800 hover:text-white opacity-20 hover:opacity-100 transition-all text-xl"
@@ -994,6 +995,14 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     >
                         *
                     </button>
+                    <button
+                        onClick={() => setShowSkeletonPanel(!showSkeletonPanel)}
+                        className={`absolute bottom-4 left-10 z-[9999] opacity-20 hover:opacity-100 transition-all text-xl ${showSkeletonPanel ? 'text-cyan-400' : 'text-gray-800 hover:text-cyan-400'}`}
+                        title="Skeleton Panel Kiosk"
+                    >
+                        +
+                    </button>
+                    </>
                 ) : (
                     <>
                     <button
