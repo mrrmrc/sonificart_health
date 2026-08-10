@@ -1304,7 +1304,7 @@ if ($action === 'get_history' && $method === 'POST') {
             $stmt = $pdo->prepare("
                 SELECT 
                     id, image_hash, created_at AS timestamp, image_url, audio_url, original_audio_url, paradigm, tradition_name, 
-                    title, subtitle, description, video_url, generated_ai_track_url, event_data, music_generation_prompt
+                    title, subtitle, description, video_url, generated_ai_track_url, event_data, music_generation_prompt, config_json
                 FROM history 
                 WHERE user_id = ? 
                 ORDER BY created_at DESC 
@@ -1327,6 +1327,14 @@ if ($action === 'get_history' && $method === 'POST') {
                 $events = is_string($h['event_data']) ? json_decode($h['event_data'], true) : $h['event_data'];
             }
 
+            // Parse config_json for stemMappings
+            $configData = null;
+            $stemMappings = null;
+            if (!empty($h['config_json'])) {
+                $configData = json_decode($h['config_json'], true);
+                $stemMappings = $configData['stemMappings'] ?? null;
+            }
+
             return [
                 "id" => (string) $h['id'],
                 "imageHash" => $h['image_hash'],
@@ -1344,6 +1352,8 @@ if ($action === 'get_history' && $method === 'POST') {
                 "generatedAiTrackUrl" => ($h['generated_ai_track_url'] ?? null) ? ((strpos($h['generated_ai_track_url'], 'http') === 0) ? $h['generated_ai_track_url'] : $baseUrl . (strpos($h['generated_ai_track_url'], '/') === 0 ? '' : '/') . $h['generated_ai_track_url']) : null,
                 "musicGenerationPrompt" => isset($h['music_generation_prompt']) ? json_decode($h['music_generation_prompt'], true) : null,
                 "events" => $events,  // Piano Roll data for ComparePage
+                "configUsed" => $configData,  // Full config including masterMappings
+                "stemMappings" => $stemMappings,  // FIX: Include stem mappings so dashboard shows them correctly
             ];
         }, $history);
         sendResponse($mapped);
