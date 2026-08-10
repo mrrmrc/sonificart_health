@@ -1303,11 +1303,11 @@ if ($action === 'get_history' && $method === 'POST') {
             // Optimized select - Include original_audio_url
             $stmt = $pdo->prepare("
                 SELECT 
-                    id, image_hash, timestamp, image_url, audio_url, original_audio_url, paradigm, tradition_name, 
+                    id, image_hash, created_at AS timestamp, image_url, audio_url, original_audio_url, paradigm, tradition_name, 
                     title, subtitle, description, video_url, generated_ai_track_url, event_data, music_generation_prompt
                 FROM history 
                 WHERE user_id = ? 
-                ORDER BY timestamp DESC 
+                ORDER BY created_at DESC 
                 LIMIT $limit OFFSET $offset
             ");
             $stmt->execute([$userId]);
@@ -1315,7 +1315,7 @@ if ($action === 'get_history' && $method === 'POST') {
         } catch (Exception $e) {
             // Fallback: Select * 
             // Also here inject integers directly
-            $stmt = $pdo->prepare("SELECT * FROM history WHERE user_id = ? ORDER BY timestamp DESC LIMIT $limit OFFSET $offset");
+            $stmt = $pdo->prepare("SELECT * FROM history WHERE user_id = ? ORDER BY created_at DESC LIMIT $limit OFFSET $offset");
             $stmt->execute([$userId]);
             $history = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
