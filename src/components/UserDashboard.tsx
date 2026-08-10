@@ -633,6 +633,14 @@ const HistoryItem: React.FC<{ item: DashboardEntry; onView: () => void; onPublis
                         Pubblicazione
                     </button>
                 )}
+                {/* KIOSK BUTTON */}
+                <button
+                    onClick={(e) => { e.stopPropagation(); window.open(`https://sonificart.com/live/${item.id}?kiosk=true`, '_blank'); }}
+                    className="bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500 hover:text-white text-[10px] sm:text-xs font-black py-2 px-3 sm:px-4 rounded border border-cyan-500/30 uppercase tracking-tighter transition-all flex items-center gap-1"
+                    title="Avvia Modalità Esposizione Museale"
+                >
+                    <i className="fas fa-expand"></i> KIOSK
+                </button>
             </div>
             <button onClick={(e) => { e.stopPropagation(); if (onDelete) onDelete(); }} className="bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white p-2 rounded ml-2"><i className="fas fa-trash text-xs"></i></button>
         </div>
@@ -661,7 +669,10 @@ export const UserDashboard: React.FC<{ user: User, onLoadEntry: (entry: Dashboar
         } catch (err) {
             console.error(err);
             const msg = err instanceof Error ? err.message : String(err);
-            if (msg.toLowerCase().includes("unauthorized") || msg.toLowerCase().includes("not found")) {
+            if (msg.toLowerCase().includes("not found")) {
+                // If history is not found, the user probably just has 0 items.
+                setHistory([]);
+            } else if (msg.toLowerCase().includes("unauthorized")) {
                 setError("Sessione scaduta o non valida. Effettua nuovamente il login.");
             } else {
                 setError(msg || "Errore nel caricamento della cronologia");

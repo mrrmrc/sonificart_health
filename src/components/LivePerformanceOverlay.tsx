@@ -87,6 +87,10 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
     const bgImageRef = useRef<HTMLImageElement>(null);
     const stageRef = useRef<HTMLDivElement>(null);
 
+    // Kiosk Mode (Hides UI for Museum Exhibitions)
+    const query = new URLSearchParams(window.location.search);
+    const isKiosk = query.get('kiosk') === 'true';
+
     // Lang Detection
     const lang = navigator.language.startsWith('it') ? 'it' : 'en';
     const t = TEXTS[lang];
@@ -186,7 +190,12 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
         imageAspect: number;
         delayWet: GainNode | null;
         highShelf: BiquadFilterNode | null;
+        synthNodes: { osc: OscillatorNode, gain: GainNode }[];
     } | null>(null);
+
+    // Grid tracking for overdubbing
+    const lastPlayedCell = useRef<{x: number, y: number} | null>(null);
+    const synthDebounce = useRef<number>(0);
 
     useEffect(() => {
         startPerformance();
@@ -301,7 +310,42 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 particles: [],
                 imageAspect,
                 delayWet,
-                highShelf
+                highShelf,
+                synthNodes: []
+            };
+
+            // Grid bounds for Overdubbing
+            let maxX = 1, maxY = 1;
+            if (result.audioOutput.events && result.audioOutput.events.length > 0) {
+                maxX = Math.max(...result.audioOutput.events.map(e => e.sourceBlock?.position?.x || 0));
+                maxY = Math.max(...result.audioOutput.events.map(e => e.sourceBlock?.position?.y || 0));
+            }
+            if (maxX === 0) maxX = 1;
+            if (maxY === 0) maxY = 1;
+
+            // Simple Synth Function
+            const playWhisperSynth = (freq: number, velocity: number) => {
+                if (!engineRef.current) return;
+                const c = engineRef.current.audioCtx;
+                if (!c) return;
+                const osc = c.createOscillator();
+                const gain = c.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, c.currentTime);
+                // Attack / Release
+                gain.gain.setValueAtTime(0, c.currentTime);
+                const vol = (velocity / 127) * 0.3 * masterVolume; // subtle
+                gain.gain.linearRampToValueAtTime(vol, c.currentTime + 0.1);
+                gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 1.0);
+                
+                osc.connect(gain);
+                gain.connect(engineRef.current.panner!); // Route through main effects
+                osc.start(c.currentTime);
+                osc.stop(c.currentTime + 1.0);
+                
+                engineRef.current.synthNodes.push({ osc, gain });
+                // Cleanup array
+                engineRef.current.synthNodes = engineRef.current.synthNodes.filter(n => n.osc.context.currentTime < c.currentTime + 1.0);
             };
 
             // 4. Render Loop
@@ -485,17 +529,48 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 let renderW = screenAspect > imgAspect ? h * imgAspect : w;
                 let renderH = screenAspect > imgAspect ? h : w / imgAspect;
 
-                // Gaze Cursor
-                if (m.isActive && calibRef.current.gazeCursorOpacity > 0) {
+                // Gaze Cursor & Overdubbing (The Whisper)
+                if (m.isActive) {
                     const gazeX = 0.5 + (m.gazeX || 0) * calibRef.current.gazeSensitivity;
                     const gazeY = 0.5 + (m.gazeY || 0) * calibRef.current.gazeSensitivity;
-                    const pointerX = cx + ((gazeX - 0.5) * renderW);
-                    const pointerY = cy + ((gazeY - 0.5) * renderH);
-                    context.save();
-                    context.globalAlpha = calibRef.current.gazeCursorOpacity * 0.6;
-                    context.beginPath(); context.arc(pointerX, pointerY, calibRef.current.gazePointerSize, 0, Math.PI * 2);
-                    context.strokeStyle = 'rgba(45, 212, 191, 0.8)'; context.lineWidth = 2; context.stroke();
-                    context.restore();
+                    
+                    if (calibRef.current.gazeCursorOpacity > 0) {
+                        const pointerX = cx + ((gazeX - 0.5) * renderW);
+                        const pointerY = cy + ((gazeY - 0.5) * renderH);
+                        context.save();
+                        context.globalAlpha = calibRef.current.gazeCursorOpacity * 0.6;
+                        context.beginPath(); context.arc(pointerX, pointerY, calibRef.current.gazePointerSize, 0, Math.PI * 2);
+                        context.strokeStyle = 'rgba(45, 212, 191, 0.8)'; context.lineWidth = 2; context.stroke();
+                        context.restore();
+                    }
+
+                    // --- OVERDUBBING LOGIC ---
+                    // Map gaze to grid coordinates
+                    const gridX = Math.floor(Math.max(0, Math.min(1, gazeX)) * (maxX + 1));
+                    const gridY = Math.floor(Math.max(0, Math.min(1, gazeY)) * (maxY + 1));
+                    
+                    if (!lastPlayedCell.current || lastPlayedCell.current.x !== gridX || lastPlayedCell.current.y !== gridY) {
+                        // Cell changed!
+                        if (now - synthDebounce.current > 0.2) { // 200ms debounce
+                            lastPlayedCell.current = { x: gridX, y: gridY };
+                            synthDebounce.current = now;
+                            
+                            // Find events in this cell
+                            if (result.audioOutput.events) {
+                                const cellEvents = result.audioOutput.events.filter(e => 
+                                    e.sourceBlock?.position?.x === gridX && e.sourceBlock?.position?.y === gridY
+                                );
+                                
+                                if (cellEvents.length > 0) {
+                                    // Play a random note from this cell to create a "whisper" texture
+                                    const randomEvent = cellEvents[Math.floor(Math.random() * cellEvents.length)];
+                                    // Convert MIDI to Frequency (Standard 440Hz tuning)
+                                    const freq = 440 * Math.pow(2, (randomEvent.midiFloat - 69) / 12);
+                                    playWhisperSynth(freq, randomEvent.velocity);
+                                }
+                            }
+                        }
+                    }
                 }
 
                 context.drawImage(logoImg, w - 120, h - 120, 80, 80);
@@ -512,6 +587,9 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
         if (engineRef.current) {
             cancelAnimationFrame(engineRef.current.animationId!);
             engineRef.current.source?.stop();
+            engineRef.current.synthNodes.forEach(n => {
+                try { n.osc.stop(); n.osc.disconnect(); n.gain.disconnect(); } catch(e){}
+            });
             engineRef.current.audioCtx?.close();
             engineRef.current = null;
         }
@@ -582,7 +660,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 </div>
 
                 {/* SETTINGS TOGGLE (Top Left) */}
-                {isAdmin && (
+                {isAdmin && !isKiosk && (
                     <button
                         onClick={() => setIsSettingsOpen(!isSettingsOpen)}
                         className="absolute top-24 left-6 z-[9999] text-gray-400 hover:text-white bg-black/50 p-3 rounded-full backdrop-blur transition-all border border-transparent hover:border-white/20"
@@ -592,6 +670,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 )}
 
                 {/* SIDEBAR SETTINGS */}
+                {!isKiosk && (
                 <div className={`absolute top-0 left-0 h-full w-80 bg-black/95 backdrop-blur-xl border-r border-white/10 z-[10000] transition-transform duration-300 transform ${isSettingsOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col shadow-2xl`}>
 
                     {/* Header */}
@@ -701,6 +780,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         </button>
                     </div>
                 </div>
+                )}
 
                 {/* ERROR BANNER */}
                 {error && (
@@ -712,6 +792,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
             </div>
 
             {/* CONTROL DECK (3-COLUMN LAYOUT) */}
+            {!isKiosk && (
             <div className="bg-gradient-to-t from-black via-black/95 to-black/80 border-t border-white/10 flex flex-col z-[120] shrink-0 shadow-[0_-10px_40px_rgba(0,0,0,0.8)] w-full backdrop-blur-md">
 
                 {/* Main Grid: Info | Spectrum | Controls */}
@@ -794,6 +875,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     </div>
                 </div>
             </div>
+            )}
             <style>{`.mirror-mode { transform: scaleX(-1); }`}</style>
         </div >
     );

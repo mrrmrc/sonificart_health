@@ -80,8 +80,11 @@ export const api = {
             body: JSON.stringify({ email, password })
         });
         const data = await handleResponse(response);
-        if (data.token && data.token !== 'undefined' && data.token !== 'null') {
-            setAuthToken(data.token, rememberMe);
+        const receivedToken = data.token || data.auth_token;
+        if (receivedToken && receivedToken !== 'undefined' && receivedToken !== 'null') {
+            setAuthToken(receivedToken, rememberMe);
+        } else if (data.user && data.user.token) {
+            setAuthToken(data.user.token, rememberMe);
         }
         return data.user;
     },
@@ -93,8 +96,11 @@ export const api = {
             body: JSON.stringify({ name, email, password })
         });
         const data = await handleResponse(response);
-        if (data.token && data.token !== 'undefined' && data.token !== 'null') {
-            setAuthToken(data.token, true); // Default to remember for registration? Or session? Let's say session or persistent. Persistent is standard.
+        const receivedToken = data.token || data.auth_token;
+        if (receivedToken && receivedToken !== 'undefined' && receivedToken !== 'null') {
+            setAuthToken(receivedToken, true);
+        } else if (data.user && data.user.token) {
+            setAuthToken(data.user.token, true);
         }
         return data.user;
     },
@@ -118,8 +124,8 @@ export const api = {
             return null;
         }
         try {
-            // TRIPLE PASS authentication for maximum stability
-            const url = `${API_BASE_URL}/index.php?action=check_session&auth_token=${encodeURIComponent(token)}`;
+            // TRIPLE PASS authentication for maximum stability (now DOUBLE PASS to avoid HPP blocks)
+            const url = `${API_BASE_URL}/index.php?action=check_session`;
             const params = new URLSearchParams();
             params.append('auth_token', token);
 
@@ -950,6 +956,8 @@ export const api = {
         clearAuthToken();
         window.location.reload();
     },
+
+
 
     logCookieConsent: async (prefs: { analytics: boolean, marketing: boolean }, uuid: string) => {
         const token = getToken();

@@ -84,6 +84,7 @@ export const CamPage: React.FC = () => {
     const [workDescription, setWorkDescription] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [hasSaved, setHasSaved] = useState(false);
+    const [savedWorkId, setSavedWorkId] = useState<string | null>(null);
 
     const handleSaveToGallery = async () => {
         if (!user) {
@@ -95,11 +96,16 @@ export const CamPage: React.FC = () => {
         setIsSaving(true);
         try {
             const titleToSave = workTitle.trim() || `Opera del ${new Date().toLocaleDateString()}`;
-            await api.saveSonification(finalResult, 'ai_composer', titleToSave, workDescription);
+            const res = await api.saveSonification(finalResult, 'ai_composer', titleToSave, workDescription);
+            if (res && res.id) setSavedWorkId(res.id);
             setHasSaved(true);
         } catch (e: any) {
             console.error(e);
-            alert(e.message || "Errore durante il salvataggio.");
+            if (e.message && e.message.includes("401")) {
+                setIsLoginModalOpen(true);
+            } else {
+                alert(e.message || "Errore durante il salvataggio.");
+            }
         } finally {
             setIsSaving(false);
         }
@@ -1553,6 +1559,40 @@ export const CamPage: React.FC = () => {
                     </h2>
                     
                     <div className="flex flex-col gap-8">
+                        {/* ABBINAMENTO TRADIZIONE ACUSTICA */}
+                        {finalResult.culturalSelectionResult && (
+                            <InfoCard
+                                title="Archetipo Culturale & Tradizione Acustica"
+                                icon="fa-globe-americas"
+                                className="w-full relative overflow-hidden bg-gradient-to-br from-amber-950/40 via-orange-950/20 to-black border-amber-500/40 shadow-xl shadow-amber-950/20"
+                            >
+                                <div className="space-y-4">
+                                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-amber-500/10 p-4 rounded-xl border border-amber-500/20">
+                                        <div className="space-y-1">
+                                            <div className="flex items-center gap-2 text-amber-400 font-bold text-xs uppercase tracking-wider">
+                                                <i className="fas fa-music text-sm"></i>
+                                                Tradizione Assegnata all'Opera
+                                            </div>
+                                            <h3 className="text-xl font-extrabold text-white flex items-center gap-3">
+                                                {finalResult.culturalSelectionResult.tradition.name}
+                                            </h3>
+                                            <p className="text-xs text-amber-200/80 italic">
+                                                {finalResult.culturalSelectionResult.tradition.description}
+                                            </p>
+                                        </div>
+                                        <div className="bg-black/40 px-4 py-2 rounded-lg border border-amber-500/30 text-right min-w-[150px]">
+                                            <span className="text-[10px] text-gray-400 block uppercase font-bold">Famiglia Culturale</span>
+                                            <span className="text-xs font-mono font-bold text-amber-300 uppercase">
+                                                {finalResult.culturalSelectionResult.tradition.cultural_family}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-gray-400">
+                                        Questa tradizione definisce l'estrazione delle frequenze dai frammenti visivi (pixel) e il loro comportamento acustico (Microtonalità, Base Freq: {finalResult.culturalSelectionResult.tradition.baseFrequency}Hz). Durante l'esposizione museale (Modalità Kiosk), i movimenti del visitatore innescheranno note puramente sintetiche coerenti con questo ecosistema.
+                                    </p>
+                                </div>
+                            </InfoCard>
+                        )}
                         {/* WHO CLASSIFICATION COMPLETA (INJECTED) */}
                         {finalResult.healthClassification && (
                             <InfoCard
@@ -1690,6 +1730,15 @@ export const CamPage: React.FC = () => {
                                             {isSaving ? <i className="fas fa-spinner fa-spin text-lg"></i> : hasSaved ? <i className="fas fa-check text-lg"></i> : <i className="fas fa-save text-lg"></i>}
                                             {isSaving ? 'Salvataggio...' : hasSaved ? 'Salvato in Galleria' : 'Salva Referto e Opera'}
                                         </button>
+                                        {hasSaved && savedWorkId && (
+                                            <button 
+                                                onClick={() => window.open(`https://sonificart.com/live/${savedWorkId}?kiosk=true`, '_blank')}
+                                                className="w-full py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:scale-[1.02] text-white border border-cyan-400/50 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-lg"
+                                            >
+                                                <i className="fas fa-desktop text-lg text-white"></i>
+                                                Avvia Modalità Esposizione (Live)
+                                            </button>
+                                        )}
                                         <p className="text-[10px] text-white/40 mt-1 text-center">
                                             Il salvataggio include la classificazione WHO, la valigia forense e il prompt AI in modo immutabile.
                                         </p>

@@ -55,7 +55,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
     const [error, setError] = useState<string | null>(null);
     const [successMsg, setSuccessMsg] = useState<string | null>(null);
     const [showPrivacy, setShowPrivacy] = useState(false);
-    const [rememberMe, setRememberMe] = useState(false);
+    const [rememberMe, setRememberMe] = useState(true);
     const { t } = useLanguage();
     // REMOVED: setHideSiteUI(true)
 
@@ -71,7 +71,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
             setPassword('');
             setName('');
             setGdprConsent(false);
-            setRememberMe(false); // Default to not checked (or true if preferred, but false is safer for public terminals)
+            setRememberMe(true); // Default to checked to avoid session loss
         } else {
             document.body.style.overflow = 'auto';
         }
@@ -216,13 +216,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
 
                         {/* FOOTER SWITCHER */}
                         <div className="mt-6 text-center pt-4 border-t border-brand-secondary/30">
-                            {/* REGISTRATION DISABLED TEMPORARILY
                             {view === 'login' && (
                                 <p className="text-sm text-brand-text-secondary">
                                     Non hai un account? <button onClick={() => { setView('register'); setError(null); }} className="text-brand-accent hover:underline font-bold">Registrati</button>
                                 </p>
                             )}
-                            */}
                             {view === 'register' && (
                                 <p className="text-sm text-brand-text-secondary">
                                     Hai già un account? <button onClick={() => { setView('login'); setError(null); }} className="text-brand-accent hover:underline font-bold">Accedi</button>
