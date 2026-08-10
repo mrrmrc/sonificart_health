@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { SonificationResult } from '../types';
+import { SonificationResult, ColorRegion } from '../types';
 import { api } from '../services/api';
 import WebcamService, { FaceMetrics } from '../services/WebcamService';
 import { LOGO_SVG_STRING } from './Logo';
@@ -172,6 +172,18 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
         const t2 = setTimeout(calibrateDistance, 3000); // Retry
         const t3 = setTimeout(calibrateDistance, 5000); // Retry
         return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+    }, []);
+
+    // Global keyboard shortcuts
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.ctrlKey && e.key.toLowerCase() === 'i') {
+                e.preventDefault();
+                setIsSettingsOpen(prev => !prev);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
     // Engine Refs
@@ -544,29 +556,122 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         context.restore();
                     }
 
-                    // --- OVERDUBBING LOGIC ---
-                    // Map gaze to grid coordinates
-                    const gridX = Math.floor(Math.max(0, Math.min(1, gazeX)) * (maxX + 1));
-                    const gridY = Math.floor(Math.max(0, Math.min(1, gazeY)) * (maxY + 1));
-                    
-                    if (!lastPlayedCell.current || lastPlayedCell.current.x !== gridX || lastPlayedCell.current.y !== gridY) {
-                        // Cell changed!
-                        if (now - synthDebounce.current > 0.2) { // 200ms debounce
-                            lastPlayedCell.current = { x: gridX, y: gridY };
-                            synthDebounce.current = now;
+                    // --- PARALLAX CONSTELLATION & OVERDUBBING (REGIONS) ---
+                    const regionsList = result.regions;
+                    if (regionsList && regionsList.length > 0) {
+                        // Health Paradigm (Organic Regions)
+                        let hoveredRegion: ColorRegion | null = null;
+                        let minDist = Infinity;
+
+                        // Draw regions as a 3D Constellation
+                        regionsList.forEach(region => {
+                            // Base position based on centroid (0-100 to canvas coordinates)
+                            const baseX = (w - renderW) / 2 + (region.centroidX / 100) * renderW;
+                            const baseY = (h - renderH) / 2 + (region.centroidY / 100) * renderH;
+
+                            // Parallax Depth Factor
+                            let depthFactor = 1.0;
+                            let nodeSize = 3;
+                            if (region.depthLayer === 'foreground') { depthFactor = 2.5; nodeSize = 5; }
+                            else if (region.depthLayer === 'background') { depthFactor = 0.4; nodeSize = 2; }
+
+                            // Apply parallax translation based on camera/tilt
+                            const parallaxX = baseX + (tiltY * 3 * depthFactor);
+                            const parallaxY = baseY - (tiltX * 3 * depthFactor); // inverted tilt for natural feel
+
+                            // Collision detection with Gaze
+                            const pointerX = cx + ((gazeX - 0.5) * renderW);
+                            const pointerY = cy + ((gazeY - 0.5) * renderH);
+                            const dx = pointerX - parallaxX;
+                            const dy = pointerY - parallaxY;
+                            const dist = Math.sqrt(dx*dx + dy*dy);
+
+                            const isHovered = dist < 40; // Collision radius
+
+                            if (isHovered && dist < minDist) {
+                                minDist = dist;
+                                hoveredRegion = region;
+                            }
+
+                            // Render Node
+                            context.save();
+                            context.beginPath();
+                            context.arc(parallaxX, parallaxY, isHovered ? nodeSize * 2 : nodeSize, 0, Math.PI * 2);
+                            context.fillStyle = region.hex;
+                            context.shadowColor = region.hex;
+                            context.shadowBlur = isHovered ? 20 : 5;
+                            context.globalAlpha = isHovered ? 1.0 : 0.6 + (Math.sin(now * 3 + region.id) * 0.2); // slight pulse
+                            context.fill();
+                            context.restore();
+
+                            // Draw subtle connecting lines for constellation effect (only to close nodes on same layer)
+                            if (isHovered) {
+                                regionsList.forEach(other => {
+                                    if (other.id !== region.id && other.depthLayer === region.depthLayer) {
+                                        const obx = (w - renderW) / 2 + (other.centroidX / 100) * renderW;
+                                        const oby = (h - renderH) / 2 + (other.centroidY / 100) * renderH;
+                                        const opx = obx + (tiltY * 3 * depthFactor);
+                                        const opy = oby - (tiltX * 3 * depthFactor);
+                                        const d = Math.sqrt(Math.pow(parallaxX - opx, 2) + Math.pow(parallaxY - opy, 2));
+                                        if (d < 150) {
+                                            context.save();
+                                            context.beginPath();
+                                            context.moveTo(parallaxX, parallaxY);
+                                            context.lineTo(opx, opy);
+                                            context.strokeStyle = region.hex;
+                                            context.globalAlpha = 0.2;
+                                            context.stroke();
+                                            context.restore();
+                                        }
+                                    }
+                                });
+                            }
+                        });
+
+                        // Trigger synth if hovered
+                        if (hoveredRegion !== null) {
+                            const hr = hoveredRegion as ColorRegion;
+                            const regionId = hr.id;
+                            const gridX = -1; // special value for regions
+                            const gridY = regionId;
                             
-                            // Find events in this cell
-                            if (result.audioOutput.events) {
-                                const cellEvents = result.audioOutput.events.filter(e => 
-                                    e.sourceBlock?.position?.x === gridX && e.sourceBlock?.position?.y === gridY
-                                );
+                            if (!lastPlayedCell.current || lastPlayedCell.current.y !== gridY || lastPlayedCell.current.x !== gridX) {
+                                if (now - synthDebounce.current > 0.3) { // 300ms debounce
+                                    lastPlayedCell.current = { x: gridX, y: gridY };
+                                    synthDebounce.current = now;
+                                    
+                                    // Play Region Frequency
+                                    playWhisperSynth(hr.frequencyHz, 0.6); // slightly louder for regions
+                                }
+                            }
+                        }
+
+                    } else {
+                        // --- LEGACY GRID OVERDUBBING (Artistic Block Paradigm) ---
+
+                        // Map gaze to grid coordinates
+                        const gridX = Math.floor(Math.max(0, Math.min(1, gazeX)) * (maxX + 1));
+                        const gridY = Math.floor(Math.max(0, Math.min(1, gazeY)) * (maxY + 1));
+                        
+                        if (!lastPlayedCell.current || lastPlayedCell.current.x !== gridX || lastPlayedCell.current.y !== gridY) {
+                            // Cell changed!
+                            if (now - synthDebounce.current > 0.2) { // 200ms debounce
+                                lastPlayedCell.current = { x: gridX, y: gridY };
+                                synthDebounce.current = now;
                                 
-                                if (cellEvents.length > 0) {
-                                    // Play a random note from this cell to create a "whisper" texture
-                                    const randomEvent = cellEvents[Math.floor(Math.random() * cellEvents.length)];
-                                    // Convert MIDI to Frequency (Standard 440Hz tuning)
-                                    const freq = 440 * Math.pow(2, (randomEvent.midiFloat - 69) / 12);
-                                    playWhisperSynth(freq, randomEvent.velocity);
+                                // Find events in this cell
+                                if (result.audioOutput.events) {
+                                    const cellEvents = result.audioOutput.events.filter(e => 
+                                        e.sourceBlock?.position?.x === gridX && e.sourceBlock?.position?.y === gridY
+                                    );
+                                    
+                                    if (cellEvents.length > 0) {
+                                        // Play a random note from this cell to create a "whisper" texture
+                                        const randomEvent = cellEvents[Math.floor(Math.random() * cellEvents.length)];
+                                        // Convert MIDI to Frequency (Standard 440Hz tuning)
+                                        const freq = 440 * Math.pow(2, (randomEvent.midiFloat - 69) / 12);
+                                        playWhisperSynth(freq, randomEvent.velocity);
+                                    }
                                 }
                             }
                         }
