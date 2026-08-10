@@ -32,9 +32,9 @@ const PublishModal: React.FC<{
     // STATE: Audio
     const [isUploadingAudio, setIsUploadingAudio] = useState(false);
     
-    // STATE: Stems
     const [localStems, setLocalStems] = useState<StemMapping[]>(entry.stemMappings || []);
     const [isUploadingStems, setIsUploadingStems] = useState(false);
+    const [masterMappings, setMasterMappings] = useState<{ bodyPart: BodyPart, parameter: 'volume' | 'lowpass' | 'pan' }[]>(entry.configUsed?.masterMappings || []);
 
     // REFS
     const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -460,6 +460,91 @@ const PublishModal: React.FC<{
                                     />
                                 </label>
                                 
+                                {localStems.length === 0 && (
+                                    <div className="mt-4 pt-4 border-t border-white/5">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <h5 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                                                <i className="fas fa-magic"></i> Effetti Traccia Master (Senza Stem)
+                                            </h5>
+                                            <button 
+                                                onClick={() => setMasterMappings([...masterMappings, { bodyPart: 'z', parameter: 'lowpass' }])}
+                                                className="text-[9px] bg-white/5 hover:bg-white/10 px-2 py-1 rounded text-gray-300 transition-colors uppercase font-bold"
+                                            >
+                                                <i className="fas fa-plus"></i> Aggiungi Effetto
+                                            </button>
+                                        </div>
+                                        {masterMappings.length === 0 ? (
+                                            <p className="text-[9px] text-gray-500 italic text-center py-2">Nessun effetto assegnato alla traccia principale.</p>
+                                        ) : (
+                                            <div className="flex flex-col gap-2 max-h-[150px] overflow-y-auto pr-2 custom-scrollbar">
+                                                {masterMappings.map((mm, i) => (
+                                                    <div key={i} className="bg-black/20 p-2 rounded-lg flex flex-col gap-2 border border-white/5">
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-[9px] font-bold text-gray-400">Effetto {i + 1}</span>
+                                                            <button onClick={() => setMasterMappings(masterMappings.filter((_, idx) => idx !== i))} className="text-red-500/50 hover:text-red-400 text-xs"><i className="fas fa-times"></i></button>
+                                                        </div>
+                                                        <div className="flex gap-2">
+                                                            <select 
+                                                                value={mm.bodyPart}
+                                                                onChange={(e) => {
+                                                                    const newMM = [...masterMappings];
+                                                                    newMM[i].bodyPart = e.target.value as BodyPart;
+                                                                    setMasterMappings(newMM);
+                                                                }}
+                                                                className="bg-black/50 border border-white/10 text-[9px] text-gray-300 p-1 rounded flex-1 outline-none uppercase font-bold"
+                                                            >
+                                                                <option value="leftHandY">Mano SX (Y)</option>
+                                                                <option value="rightHandY">Mano DX (Y)</option>
+                                                                <option value="leftHandX">Mano SX (X)</option>
+                                                                <option value="rightHandX">Mano DX (X)</option>
+                                                                <option value="z">Distanza (Z)</option>
+                                                                <option value="headYaw">Testa (Rotazione X)</option>
+                                                                <option value="headPitch">Testa (Rotazione Y)</option>
+                                                                <option value="shoulderY">Spalle (Altezza)</option>
+                                                                <option value="shoulderTilt">Spalle (Inclinazione)</option>
+                                                                <option value="elbowY">Gomiti (Altezza)</option>
+                                                                <option value="kneeY">Ginocchia (Altezza)</option>
+                                                                <option value="footY">Piedi (Altezza)</option>
+                                                                <option value="torsoY">Busto (Altezza)</option>
+                                                                <option value="armSpan">Apertura Braccia</option>
+                                                                <option value="handsY">Mani (Altezza Media)</option>
+                                                            </select>
+                                                            <select 
+                                                                value={mm.parameter}
+                                                                onChange={(e) => {
+                                                                    const newMM = [...masterMappings];
+                                                                    newMM[i].parameter = e.target.value as any;
+                                                                    setMasterMappings(newMM);
+                                                                }}
+                                                                className="bg-black/50 border border-white/10 text-[9px] text-gray-300 p-1 rounded flex-1 outline-none uppercase font-bold"
+                                                            >
+                                                                <option value="volume">Volume</option>
+                                                                <option value="lowpass">Filtro Lowpass</option>
+                                                                <option value="pan">Panning (L/R)</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                        <button 
+                                            onClick={async () => {
+                                                try {
+                                                    // Add to configUsed
+                                                    const configToSave = { ...entry.configUsed, masterMappings };
+                                                    await api.updateHistoryItemConfig(entry.id, configToSave);
+                                                    entry.configUsed = configToSave;
+                                                    onShowMessage("Salvato", "Effetti Master salvati con successo!", 'success');
+                                                } catch (e) {
+                                                    onShowMessage("Errore", "Impossibile salvare: " + e, 'danger');
+                                                }
+                                            }}
+                                            className="w-full py-2 bg-gray-600/80 hover:bg-gray-500 text-white rounded text-[10px] font-bold uppercase mt-3 shadow-lg transition-colors"
+                                        >
+                                            <i className="fas fa-save mr-2"></i> Salva Mappatura Master
+                                        </button>
+                                    </div>
+                                )}
                                 {localStems.length > 0 && (
                                     <div className="flex flex-col gap-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
                                         {localStems.map((stem, i) => (
@@ -483,9 +568,29 @@ const PublishModal: React.FC<{
                                                         <option value="leftHandX">Mano SX (X)</option>
                                                         <option value="rightHandX">Mano DX (X)</option>
                                                         <option value="z">Distanza (Z)</option>
+                                                        <option value="headYaw">Testa (Rotazione X)</option>
+                                                        <option value="headPitch">Testa (Rotazione Y)</option>
+                                                        <option value="shoulderY">Spalle (Altezza)</option>
+                                                        <option value="shoulderTilt">Spalle (Inclinazione)</option>
+                                                        <option value="elbowY">Gomiti (Altezza)</option>
+                                                        <option value="kneeY">Ginocchia (Altezza)</option>
+                                                        <option value="footY">Piedi (Altezza)</option>
+                                                        <option value="torsoY">Busto (Altezza)</option>
+                                                        <option value="armSpan">Apertura Braccia</option>
+                                                        <option value="handsY">Mani (Altezza Media)</option>
                                                     </select>
-                                                    <select className="bg-black/50 border border-white/10 text-[9px] text-gray-500 p-1 rounded flex-1 outline-none uppercase font-bold" disabled>
+                                                    <select 
+                                                        value={stem.parameter}
+                                                        onChange={(e) => {
+                                                            const newStems = [...localStems];
+                                                            newStems[i].parameter = e.target.value as any;
+                                                            setLocalStems(newStems);
+                                                        }}
+                                                        className="bg-black/50 border border-white/10 text-[9px] text-gray-300 p-1 rounded flex-1 outline-none uppercase font-bold"
+                                                    >
                                                         <option value="volume">Volume</option>
+                                                        <option value="lowpass">Filtro Lowpass</option>
+                                                        <option value="pan">Panning (L/R)</option>
                                                     </select>
                                                 </div>
                                             </div>

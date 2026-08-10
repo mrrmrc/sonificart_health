@@ -9,6 +9,8 @@ export interface AudioEngine {
     source: AudioBufferSourceNode | null;
     stemSources?: AudioBufferSourceNode[];
     stemGains?: GainNode[];
+    stemPanners?: StereoPannerNode[];
+    stemFilters?: BiquadFilterNode[];
     panner: StereoPannerNode | null;
     filter: BiquadFilterNode | null;
     autoGain: GainNode | null;
@@ -157,24 +159,15 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
 
     // --- AUTO CALIBRATION ---
     const calibrateDistance = () => {
-        // Use smoothCam.current.z (real-time filtered position)
-        const currentZ = smoothCam.current.z;
-        // Default is -1.0. If close to default, camera might not be ready.
-        if (currentZ <= -0.95) {
-            return;
-        }
-
-        calibRef.current.neutralZ = currentZ;
         setIsCalibrated(true);
-        setTimeout(() => setIsCalibrated(false), 2000);
+        WebcamService.startCalibration();
+        setTimeout(() => setIsCalibrated(false), 3000);
     };
 
     // Auto-Calibrate on Startup
     useEffect(() => {
         const t1 = setTimeout(calibrateDistance, 1500);
-        const t2 = setTimeout(calibrateDistance, 3000);
-        const t3 = setTimeout(calibrateDistance, 5000);
-        return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+        return () => { clearTimeout(t1); };
     }, []);
 
     // Global keyboard shortcuts
@@ -289,21 +282,38 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
             let sourceNode: AudioBufferSourceNode | null = null;
             let stemSources: AudioBufferSourceNode[] = [];
             let stemGains: GainNode[] = [];
+            let stemPanners: StereoPannerNode[] = [];
+            let stemFilters: BiquadFilterNode[] = [];
             let panner: StereoPannerNode | null = null;
 
             if (useStems) {
-                panner = ctx.createStereoPanner();
-                panner.connect(filter);
                 for (let i = 0; i < stemBuffers.length; i++) {
                     const src = ctx.createBufferSource();
                     src.buffer = stemBuffers[i];
+                    
                     const gain = ctx.createGain();
-                    gain.gain.value = 0.5; // Starts at mid volume
+                    gain.gain.value = 0.5;
+                    
+                    const stemPanner = ctx.createStereoPanner();
+                    stemPanner.pan.value = 0;
+                    
+                    const stemFilter = ctx.createBiquadFilter();
+                    stemFilter.type = 'lowpass';
+                    stemFilter.frequency.value = 20000;
+                    
                     src.connect(gain);
-                    gain.connect(panner);
+                    gain.connect(stemPanner);
+                    stemPanner.connect(stemFilter);
+                    stemFilter.connect(filter); // connect to master chain
+                    
                     stemSources.push(src);
                     stemGains.push(gain);
+                    stemPanners.push(stemPanner);
+                    stemFilters.push(stemFilter);
                 }
+                // We still need a dummy panner for the synth nodes
+                panner = ctx.createStereoPanner();
+                panner.connect(filter);
             } else {
                 sourceNode = ctx.createBufferSource();
                 sourceNode.buffer = fallbackBuffer;
@@ -352,6 +362,8 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 source: sourceNode,
                 stemSources,
                 stemGains,
+                stemPanners,
+                stemFilters,
                 panner,
                 filter,
                 autoGain,
@@ -460,42 +472,79 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     const headPan = -(m.yaw * calibRef.current.panSensitivity);
                     if (engineRef.current.panner) engineRef.current.panner.pan.setTargetAtTime(Math.max(-1, Math.min(1, headPan)), now, 0.1);
 
-                    // 4. STEM ENGINE PROTOTYPE MAPPING
-                    if (engineRef.current.stemGains && engineRef.current.stemGains.length > 0) {
-                        const actx = engineRef.current.audioCtx;
-                        if (actx) {
-                            if (localStems.length > 0) {
-                                localStems.forEach((stem, index) => {
-                                    const gainNode = engineRef.current!.stemGains![index];
-                                    if (!gainNode) return;
-                                    
-                                    let rawVal = 0.5;
-                                    switch(stem.assignedBodyPart) {
-                                        case 'leftHandY': rawVal = m.leftHandY || 0.5; break;
-                                        case 'rightHandY': rawVal = m.rightHandY || 0.5; break;
-                                        case 'leftHandX': rawVal = m.leftHandX || 0.5; break;
-                                        case 'rightHandX': rawVal = m.rightHandX || 0.5; break;
-                                        case 'z': rawVal = m.z || 0.5; break;
-                                    }
-
-                                    if (stem.parameter === 'volume') {
-                                        const vol = Math.max(0, Math.min(1, 1.0 - rawVal));
-                                        gainNode.gain.setTargetAtTime(vol, actx.currentTime, 0.1);
-                                    }
-                                });
-                            } else if (engineRef.current.stemGains.length === 4) {
-                                // Default hardcoded fallback
-                                const leftHandY = m.leftHandY || 0.5;
-                                const leftVol = Math.max(0, Math.min(1, 1.0 - leftHandY));
-                                engineRef.current.stemGains[0].gain.setTargetAtTime(leftVol, actx.currentTime, 0.1);
-                                engineRef.current.stemGains[1].gain.setTargetAtTime(leftVol, actx.currentTime, 0.1);
-                                
-                                const rightHandY = m.rightHandY || 0.5;
-                                const rightVol = Math.max(0, Math.min(1, 1.0 - rightHandY));
-                                engineRef.current.stemGains[2].gain.setTargetAtTime(rightVol, actx.currentTime, 0.1);
-                                engineRef.current.stemGains[3].gain.setTargetAtTime(rightVol, actx.currentTime, 0.1);
-                            }
+                    // Helper to get body parameter value and apply calibration
+                    const getBodyVal = (part: BodyPart) => {
+                        let val = 0.5;
+                        switch(part) {
+                            case 'leftHandY': val = m.leftHandY; break;
+                            case 'rightHandY': val = m.rightHandY; break;
+                            case 'leftHandX': val = m.leftHandX; break;
+                            case 'rightHandX': val = m.rightHandX; break;
+                            case 'z': val = m.z; break;
+                            case 'headYaw': val = (m.yaw + 1) / 2; break; // Normalize -1..1 to 0..1
+                            case 'headPitch': val = (m.pitch + 1) / 2; break;
+                            case 'shoulderY': val = (m.leftShoulderY + m.rightShoulderY) / 2; break;
+                            case 'shoulderTilt': val = m.shoulderTilt; break;
+                            case 'elbowY': val = (m.leftElbowY + m.rightElbowY) / 2; break;
+                            case 'kneeY': val = (m.leftKneeY + m.rightKneeY) / 2; break;
+                            case 'footY': val = (m.leftFootY + m.rightFootY) / 2; break;
+                            case 'torsoY': val = m.torsoY; break;
+                            case 'armSpan': val = m.armSpan; break;
+                            case 'handsY': val = (m.leftHandY + m.rightHandY) / 2; break;
+                            default: val = 0.5; break;
                         }
+                        return val || 0.5;
+                    };
+
+                    const applyParam = (param: AudioParameter, rawVal: number, gainNode?: GainNode, pannerNode?: StereoPannerNode, filterNode?: BiquadFilterNode) => {
+                        const actx = engineRef.current!.audioCtx!;
+                        if (param === 'volume' && gainNode) {
+                            const vol = Math.max(0, Math.min(1, 1.0 - rawVal)); // Y up = louder
+                            gainNode.gain.setTargetAtTime(vol, actx.currentTime, 0.1);
+                        } else if (param === 'pan' && pannerNode) {
+                            const pan = (rawVal * 2) - 1; // 0..1 -> -1..1
+                            pannerNode.pan.setTargetAtTime(pan, actx.currentTime, 0.1);
+                        } else if (param === 'lowpass' && filterNode) {
+                            // Map 0..1 to 200Hz .. 20000Hz exponentially
+                            const minFreq = 200;
+                            const maxFreq = 20000;
+                            // 1.0 - rawVal so that hands up = open filter, hands down = muffled
+                            const val = Math.max(0, Math.min(1, 1.0 - rawVal));
+                            const freq = minFreq * Math.pow(maxFreq / minFreq, val);
+                            filterNode.frequency.setTargetAtTime(freq, actx.currentTime, 0.1);
+                        }
+                    };
+
+                    // 4. STEM ENGINE MAPPING
+                    if (engineRef.current.stemGains && engineRef.current.stemGains.length > 0) {
+                        if (localStems.length > 0) {
+                            localStems.forEach((stem, index) => {
+                                const gainNode = engineRef.current!.stemGains![index];
+                                const pannerNode = engineRef.current!.stemPanners![index];
+                                const filterNode = engineRef.current!.stemFilters![index];
+                                if (!gainNode) return;
+                                
+                                const rawVal = getBodyVal(stem.assignedBodyPart);
+                                applyParam(stem.parameter, rawVal, gainNode, pannerNode, filterNode);
+                            });
+                        } else if (engineRef.current.stemGains.length === 4) {
+                            // Default hardcoded fallback
+                            const leftHandY = m.leftHandY || 0.5;
+                            const leftVol = Math.max(0, Math.min(1, 1.0 - leftHandY));
+                            engineRef.current.stemGains[0].gain.setTargetAtTime(leftVol, actx.currentTime, 0.1);
+                            engineRef.current.stemGains[1].gain.setTargetAtTime(leftVol, actx.currentTime, 0.1);
+                            
+                            const rightHandY = m.rightHandY || 0.5;
+                            const rightVol = Math.max(0, Math.min(1, 1.0 - rightHandY));
+                            engineRef.current.stemGains[2].gain.setTargetAtTime(rightVol, actx.currentTime, 0.1);
+                            engineRef.current.stemGains[3].gain.setTargetAtTime(rightVol, actx.currentTime, 0.1);
+                        }
+                    } else if (result.configUsed?.masterMappings) {
+                        // 5. MASTER TRACK MAPPING (No Stems)
+                        result.configUsed.masterMappings.forEach(mm => {
+                            const rawVal = getBodyVal(mm.bodyPart);
+                            applyParam(mm.parameter, rawVal, engineRef.current!.autoGain!, engineRef.current!.panner!, engineRef.current!.filter!);
+                        });
                     }
 
                 } else {
@@ -606,45 +655,86 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 // --- DRAW VISUAL MODES ---
                 if (visualModeRef.current === 'skeleton' && m.landmarks) {
                     context.save();
-                    context.globalAlpha = 0.8;
-                    context.strokeStyle = '#2dd4bf'; // Cyan
-                    context.lineWidth = 2;
-                    context.fillStyle = '#f472b6'; // Pink
                     
-                    // Full body Pose connections
-                    const connections = [
-                        [0, 1], [1, 2], [2, 3], [3, 7], // Right eye/ear
-                        [0, 4], [4, 5], [5, 6], [6, 8], // Left eye/ear
-                        [9, 10], // Mouth
-                        [11, 12], // Shoulders
-                        [11, 13], [13, 15], // Right arm
-                        [12, 14], [14, 16], // Left arm
-                        [15, 17], [15, 19], [15, 21], [17, 19], // Right hand
-                        [16, 18], [16, 20], [16, 22], [18, 20], // Left hand
-                        [11, 23], [12, 24], [23, 24], // Torso
-                        [23, 25], [25, 27], [27, 29], [29, 31], [31, 27], // Right leg
-                        [24, 26], [26, 28], [28, 30], [30, 32], [32, 28]  // Left leg
-                    ];
+                    // Base Neon Settings
+                    context.lineCap = 'round';
+                    context.lineJoin = 'round';
+                    
+                    const drawNeonLine = (p1: any, p2: any, color: string, glowColor: string, width: number) => {
+                        if (!p1 || !p2) return;
+                        context.shadowBlur = 15;
+                        context.shadowColor = glowColor;
+                        context.strokeStyle = color;
+                        context.lineWidth = width;
+                        context.beginPath();
+                        context.moveTo(cx + (p1.x - 0.5) * renderW, cy + (p1.y - 0.5) * renderH);
+                        context.lineTo(cx + (p2.x - 0.5) * renderW, cy + (p2.y - 0.5) * renderH);
+                        context.stroke();
+                        // Inner core
+                        context.shadowBlur = 0;
+                        context.strokeStyle = '#ffffff';
+                        context.lineWidth = width * 0.4;
+                        context.stroke();
+                    };
 
-                    connections.forEach(([i, j]) => {
-                        const p1 = m.landmarks![i];
-                        const p2 = m.landmarks![j];
-                        if (p1 && p2) {
-                            context.beginPath();
-                            context.moveTo(cx + (p1.x - 0.5) * renderW, cy + (p1.y - 0.5) * renderH);
-                            context.lineTo(cx + (p2.x - 0.5) * renderW, cy + (p2.y - 0.5) * renderH);
-                            context.stroke();
-                        }
-                    });
+                    const drawNeonPoint = (p: any, radius: number, color: string, glowColor: string) => {
+                        if (!p) return;
+                        context.shadowBlur = 15;
+                        context.shadowColor = glowColor;
+                        context.fillStyle = color;
+                        context.beginPath();
+                        context.arc(cx + (p.x - 0.5) * renderW, cy + (p.y - 0.5) * renderH, radius, 0, Math.PI * 2);
+                        context.fill();
+                        // Inner core
+                        context.shadowBlur = 0;
+                        context.fillStyle = '#ffffff';
+                        context.beginPath();
+                        context.arc(cx + (p.x - 0.5) * renderW, cy + (p.y - 0.5) * renderH, radius * 0.4, 0, Math.PI * 2);
+                        context.fill();
+                    };
 
+                    const l = m.landmarks;
+
+                    // 1. Torso (Magenta)
+                    const torso = [[11, 12], [11, 23], [12, 24], [23, 24]];
+                    torso.forEach(([i, j]) => drawNeonLine(l[i], l[j], '#d946ef', '#c026d3', 6));
+                    
+                    // 2. Arms (Cyan)
+                    const arms = [[11, 13], [13, 15], [12, 14], [14, 16]];
+                    arms.forEach(([i, j]) => drawNeonLine(l[i], l[j], '#06b6d4', '#0891b2', 5));
+                    
+                    // 3. Legs (Blue)
+                    const legs = [[23, 25], [25, 27], [27, 29], [29, 31], [31, 27], [24, 26], [26, 28], [28, 30], [30, 32], [32, 28]];
+                    legs.forEach(([i, j]) => drawNeonLine(l[i], l[j], '#3b82f6', '#2563eb', 5));
+
+                    // 4. Hands detail (Cyan)
+                    const hands = [[15, 17], [15, 19], [15, 21], [17, 19], [16, 18], [16, 20], [16, 22], [18, 20]];
+                    hands.forEach(([i, j]) => drawNeonLine(l[i], l[j], '#22d3ee', '#06b6d4', 3));
+
+                    // 5. Face detail (Yellow/Orange)
+                    // Face outline / structure
+                    const face = [[0, 1], [1, 2], [2, 3], [3, 7], [0, 4], [4, 5], [5, 6], [6, 8]];
+                    face.forEach(([i, j]) => drawNeonLine(l[i], l[j], '#f59e0b', '#d97706', 3));
+                    // Mouth
+                    drawNeonLine(l[9], l[10], '#ef4444', '#b91c1c', 4);
+                    
+                    // Draw joints
                     for (let i = 0; i < 33; i++) {
-                        const p = m.landmarks![i];
-                        if (p) {
-                            context.beginPath();
-                            context.arc(cx + (p.x - 0.5) * renderW, cy + (p.y - 0.5) * renderH, 5, 0, Math.PI * 2);
-                            context.fill();
-                        }
+                        let color = '#d946ef';
+                        let glow = '#c026d3';
+                        let size = 4;
+                        
+                        if (i >= 0 && i <= 10) { color = '#f59e0b'; glow = '#d97706'; size = 3; } // Face
+                        if (i >= 13 && i <= 22) { color = '#06b6d4'; glow = '#0891b2'; size = 5; } // Arms/Hands
+                        if (i >= 25) { color = '#3b82f6'; glow = '#2563eb'; size = 5; } // Legs
+                        
+                        // Highlight Eyes and Nose
+                        if (i === 0) size = 6; // Nose
+                        if (i === 2 || i === 5) { color = '#10b981'; glow = '#059669'; size = 6; } // Eyes
+                        
+                        drawNeonPoint(l[i], size, color, glow);
                     }
+                    
                     context.restore();
                 }
 

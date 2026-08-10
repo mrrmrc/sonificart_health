@@ -39,6 +39,7 @@ export interface ConfigSettings {
     accompanimentInstrument: InstrumentType;
     useHealthAgent?: boolean;
     healthEnrichment?: string;
+    masterMappings?: { bodyPart: BodyPart, parameter: AudioParameter }[];
 }
 
 export interface MusicalGenre {
@@ -291,7 +292,7 @@ export interface ColorRegion {
 }
 
 // --- DYNAMIC STEM ENGINE ---
-export type BodyPart = 'leftHandY' | 'rightHandY' | 'leftHandX' | 'rightHandX' | 'z' | 'headYaw' | 'headPitch' | 'leftFoot' | 'rightFoot';
+export type BodyPart = 'leftHandY' | 'rightHandY' | 'leftHandX' | 'rightHandX' | 'z' | 'headYaw' | 'headPitch' | 'shoulderY' | 'shoulderTilt' | 'elbowY' | 'kneeY' | 'footY' | 'torsoY' | 'armSpan' | 'handsY';
 export type AudioParameter = 'volume' | 'lowpass' | 'pan';
 
 export interface StemMapping {
