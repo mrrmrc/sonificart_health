@@ -1676,7 +1676,18 @@ if ($action === 'attach_audio_to_history' && $method === 'POST') {
         $finalAudioUrl = $_POST['audioUrl'];
     }
     // 2. Fallback File Upload
-    else if (isset($_FILES['audioFile']) && $_FILES['audioFile']['error'] === UPLOAD_ERR_OK) {
+    else if (isset($_FILES['audioFile'])) {
+        if ($_FILES['audioFile']['error'] !== UPLOAD_ERR_OK) {
+            $errCode = $_FILES['audioFile']['error'];
+            $errMsg = "Errore sconosciuto";
+            if ($errCode == UPLOAD_ERR_INI_SIZE) $errMsg = "Il file supera upload_max_filesize in php.ini.";
+            else if ($errCode == UPLOAD_ERR_FORM_SIZE) $errMsg = "Il file supera MAX_FILE_SIZE specificato nel form HTML.";
+            else if ($errCode == UPLOAD_ERR_PARTIAL) $errMsg = "Upload file interrotto a metà.";
+            else if ($errCode == UPLOAD_ERR_NO_FILE) $errMsg = "Nessun file inviato.";
+            
+            sendResponse(["error" => "Errore upload PHP (Codice $errCode): $errMsg"], 400);
+        }
+
         $file = $_FILES['audioFile'];
         $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
         $allowed = ['mp3', 'wav', 'ogg', 'm4a'];
@@ -1698,10 +1709,14 @@ if ($action === 'attach_audio_to_history' && $method === 'POST') {
             $scriptDir = ($scriptDir === '/' || $scriptDir === '\\') ? '' : rtrim($scriptDir, '/');
             $finalAudioUrl = $scriptDir . "/media/custom/" . $newFileName;
         } else {
-            sendResponse(["error" => "Errore upload audio"], 500);
+            sendResponse(["error" => "Errore durante lo spostamento del file (move_uploaded_file fallito). Verifica i permessi della cartella."], 500);
         }
     } else {
-        sendResponse(["error" => "Nessun audio fornito"], 400);
+        // Log to see if $_POST is also empty, indicating a POST size limit issue
+        if (empty($_POST) && $_SERVER['CONTENT_LENGTH'] > 0) {
+            sendResponse(["error" => "Il server (NGINX/Apache) o post_max_size ha bloccato la richiesta perché il file è troppo grande."], 413);
+        }
+        sendResponse(["error" => "Nessun audio fornito nella richiesta."], 400);
     }
 
     if ($finalAudioUrl) {
