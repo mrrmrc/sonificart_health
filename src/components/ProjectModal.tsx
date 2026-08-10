@@ -43,7 +43,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, us
     const getAbsoluteUrl = (url: string | undefined) => {
         if (!url) return null;
         if (url.startsWith('http')) return url;
-        return `https://sonificart.com${url.startsWith('/') ? '' : '/'}${url}`;
+        return `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`;
     };
 
     const ActionToolbar: React.FC<{ url: string | null | undefined, type: 'video' | 'audio' | 'live', filename?: string, title?: string }> = ({ url, type, filename }) => {
@@ -204,7 +204,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, us
                                             Interagisci in tempo reale: il tuo sguardo e i movimenti trasformano l'immagine in suono.
                                         </p>
                                         <button
-                                            onClick={() => window.open(`https://sonificart.com/live/${project.id || project.historyId}?play=true`, '_blank')}
+                                            onClick={() => window.open(`${window.location.origin}/live/${project.id || project.historyId}?play=true`, '_blank')}
                                             className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-black text-[10px] uppercase tracking-[0.2em] rounded-xl shadow-xl transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2"
                                         >
                                             <i className="fas fa-play text-xs"></i>

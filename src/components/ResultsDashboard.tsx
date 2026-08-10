@@ -117,7 +117,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
     const [qrUrl, setQrUrl] = useState<string | null>(null);
 
     const copyLink = (text: string) => {
-        const full = text.startsWith('http') ? text : `https://sonificart.com${text.startsWith('/') ? '' : '/'}${text}`;
+        const full = text.startsWith('http') ? text : `${window.location.origin}${text.startsWith('/') ? '' : '/'}${text}`;
         navigator.clipboard.writeText(full)
             .then(() => setConfirmModal({
                 isOpen: true, title: "Copia", message: "Link copiato negli appunti!", type: 'success', singleButton: true,
@@ -131,7 +131,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
 
     const socialShare = (platform: 'whatsapp' | 'facebook' | 'twitter' | 'linkedin', url: string, text: string) => {
         if (!url) return;
-        const full = url.startsWith('http') ? url : `https://sonificart.com${url.startsWith('/') ? '' : '/'}${url}`;
+        const full = url.startsWith('http') ? url : `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`;
         const encUrl = encodeURIComponent(full);
         const encText = encodeURIComponent(text);
 
@@ -1941,7 +1941,7 @@ ${p?.justification || ''}
                             <button onClick={() => setQrUrl(null)} className="text-gray-400 hover:text-white"><i className="fas fa-times"></i></button>
                         </div>
                         <div className="bg-white p-4 rounded-xl inline-block mb-4">
-                            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrUrl.startsWith('http') ? qrUrl : `https://sonificart.com${qrUrl.startsWith('/') ? '' : '/'}${qrUrl}`)}`} alt="QR Code" className="w-full h-full" />
+                            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrUrl.startsWith('http') ? qrUrl : `${window.location.origin}${qrUrl.startsWith('/') ? '' : '/'}${qrUrl}`)}`} alt="QR Code" className="w-full h-full" />
                         </div>
                         <p className="text-xs text-gray-400 break-all bg-black/30 p-2 rounded border border-white/5">{qrUrl}</p>
                         <button onClick={() => copyLink(qrUrl)} className="text-brand-accent text-xs mt-3 hover:underline">Copia Link</button>

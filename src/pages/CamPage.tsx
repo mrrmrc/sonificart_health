@@ -1732,7 +1732,7 @@ export const CamPage: React.FC = () => {
                                         </button>
                                         {hasSaved && savedWorkId && (
                                             <button 
-                                                onClick={() => window.open(`https://sonificart.com/live/${savedWorkId}?kiosk=true`, '_blank')}
+                                                onClick={() => window.open(`${window.location.origin}/live/${savedWorkId}?kiosk=true`, '_blank')}
                                                 className="w-full py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:scale-[1.02] text-white border border-cyan-400/50 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-lg"
                                             >
                                                 <i className="fas fa-desktop text-lg text-white"></i>

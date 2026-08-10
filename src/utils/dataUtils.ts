@@ -6,8 +6,7 @@ import { initialSettings } from '../config/defaults';
 export const fixAudioUrl = (url?: string | null): string | undefined => {
     if (!url) return undefined;
     if (url.startsWith('http') || url.startsWith('blob:') || url.startsWith('data:')) return url;
-    // Base URL from the API service or hardcoded if needed
-    const API_BASE = 'https://sonificart.com';
+    const API_BASE = window.location.origin;
     const cleanUrl = url.startsWith('/') ? url : `/${url}`;
     return `${API_BASE}${cleanUrl}`;
 };

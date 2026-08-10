@@ -100,7 +100,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
             }
             else if (view === 'forgot') {
                 // Chiamata alla nuova API reset_password
-                const res = await fetch('https://sonificart.com/api/index.php?action=reset_password', {
+                const res = await fetch(`${window.location.origin}/api/index.php?action=reset_password`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email })

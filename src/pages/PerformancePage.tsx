@@ -57,7 +57,7 @@ export const PerformancePage: React.FC = () => {
                 if (!audioUrl) throw new Error("Audio non disponibile per questa opera.");
 
                 // Fetch Audio Blob
-                const fixedAudioUrl = audioUrl.startsWith('http') ? audioUrl : `https://sonificart.com${audioUrl.startsWith('/') ? '' : '/'}${audioUrl}`;
+                const fixedAudioUrl = audioUrl.startsWith('http') ? audioUrl : `${window.location.origin}${audioUrl.startsWith('/') ? '' : '/'}${audioUrl}`;
                 const audioRes = await fetch(fixedAudioUrl);
                 if (!audioRes.ok) throw new Error("Impossibile caricare l'audio.");
                 const audioBlob = await audioRes.blob();
@@ -87,7 +87,7 @@ export const PerformancePage: React.FC = () => {
                 const result: SonificationResult = {
                     imageHash: target.id,
                     audioHash: target.id,
-                    standardizedImageUrl: (target as any).imageUrl.startsWith('http') ? (target as any).imageUrl : `https://sonificart.com${(target as any).imageUrl}`,
+                    standardizedImageUrl: (target as any).imageUrl.startsWith('http') ? (target as any).imageUrl : `${window.location.origin}${(target as any).imageUrl}`,
                     paradigm: (target as any).paradigm as any,
                     blockAnalysisResult: blockData,
                     culturalSelectionResult: {

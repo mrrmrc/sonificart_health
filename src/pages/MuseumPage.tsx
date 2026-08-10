@@ -9,7 +9,7 @@ import { Logo } from '../components/Logo';
 const fixImage = (url: string | undefined) => {
     if (!url) return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
     if (url.startsWith('data:') || url.startsWith('http')) return url;
-    return `https://sonificart.com${url.startsWith('/') ? '' : '/'}${url}`;
+    return `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`;
 };
 
 export const MuseumPage: React.FC = () => {

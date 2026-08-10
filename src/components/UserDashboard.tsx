@@ -10,7 +10,7 @@ import { LivePerformanceOverlay } from './LivePerformanceOverlay';
 const fixImage = (url: string | null | undefined) => {
     if (!url) return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
     if (url.startsWith('data:') || url.startsWith('http')) return url;
-    if (url.startsWith('/')) return `https://sonificart.com${url}`;
+    if (url.startsWith('/')) return `${window.location.origin}${url}`;
     return `data:image/jpeg;base64,${url}`;
 };
 
@@ -60,7 +60,7 @@ const PublishModal: React.FC<{
     const getAbsoluteUrl = (url: string | null | undefined) => {
         if (!url) return null;
         if (url.startsWith('http')) return url;
-        return `https://sonificart.com${url.startsWith('/') ? '' : '/'}${url}`;
+        return `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`;
     };
 
     // ACTION: Save Metadata
@@ -192,7 +192,7 @@ const PublishModal: React.FC<{
             videoRef.current.pause();
         }
 
-        window.open(`https://sonificart.com/live/${entry.id}`, '_blank');
+        window.open(`${window.location.origin}/live/${entry.id}`, '_blank');
     };
 
     // ACTION: Webcam Check
@@ -540,7 +540,7 @@ const PublishModal: React.FC<{
                                             </button>
                                             <div className="flex justify-center gap-3 mt-3 opacity-60">
                                                 <button className="w-6 h-6 rounded bg-black/40 border border-white/10 flex items-center justify-center text-[10px] text-gray-400 hover:text-white transition-colors" title="Copia Link"><i className="fas fa-link"></i></button>
-                                                <button className="w-6 h-6 rounded bg-black/40 border border-white/10 flex items-center justify-center text-[10px] text-gray-400 hover:text-white transition-colors" title="QR Code" onClick={() => setQrUrl(`https://sonificart.com/live/${entry.id}`)}><i className="fas fa-qrcode"></i></button>
+                                                <button className="w-6 h-6 rounded bg-black/40 border border-white/10 flex items-center justify-center text-[10px] text-gray-400 hover:text-white transition-colors" title="QR Code" onClick={() => setQrUrl(`${window.location.origin}/live/${entry.id}`)}><i className="fas fa-qrcode"></i></button>
                                                 <button className="w-6 h-6 rounded bg-black/40 border border-white/10 flex items-center justify-center text-[10px] text-green-400/70 hover:text-green-400 transition-colors" title="Condividi Whatsapp"><i className="fab fa-whatsapp"></i></button>
                                                 <button className="w-6 h-6 rounded bg-black/40 border border-white/10 flex items-center justify-center text-[10px] text-blue-400/70 hover:text-blue-400 transition-colors" title="Condividi Facebook"><i className="fab fa-facebook-f"></i></button>
                                                 <button className="w-6 h-6 rounded bg-black/40 border border-white/10 flex items-center justify-center text-[10px] text-blue-600/70 hover:text-blue-600 transition-colors" title="Condividi Linkedin"><i className="fab fa-linkedin-in"></i></button>
@@ -635,7 +635,7 @@ const HistoryItem: React.FC<{ item: DashboardEntry; onView: () => void; onPublis
                 )}
                 {/* KIOSK BUTTON */}
                 <button
-                    onClick={(e) => { e.stopPropagation(); window.open(`https://sonificart.com/live/${item.id}?kiosk=true`, '_blank'); }}
+                    onClick={(e) => { e.stopPropagation(); window.open(`${window.location.origin}/live/${item.id}?kiosk=true`, '_blank'); }}
                     className="bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500 hover:text-white text-[10px] sm:text-xs font-black py-2 px-3 sm:px-4 rounded border border-cyan-500/30 uppercase tracking-tighter transition-all flex items-center gap-1"
                     title="Avvia Modalità Esposizione Museale"
                 >
