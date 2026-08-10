@@ -1240,10 +1240,21 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                 </p>
                                 <button
                                     onClick={calibrateDistance}
-                                    className={`w-full py-3 rounded-lg text-xs font-bold tracking-widest uppercase transition-all shadow-lg flex items-center justify-center gap-2
+                                    className={`w-full py-3 rounded-lg text-xs font-bold tracking-widest uppercase transition-all shadow-lg flex items-center justify-center gap-2 mb-3
                                         ${isCalibrated ? 'bg-green-500 text-black' : 'bg-cyan-600 hover:bg-cyan-500 text-white'}`}
                                 >
                                     {isCalibrated ? <><i className="fas fa-check"></i> {t.calibSuccess}</> : <><i className="fas fa-crosshairs"></i> {t.calibInstr}</>}
+                                </button>
+                                
+                                {/* SETUP SKELETON BUTTON */}
+                                <button
+                                    onClick={() => {
+                                        setIsSettingsOpen(false); // Close settings panel
+                                        setShowSkeletonPanel(true); // Open skeleton panel
+                                    }}
+                                    className="w-full py-3 rounded-lg text-xs font-bold tracking-widest uppercase transition-all shadow-lg flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-500 text-white border border-purple-400/50"
+                                >
+                                    <i className="fas fa-person-running"></i> SETUP SKELETON
                                 </button>
                             </div>
                         </div>
