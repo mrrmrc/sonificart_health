@@ -108,6 +108,8 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
     const [masterVolume, setMasterVolume] = useState(1.0);
     const [isCalibrated, setIsCalibrated] = useState(false);
     const [visualMode, setVisualMode] = useState<'none' | 'skeleton' | 'transparency'>('none');
+    const visualModeRef = useRef(visualMode);
+    useEffect(() => { visualModeRef.current = visualMode; }, [visualMode]);
 
     // Default calibration values
     const calibRef = useRef({
@@ -408,7 +410,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
 
                 context.clearRect(0, 0, w, h);
 
-                if (visualMode !== 'none' && videoRef.current && m.isActive) {
+                if (visualModeRef.current !== 'none' && videoRef.current && m.isActive) {
                     context.save();
                     context.globalAlpha = 0.15; // Leggera trasparenza per far vedere la persona
                     context.translate(w, 0);
@@ -593,7 +595,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     } // No legacy grid synth anymore!
 
                     // --- DRAW VISUAL MODES ---
-                    if (visualMode === 'skeleton' && m.landmarks) {
+                    if (visualModeRef.current === 'skeleton' && m.landmarks) {
                         context.save();
                         context.globalAlpha = 0.8;
                         context.strokeStyle = '#2dd4bf'; // Cyan
@@ -651,7 +653,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         context.restore();
                     }
 
-                    if (visualMode === 'transparency' && m.landmarks) {
+                    if (visualModeRef.current === 'transparency' && m.landmarks) {
                         // Apply destination-out to clear the canvas where the body is
                         context.save();
                         context.globalAlpha = 0.8;
