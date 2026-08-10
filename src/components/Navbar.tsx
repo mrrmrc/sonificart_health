@@ -18,11 +18,13 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, isAdmin, userCredits, isProUser, onLogin, onLogout, onGoProClick, onOpenHelp }) => {
     const { t } = useLanguage();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [isCreaMusicaOpen, setIsCreaMusicaOpen] = useState(false);
     const navigate = useNavigate();
     const location = useLocation();
 
     // Helper per determinare la vista corrente dal path
     const currentView = location.pathname === '/' ? 'landing' : location.pathname.substring(1);
+    const isCreaMusicaActive = currentView === 'sonification' || currentView === 'cam';
 
     const navLinkClass = (view: string) => `
         relative cursor-pointer px-3 py-2 text-sm font-bold tracking-wide uppercase transition-all duration-300 group
@@ -64,12 +66,6 @@ export const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, isAdmin, userCredits
                         <ActiveIndicator isActive={currentView === 'landing'} />
                     </button>
 
-                    <button onClick={() => navigate('/cam')} className={`${navLinkClass('cam')} text-cyan-400 hover:text-cyan-300 flex items-center gap-1.5 font-extrabold`}>
-                        <i className="fas fa-video text-xs text-cyan-400 animate-pulse"></i>
-                        CAM
-                        <ActiveIndicator isActive={currentView === 'cam'} />
-                    </button>
-
                     <button onClick={onGoProClick} className={`${navLinkClass('landing')} text-brand-accent hover:text-brand-accent-light flex items-center gap-2`}>
                         {t('nav.access')}
                         <ActiveIndicator isActive={false} />
@@ -77,10 +73,54 @@ export const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, isAdmin, userCredits
 
                     {isLoggedIn ? (
                         <>
-                            <button onClick={() => navigate('/sonification')} className={navLinkClass('sonification')}>
-                                {t('nav.sonify')}
-                                <ActiveIndicator isActive={currentView === 'sonification'} />
-                            </button>
+                            {/* CREA MUSICA DROPDOWN */}
+                            <div
+                                className="relative group"
+                                onMouseEnter={() => setIsCreaMusicaOpen(true)}
+                                onMouseLeave={() => setIsCreaMusicaOpen(false)}
+                            >
+                                <button
+                                    className={`relative cursor-pointer px-3 py-2 text-sm font-bold tracking-wide uppercase transition-all duration-300 flex items-center gap-1.5 ${isCreaMusicaActive ? 'text-white' : 'text-white/70 hover:text-white'}`}
+                                >
+                                    <i className="fas fa-music text-xs text-brand-accent"></i>
+                                    {t('nav.sonify')}
+                                    <i className={`fas fa-chevron-down text-[9px] transition-transform duration-200 ${isCreaMusicaOpen ? 'rotate-180' : ''}`}></i>
+                                    <span className={`absolute -bottom-1 left-1/2 -translate-x-1/2 h-0.5 bg-brand-accent transition-all duration-300 shadow-[0_0_10px_rgba(45,212,191,0.8)] ${isCreaMusicaActive ? 'w-full opacity-100' : 'w-0 opacity-0 group-hover:w-2/3 group-hover:opacity-50'}`}></span>
+                                </button>
+
+                                {/* Dropdown panel */}
+                                <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-1 w-52 bg-[#0f172a]/95 border border-white/10 rounded-xl shadow-2xl backdrop-blur-xl overflow-hidden transition-all duration-200 origin-top ${isCreaMusicaOpen ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'}`}>
+                                    {/* Scientifico */}
+                                    <button
+                                        onClick={() => { navigate('/sonification'); setIsCreaMusicaOpen(false); }}
+                                        className={`w-full flex items-center gap-3 px-4 py-3.5 text-sm font-bold uppercase tracking-wide transition-all hover:bg-white/5 border-b border-white/5 ${currentView === 'sonification' ? 'text-cyan-400 bg-cyan-500/5' : 'text-white/80 hover:text-white'}`}
+                                    >
+                                        <span className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center shrink-0">
+                                            <i className="fas fa-flask text-cyan-400 text-xs"></i>
+                                        </span>
+                                        <div className="text-left">
+                                            <div>Scientifico</div>
+                                            <div className="text-[9px] font-normal text-white/40 uppercase tracking-wider normal-case">Carica immagine</div>
+                                        </div>
+                                        {currentView === 'sonification' && <i className="fas fa-check text-cyan-400 text-xs ml-auto"></i>}
+                                    </button>
+                                    {/* Artistico (Health) */}
+                                    <button
+                                        onClick={() => { navigate('/cam'); setIsCreaMusicaOpen(false); }}
+                                        className={`w-full flex items-center gap-3 px-4 py-3.5 text-sm font-bold uppercase tracking-wide transition-all hover:bg-white/5 ${currentView === 'cam' ? 'text-purple-400 bg-purple-500/5' : 'text-white/80 hover:text-white'}`}
+                                    >
+                                        <span className="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0">
+                                            <i className="fas fa-heartbeat text-purple-400 text-xs"></i>
+                                        </span>
+                                        <div className="text-left">
+                                            <div>Artistico</div>
+                                            <div className="text-[9px] font-normal text-white/40 uppercase tracking-wider normal-case">Health &amp; WHO</div>
+                                        </div>
+                                        {currentView === 'cam' && <i className="fas fa-check text-purple-400 text-xs ml-auto"></i>}
+                                    </button>
+                                </div>
+                            </div>
+
                             <button onClick={() => navigate(isLoggedIn ? '/profile' : '/showcase')} className={navLinkClass(isLoggedIn ? 'profile' : 'showcase')}>
                                 {t('nav.showcase')}
                                 <ActiveIndicator isActive={currentView === (isLoggedIn ? 'profile' : 'showcase')} />
@@ -174,9 +214,6 @@ export const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, isAdmin, userCredits
                         <button onClick={() => { navigate('/'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg notranslate">
                             Home
                         </button>
-                        <button onClick={() => { navigate('/cam'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-cyan-400 font-bold bg-white/5 rounded-lg border border-cyan-500/30 flex items-center gap-2">
-                            <i className="fas fa-video text-cyan-400 animate-pulse"></i> CAM (Real-Time Opera & WHO)
-                        </button>
                         <button onClick={() => { onGoProClick(); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-brand-accent font-bold bg-white/5 rounded-lg border border-brand-accent/20">
                             {t('nav.access')}
                         </button>
@@ -188,9 +225,22 @@ export const Navbar: React.FC<NavbarProps> = ({ isLoggedIn, isAdmin, userCredits
                         </button>
                         {isLoggedIn && (
                             <>
-                                <button onClick={() => { navigate('/sonification'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">
-                                    <i className="fas fa-plus-circle mr-3 w-5 text-center text-gray-400"></i> {t('nav.sonify')}
-                                </button>
+                                {/* CREA MUSICA section mobile */}
+                                <div className="border border-white/10 rounded-xl overflow-hidden">
+                                    <div className="px-4 py-2 bg-white/5 text-xs font-bold uppercase tracking-widest text-brand-accent flex items-center gap-2">
+                                        <i className="fas fa-music"></i> {t('nav.sonify')}
+                                    </div>
+                                    <button onClick={() => { navigate('/sonification'); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-3 font-bold flex items-center gap-3 transition-colors ${currentView === 'sonification' ? 'text-cyan-400 bg-cyan-500/5' : 'text-white hover:bg-white/5'}`}>
+                                        <i className="fas fa-flask text-cyan-400 w-5 text-center"></i>
+                                        <span>Scientifico</span>
+                                        <span className="text-[9px] text-white/40 ml-auto">Carica immagine</span>
+                                    </button>
+                                    <button onClick={() => { navigate('/cam'); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-3 font-bold flex items-center gap-3 transition-colors ${currentView === 'cam' ? 'text-purple-400 bg-purple-500/5' : 'text-white hover:bg-white/5'}`}>
+                                        <i className="fas fa-heartbeat text-purple-400 w-5 text-center"></i>
+                                        <span>Artistico</span>
+                                        <span className="text-[9px] text-white/40 ml-auto">Health &amp; WHO</span>
+                                    </button>
+                                </div>
                                 <button onClick={() => { navigate('/verification'); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 text-white font-bold hover:bg-white/5 rounded-lg">
                                     <i className="fas fa-shield-alt mr-3 w-5 text-center text-gray-400"></i> {t('nav.verify')}
                                 </button>
