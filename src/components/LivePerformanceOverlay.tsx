@@ -754,9 +754,9 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
         <div ref={containerRef} className="fixed inset-0 z-[9999] bg-black flex flex-col overflow-hidden font-sans">
             <div ref={stageRef} className="flex-grow relative overflow-hidden w-full">
                 {/* Backgrounds */}
-                {mode === 'fullscreen' && <div className={`absolute inset-0 z-0 transition-opacity duration-500 ${visualMode !== 'none' ? 'opacity-0' : 'opacity-100'}`}><img src={result.standardizedImageUrl} className="w-full h-full object-cover filter blur-[40px] opacity-40 scale-110" /></div>}
+                {mode === 'fullscreen' && <div className={`absolute inset-0 z-0 transition-opacity duration-500 ${visualMode === 'skeleton' ? 'opacity-0' : 'opacity-100'}`}><img src={result.standardizedImageUrl} className="w-full h-full object-cover filter blur-[40px] opacity-40 scale-110" /></div>}
                 {/* 3D PLATFORM IMAGE */}
-                <div className={`absolute inset-0 flex items-center justify-center pointer-events-none z-1 transition-opacity duration-500 ${visualMode !== 'none' ? 'opacity-0' : 'opacity-100'}`} style={{ perspective: '1500px', transformStyle: 'preserve-3d' }}>
+                <div className={`absolute inset-0 flex items-center justify-center pointer-events-none z-1 transition-opacity duration-500 ${visualMode === 'skeleton' ? 'opacity-0' : 'opacity-100'}`} style={{ perspective: '1500px', transformStyle: 'preserve-3d' }}>
                     <div className="relative" style={{ transformStyle: 'preserve-3d' }}>
                         {/* Main Image */}
                         <img ref={bgImageRef} src={result.standardizedImageUrl} className="w-full h-full object-contain transition-transform duration-75 ease-out relative z-10" style={{ transformStyle: 'preserve-3d', backfaceVisibility: 'hidden' }} />
