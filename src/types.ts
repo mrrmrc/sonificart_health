@@ -290,6 +290,19 @@ export interface ColorRegion {
     depthLayer: 'background' | 'middleground' | 'foreground';
 }
 
+// --- DYNAMIC STEM ENGINE ---
+export type BodyPart = 'leftHandY' | 'rightHandY' | 'leftHandX' | 'rightHandX' | 'z' | 'headYaw' | 'headPitch' | 'leftFoot' | 'rightFoot';
+export type AudioParameter = 'volume' | 'lowpass' | 'pan';
+
+export interface StemMapping {
+    id: string;
+    name: string;
+    url: string; // The backend URL or local Object URL
+    file?: File; // Local reference during creation
+    assignedBodyPart: BodyPart;
+    parameter: AudioParameter;
+}
+
 export interface SonificationResult {
     imageHash: string;
     audioHash: string;
@@ -320,6 +333,7 @@ export interface SonificationResult {
     videoUrl?: string | null;
     healthClassification?: HealthClassificationResult | null;
     regions?: ColorRegion[]; // Aggiunto per salvare i centroidi 3D
+    stemMappings?: StemMapping[]; // NEW: For dynamic stem engine
 }
 
 export interface SacVerificationDetails {
@@ -366,6 +380,7 @@ export interface DashboardEntry {
     configUsed?: ConfigSettings;
     events?: any[]; // Compressed format from backend
     blockData?: BlockAnalysisResult;
+    stemMappings?: StemMapping[];
     imageHash?: string;
     videoUrl?: string | null;
     title?: string | null;

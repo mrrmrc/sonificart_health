@@ -1388,7 +1388,8 @@ if ($action === 'get_history_item' && $method === 'POST') {
         "videoUrl" => $h['video_url'] ? ((strpos($h['video_url'], 'http') === 0) ? $h['video_url'] : $baseUrl . (strpos($h['video_url'], '/') === 0 ? '' : '/') . $h['video_url']) : null,
         "audioHash" => $h['audio_hash'] ?? null,
         "acquisitionMetadata" => isset($h['acquisition_metadata']) ? json_decode($h['acquisition_metadata'], true) : null,
-        "validationHashes" => isset($h['validation_hashes']) ? json_decode($h['validation_hashes'], true) : null
+        "validationHashes" => isset($h['validation_hashes']) ? json_decode($h['validation_hashes'], true) : null,
+        "stemMappings" => isset($h['config_json']) && isset(json_decode($h['config_json'], true)['stemMappings']) ? json_decode($h['config_json'], true)['stemMappings'] : null
     ]);
 }
 
@@ -1734,6 +1735,88 @@ if ($action === 'attach_audio_to_history' && $method === 'POST') {
 
         sendResponse(["success" => true, "audioUrl" => $finalAudioUrl]);
     }
+}
+
+// --- UPLOAD HISTORY STEMS (DYNAMIC STEM ENGINE) ---
+if ($action === 'upload_history_stems' && $method === 'POST') {
+    $entryId = $_POST['entryId'] ?? null;
+    if (!$entryId) sendResponse(["error" => "No ID"], 400);
+
+    // Verify ownership
+    $stmt = $pdo->prepare("SELECT user_id FROM history WHERE id = ?");
+    $stmt->execute([$entryId]);
+    $ownerId = $stmt->fetchColumn();
+
+    if ($ownerId != $userId) {
+        $stmtAdmin = $pdo->prepare("SELECT is_admin FROM users WHERE id = ?");
+        $stmtAdmin->execute([$userId]);
+        if (!$stmtAdmin->fetchColumn()) {
+            sendResponse(["error" => "Unauthorized"], 403);
+        }
+    }
+
+    if (!isset($_FILES['stems']) || empty($_FILES['stems']['name'][0])) {
+        sendResponse(["error" => "No stems uploaded"], 400);
+    }
+
+    $targetDir = __DIR__ . '/media/stems/' . $entryId . '/';
+    if (!file_exists($targetDir)) {
+        mkdir($targetDir, 0755, true);
+    }
+
+    $scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME']));
+    $scriptDir = ($scriptDir === '/' || $scriptDir === '\\') ? '' : rtrim($scriptDir, '/');
+    
+    $stemUrls = [];
+    $count = count($_FILES['stems']['name']);
+
+    for ($i = 0; $i < $count; $i++) {
+        if ($_FILES['stems']['error'][$i] === UPLOAD_ERR_OK) {
+            $ext = strtolower(pathinfo($_FILES['stems']['name'][$i], PATHINFO_EXTENSION));
+            $allowed = ['mp3', 'wav', 'ogg', 'm4a'];
+            if (!in_array($ext, $allowed)) $ext = 'mp3';
+
+            $newFileName = 'stem_' . $i . '_' . time() . '.' . $ext;
+            $targetPath = $targetDir . $newFileName;
+
+            if (move_uploaded_file($_FILES['stems']['tmp_name'][$i], $targetPath)) {
+                $stemUrls[] = $scriptDir . "/media/stems/" . $entryId . "/" . $newFileName;
+            }
+        }
+    }
+
+    sendResponse(["success" => true, "stemUrls" => $stemUrls]);
+}
+
+// --- UPDATE STEMS MAPPING ---
+if ($action === 'update_stems_mapping' && $method === 'POST') {
+    $entryId = $input['id'] ?? null;
+    $mappings = $input['mappings'] ?? null;
+
+    if (!$entryId || $mappings === null) sendResponse(["error" => "Missing data"], 400);
+
+    // Verify ownership
+    $stmt = $pdo->prepare("SELECT user_id, config_json FROM history WHERE id = ?");
+    $stmt->execute([$entryId]);
+    $historyRow = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$historyRow) sendResponse(["error" => "Not found"], 404);
+
+    if ($historyRow['user_id'] != $userId) {
+        $stmtAdmin = $pdo->prepare("SELECT is_admin FROM users WHERE id = ?");
+        $stmtAdmin->execute([$userId]);
+        if (!$stmtAdmin->fetchColumn()) sendResponse(["error" => "Unauthorized"], 403);
+    }
+
+    // Merge into config_json JSON
+    $configData = json_decode($historyRow['config_json'], true);
+    if (!$configData) $configData = [];
+    
+    $configData['stemMappings'] = $mappings;
+    
+    $pdo->prepare("UPDATE history SET config_json = ? WHERE id = ?")
+        ->execute([json_encode($configData), $entryId]);
+
+    sendResponse(["success" => true]);
 }
 
 // --- UPDATE HISTORY ITEM CONFIG (Protetta) ---

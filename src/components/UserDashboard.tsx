@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { DashboardEntry, User, TransformedNoteEvent, SonificationResult } from '../types';
+import { DashboardEntry, User, TransformedNoteEvent, SonificationResult, StemMapping, BodyPart } from '../types';
 import { api, USE_MOCK_BACKEND } from '../services/api';
 import { ConfirmationModal } from './ConfirmationModal';
 import { generateSonificationVideo } from '../services/videoService';
@@ -31,6 +31,10 @@ const PublishModal: React.FC<{
 
     // STATE: Audio
     const [isUploadingAudio, setIsUploadingAudio] = useState(false);
+    
+    // STATE: Stems
+    const [localStems, setLocalStems] = useState<StemMapping[]>(entry.stemMappings || []);
+    const [isUploadingStems, setIsUploadingStems] = useState(false);
 
     // REFS
     const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -416,6 +420,118 @@ const PublishModal: React.FC<{
                                     <div className="scale-90 origin-left">
                                         <ActionToolbar url={entry.audioUrl || ""} type="audio" filename={`audio_${entry.id}.wav`} title={title} />
                                     </div>
+                                )}
+                            </div>
+                            
+                            {/* STEM ENGINE (DYNAMIC STEMS) */}
+                            <div className="bg-[#15151b] border border-white/5 rounded-xl p-3 relative shadow-lg mt-4 shrink-0">
+                                <div className="flex justify-between items-center mb-2">
+                                    <h5 className="text-[10px] font-bold text-purple-400 uppercase tracking-wider flex items-center gap-2">
+                                        <i className="fas fa-layer-group"></i> Sorgente Stem Multitraccia
+                                    </h5>
+                                </div>
+                                <label className="w-full py-4 bg-black/30 border border-dashed border-white/10 hover:border-purple-500/50 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-colors mb-3">
+                                    <i className="fas fa-cloud-upload-alt text-xl text-purple-400 mb-2"></i>
+                                    <span className="text-[10px] text-gray-400 text-center px-4 uppercase tracking-widest font-bold">Carica Stem (Max 12)</span>
+                                    <input 
+                                        type="file" multiple accept="audio/*" className="hidden"
+                                        onChange={async (e) => {
+                                            if (!e.target.files || e.target.files.length === 0) return;
+                                            
+                                            // 1. Prepare stems
+                                            const files = Array.from(e.target.files).slice(0, 12 - localStems.length);
+                                            const defaultMappings: BodyPart[] = ['leftHandY', 'rightHandY', 'z', 'leftHandX', 'rightHandX'];
+                                            
+                                            const newStems = files.map((file, i) => {
+                                                const assignedBodyPart = defaultMappings[(localStems.length + i) % defaultMappings.length];
+                                                return {
+                                                    id: Math.random().toString(36).substr(2, 9),
+                                                    name: file.name,
+                                                    url: URL.createObjectURL(file), // Temp URL for local UI preview
+                                                    file: file,
+                                                    assignedBodyPart,
+                                                    parameter: 'volume'
+                                                } as StemMapping;
+                                            });
+                                            
+                                            setLocalStems(prev => [...prev, ...newStems]);
+                                            e.target.value = '';
+                                        }}
+                                    />
+                                </label>
+                                
+                                {localStems.length > 0 && (
+                                    <div className="flex flex-col gap-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
+                                        {localStems.map((stem, i) => (
+                                            <div key={stem.id} className="bg-black/40 p-2 rounded-lg flex flex-col gap-2 border border-white/5">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-[10px] font-bold text-white truncate max-w-[150px]" title={stem.name}>{stem.name}</span>
+                                                    <button onClick={() => setLocalStems(prev => prev.filter(s => s.id !== stem.id))} className="text-red-400 hover:text-red-300 text-xs"><i className="fas fa-times"></i></button>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <select 
+                                                        value={stem.assignedBodyPart}
+                                                        onChange={(e) => {
+                                                            const newStems = [...localStems];
+                                                            newStems[i].assignedBodyPart = e.target.value as BodyPart;
+                                                            setLocalStems(newStems);
+                                                        }}
+                                                        className="bg-black/50 border border-white/10 text-[9px] text-gray-300 p-1 rounded flex-1 outline-none uppercase font-bold"
+                                                    >
+                                                        <option value="leftHandY">Mano SX (Y)</option>
+                                                        <option value="rightHandY">Mano DX (Y)</option>
+                                                        <option value="leftHandX">Mano SX (X)</option>
+                                                        <option value="rightHandX">Mano DX (X)</option>
+                                                        <option value="z">Distanza (Z)</option>
+                                                    </select>
+                                                    <select className="bg-black/50 border border-white/10 text-[9px] text-gray-500 p-1 rounded flex-1 outline-none uppercase font-bold" disabled>
+                                                        <option value="volume">Volume</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                {localStems.length > 0 && (
+                                    <button 
+                                        disabled={isUploadingStems}
+                                        onClick={async () => {
+                                            setIsUploadingStems(true);
+                                            try {
+                                                // Identify the new files that need uploading
+                                                const filesToUpload = localStems.filter(s => s.file).map(s => s.file!);
+                                                
+                                                if (filesToUpload.length > 0) {
+                                                    // Upload them
+                                                    const uploadedUrls = await api.uploadHistoryStems(entry.id, filesToUpload);
+                                                    // Now update our local state to map the new URLs and remove the File reference
+                                                    let uploadIdx = 0;
+                                                    localStems.forEach(s => {
+                                                        if (s.file) {
+                                                            s.url = uploadedUrls[uploadIdx++];
+                                                            delete s.file; // no longer need to upload
+                                                        }
+                                                    });
+                                                }
+                                                
+                                                // Save the mapping metadata to history entry
+                                                await api.updateHistoryItemStemsMapping(entry.id, localStems);
+                                                
+                                                // Update entry so LivePerformanceOverlay gets it
+                                                entry.stemMappings = [...localStems];
+                                                
+                                                onShowMessage("Salvato", "Mappatura Stem salvata con successo!", 'success');
+                                            } catch (e) {
+                                                onShowMessage("Errore", "Impossibile salvare gli stem: " + e, 'danger');
+                                            } finally {
+                                                setIsUploadingStems(false);
+                                            }
+                                        }}
+                                        className="w-full py-2 bg-purple-600/80 hover:bg-purple-500 text-white rounded text-[10px] font-bold uppercase mt-3 shadow-lg transition-colors"
+                                    >
+                                        {isUploadingStems ? <i className="fas fa-spinner fa-spin mr-2"></i> : <i className="fas fa-save mr-2"></i>}
+                                        Salva Mappatura
+                                    </button>
                                 )}
                             </div>
 

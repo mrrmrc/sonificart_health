@@ -7,6 +7,15 @@ export default defineConfig({
   define: {
     '__BUILD_TIME__': JSON.stringify(new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' }))
   },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'https://sonificarthealth.sviluppo.host',
+        changeOrigin: true,
+        secure: false,
+      }
+    }
+  },
   build: {
     outDir: 'internet',
     sourcemap: false,

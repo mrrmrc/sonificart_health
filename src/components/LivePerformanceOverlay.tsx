@@ -1,8 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { SonificationResult, ColorRegion } from '../types';
+import { SonificationResult, ColorRegion, StemMapping, BodyPart, AudioParameter } from '../types';
 import { api } from '../services/api';
 import WebcamService, { BodyMetrics } from '../services/WebcamService';
 import { LOGO_SVG_STRING } from './Logo';
+
+export interface AudioEngine {
+    audioCtx: AudioContext | null;
+    source: AudioBufferSourceNode | null;
+    stemSources?: AudioBufferSourceNode[];
+    stemGains?: GainNode[];
+    panner: StereoPannerNode | null;
+    filter: BiquadFilterNode | null;
+    autoGain: GainNode | null;
+    masterGain: GainNode | null;
+    analyser: AnalyserNode | null;
+    imageAspect: number;
+    startTime: number;
+    animationId: number;
+    synthNodes: {osc: OscillatorNode, gain: GainNode}[];
+}
 
 interface Props {
     result: SonificationResult;
@@ -122,10 +138,13 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
         moveXSensitivity: 0.8,
         moveYSensitivity: 0.5,
         zoomSensitivity: 0.5,
-        distAudio: 1.0,
         gazeAudioX: 1.0,
         gazeAudioY: 1.0,
+        distAudio: 1.0
     });
+    
+    // STEM LOCAL STATE
+    const [localStems, setLocalStems] = useState<StemMapping[]>(result.stemMappings || []);
     
     // Force re-render for UI
     const [calibState, setCalibState] = useState(calibRef.current);
@@ -172,22 +191,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
     }, []);
 
     // Engine Refs
-    const engineRef = useRef<{
-        audioCtx: AudioContext | null;
-        source: AudioBufferSourceNode | null;
-        panner: StereoPannerNode | null;
-        filter: BiquadFilterNode | null;
-        autoGain: GainNode | null; // Controlled by distance
-        masterGain: GainNode | null; // Controlled by User Slider
-        analyser: AnalyserNode | null;
-        animationId: number | null;
-        startTime: number;
-        duration: number;
-        particles: Particle[];
-        imageAspect: number;
-        highShelf: BiquadFilterNode | null;
-        synthNodes: { osc: OscillatorNode, gain: GainNode }[];
-    } | null>(null);
+    const engineRef = useRef<AudioEngine | null>(null);
 
     // Grid tracking for overdubbing
     const lastPlayedCell = useRef<{x: number, y: number} | null>(null);
@@ -213,14 +217,48 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
             const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
             const ctx = new AudioContextClass();
 
-            const arrayBuffer = await audioBlob.arrayBuffer();
-            const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+            // Try to load Stems
+            let stemBuffers: AudioBuffer[] = [];
+            let useStems = false;
+            
+            if (localStems.length > 0) {
+                // User uploaded local stems via UI
+                try {
+                    const fetchStem = async (stem: StemMapping) => {
+                        const res = await fetch(stem.url);
+                        if (!res.ok) throw new Error('Not found');
+                        return await ctx.decodeAudioData(await res.arrayBuffer());
+                    };
+                    stemBuffers = await Promise.all(localStems.map(fetchStem));
+                    useStems = true;
+                    console.log(`Caricati ${stemBuffers.length} stem dinamici.`);
+                } catch (e) {
+                    console.log("Errore caricamento stem locali", e);
+                }
+            } else {
+                // Fallback hardcoded
+                try {
+                    const fetchStem = async (name: string) => {
+                        const res = await fetch(`/stems/${name}.mp3`);
+                        if (!res.ok) throw new Error('Not found');
+                        return await ctx.decodeAudioData(await res.arrayBuffer());
+                    };
+                    stemBuffers = await Promise.all(['drums', 'bass', 'vox', 'other'].map(fetchStem));
+                    useStems = true;
+                    console.log("Stem multitraccia caricati con successo!");
+                } catch (e) {
+                    console.log("Stems non trovati, procedo con traccia unita");
+                }
+            }
 
-            const source = ctx.createBufferSource();
-            source.buffer = audioBuffer;
+            // Fallback decode
+            let fallbackBuffer: AudioBuffer | null = null;
+            if (!useStems) {
+                const arrayBuffer = await audioBlob.arrayBuffer();
+                fallbackBuffer = await ctx.decodeAudioData(arrayBuffer);
+            }
 
-            // NODE GRAPH
-            const panner = ctx.createStereoPanner();
+            // NODE GRAPH FOR MASTER EFFECTS
             const filter = ctx.createBiquadFilter();
             filter.type = 'lowpass';
             filter.frequency.value = 20000;
@@ -231,25 +269,47 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
             highShelf.frequency.value = 4000;
             highShelf.gain.value = 0;
 
-            // Auto Gain (Distance Volume)
-            const autoGain = ctx.createGain();
+            const autoGain = ctx.createGain(); // Distance volume
             autoGain.gain.value = 1.0;
 
-            // Master Gain (User Volume)
-            const masterGain = ctx.createGain();
+            const masterGain = ctx.createGain(); // User master volume
             masterGain.gain.value = masterVolume;
 
             const analyser = ctx.createAnalyser();
             analyser.fftSize = 256;
 
-            // ROUTING
-            source.connect(panner);
-            panner.connect(filter);
+            // Route master chain
             filter.connect(highShelf);
             highShelf.connect(autoGain);
             autoGain.connect(masterGain);
             masterGain.connect(analyser);
             analyser.connect(ctx.destination);
+
+            let sourceNode: AudioBufferSourceNode | null = null;
+            let stemSources: AudioBufferSourceNode[] = [];
+            let stemGains: GainNode[] = [];
+            let panner: StereoPannerNode | null = null;
+
+            if (useStems) {
+                panner = ctx.createStereoPanner();
+                panner.connect(filter);
+                for (let i = 0; i < stemBuffers.length; i++) {
+                    const src = ctx.createBufferSource();
+                    src.buffer = stemBuffers[i];
+                    const gain = ctx.createGain();
+                    gain.gain.value = 0.5; // Starts at mid volume
+                    src.connect(gain);
+                    gain.connect(panner);
+                    stemSources.push(src);
+                    stemGains.push(gain);
+                }
+            } else {
+                sourceNode = ctx.createBufferSource();
+                sourceNode.buffer = fallbackBuffer;
+                panner = ctx.createStereoPanner();
+                sourceNode.connect(panner);
+                panner.connect(filter);
+            }
 
             // 2. Init Webcam
             try {
@@ -277,14 +337,28 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
             const logoStub = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(LOGO_SVG_STRING)));
             const logoImg = await loadImage(logoStub);
 
-            source.start(0);
+            if (useStems) {
+                stemSources.forEach(s => s.start(0));
+                setDuration(stemBuffers[0].duration);
+            } else if (sourceNode && fallbackBuffer) {
+                sourceNode.start(0);
+                setDuration(fallbackBuffer.duration);
+            }
+            setIsPlaying(true);
 
             engineRef.current = {
-                audioCtx: ctx, source, panner, filter, autoGain, masterGain, analyser,
-                animationId: 0, startTime: ctx.currentTime, duration: audioBuffer.duration,
-                particles: [],
+                audioCtx: ctx,
+                source: sourceNode,
+                stemSources,
+                stemGains,
+                panner,
+                filter,
+                autoGain,
+                masterGain,
+                analyser,
+                animationId: 0,
                 imageAspect,
-                highShelf,
+                startTime: ctx.currentTime,
                 synthNodes: []
             };
 
@@ -318,7 +392,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 osc.stop(c.currentTime + 1.0);
                 
                 engineRef.current.synthNodes.push({ osc, gain });
-                engineRef.current.synthNodes = engineRef.current.synthNodes.filter(n => n.osc.context.currentTime < c.currentTime + 1.0);
+                engineRef.current.synthNodes = engineRef.current.synthNodes.filter((n: any) => n.osc.context.currentTime < c.currentTime + 1.0);
             };
 
             // 4. Render Loop
@@ -382,15 +456,46 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     }
 
                     // 2. Panning
-                    const gazeOffset = 0; // removed gaze logic
                     const headPan = -(m.yaw * calibRef.current.panSensitivity);
-                    const totalPan = headPan - gazeOffset;
-                    if (engineRef.current.panner) engineRef.current.panner.pan.setTargetAtTime(Math.max(-1, Math.min(1, totalPan)), now, 0.1);
+                    if (engineRef.current.panner) engineRef.current.panner.pan.setTargetAtTime(Math.max(-1, Math.min(1, headPan)), now, 0.1);
 
-                    // 3. Tone (Gaze Y)
-                    const gazeY = 0;
-                    const targetQ = 1.0 + ((gazeY + 0.5) * 6.0 * calibRef.current.gazeAudioY);
-                    if (engineRef.current.filter) engineRef.current.filter.Q.setTargetAtTime(Math.max(0.1, targetQ), now, 0.1);
+                    // 4. STEM ENGINE PROTOTYPE MAPPING
+                    if (engineRef.current.stemGains && engineRef.current.stemGains.length > 0) {
+                        const actx = engineRef.current.audioCtx;
+                        if (actx) {
+                            if (localStems.length > 0) {
+                                localStems.forEach((stem, index) => {
+                                    const gainNode = engineRef.current!.stemGains![index];
+                                    if (!gainNode) return;
+                                    
+                                    let rawVal = 0.5;
+                                    switch(stem.assignedBodyPart) {
+                                        case 'leftHandY': rawVal = m.leftHandY || 0.5; break;
+                                        case 'rightHandY': rawVal = m.rightHandY || 0.5; break;
+                                        case 'leftHandX': rawVal = m.leftHandX || 0.5; break;
+                                        case 'rightHandX': rawVal = m.rightHandX || 0.5; break;
+                                        case 'z': rawVal = m.z || 0.5; break;
+                                    }
+
+                                    if (stem.parameter === 'volume') {
+                                        const vol = Math.max(0, Math.min(1, 1.0 - rawVal));
+                                        gainNode.gain.setTargetAtTime(vol, actx.currentTime, 0.1);
+                                    }
+                                });
+                            } else if (engineRef.current.stemGains.length === 4) {
+                                // Default hardcoded fallback
+                                const leftHandY = m.leftHandY || 0.5;
+                                const leftVol = Math.max(0, Math.min(1, 1.0 - leftHandY));
+                                engineRef.current.stemGains[0].gain.setTargetAtTime(leftVol, actx.currentTime, 0.1);
+                                engineRef.current.stemGains[1].gain.setTargetAtTime(leftVol, actx.currentTime, 0.1);
+                                
+                                const rightHandY = m.rightHandY || 0.5;
+                                const rightVol = Math.max(0, Math.min(1, 1.0 - rightHandY));
+                                engineRef.current.stemGains[2].gain.setTargetAtTime(rightVol, actx.currentTime, 0.1);
+                                engineRef.current.stemGains[3].gain.setTargetAtTime(rightVol, actx.currentTime, 0.1);
+                            }
+                        }
+                    }
 
                 } else {
                     // Auto Mode
@@ -403,23 +508,17 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 const w = canvas.width = stageRef.current ? stageRef.current.clientWidth : window.innerWidth;
                 const h = canvas.height = stageRef.current ? stageRef.current.clientHeight : window.innerHeight;
 
-                // Visual Feedback
-                if (bgImageRef.current) {
-                    bgImageRef.current.style.filter = mode === 'fullscreen' ? 'brightness(0.8) contrast(1.2)' : 'brightness(0.5) contrast(1.2)';
-                }
-
                 context.clearRect(0, 0, w, h);
 
                 if (visualModeRef.current !== 'none' && videoRef.current && m.isActive) {
                     context.save();
-                    context.globalAlpha = 0.15; // Leggera trasparenza per far vedere la persona
+                    context.globalAlpha = 0.15;
                     context.translate(w, 0);
                     context.scale(-1, 1);
                     context.drawImage(videoRef.current, 0, 0, w, h);
                     context.restore();
                 }
 
-                // Camera Math
                 let camX = 0, camY = 0, camZ = -1.2;
                 let tiltX = 0, tiltY = 0;
                 const breath = Math.sin(now * 0.8) * 0.02;
@@ -427,14 +526,10 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 if (m.isActive) {
                     const targetCamX = (m.x - 0.5) * calibRef.current.moveXSensitivity;
                     const targetCamY = (m.y - 0.5) * calibRef.current.moveYSensitivity;
-
                     const relZ = m.z - calibRef.current.neutralZ;
                     const targetCamZ = -1.0 + (relZ * calibRef.current.zoomSensitivity * 2);
-
-                    const gazeTiltX = 0; // removed gaze
-                    const gazeTiltY = 0; // removed gaze
-                    const targetTiltY = ((m.x - 0.5) * calibRef.current.tiltSensitivity) + gazeTiltY;
-                    const targetTiltX = (-(m.y - 0.5) * calibRef.current.tiltSensitivity) + gazeTiltX;
+                    const targetTiltY = (m.x - 0.5) * calibRef.current.tiltSensitivity;
+                    const targetTiltX = -(m.y - 0.5) * calibRef.current.tiltSensitivity;
 
                     const lerpFactor = 0.08;
                     smoothCam.current.x += (targetCamX - smoothCam.current.x) * lerpFactor;
@@ -460,10 +555,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
 
                 if (bgImageRef.current) {
                     const cssZ = (camZ + 1.2) * 200;
-                    const shadowX = -tiltY * 15;
-                    const shadowY = tiltX * 15; 
                     bgImageRef.current.style.transform = `perspective(1000px) rotateX(${tiltX * 1.5}deg) rotateY(${tiltY * 1.5}deg) scale(1.0) translate3d(${-camX * 100}px, ${-camY * 100}px, ${cssZ}px)`;
-                    bgImageRef.current.style.boxShadow = `${shadowX}px ${shadowY}px ${30 + Math.abs(cssZ / 5)}px rgba(0,0,0,0.6)`;
                 }
 
                 // Draw Logic
@@ -473,243 +565,133 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 let renderW = screenAspect > imgAspect ? h * imgAspect : w;
                 let renderH = screenAspect > imgAspect ? h : w / imgAspect;
 
-                if (m.isActive && calibRef.current.gazeCursorOpacity > 0) {
+                // --- CONSTELLATION ---
+                const regionsList = result.regions;
+                if (regionsList && regionsList.length > 0) {
+                    let hoveredRegion: ColorRegion | null = null;
+                    let minDist = Infinity;
+
+                    regionsList.forEach(region => {
+                        const baseX = (w - renderW) / 2 + (region.centroidX / 100) * renderW;
+                        const baseY = (h - renderH) / 2 + (region.centroidY / 100) * renderH;
+                        const parallaxX = baseX + (tiltY * 3);
+                        const parallaxY = baseY - (tiltX * 3);
+
+                        const lhX = cx + ((m.leftHandX || 0.5) - 0.5) * renderW;
+                        const lhY = cy + ((m.leftHandY || 0.5) - 0.5) * renderH;
+                        const rhX = cx + ((m.rightHandX || 0.5) - 0.5) * renderW;
+                        const rhY = cy + ((m.rightHandY || 0.5) - 0.5) * renderH;
+                        const dist = Math.min(Math.hypot(lhX - parallaxX, lhY - parallaxY), Math.hypot(rhX - parallaxX, rhY - parallaxY));
+
+                        if (dist < 40 && dist < minDist) { minDist = dist; hoveredRegion = region; }
+
+                        context.save();
+                        context.beginPath();
+                        context.arc(parallaxX, parallaxY, dist < 40 ? 6 : 3, 0, Math.PI * 2);
+                        context.fillStyle = region.hex;
+                        context.fill();
+                        context.restore();
+                    });
+
+                    if (hoveredRegion !== null) {
+                        const hr = hoveredRegion as ColorRegion;
+                        if (now - synthDebounce.current > 0.3) {
+                            synthDebounce.current = now;
+                            playWhisperSynth(hr.frequencyHz, 0.6);
+                        }
+                    }
+                }
+
+                // --- DRAW VISUAL MODES ---
+                if (visualModeRef.current === 'skeleton' && m.landmarks) {
                     context.save();
-                    context.globalAlpha = calibRef.current.gazeCursorOpacity * 0.6;
-                    context.strokeStyle = 'rgba(45, 212, 191, 0.8)'; 
+                    context.globalAlpha = 0.8;
+                    context.strokeStyle = '#2dd4bf'; // Cyan
                     context.lineWidth = 2;
+                    context.fillStyle = '#f472b6'; // Pink
                     
-                    // Left Hand
-                    const hLx = cx + (((m.leftHandX || 0.5) - 0.5) * renderW);
-                    const hLy = cy + (((m.leftHandY || 0.5) - 0.5) * renderH);
-                    context.beginPath(); context.arc(hLx, hLy, calibRef.current.gazePointerSize, 0, Math.PI * 2); context.stroke();
+                    // Full body Pose connections
+                    const connections = [
+                        [0, 1], [1, 2], [2, 3], [3, 7], // Right eye/ear
+                        [0, 4], [4, 5], [5, 6], [6, 8], // Left eye/ear
+                        [9, 10], // Mouth
+                        [11, 12], // Shoulders
+                        [11, 13], [13, 15], // Right arm
+                        [12, 14], [14, 16], // Left arm
+                        [15, 17], [15, 19], [15, 21], [17, 19], // Right hand
+                        [16, 18], [16, 20], [16, 22], [18, 20], // Left hand
+                        [11, 23], [12, 24], [23, 24], // Torso
+                        [23, 25], [25, 27], [27, 29], [29, 31], [31, 27], // Right leg
+                        [24, 26], [26, 28], [28, 30], [30, 32], [32, 28]  // Left leg
+                    ];
 
-                    // Right Hand
-                    const hRx = cx + (((m.rightHandX || 0.5) - 0.5) * renderW);
-                    const hRy = cy + (((m.rightHandY || 0.5) - 0.5) * renderH);
-                    context.beginPath(); context.arc(hRx, hRy, calibRef.current.gazePointerSize, 0, Math.PI * 2); context.stroke();
+                    connections.forEach(([i, j]) => {
+                        const p1 = m.landmarks![i];
+                        const p2 = m.landmarks![j];
+                        if (p1 && p2) {
+                            context.beginPath();
+                            context.moveTo(cx + (p1.x - 0.5) * renderW, cy + (p1.y - 0.5) * renderH);
+                            context.lineTo(cx + (p2.x - 0.5) * renderW, cy + (p2.y - 0.5) * renderH);
+                            context.stroke();
+                        }
+                    });
 
+                    for (let i = 0; i < 33; i++) {
+                        const p = m.landmarks![i];
+                        if (p) {
+                            context.beginPath();
+                            context.arc(cx + (p.x - 0.5) * renderW, cy + (p.y - 0.5) * renderH, 5, 0, Math.PI * 2);
+                            context.fill();
+                        }
+                    }
                     context.restore();
                 }
 
-                    // --- PARALLAX CONSTELLATION & OVERDUBBING (REGIONS) ---
-                    const regionsList = result.regions;
-                    if (regionsList && regionsList.length > 0) {
-                        // Health Paradigm (Organic Regions)
-                        let hoveredRegion: ColorRegion | null = null;
-                        let minDist = Infinity;
-
-                        // Draw regions as a 3D Constellation
-                        regionsList.forEach(region => {
-                            // Base position based on centroid (0-100 to canvas coordinates)
-                            const baseX = (w - renderW) / 2 + (region.centroidX / 100) * renderW;
-                            const baseY = (h - renderH) / 2 + (region.centroidY / 100) * renderH;
-
-                            // Parallax Depth Factor
-                            let depthFactor = 1.0;
-                            let nodeSize = 3;
-                            if (region.depthLayer === 'foreground') { depthFactor = 2.5; nodeSize = 5; }
-                            else if (region.depthLayer === 'background') { depthFactor = 0.4; nodeSize = 2; }
-
-                            // Apply parallax translation based on camera/tilt
-                            const parallaxX = baseX + (tiltY * 3 * depthFactor);
-                            const parallaxY = baseY - (tiltX * 3 * depthFactor); // inverted tilt for natural feel
-
-                            // Collision detection with Hands instead of Gaze
-                            // Map Hand coordinates (0 to 1) to canvas coordinates
-                            const lhX = cx + ((m.leftHandX || 0.5) - 0.5) * renderW;
-                            const lhY = cy + ((m.leftHandY || 0.5) - 0.5) * renderH;
-                            const rhX = cx + ((m.rightHandX || 0.5) - 0.5) * renderW;
-                            const rhY = cy + ((m.rightHandY || 0.5) - 0.5) * renderH;
-                            
-                            const dlhX = lhX - parallaxX;
-                            const dlhY = lhY - parallaxY;
-                            const drhX = rhX - parallaxX;
-                            const drhY = rhY - parallaxY;
-                            
-                            const distL = Math.sqrt(dlhX*dlhX + dlhY*dlhY);
-                            const distR = Math.sqrt(drhX*drhX + drhY*drhY);
-                            const dist = Math.min(distL, distR); // Closest hand
-                            // Old dist removed
-
-                            const isHovered = dist < 40; // Collision radius
-
-                            if (isHovered && dist < minDist) {
-                                minDist = dist;
-                                hoveredRegion = region;
-                            }
-
-                            // Render Node
-                            context.save();
+                if (visualModeRef.current === 'transparency' && m.landmarks) {
+                    context.save();
+                    context.globalAlpha = 0.8;
+                    context.beginPath();
+                    const shoulderL = m.landmarks[12];
+                    const shoulderR = m.landmarks[11];
+                    const hipL = m.landmarks[24];
+                    const hipR = m.landmarks[23];
+                    
+                    if (shoulderL && shoulderR && hipL && hipR) {
+                        context.moveTo(cx + (shoulderL.x - 0.5) * renderW, cy + (shoulderL.y - 0.5) * renderH);
+                        context.lineTo(cx + (shoulderR.x - 0.5) * renderW, cy + (shoulderR.y - 0.5) * renderH);
+                        context.lineTo(cx + (hipR.x - 0.5) * renderW, cy + (hipR.y - 0.5) * renderH);
+                        context.lineTo(cx + (hipL.x - 0.5) * renderW, cy + (hipL.y - 0.5) * renderH);
+                        context.closePath();
+                        
+                        context.save();
+                        context.clip();
+                        if (videoRef.current) {
+                            context.translate(w, 0);
+                            context.scale(-1, 1);
+                            context.drawImage(videoRef.current, 0, 0, w, h);
+                        }
+                        context.restore();
+                    }
+                    
+                    context.lineWidth = 80;
+                    context.lineCap = 'round';
+                    context.lineJoin = 'round';
+                    context.strokeStyle = 'rgba(45, 212, 191, 0.4)';
+                    
+                    const arms = [[11, 13], [13, 15], [12, 14], [14, 16]];
+                    arms.forEach(([i, j]) => {
+                        const p1 = m.landmarks![i];
+                        const p2 = m.landmarks![j];
+                        if (p1 && p2) {
                             context.beginPath();
-                            context.arc(parallaxX, parallaxY, isHovered ? nodeSize * 2 : nodeSize, 0, Math.PI * 2);
-                            context.fillStyle = region.hex;
-                            context.shadowColor = region.hex;
-                            context.shadowBlur = isHovered ? 20 : 5;
-                            context.globalAlpha = isHovered ? 1.0 : 0.6 + (Math.sin(now * 3 + region.id) * 0.2); // slight pulse
-                            context.fill();
-                            context.restore();
-
-                            // Draw subtle connecting lines for constellation effect (only to close nodes on same layer)
-                            if (isHovered) {
-                                regionsList.forEach(other => {
-                                    if (other.id !== region.id && other.depthLayer === region.depthLayer) {
-                                        const obx = (w - renderW) / 2 + (other.centroidX / 100) * renderW;
-                                        const oby = (h - renderH) / 2 + (other.centroidY / 100) * renderH;
-                                        const opx = obx + (tiltY * 3 * depthFactor);
-                                        const opy = oby - (tiltX * 3 * depthFactor);
-                                        const d = Math.sqrt(Math.pow(parallaxX - opx, 2) + Math.pow(parallaxY - opy, 2));
-                                        if (d < 150) {
-                                            context.save();
-                                            context.beginPath();
-                                            context.moveTo(parallaxX, parallaxY);
-                                            context.lineTo(opx, opy);
-                                            context.strokeStyle = region.hex;
-                                            context.globalAlpha = 0.2;
-                                            context.stroke();
-                                            context.restore();
-                                        }
-                                    }
-                                });
-                            }
-                        });
-
-                        // Trigger synth if hovered
-                        if (hoveredRegion !== null) {
-                            const hr = hoveredRegion as ColorRegion;
-                            const regionId = hr.id;
-                            const gridX = -1; // special value for regions
-                            const gridY = regionId;
-                            
-                            if (!lastPlayedCell.current || lastPlayedCell.current.y !== gridY || lastPlayedCell.current.x !== gridX) {
-                                if (now - synthDebounce.current > 0.3) { // 300ms debounce
-                                    lastPlayedCell.current = { x: gridX, y: gridY };
-                                    synthDebounce.current = now;
-                                    
-                                    // Play Region Frequency
-                                    playWhisperSynth(hr.frequencyHz, 0.6); // slightly louder for regions
-                                }
-                            }
+                            context.moveTo(cx + (p1.x - 0.5) * renderW, cy + (p1.y - 0.5) * renderH);
+                            context.lineTo(cx + (p2.x - 0.5) * renderW, cy + (p2.y - 0.5) * renderH);
+                            context.stroke();
                         }
-
-                    } // No legacy grid synth anymore!
-
-                    // --- DRAW VISUAL MODES ---
-                    if (visualModeRef.current === 'skeleton' && m.landmarks) {
-                        context.save();
-                        context.globalAlpha = 0.8;
-                        context.strokeStyle = '#2dd4bf'; // Cyan
-                        context.lineWidth = 2;
-                        context.fillStyle = '#f472b6'; // Pink
-                        
-                        // Full body Pose connections
-                        const connections = [
-                            // Face
-                            [0, 1], [1, 2], [2, 3], [3, 7], // Right eye/ear
-                            [0, 4], [4, 5], [5, 6], [6, 8], // Left eye/ear
-                            [9, 10], // Mouth
-                            // Upper body
-                            [11, 12], // Shoulders
-                            [11, 13], [13, 15], // Right arm
-                            [12, 14], [14, 16], // Left arm
-                            // Hands
-                            [15, 17], [15, 19], [15, 21], [17, 19], // Right hand
-                            [16, 18], [16, 20], [16, 22], [18, 20], // Left hand
-                            // Torso
-                            [11, 23], [12, 24], [23, 24],
-                            // Legs & Feet
-                            [23, 25], [25, 27], [27, 29], [29, 31], [31, 27], // Right leg
-                            [24, 26], [26, 28], [28, 30], [30, 32], [32, 28]  // Left leg
-                        ];
-
-                        // Draw lines
-                        connections.forEach(([i, j]) => {
-                            const p1 = m.landmarks![i];
-                            const p2 = m.landmarks![j];
-                            if (p1 && p2) {
-                                const px1 = cx + (p1.x - 0.5) * renderW;
-                                const py1 = cy + (p1.y - 0.5) * renderH;
-                                const px2 = cx + (p2.x - 0.5) * renderW;
-                                const py2 = cy + (p2.y - 0.5) * renderH;
-                                context.beginPath();
-                                context.moveTo(px1, py1);
-                                context.lineTo(px2, py2);
-                                context.stroke();
-                            }
-                        });
-
-                        // Draw all 33 joints
-                        for (let i = 0; i < 33; i++) {
-                            const p = m.landmarks![i];
-                            if (p) {
-                                const px = cx + (p.x - 0.5) * renderW;
-                                const py = cy + (p.y - 0.5) * renderH;
-                                context.beginPath();
-                                context.arc(px, py, 5, 0, Math.PI * 2);
-                                context.fill();
-                            }
-                        }
-
-                        context.restore();
-                    }
-
-                    if (visualModeRef.current === 'transparency' && m.landmarks) {
-                        // Apply destination-out to clear the canvas where the body is
-                        context.save();
-                        context.globalAlpha = 0.8;
-                        
-                        // Create a thick path over the torso and arms to cut out the video
-                        context.beginPath();
-                        const shoulderL = m.landmarks[12];
-                        const shoulderR = m.landmarks[11];
-                        const hipL = m.landmarks[24];
-                        const hipR = m.landmarks[23];
-                        
-                        if (shoulderL && shoulderR && hipL && hipR) {
-                            context.moveTo(cx + (shoulderL.x - 0.5) * renderW, cy + (shoulderL.y - 0.5) * renderH);
-                            context.lineTo(cx + (shoulderR.x - 0.5) * renderW, cy + (shoulderR.y - 0.5) * renderH);
-                            context.lineTo(cx + (hipR.x - 0.5) * renderW, cy + (hipR.y - 0.5) * renderH);
-                            context.lineTo(cx + (hipL.x - 0.5) * renderW, cy + (hipL.y - 0.5) * renderH);
-                            context.closePath();
-                            
-                            // Clip the video to this torso shape
-                            context.save();
-                            context.clip();
-                            if (videoRef.current) {
-                                // Draw video feed mirrored
-                                context.translate(w, 0);
-                                context.scale(-1, 1);
-                                // The video fills the screen
-                                context.drawImage(videoRef.current, 0, 0, w, h);
-                            }
-                            context.restore();
-                        }
-                        
-                        // Thicken arms
-                        context.lineWidth = 80; // Thick stroke for arms
-                        context.lineCap = 'round';
-                        context.lineJoin = 'round';
-                        // Semi-transparent overlay for arms since we can't easily stroke clip the video
-                        context.strokeStyle = 'rgba(45, 212, 191, 0.4)';
-                        
-                        const arms = [
-                            [11, 13], [13, 15], // Right
-                            [12, 14], [14, 16]  // Left
-                        ];
-                        
-                        arms.forEach(([i, j]) => {
-                            const p1 = m.landmarks![i];
-                            const p2 = m.landmarks![j];
-                            if (p1 && p2) {
-                                context.beginPath();
-                                context.moveTo(cx + (p1.x - 0.5) * renderW, cy + (p1.y - 0.5) * renderH);
-                                context.lineTo(cx + (p2.x - 0.5) * renderW, cy + (p2.y - 0.5) * renderH);
-                                context.stroke();
-                            }
-                        });
-                        
-                        context.restore();
-                    }
+                    });
+                    
+                    context.restore();
+                }
 
                 context.drawImage(logoImg, w - 120, h - 120, 80, 80);
                 engineRef.current.animationId = requestAnimationFrame(render);
@@ -723,13 +705,18 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
 
     const stopPerformance = () => {
         if (engineRef.current) {
-            cancelAnimationFrame(engineRef.current.animationId!);
-            engineRef.current.source?.stop();
-            engineRef.current.synthNodes.forEach(n => {
-                try { n.osc.stop(); n.osc.disconnect(); n.gain.disconnect(); } catch(e){}
-            });
-            engineRef.current.audioCtx?.close();
-            engineRef.current = null;
+            try {
+                if (engineRef.current.source) {
+                    engineRef.current.source.stop();
+                    engineRef.current.source.disconnect();
+                }
+                if (engineRef.current.stemSources) {
+                    engineRef.current.stemSources.forEach((s: AudioBufferSourceNode) => {
+                        try { s.stop(); s.disconnect(); } catch (e) {}
+                    });
+                }
+                engineRef.current.audioCtx?.close();
+            } catch (e) { console.error(e); }
         }
         WebcamService.stop();
     };
@@ -904,6 +891,8 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                 <InputSlider label={t.gazeY || 'Filter (Gaze Y)'} value={calibState.gazeAudioY} max={3} onChange={(v) => updateCalib('gazeAudioY', v)} color="text-cyan-200" />
                             </div>
                         </div>
+
+
                     </div>
 
                     {/* Footer Actions */}

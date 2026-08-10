@@ -1,4 +1,4 @@
-import { DashboardEntry, SonificationResult, ShowcaseProject, User, SystemStats, SystemLog, Paradigm } from '../types';
+import { DashboardEntry, SonificationResult, ShowcaseProject, User, SystemStats, SystemLog, Paradigm, StemMapping } from '../types';
 import { blobToBase64 } from './audioUtils';
 
 // --- CONFIGURAZIONE ---
@@ -617,7 +617,36 @@ export const api = {
         return data.audioUrl;
     },
 
+    // --- DYNAMIC STEM ENGINE API ---
+    uploadHistoryStems: async (id: string, files: File[]): Promise<string[]> => {
+        const token = getToken();
+        const formData = new FormData();
+        formData.append('entryId', id);
+        files.forEach((file, index) => {
+            formData.append(`stems[]`, file);
+        });
+        if (token) formData.append('auth_token', token);
 
+        const response = await fetch(`${API_BASE_URL}/index.php?action=upload_history_stems`, {
+            method: 'POST',
+            body: formData
+        });
+        const data = await handleResponse(response);
+        return data.stemUrls; // Backend should return array of relative URLs
+    },
+
+    updateHistoryItemStemsMapping: async (id: string, mappings: StemMapping[]): Promise<void> => {
+        const token = getToken();
+        const response = await fetch(`${API_BASE_URL}/index.php?action=update_stems_mapping`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ id, mappings, auth_token: token })
+        });
+        await handleResponse(response);
+    },
 
     getShowcase: async (includeAll: boolean = false) => {
         const token = getToken();
