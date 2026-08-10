@@ -225,8 +225,9 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 // User uploaded local stems via UI
                 try {
                     const fetchStem = async (stem: StemMapping) => {
-                        const res = await fetch(stem.url);
-                        if (!res.ok) throw new Error('Not found');
+                        const fixedUrl = stem.url.startsWith('http') ? stem.url : `${window.location.origin}${stem.url.startsWith('/') ? '' : '/'}${stem.url}`;
+                        const res = await fetch(fixedUrl);
+                        if (!res.ok) throw new Error(`Not found: ${fixedUrl}`);
                         return await ctx.decodeAudioData(await res.arrayBuffer());
                     };
                     stemBuffers = await Promise.all(localStems.map(fetchStem));

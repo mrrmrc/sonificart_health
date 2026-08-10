@@ -114,7 +114,8 @@ export const PerformancePage: React.FC = () => {
                     title: (target as any).title || "Opera Senza Titolo",
                     validationResult: {} as any,
                     performanceMetrics: {} as any,
-                    validationHashes: {} as any
+                    validationHashes: {} as any,
+                    stemMappings: (target as any).stemMappings || undefined
                 };
 
                 setPerformanceData({
