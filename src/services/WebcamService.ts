@@ -1,65 +1,66 @@
-import { FaceMesh } from '@mediapipe/face_mesh';
+import { Pose } from '@mediapipe/pose';
 import { Camera } from '@mediapipe/camera_utils';
 
-export interface FaceMetrics {
-    yaw: number;   // Left/Right rotation (-1 to 1)
-    pitch: number; // Up/Down rotation (-1 to 1)
-    roll: number;  // Tilt (-1 to 1)
-    x: number;     // Head X position normalized
-    y: number;     // Head Y position normalized
-    z: number;     // Distance (Zoom) - 0(Close) to 1(Far)
+export interface BodyMetrics {
+    // Head Position/Rotation (for Parallax)
+    yaw: number;   
+    pitch: number; 
+    x: number;     
+    y: number;     
+    z: number;     
 
-    // Expressions
-    mouthOpen: number; // 0 to 1
-    smile: number;     // 0 to 1
-    eyebrowRise: number; // 0 to 1 -- Focus/Surprise
+    // Hands
+    leftHandX: number;
+    leftHandY: number;
+    rightHandX: number;
+    rightHandY: number;
 
-    // Eyes (Approximate Gaze)
-    gazeX: number; // -1 (Left) to 1 (Right)
-    gazeY: number; // -1 (Up) to 1 (Down)
+    // Body
+    armSpan: number; // Normalized distance between hands (0 to 1)
 
     // Visualization
-    landmarks?: { x: number, y: number }[]; // For drawing mesh
+    landmarks?: { x: number, y: number, z?: number, visibility?: number }[];
 
     isActive: boolean;
 }
 
 class WebcamService {
-    private faceMesh: FaceMesh | null = null;
+    private pose: Pose | null = null;
     private camera: Camera | null = null;
     private videoElement: HTMLVideoElement | null = null;
 
     // Current State
-    private metrics: FaceMetrics = {
-        yaw: 0, pitch: 0, roll: 0,
+    private metrics: BodyMetrics = {
+        yaw: 0, pitch: 0,
         x: 0.5, y: 0.5, z: 0.5,
-        mouthOpen: 0, smile: 0, eyebrowRise: 0,
-        gazeX: 0, gazeY: 0,
+        leftHandX: 0.5, leftHandY: 0.5,
+        rightHandX: 0.5, rightHandY: 0.5,
+        armSpan: 0,
         isActive: false
     };
 
     public async initialize(videoElement: HTMLVideoElement): Promise<void> {
         this.videoElement = videoElement;
 
-        this.faceMesh = new FaceMesh({
+        this.pose = new Pose({
             locateFile: (file) => {
-                return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
             }
         });
 
-        this.faceMesh.setOptions({
-            maxNumFaces: 1,
-            refineLandmarks: true, // Crucial for Iris/Eyes
+        this.pose.setOptions({
+            modelComplexity: 1, // 0=Lite, 1=Full, 2=Heavy
+            smoothLandmarks: true,
             minDetectionConfidence: 0.5,
             minTrackingConfidence: 0.5
         });
 
-        this.faceMesh.onResults(this.onResults.bind(this));
+        this.pose.onResults(this.onResults.bind(this));
 
         this.camera = new Camera(this.videoElement, {
             onFrame: async () => {
-                if (this.faceMesh && this.videoElement) {
-                    await this.faceMesh.send({ image: this.videoElement });
+                if (this.pose && this.videoElement) {
+                    await this.pose.send({ image: this.videoElement });
                 }
             },
             width: 640,
@@ -71,94 +72,62 @@ class WebcamService {
     }
 
     private onResults(results: any) {
-        if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) {
-            return; // No face detected
+        if (!results.poseLandmarks) {
+            return; // No body detected
         }
 
-        const landmarks = results.multiFaceLandmarks[0];
+        const landmarks = results.poseLandmarks;
 
-        // --- 1. HEAD POSE (Simplified Estimation) ---
-        // Nose tip: 1, Left Eye: 33, Right Eye: 263
-        const nose = landmarks[1];
-        const leftEye = landmarks[33];
-        const rightEye = landmarks[263];
+        // Pose Landmarks Mapping:
+        // 0: nose, 2: right eye, 5: left eye, 7: right ear, 8: left ear
+        // 11: right shoulder, 12: left shoulder
+        // 15: right wrist, 16: left wrist
+        // Note: Mediapipe is mirrored normally, but let's just stick to the index.
+        const nose = landmarks[0];
+        const rightEye = landmarks[2];
+        const leftEye = landmarks[5];
+        const rightShoulder = landmarks[11];
+        const leftShoulder = landmarks[12];
+        const rightWrist = landmarks[15];
+        const leftWrist = landmarks[16];
 
-        // Yaw: Difference in Z between eyes? No, better use X relativity
+        // --- 1. HEAD POSE (For Parallax) ---
         const midEyeX = (leftEye.x + rightEye.x) / 2;
         const noseOffsetX = nose.x - midEyeX;
-        // Sensitivity factor
-        this.metrics.yaw = Math.max(-1, Math.min(1, noseOffsetX * 8)); // Amplified
+        this.metrics.yaw = Math.max(-1, Math.min(1, noseOffsetX * 5));
 
         const midEyeY = (leftEye.y + rightEye.y) / 2;
         const noseOffsetY = nose.y - midEyeY;
-        this.metrics.pitch = Math.max(-1, Math.min(1, noseOffsetY * 8));
+        this.metrics.pitch = Math.max(-1, Math.min(1, noseOffsetY * 5));
 
         this.metrics.x = nose.x;
         this.metrics.y = nose.y;
 
-        // Z estimation (Depth-invariant ref)
-        const eyeDist = Math.hypot(leftEye.x - rightEye.x, leftEye.y - rightEye.y);
-
-        // CALIBRATION:
-        // EyeDist 0.06 -> Approx 60cm (Far) -> z = 1.0
-        // EyeDist 0.25 -> Approx 15cm (Close) -> z = 0.0
-        // Formula: z = 1 - (eyeDist - 0.06) / (0.25 - 0.06)
-        // Values < 0.06 (Very Far) -> z > 1 (Clamp to 1)
-        // Values > 0.25 (Very Close) -> z < 0 (Clamp to 0)
-
-        const rawZ = 1.0 - (eyeDist - 0.06) / 0.19;
+        // Z estimation based on shoulder width
+        const shoulderDist = Math.hypot(leftShoulder.x - rightShoulder.x, leftShoulder.y - rightShoulder.y);
+        // Calibration:
+        // shoulderDist 0.1 -> Far (z = 1)
+        // shoulderDist 0.5 -> Close (z = 0)
+        const rawZ = 1.0 - (shoulderDist - 0.1) / 0.4;
         this.metrics.z = Math.max(0, Math.min(1, rawZ));
 
-        // --- 2. EXPRESSIONS ---
-        // Mouth: Top 13, Bottom 14
-        const mouthTop = landmarks[13];
-        const mouthBottom = landmarks[14];
-        const mouthOpenDist = Math.hypot(mouthTop.x - mouthBottom.x, mouthTop.y - mouthBottom.y);
+        // --- 2. HANDS & ARMS ---
+        this.metrics.leftHandX = leftWrist.x;
+        this.metrics.leftHandY = leftWrist.y;
+        this.metrics.rightHandX = rightWrist.x;
+        this.metrics.rightHandY = rightWrist.y;
 
-        // Normalize mouth open by eye distance (scale invariant)
-        const mouthOpenRatio = mouthOpenDist / eyeDist;
-        this.metrics.mouthOpen = Math.min(1, Math.max(0, (mouthOpenRatio - 0.1) * 3)); // Threshold 0.1, Amp 3
+        const wristDist = Math.hypot(leftWrist.x - rightWrist.x, leftWrist.y - rightWrist.y);
+        // Normalize by shoulder dist so it's depth-invariant
+        const armSpanRatio = wristDist / Math.max(0.01, shoulderDist);
+        // Ratio usually between 0.5 (hands together) and 3.0 (T-pose)
+        this.metrics.armSpan = Math.max(0, Math.min(1, (armSpanRatio - 0.5) / 2.5));
 
-        // Smile: Corners 61 (Left), 291 (Right). 
-        const mouthLeft = landmarks[61];
-        const mouthRight = landmarks[291];
-        const mouthWidth = Math.hypot(mouthLeft.x - mouthRight.x, mouthLeft.y - mouthRight.y);
-
-        // Normalize smile by eye distance
-        const smileRatio = mouthWidth / eyeDist;
-        // LOWER THRESHOLD: was 1.3, now 1.15 to be more sensitive
-        this.metrics.smile = Math.min(1, Math.max(0, (smileRatio - 1.15) * 4));
-
-        // --- 3. GAZE (Iris Tracking) ---
-        // Iris: 468 (Left), 473 (Right)
-        if (landmarks.length > 468) {
-            const leftIris = landmarks[468];
-            // Compare iris center to eye corners (33 and 133 for left eye)
-            const lEyeLeft = landmarks[33];
-            const lEyeRight = landmarks[133];
-            const eyeWidth = Math.abs(lEyeLeft.x - lEyeRight.x);
-
-            if (eyeWidth > 0) {
-                const irisRelX = (leftIris.x - lEyeLeft.x) / eyeWidth;
-                // 0.5 is center. < 0.5 Left, > 0.5 Right
-                this.metrics.gazeX = (irisRelX - 0.5) * 4; // Normalized -1 to 1
-
-                const eyeH = Math.abs(landmarks[159].y - landmarks[145].y); // Upper vs Lower lid
-                const irisRelY = (leftIris.y - landmarks[159].y) / eyeH;
-                this.metrics.gazeY = (irisRelY - 0.5) * 4;
-            }
-        }
-
-        // --- 4. LANDMARKS FOR VISUALIZATION ---
-        // Pass a subset of landmarks to draw face mesh
-        // We only need a coarse mesh for the UI effect
-        // 468 points is a lot to copy every frame, let's just pass the raw array reference?
-        // Actually, let's map a subset for performance if needed, but for now copying is likely fine for 468 points.
-        // Let's just map x,y to avoid sending full structure
-        this.metrics.landmarks = landmarks.map((l: any) => ({ x: l.x, y: l.y }));
+        // --- 3. LANDMARKS FOR VISUALIZATION (Skeleton) ---
+        this.metrics.landmarks = landmarks;
     }
 
-    public getMetrics(): FaceMetrics {
+    public getMetrics(): BodyMetrics {
         return { ...this.metrics };
     }
 
@@ -166,8 +135,8 @@ class WebcamService {
         if (this.camera) {
             this.camera.stop();
         }
-        if (this.faceMesh) {
-            this.faceMesh.close();
+        if (this.pose) {
+            this.pose.close();
         }
         this.metrics.isActive = false;
 

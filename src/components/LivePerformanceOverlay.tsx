@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SonificationResult, ColorRegion } from '../types';
 import { api } from '../services/api';
-import WebcamService, { FaceMetrics } from '../services/WebcamService';
+import WebcamService, { BodyMetrics } from '../services/WebcamService';
 import { LOGO_SVG_STRING } from './Logo';
 
 interface Props {
@@ -96,7 +96,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
     const t = TEXTS[lang];
 
     // States
-    const [metrics, setMetrics] = useState<FaceMetrics | null>(null);
+    const [metrics, setMetrics] = useState<BodyMetrics | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [isPlaying, setIsPlaying] = useState(true);
     const [currentTime, setCurrentTime] = useState(0);
@@ -107,40 +107,24 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
     const [expandedSection, setExpandedSection] = useState<'video' | 'audio' | null>(null);
     const [masterVolume, setMasterVolume] = useState(1.0);
     const [isCalibrated, setIsCalibrated] = useState(false);
+    const [visualMode, setVisualMode] = useState<'none' | 'skeleton' | 'transparency'>('none');
 
-    // Load initial config
-    const initialConfig = result.configUsed || {};
-
+    // Default calibration values
     const calibRef = useRef({
-        panSensitivity: (initialConfig as any).panSensitivity ?? 3.0,
-        tiltSensitivity: (initialConfig as any).tiltSensitivity ?? 20,
-        moveXSensitivity: (initialConfig as any).moveXSensitivity ?? 0.8,
-        moveYSensitivity: (initialConfig as any).moveYSensitivity ?? 0.5,
-        zoomSensitivity: (initialConfig as any).zoomSensitivity ?? 0.5,
-        audioFilterStrength: (initialConfig as any).audioFilterStrength ?? 1.0,
-        smileSensitivity: (initialConfig as any).smileSensitivity ?? 1.0,
-        mouthSensitivity: (initialConfig as any).mouthSensitivity ?? 1.0,
-        gazeSensitivity: (initialConfig as any).gazeSensitivity ?? 1.0,
-        gazeCursorOpacity: (initialConfig as any).gazeCursorOpacity ?? 0.4,
-        headTiltEffect: (initialConfig as any).headTiltEffect ?? 0.8,
-        eyebrowEffect: (initialConfig as any).eyebrowEffect ?? 0.5,
-        blinkEffect: (initialConfig as any).blinkEffect ?? 0.6,
-        showFaceMesh: (initialConfig as any).showFaceMesh ?? false,
-        gazePointerSize: (initialConfig as any).gazePointerSize ?? 40,
-
-        // AUDIO
-        smileAudio: (initialConfig as any).smileAudio ?? 0.0,
-        mouthAudio: (initialConfig as any).mouthAudio ?? 0.0,
-        tiltAudio: (initialConfig as any).tiltAudio ?? 0.0,
-        eyebrowAudio: (initialConfig as any).eyebrowAudio ?? 0.0,
-        distAudio: (initialConfig as any).distAudio ?? 1.0,
-        gazeAudioX: (initialConfig as any).gazeAudioX ?? 1.0,
-        gazeAudioY: (initialConfig as any).gazeAudioY ?? 1.0,
-
-        // AUTO CALIB
-        neutralZ: 0.5 // Default mid-distance (will be overwritten by auto-calib)
+        gazeCursorOpacity: 1.0,
+        gazePointerSize: 10,
+        gazeSensitivity: 1.0,
+        tiltSensitivity: 1.0,
+        neutralZ: 0.5,
+        panSensitivity: 3.0,
+        moveXSensitivity: 0.8,
+        moveYSensitivity: 0.5,
+        zoomSensitivity: 0.5,
+        distAudio: 1.0,
+        gazeAudioX: 1.0,
+        gazeAudioY: 1.0,
     });
-
+    
     // Force re-render for UI
     const [calibState, setCalibState] = useState(calibRef.current);
     const smoothCam = useRef({ x: 0, y: 0, z: -1.0, tiltX: 0, tiltY: 0 });
@@ -150,7 +134,6 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
         setCalibState(calibRef.current);
     };
 
-    // --- AUTO CALIBRATION ---
     // --- AUTO CALIBRATION ---
     const calibrateDistance = () => {
         // Use smoothCam.current.z (real-time filtered position)
@@ -165,12 +148,11 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
         setTimeout(() => setIsCalibrated(false), 2000);
     };
 
-    // Auto-Calibrate on Startup (User Request: "First Second")
-    // We try multiple times to ensure we catch the user once the webcam is ready
+    // Auto-Calibrate on Startup
     useEffect(() => {
-        const t1 = setTimeout(calibrateDistance, 1500); // "Primo Secondo" (approssimato per loading)
-        const t2 = setTimeout(calibrateDistance, 3000); // Retry
-        const t3 = setTimeout(calibrateDistance, 5000); // Retry
+        const t1 = setTimeout(calibrateDistance, 1500);
+        const t2 = setTimeout(calibrateDistance, 3000);
+        const t3 = setTimeout(calibrateDistance, 5000);
         return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
     }, []);
 
@@ -201,7 +183,6 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
         duration: number;
         particles: Particle[];
         imageAspect: number;
-        delayWet: GainNode | null;
         highShelf: BiquadFilterNode | null;
         synthNodes: { osc: OscillatorNode, gain: GainNode }[];
     } | null>(null);
@@ -252,14 +233,6 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
             const autoGain = ctx.createGain();
             autoGain.gain.value = 1.0;
 
-            // FX: Delay
-            const delayNode = ctx.createDelay();
-            delayNode.delayTime.value = 0.35;
-            const delayFeedback = ctx.createGain();
-            delayFeedback.gain.value = 0.4;
-            const delayWet = ctx.createGain();
-            delayWet.gain.value = 0.0;
-
             // Master Gain (User Volume)
             const masterGain = ctx.createGain();
             masterGain.gain.value = masterVolume;
@@ -268,24 +241,11 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
             analyser.fftSize = 256;
 
             // ROUTING
-            /* 
-               Source -> Panner -> Filter -> HighShelf -> AutoGain -> [Branch Delay] -> Mix -> MasterGain -> Analyser -> Dest
-            */
             source.connect(panner);
             panner.connect(filter);
             filter.connect(highShelf);
             highShelf.connect(autoGain);
-
-            // Branch Direct
             autoGain.connect(masterGain);
-
-            // Branch Delay
-            autoGain.connect(delayWet);
-            delayWet.connect(delayNode);
-            delayNode.connect(delayFeedback);
-            delayFeedback.connect(delayNode);
-            delayNode.connect(masterGain); // Mix delay back to master
-
             masterGain.connect(analyser);
             analyser.connect(ctx.destination);
 
@@ -322,7 +282,6 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 animationId: 0, startTime: ctx.currentTime, duration: audioBuffer.duration,
                 particles: [],
                 imageAspect,
-                delayWet,
                 highShelf,
                 synthNodes: []
             };
@@ -357,7 +316,6 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 osc.stop(c.currentTime + 1.0);
                 
                 engineRef.current.synthNodes.push({ osc, gain });
-                // Cleanup array
                 engineRef.current.synthNodes = engineRef.current.synthNodes.filter(n => n.osc.context.currentTime < c.currentTime + 1.0);
             };
 
@@ -399,26 +357,21 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     }
                 }
 
-                const m = WebcamService.getMetrics();
+                let m = WebcamService.getMetrics() as BodyMetrics;
                 setMetrics(m);
 
                 if (m.isActive) {
-                    // --- RELATIVE DISTANCE LOGIC ---
                     // --- RELATIVE DISTANCE & VOLUME LOGIC ---
                     const rawZ = m.z;
                     const neutralZ = calibRef.current.neutralZ;
-                    // zDiff > 0 means Closer (Z increases towards 0). zDiff < 0 means Further.
                     const zDiff = rawZ - neutralZ;
 
-                    // VOLUME: Closer -> Lower Volume. Further -> Higher Volume.
                     let volFactor = 1.0;
-                    const sensitivity = (calibRef.current as any).distAudio || 1.0;
+                    const sensitivity = calibRef.current.distAudio || 1.0;
 
                     if (zDiff > 0) {
-                        // Closer: Reduce Volume
                         volFactor = Math.max(0.1, 1.0 - (zDiff * sensitivity * 1.5));
                     } else {
-                        // Further: Increase Volume
                         volFactor = Math.min(2.5, 1.0 + (Math.abs(zDiff) * sensitivity));
                     }
 
@@ -426,35 +379,16 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         engineRef.current.autoGain.gain.setTargetAtTime(volFactor, now, 0.15);
                     }
 
-                    // FILTER (Ambience): Further = Slight Muffle/Reverb feel? 
-                    // Keeping standard for now, focusing on Volume as requested.
-                    const targetFreq = 20000;
-                    const ambientWet = zDiff < -0.5 ? 0.3 : 0; // Add echo if very far
-
-                    if (engineRef.current.filter) engineRef.current.filter.frequency.setTargetAtTime(targetFreq, now, 0.1);
-
                     // 2. Panning
-                    const gazeOffset = (m.gazeX || 0) * 0.8 * (calibRef.current as any).gazeAudioX;
+                    const gazeOffset = 0; // removed gaze logic
                     const headPan = -(m.yaw * calibRef.current.panSensitivity);
                     const totalPan = headPan - gazeOffset;
                     if (engineRef.current.panner) engineRef.current.panner.pan.setTargetAtTime(Math.max(-1, Math.min(1, totalPan)), now, 0.1);
 
                     // 3. Tone (Gaze Y)
-                    const gazeY = m.gazeY || 0;
-                    const targetQ = 1.0 + ((gazeY + 0.5) * 6.0 * (calibRef.current as any).gazeAudioY);
+                    const gazeY = 0;
+                    const targetQ = 1.0 + ((gazeY + 0.5) * 6.0 * calibRef.current.gazeAudioY);
                     if (engineRef.current.filter) engineRef.current.filter.Q.setTargetAtTime(Math.max(0.1, targetQ), now, 0.1);
-
-                    // 4. Expression FX
-                    const mouthEcho = (m.mouthOpen || 0) * (calibRef.current as any).mouthAudio;
-                    const totalWet = Math.min(0.9, mouthEcho + ambientWet);
-                    if (engineRef.current.delayWet) engineRef.current.delayWet.gain.setTargetAtTime(totalWet, now, 0.1);
-
-                    const brightAmount = ((m.smile || 0) * (calibRef.current as any).smileAudio);
-                    if (engineRef.current.highShelf) engineRef.current.highShelf.gain.setTargetAtTime(brightAmount * 15, now, 0.1);
-
-                    const tiltFactor = Math.abs(smoothCam.current.tiltX) / 45;
-                    const detuneAmount = tiltFactor * (calibRef.current as any).tiltAudio * 500;
-                    if (engineRef.current.source) engineRef.current.source.detune.setTargetAtTime(detuneAmount, now, 0.1);
 
                 } else {
                     // Auto Mode
@@ -468,16 +402,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 const h = canvas.height = stageRef.current ? stageRef.current.clientHeight : window.innerHeight;
 
                 // Visual Feedback
-                if (bgImageRef.current && m.isActive) {
-                    const smileVal = (m.smile || 0) * calibRef.current.smileSensitivity;
-                    const satVal = 1.0 + (smileVal * 1.5);
-                    const hueVal = smileVal * 20;
-                    const mouthVal = (m.mouthOpen || 0) * calibRef.current.mouthSensitivity;
-                    const contrastVal = 1.0 + (mouthVal * 0.5);
-                    const blurVal = mouthVal > 0.3 ? (mouthVal - 0.3) * 10 : 0;
-                    const baseFilter = mode === 'fullscreen' ? 'brightness(0.8)' : 'brightness(0.5)';
-                    bgImageRef.current.style.filter = `${baseFilter} contrast(${1.2 * contrastVal}) saturate(${satVal}) hue-rotate(${hueVal}deg) blur(${blurVal}px)`;
-                } else if (bgImageRef.current) {
+                if (bgImageRef.current) {
                     bgImageRef.current.style.filter = mode === 'fullscreen' ? 'brightness(0.8) contrast(1.2)' : 'brightness(0.5) contrast(1.2)';
                 }
 
@@ -492,15 +417,11 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     const targetCamX = (m.x - 0.5) * calibRef.current.moveXSensitivity;
                     const targetCamY = (m.y - 0.5) * calibRef.current.moveYSensitivity;
 
-                    // Zoom relative to calibration
-                    // If Z is neutralZ, zoom is -1.0 (standard).
-                    // If Z > neutralZ (farther), zoom out.
-                    // If Z < neutralZ (closer), zoom in.
                     const relZ = m.z - calibRef.current.neutralZ;
                     const targetCamZ = -1.0 + (relZ * calibRef.current.zoomSensitivity * 2);
 
-                    const gazeTiltX = -(m.gazeY || 0) * 5 * calibRef.current.gazeSensitivity;
-                    const gazeTiltY = (m.gazeX || 0) * 5 * calibRef.current.gazeSensitivity;
+                    const gazeTiltX = 0; // removed gaze
+                    const gazeTiltY = 0; // removed gaze
                     const targetTiltY = ((m.x - 0.5) * calibRef.current.tiltSensitivity) + gazeTiltY;
                     const targetTiltX = (-(m.y - 0.5) * calibRef.current.tiltSensitivity) + gazeTiltX;
 
@@ -529,9 +450,8 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 if (bgImageRef.current) {
                     const cssZ = (camZ + 1.2) * 200;
                     const shadowX = -tiltY * 15;
-                    const shadowY = tiltX * 15; // Inverted for realism?
-                    bgImageRef.current.style.transform = `perspective(1000px) rotateX(${tiltX * 1.5}deg) rotateY(${tiltY * 1.5}deg) scale(${1.0 + breath * 2}) translate3d(${-camX * 100}px, ${-camY * 100}px, ${cssZ}px)`;
-                    // Dynamic Depth Shadow
+                    const shadowY = tiltX * 15; 
+                    bgImageRef.current.style.transform = `perspective(1000px) rotateX(${tiltX * 1.5}deg) rotateY(${tiltY * 1.5}deg) scale(1.0) translate3d(${-camX * 100}px, ${-camY * 100}px, ${cssZ}px)`;
                     bgImageRef.current.style.boxShadow = `${shadowX}px ${shadowY}px ${30 + Math.abs(cssZ / 5)}px rgba(0,0,0,0.6)`;
                 }
 
@@ -542,20 +462,24 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 let renderW = screenAspect > imgAspect ? h * imgAspect : w;
                 let renderH = screenAspect > imgAspect ? h : w / imgAspect;
 
-                // Gaze Cursor & Overdubbing (The Whisper)
-                if (m.isActive) {
-                    const gazeX = 0.5 + (m.gazeX || 0) * calibRef.current.gazeSensitivity;
-                    const gazeY = 0.5 + (m.gazeY || 0) * calibRef.current.gazeSensitivity;
+                if (m.isActive && calibRef.current.gazeCursorOpacity > 0) {
+                    context.save();
+                    context.globalAlpha = calibRef.current.gazeCursorOpacity * 0.6;
+                    context.strokeStyle = 'rgba(45, 212, 191, 0.8)'; 
+                    context.lineWidth = 2;
                     
-                    if (calibRef.current.gazeCursorOpacity > 0) {
-                        const pointerX = cx + ((gazeX - 0.5) * renderW);
-                        const pointerY = cy + ((gazeY - 0.5) * renderH);
-                        context.save();
-                        context.globalAlpha = calibRef.current.gazeCursorOpacity * 0.6;
-                        context.beginPath(); context.arc(pointerX, pointerY, calibRef.current.gazePointerSize, 0, Math.PI * 2);
-                        context.strokeStyle = 'rgba(45, 212, 191, 0.8)'; context.lineWidth = 2; context.stroke();
-                        context.restore();
-                    }
+                    // Left Hand
+                    const hLx = cx + (((m.leftHandX || 0.5) - 0.5) * renderW);
+                    const hLy = cy + (((m.leftHandY || 0.5) - 0.5) * renderH);
+                    context.beginPath(); context.arc(hLx, hLy, calibRef.current.gazePointerSize, 0, Math.PI * 2); context.stroke();
+
+                    // Right Hand
+                    const hRx = cx + (((m.rightHandX || 0.5) - 0.5) * renderW);
+                    const hRy = cy + (((m.rightHandY || 0.5) - 0.5) * renderH);
+                    context.beginPath(); context.arc(hRx, hRy, calibRef.current.gazePointerSize, 0, Math.PI * 2); context.stroke();
+
+                    context.restore();
+                }
 
                     // --- PARALLAX CONSTELLATION & OVERDUBBING (REGIONS) ---
                     const regionsList = result.regions;
@@ -580,12 +504,22 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                             const parallaxX = baseX + (tiltY * 3 * depthFactor);
                             const parallaxY = baseY - (tiltX * 3 * depthFactor); // inverted tilt for natural feel
 
-                            // Collision detection with Gaze
-                            const pointerX = cx + ((gazeX - 0.5) * renderW);
-                            const pointerY = cy + ((gazeY - 0.5) * renderH);
-                            const dx = pointerX - parallaxX;
-                            const dy = pointerY - parallaxY;
-                            const dist = Math.sqrt(dx*dx + dy*dy);
+                            // Collision detection with Hands instead of Gaze
+                            // Map Hand coordinates (0 to 1) to canvas coordinates
+                            const lhX = cx + ((m.leftHandX || 0.5) - 0.5) * renderW;
+                            const lhY = cy + ((m.leftHandY || 0.5) - 0.5) * renderH;
+                            const rhX = cx + ((m.rightHandX || 0.5) - 0.5) * renderW;
+                            const rhY = cy + ((m.rightHandY || 0.5) - 0.5) * renderH;
+                            
+                            const dlhX = lhX - parallaxX;
+                            const dlhY = lhY - parallaxY;
+                            const drhX = rhX - parallaxX;
+                            const drhY = rhY - parallaxY;
+                            
+                            const distL = Math.sqrt(dlhX*dlhX + dlhY*dlhY);
+                            const distR = Math.sqrt(drhX*drhX + drhY*drhY);
+                            const dist = Math.min(distL, distR); // Closest hand
+                            // Old dist removed
 
                             const isHovered = dist < 40; // Collision radius
 
@@ -647,37 +581,100 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                             }
                         }
 
-                    } else {
-                        // --- LEGACY GRID OVERDUBBING (Artistic Block Paradigm) ---
+                    } // No legacy grid synth anymore!
 
-                        // Map gaze to grid coordinates
-                        const gridX = Math.floor(Math.max(0, Math.min(1, gazeX)) * (maxX + 1));
-                        const gridY = Math.floor(Math.max(0, Math.min(1, gazeY)) * (maxY + 1));
+                    // --- DRAW VISUAL MODES ---
+                    if (visualMode === 'skeleton' && m.landmarks) {
+                        context.save();
+                        context.globalAlpha = 0.8;
+                        context.strokeStyle = '#2dd4bf'; // Cyan
+                        context.lineWidth = 2;
+                        context.fillStyle = '#f472b6'; // Pink
                         
-                        if (!lastPlayedCell.current || lastPlayedCell.current.x !== gridX || lastPlayedCell.current.y !== gridY) {
-                            // Cell changed!
-                            if (now - synthDebounce.current > 0.2) { // 200ms debounce
-                                lastPlayedCell.current = { x: gridX, y: gridY };
-                                synthDebounce.current = now;
-                                
-                                // Find events in this cell
-                                if (result.audioOutput.events) {
-                                    const cellEvents = result.audioOutput.events.filter(e => 
-                                        e.sourceBlock?.position?.x === gridX && e.sourceBlock?.position?.y === gridY
-                                    );
-                                    
-                                    if (cellEvents.length > 0) {
-                                        // Play a random note from this cell to create a "whisper" texture
-                                        const randomEvent = cellEvents[Math.floor(Math.random() * cellEvents.length)];
-                                        // Convert MIDI to Frequency (Standard 440Hz tuning)
-                                        const freq = 440 * Math.pow(2, (randomEvent.midiFloat - 69) / 12);
-                                        playWhisperSynth(freq, randomEvent.velocity);
-                                    }
-                                }
+                        // Define connections for the upper body (Pose landmarks)
+                        const connections = [
+                            [11, 12], [11, 13], [13, 15], // Right Arm
+                            [12, 14], [14, 16],           // Left Arm
+                            [11, 23], [12, 24], [23, 24]  // Torso
+                        ];
+
+                        // Draw lines
+                        connections.forEach(([i, j]) => {
+                            const p1 = m.landmarks![i];
+                            const p2 = m.landmarks![j];
+                            if (p1 && p2 && (p1.visibility ?? 1) > 0.5 && (p2.visibility ?? 1) > 0.5) {
+                                const px1 = cx + (p1.x - 0.5) * renderW;
+                                const py1 = cy + (p1.y - 0.5) * renderH;
+                                const px2 = cx + (p2.x - 0.5) * renderW;
+                                const py2 = cy + (p2.y - 0.5) * renderH;
+                                context.beginPath();
+                                context.moveTo(px1, py1);
+                                context.lineTo(px2, py2);
+                                context.stroke();
                             }
-                        }
+                        });
+
+                        // Draw joints
+                        [11, 12, 13, 14, 15, 16, 23, 24].forEach(i => {
+                            const p = m.landmarks![i];
+                            if (p && (p.visibility ?? 1) > 0.5) {
+                                const px = cx + (p.x - 0.5) * renderW;
+                                const py = cy + (p.y - 0.5) * renderH;
+                                context.beginPath();
+                                context.arc(px, py, 5, 0, Math.PI * 2);
+                                context.fill();
+                            }
+                        });
+
+                        context.restore();
                     }
-                }
+
+                    if (visualMode === 'transparency' && m.landmarks) {
+                        // Apply destination-out to clear the canvas where the body is
+                        context.save();
+                        context.globalCompositeOperation = 'destination-out';
+                        context.fillStyle = 'black';
+                        
+                        // Create a thick path over the torso and arms to cut out the painting
+                        context.beginPath();
+                        const shoulderL = m.landmarks[12];
+                        const shoulderR = m.landmarks[11];
+                        const hipL = m.landmarks[24];
+                        const hipR = m.landmarks[23];
+                        
+                        if (shoulderL && shoulderR && hipL && hipR) {
+                            context.moveTo(cx + (shoulderL.x - 0.5) * renderW, cy + (shoulderL.y - 0.5) * renderH);
+                            context.lineTo(cx + (shoulderR.x - 0.5) * renderW, cy + (shoulderR.y - 0.5) * renderH);
+                            context.lineTo(cx + (hipR.x - 0.5) * renderW, cy + (hipR.y - 0.5) * renderH);
+                            context.lineTo(cx + (hipL.x - 0.5) * renderW, cy + (hipL.y - 0.5) * renderH);
+                            context.closePath();
+                            context.fill();
+                        }
+                        
+                        // Thicken arms
+                        context.lineWidth = 60; // Thick stroke for arms
+                        context.lineCap = 'round';
+                        context.lineJoin = 'round';
+                        context.strokeStyle = 'black';
+                        
+                        const arms = [
+                            [11, 13], [13, 15], // Right
+                            [12, 14], [14, 16]  // Left
+                        ];
+                        
+                        arms.forEach(([i, j]) => {
+                            const p1 = m.landmarks![i];
+                            const p2 = m.landmarks![j];
+                            if (p1 && p2) {
+                                context.beginPath();
+                                context.moveTo(cx + (p1.x - 0.5) * renderW, cy + (p1.y - 0.5) * renderH);
+                                context.lineTo(cx + (p2.x - 0.5) * renderW, cy + (p2.y - 0.5) * renderH);
+                                context.stroke();
+                            }
+                        });
+                        
+                        context.restore();
+                    }
 
                 context.drawImage(logoImg, w - 120, h - 120, 80, 80);
                 engineRef.current.animationId = requestAnimationFrame(render);
@@ -831,48 +828,46 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                             </div>
                         </div>
 
-                        {/* 2. VIDEO EFFECTS (Accordion) */}
+                        {/* 2. DISPLAY MODE */}
                         <div className="border-t border-white/5 pt-4">
-                            <button
-                                onClick={() => setExpandedSection(expandedSection === 'video' ? null : 'video')}
-                                className="w-full flex justify-between items-center py-2 text-xs font-bold text-pink-500 uppercase tracking-widest hover:text-pink-400"
-                            >
-                                <span><i className="fas fa-video mr-2"></i> {t.videoFx}</span>
-                                <i className={`fas fa-chevron-down transition-transform ${expandedSection === 'video' ? 'rotate-180' : ''}`}></i>
-                            </button>
-
-                            {expandedSection === 'video' && (
-                                <div className="mt-4 space-y-4 animate-fade-in pl-2 border-l border-white/5">
-                                    <InputSlider label={t.smile} value={calibState.smileSensitivity} max={3} onChange={(v) => updateCalib('smileSensitivity', v)} color="text-pink-400" />
-                                    <InputSlider label={t.mouth} value={calibState.mouthSensitivity} max={3} onChange={(v) => updateCalib('mouthSensitivity', v)} color="text-purple-400" />
-                                    <InputSlider label={t.eyebrow} value={calibState.eyebrowEffect} max={2} onChange={(v) => updateCalib('eyebrowEffect', v)} color="text-orange-400" />
-                                    <InputSlider label={t.zoom} value={calibState.zoomSensitivity} max={2} onChange={(v) => updateCalib('zoomSensitivity', v)} color="text-blue-400" />
-                                    <InputSlider label={t.tilt} value={calibState.tiltSensitivity} max={100} step={1} onChange={(v) => updateCalib('tiltSensitivity', v)} color="text-gray-300" />
-                                    <InputSlider label={t.pan} value={calibState.panSensitivity} max={10} onChange={(v) => updateCalib('panSensitivity', v)} color="text-gray-300" />
-                                </div>
-                            )}
+                            <label className="block text-xs font-bold text-pink-500 mb-2 uppercase tracking-wider flex items-center gap-2">
+                                <i className="fas fa-eye"></i> Visual Mode
+                            </label>
+                            <div className="flex gap-2 mb-6">
+                                <button
+                                    onClick={() => setVisualMode('none')}
+                                    className={`flex-1 py-2 rounded text-xs font-bold transition-all ${visualMode === 'none' ? 'bg-pink-600 text-white' : 'bg-white/10 text-gray-400 hover:bg-white/20'}`}
+                                >
+                                    None
+                                </button>
+                                <button
+                                    onClick={() => setVisualMode('skeleton')}
+                                    className={`flex-1 py-2 rounded text-xs font-bold transition-all ${visualMode === 'skeleton' ? 'bg-pink-600 text-white' : 'bg-white/10 text-gray-400 hover:bg-white/20'}`}
+                                >
+                                    Skeleton
+                                </button>
+                                <button
+                                    onClick={() => setVisualMode('transparency')}
+                                    className={`flex-1 py-2 rounded text-xs font-bold transition-all ${visualMode === 'transparency' ? 'bg-pink-600 text-white' : 'bg-white/10 text-gray-400 hover:bg-white/20'}`}
+                                >
+                                    Transparent
+                                </button>
+                            </div>
                         </div>
 
-                        {/* 3. AUDIO EFFECTS (Accordion) */}
-                        <div className="border-t border-white/5 pt-2">
-                            <button
-                                onClick={() => setExpandedSection(expandedSection === 'audio' ? null : 'audio')}
-                                className="w-full flex justify-between items-center py-2 text-xs font-bold text-green-500 uppercase tracking-widest hover:text-green-400"
-                            >
-                                <span><i className="fas fa-music mr-2"></i> {t.audioFx}</span>
-                                <i className={`fas fa-chevron-down transition-transform ${expandedSection === 'audio' ? 'rotate-180' : ''}`}></i>
-                            </button>
-
-                            {expandedSection === 'audio' && (
-                                <div className="mt-4 space-y-4 animate-fade-in pl-2 border-l border-white/5">
-                                    <InputSlider label={t.dist} value={(calibState as any).distAudio} max={2} onChange={(v) => updateCalib('distAudio' as any, v)} color="text-blue-400" />
-                                    <InputSlider label={t.gazeX} value={(calibState as any).gazeAudioX} max={3} onChange={(v) => updateCalib('gazeAudioX' as any, v)} color="text-cyan-400" />
-                                    <InputSlider label={t.gazeY} value={(calibState as any).gazeAudioY} max={3} onChange={(v) => updateCalib('gazeAudioY' as any, v)} color="text-cyan-200" />
-                                    <InputSlider label={`${t.smile} (Audio)`} value={(calibState as any).smileAudio} max={5} onChange={(v) => updateCalib('smileAudio' as any, v)} color="text-pink-400" />
-                                    <InputSlider label={`${t.mouth} (Audio)`} value={(calibState as any).mouthAudio} max={2} onChange={(v) => updateCalib('mouthAudio' as any, v)} color="text-purple-400" />
-                                    <InputSlider label={`${t.tilt} (Audio)`} value={(calibState as any).tiltAudio} max={2} step={0.05} onChange={(v) => updateCalib('tiltAudio' as any, v)} color="text-orange-400" />
-                                </div>
-                            )}
+                        {/* 3. CAMERA CONTROLS */}
+                        <div className="border-t border-white/5 pt-4">
+                            <label className="block text-xs font-bold text-blue-400 mb-2 uppercase tracking-wider flex items-center gap-2">
+                                <i className="fas fa-camera"></i> Camera Sensitivity
+                            </label>
+                            <div className="mt-4 space-y-4">
+                                <InputSlider label={t.zoom || 'Zoom'} value={calibState.zoomSensitivity} max={2} onChange={(v) => updateCalib('zoomSensitivity', v)} color="text-blue-400" />
+                                <InputSlider label={t.tilt || 'Tilt'} value={calibState.tiltSensitivity} max={100} step={1} onChange={(v) => updateCalib('tiltSensitivity', v)} color="text-gray-300" />
+                                <InputSlider label={t.pan || 'Pan'} value={calibState.panSensitivity} max={10} onChange={(v) => updateCalib('panSensitivity', v)} color="text-gray-300" />
+                                <InputSlider label={t.dist || 'Volume (Distance)'} value={calibState.distAudio} max={2} onChange={(v) => updateCalib('distAudio', v)} color="text-blue-400" />
+                                <InputSlider label={t.gazeX || 'Pan (Gaze X)'} value={calibState.gazeAudioX} max={3} onChange={(v) => updateCalib('gazeAudioX', v)} color="text-cyan-400" />
+                                <InputSlider label={t.gazeY || 'Filter (Gaze Y)'} value={calibState.gazeAudioY} max={3} onChange={(v) => updateCalib('gazeAudioY', v)} color="text-cyan-200" />
+                            </div>
                         </div>
                     </div>
 
@@ -1009,3 +1004,5 @@ const InputSlider: React.FC<InputSliderProps> = ({ label, value, min = 0, max, s
         />
     </div>
 );
+
+export default LivePerformanceOverlay;

@@ -370,7 +370,7 @@ export async function generateSonificationVideo(
                     }
 
                     // --- READ WEBCAM METRICS ---
-                    let metrics = { yaw: 0, pitch: 0, roll: 0, x: 0.5, y: 0.5, z: 0.5, mouthOpen: 0, smile: 0, gazeX: 0, gazeY: 0, isActive: false };
+                    let metrics: any = { yaw: 0, pitch: 0, x: 0.5, y: 0.5, z: 0.5, isActive: false };
                     if (useWebcam) {
                         metrics = WebcamService.getMetrics();
                     }
@@ -382,11 +382,9 @@ export async function generateSonificationVideo(
                         const targetPan = -metrics.yaw; // Invert?
                         pannerNode.pan.value += (targetPan - pannerNode.pan.value) * 0.1;
 
-                        // 2. Filter (Brightness) follows Smile + Pitch
-                        // Smile opens filter (brighter). Pitch up opens, Pitch down closes.
-                        const smileBooster = metrics.smile * 5000;
+                        // 2. Filter (Brightness) follows Head Pitch instead of Smile
                         const pitchMod = metrics.pitch * 3000;
-                        const targetFreq = 1000 + smileBooster + pitchMod + 500; // Base 1500
+                        const targetFreq = 1500 + pitchMod; // Base 1500
                         // Clamped
                         const clampedFreq = Math.max(200, Math.min(22000, targetFreq));
                         filterNode.frequency.value += (clampedFreq - filterNode.frequency.value) * 0.1;
@@ -451,13 +449,7 @@ export async function generateSonificationVideo(
                     ctx.scale(zoomDrift, zoomDrift);
                     ctx.translate(camX, camY);
 
-                    // Expression effect: Surprise triggers shake/chromatic aberration?
-                    // Simple shake
-                    if (metrics.mouthOpen > 0.3) {
-                        const shake = (Math.random() - 0.5) * 10;
-                        ctx.translate(shake, shake);
-                    }
-
+                    // Simple shake removed (was based on mouthOpen)
                     ctx.globalAlpha = 1.0;
                     ctx.shadowColor = 'rgba(0,0,0,0.8)';
                     ctx.shadowBlur = 40;
@@ -471,12 +463,12 @@ export async function generateSonificationVideo(
                     const effH = imgH * zoomDrift;
 
                     if (useWebcam && metrics.isActive) {
-                        // Gaze tracking cursor
-                        const gazeTargetX = centerX + (metrics.gazeX * (effW * 0.8)); // limit range
-                        const gazeTargetY = centerY + (metrics.gazeY * (effH * 0.8));
+                        // Hand tracking cursor (simplified using left hand for now)
+                        const handX = centerX + (((metrics.leftHandX || 0.5) - 0.5) * effW);
+                        const handY = centerY + (((metrics.leftHandY || 0.5) - 0.5) * effH);
 
-                        targetX = gazeTargetX;
-                        targetY = gazeTargetY;
+                        targetX = handX;
+                        targetY = handY;
 
                         cursorX += (targetX - cursorX) * 0.08;
                         cursorY += (targetY - cursorY) * 0.08;
