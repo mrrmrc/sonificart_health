@@ -531,13 +531,13 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                             // Default hardcoded fallback
                             const leftHandY = m.leftHandY || 0.5;
                             const leftVol = Math.max(0, Math.min(1, 1.0 - leftHandY));
-                            engineRef.current.stemGains[0].gain.setTargetAtTime(leftVol, actx.currentTime, 0.1);
-                            engineRef.current.stemGains[1].gain.setTargetAtTime(leftVol, actx.currentTime, 0.1);
+                            engineRef.current.stemGains[0].gain.setTargetAtTime(leftVol, ctx.currentTime, 0.1);
+                            engineRef.current.stemGains[1].gain.setTargetAtTime(leftVol, ctx.currentTime, 0.1);
                             
                             const rightHandY = m.rightHandY || 0.5;
                             const rightVol = Math.max(0, Math.min(1, 1.0 - rightHandY));
-                            engineRef.current.stemGains[2].gain.setTargetAtTime(rightVol, actx.currentTime, 0.1);
-                            engineRef.current.stemGains[3].gain.setTargetAtTime(rightVol, actx.currentTime, 0.1);
+                            engineRef.current.stemGains[2].gain.setTargetAtTime(rightVol, ctx.currentTime, 0.1);
+                            engineRef.current.stemGains[3].gain.setTargetAtTime(rightVol, ctx.currentTime, 0.1);
                         }
                     } else if (result.configUsed?.masterMappings) {
                         // 5. MASTER TRACK MAPPING (No Stems)

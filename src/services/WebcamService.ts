@@ -84,7 +84,7 @@ class WebcamService {
             this.isCalibrating = false;
             // Compute averages for baseline
             for (const key in this.accumulators) {
-                this.baselineOffsets[key as keyof BodyMetrics] = (this.accumulators[key as keyof BodyMetrics] as number) / this.frameCount;
+                (this.baselineOffsets as any)[key] = (this.accumulators[key as keyof BodyMetrics] as number) / this.frameCount;
             }
             console.log("Calibration finished.", this.baselineOffsets);
         }, 3000); // 3 seconds calibration phase

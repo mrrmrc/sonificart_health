@@ -531,7 +531,7 @@ const PublishModal: React.FC<{
                                             onClick={async () => {
                                                 try {
                                                     // Add to configUsed
-                                                    const configToSave = { ...entry.configUsed, masterMappings };
+                                                    const configToSave = { ...entry.configUsed, masterMappings } as any;
                                                     await api.updateHistoryItemConfig(entry.id, configToSave);
                                                     entry.configUsed = configToSave;
                                                     onShowMessage("Salvato", "Effetti Master salvati con successo!", 'success');
