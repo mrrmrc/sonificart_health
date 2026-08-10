@@ -602,7 +602,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         connections.forEach(([i, j]) => {
                             const p1 = m.landmarks![i];
                             const p2 = m.landmarks![j];
-                            if (p1 && p2 && (p1.visibility ?? 1) > 0.5 && (p2.visibility ?? 1) > 0.5) {
+                            if (p1 && p2) {
                                 const px1 = cx + (p1.x - 0.5) * renderW;
                                 const py1 = cy + (p1.y - 0.5) * renderH;
                                 const px2 = cx + (p2.x - 0.5) * renderW;
@@ -617,7 +617,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         // Draw joints
                         [11, 12, 13, 14, 15, 16, 23, 24].forEach(i => {
                             const p = m.landmarks![i];
-                            if (p && (p.visibility ?? 1) > 0.5) {
+                            if (p) {
                                 const px = cx + (p.x - 0.5) * renderW;
                                 const py = cy + (p.y - 0.5) * renderH;
                                 context.beginPath();
