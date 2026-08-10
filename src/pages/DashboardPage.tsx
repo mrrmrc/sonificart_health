@@ -20,16 +20,28 @@ export const DashboardPage: React.FC = () => {
             setIsLoadingFull(true);
             try {
                 const fullEntry = await api.getHistoryItem(entry.id);
-                navigate('/sonification', { state: { historyEntry: fullEntry } });
+                if (entry.paradigm === 'ai_composer') {
+                    navigate('/cam', { state: { historyEntry: fullEntry } });
+                } else {
+                    navigate('/sonification', { state: { historyEntry: fullEntry } });
+                }
             } catch (e) {
                 console.error("Errore nel caricamento completo dell'opera:", e);
                 // Fallback all'entry parziale se il server fallisce
-                navigate('/sonification', { state: { historyEntry: entry } });
+                if (entry.paradigm === 'ai_composer') {
+                    navigate('/cam', { state: { historyEntry: entry } });
+                } else {
+                    navigate('/sonification', { state: { historyEntry: entry } });
+                }
             } finally {
                 setIsLoadingFull(false);
             }
         } else {
-            navigate('/sonification', { state: { historyEntry: entry } });
+            if (entry.paradigm === 'ai_composer') {
+                navigate('/cam', { state: { historyEntry: entry } });
+            } else {
+                navigate('/sonification', { state: { historyEntry: entry } });
+            }
         }
     };
 

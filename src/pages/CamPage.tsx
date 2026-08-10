@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useOutletContext } from 'react-router-dom';
-import { User } from '../types';
+import { useOutletContext, useLocation } from 'react-router-dom';
+import { User, DashboardEntry } from '../types';
+import { reconstructResultFromPartialData } from '../utils/dataUtils';
 
 interface OutletContextType {
     user: User | null;
@@ -62,6 +63,7 @@ const InfoCard: React.FC<{ title: string, icon: string, children: React.ReactNod
 );
 
 export const CamPage: React.FC = () => {
+    const location = useLocation();
     const [activePromptTab, setActivePromptTab] = useState<'suno' | 'udio' | 'soundverse'>('suno');
     const { user, setUser, isUnlimited, setIsLoginModalOpen, setIsRequestAccessOpen } = useOutletContext<OutletContextType>();
 
@@ -121,6 +123,43 @@ export const CamPage: React.FC = () => {
         { id: 3, name: "Generazione Prompt Olistico", status: 'pending' },
         { id: 4, name: "Assemblaggio Certificato Forense (SAC)", status: 'pending' }
     ]);
+
+    useEffect(() => {
+        if (location.state?.historyEntry) {
+            const entry: DashboardEntry = location.state.historyEntry;
+            const fixImg = (url: string) => url.startsWith('data:') || url.startsWith('http') ? url : `data:image/jpeg;base64,${url}`;
+            const imgUrl = fixImg(entry.imageUrl || '');
+            const restoredResult = reconstructResultFromPartialData(
+                entry,
+                imgUrl,
+                null,
+                "project_from_dashboard.sac"
+            );
+            
+            setUploadedImageUrl(imgUrl);
+            setUploadedFileName("Opera dal Server");
+            setFinalResult(restoredResult);
+            setIsAnalyzing(false); 
+            
+            if (entry.audioUrl) {
+                const absoluteAudioUrl = entry.audioUrl.startsWith('http') ? entry.audioUrl : `${window.location.origin}${entry.audioUrl.startsWith('/') ? '' : '/'}${entry.audioUrl}`;
+                fetch(absoluteAudioUrl).then(res => res.blob()).then(blob => {
+                    setFinalResult(prev => {
+                        if (!prev) return prev;
+                        return {
+                            ...prev,
+                            audioOutput: {
+                                ...prev.audioOutput,
+                                audioWavBlob: blob,
+                                audioUrl: absoluteAudioUrl
+                            }
+                        };
+                    });
+                }).catch(e => console.error("Impossibile recuperare il file audio", e));
+            }
+        }
+    }, [location.state]);
+
     const [config, setConfig] = useState<ConfigSettings>({
         pixelCount: 512*512, bpm: 108, noteDurationSeconds: 0.1, targetDurationSeconds: 180,
         osc: { enabled: false, host: 'localhost', port: 8080 },
