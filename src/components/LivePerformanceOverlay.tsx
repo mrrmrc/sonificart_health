@@ -191,6 +191,11 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 e.stopPropagation();
                 setIsSettingsOpen(prev => !prev);
             }
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowSkeletonPanel(prev => !prev);
+            }
         };
         document.addEventListener('keydown', handleKeyDown, { capture: true });
         return () => document.removeEventListener('keydown', handleKeyDown, { capture: true });
