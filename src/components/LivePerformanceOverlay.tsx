@@ -632,10 +632,9 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     if (visualMode === 'transparency' && m.landmarks) {
                         // Apply destination-out to clear the canvas where the body is
                         context.save();
-                        context.globalCompositeOperation = 'destination-out';
-                        context.fillStyle = 'black';
+                        context.globalAlpha = 0.8;
                         
-                        // Create a thick path over the torso and arms to cut out the painting
+                        // Create a thick path over the torso and arms to cut out the video
                         context.beginPath();
                         const shoulderL = m.landmarks[12];
                         const shoulderR = m.landmarks[11];
@@ -648,14 +647,26 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                             context.lineTo(cx + (hipR.x - 0.5) * renderW, cy + (hipR.y - 0.5) * renderH);
                             context.lineTo(cx + (hipL.x - 0.5) * renderW, cy + (hipL.y - 0.5) * renderH);
                             context.closePath();
-                            context.fill();
+                            
+                            // Clip the video to this torso shape
+                            context.save();
+                            context.clip();
+                            if (videoRef.current) {
+                                // Draw video feed mirrored
+                                context.translate(w, 0);
+                                context.scale(-1, 1);
+                                // The video fills the screen
+                                context.drawImage(videoRef.current, 0, 0, w, h);
+                            }
+                            context.restore();
                         }
                         
                         // Thicken arms
-                        context.lineWidth = 60; // Thick stroke for arms
+                        context.lineWidth = 80; // Thick stroke for arms
                         context.lineCap = 'round';
                         context.lineJoin = 'round';
-                        context.strokeStyle = 'black';
+                        // Semi-transparent overlay for arms since we can't easily stroke clip the video
+                        context.strokeStyle = 'rgba(45, 212, 191, 0.4)';
                         
                         const arms = [
                             [11, 13], [13, 15], // Right
@@ -719,9 +730,9 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
         <div ref={containerRef} className="fixed inset-0 z-[9999] bg-black flex flex-col overflow-hidden font-sans">
             <div ref={stageRef} className="flex-grow relative overflow-hidden w-full">
                 {/* Backgrounds */}
-                {mode === 'fullscreen' && <div className="absolute inset-0 z-0"><img src={result.standardizedImageUrl} className="w-full h-full object-cover filter blur-[40px] opacity-40 scale-110" /></div>}
+                {mode === 'fullscreen' && <div className={`absolute inset-0 z-0 transition-opacity duration-500 ${visualMode !== 'none' ? 'opacity-0' : 'opacity-100'}`}><img src={result.standardizedImageUrl} className="w-full h-full object-cover filter blur-[40px] opacity-40 scale-110" /></div>}
                 {/* 3D PLATFORM IMAGE */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-1" style={{ perspective: '1500px', transformStyle: 'preserve-3d' }}>
+                <div className={`absolute inset-0 flex items-center justify-center pointer-events-none z-1 transition-opacity duration-500 ${visualMode !== 'none' ? 'opacity-0' : 'opacity-100'}`} style={{ perspective: '1500px', transformStyle: 'preserve-3d' }}>
                     <div className="relative" style={{ transformStyle: 'preserve-3d' }}>
                         {/* Main Image */}
                         <img ref={bgImageRef} src={result.standardizedImageUrl} className="w-full h-full object-contain transition-transform duration-75 ease-out relative z-10" style={{ transformStyle: 'preserve-3d', backfaceVisibility: 'hidden' }} />
