@@ -408,6 +408,15 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
 
                 context.clearRect(0, 0, w, h);
 
+                if (visualMode !== 'none' && videoRef.current && m.isActive) {
+                    context.save();
+                    context.globalAlpha = 0.15; // Leggera trasparenza per far vedere la persona
+                    context.translate(w, 0);
+                    context.scale(-1, 1);
+                    context.drawImage(videoRef.current, 0, 0, w, h);
+                    context.restore();
+                }
+
                 // Camera Math
                 let camX = 0, camY = 0, camZ = -1.2;
                 let tiltX = 0, tiltY = 0;
@@ -591,11 +600,24 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         context.lineWidth = 2;
                         context.fillStyle = '#f472b6'; // Pink
                         
-                        // Define connections for the upper body (Pose landmarks)
+                        // Full body Pose connections
                         const connections = [
-                            [11, 12], [11, 13], [13, 15], // Right Arm
-                            [12, 14], [14, 16],           // Left Arm
-                            [11, 23], [12, 24], [23, 24]  // Torso
+                            // Face
+                            [0, 1], [1, 2], [2, 3], [3, 7], // Right eye/ear
+                            [0, 4], [4, 5], [5, 6], [6, 8], // Left eye/ear
+                            [9, 10], // Mouth
+                            // Upper body
+                            [11, 12], // Shoulders
+                            [11, 13], [13, 15], // Right arm
+                            [12, 14], [14, 16], // Left arm
+                            // Hands
+                            [15, 17], [15, 19], [15, 21], [17, 19], // Right hand
+                            [16, 18], [16, 20], [16, 22], [18, 20], // Left hand
+                            // Torso
+                            [11, 23], [12, 24], [23, 24],
+                            // Legs & Feet
+                            [23, 25], [25, 27], [27, 29], [29, 31], [31, 27], // Right leg
+                            [24, 26], [26, 28], [28, 30], [30, 32], [32, 28]  // Left leg
                         ];
 
                         // Draw lines
@@ -614,8 +636,8 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                             }
                         });
 
-                        // Draw joints
-                        [11, 12, 13, 14, 15, 16, 23, 24].forEach(i => {
+                        // Draw all 33 joints
+                        for (let i = 0; i < 33; i++) {
                             const p = m.landmarks![i];
                             if (p) {
                                 const px = cx + (p.x - 0.5) * renderW;
@@ -624,7 +646,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                 context.arc(px, py, 5, 0, Math.PI * 2);
                                 context.fill();
                             }
-                        });
+                        }
 
                         context.restore();
                     }
