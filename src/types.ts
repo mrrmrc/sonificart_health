@@ -265,6 +265,31 @@ export interface HealthClassificationResult {
     promptFragment: string;  // Ready-to-use prompt text for Gemini with only relevant directives
 }
 
+export interface ColorRegion {
+    id: number;
+    idCode: string;
+    r: number;
+    g: number;
+    b: number;
+    hex: string;
+    pixelIndices?: number[]; // Opzionale per non appesantire il DB
+    pixelCount: number;
+    percentage: number;
+    centroidX: number;
+    centroidY: number;
+    minX: number;
+    maxX: number;
+    minY: number;
+    maxY: number;
+    L: number;
+    a: number;
+    b_val: number;
+    noteName: string;
+    frequencyHz: number;
+    isDetached: boolean;
+    depthLayer: 'background' | 'middleground' | 'foreground';
+}
+
 export interface SonificationResult {
     imageHash: string;
     audioHash: string;
@@ -294,6 +319,7 @@ export interface SonificationResult {
     description?: string | null;
     videoUrl?: string | null;
     healthClassification?: HealthClassificationResult | null;
+    regions?: ColorRegion[]; // Aggiunto per salvare i centroidi 3D
 }
 
 export interface SacVerificationDetails {

@@ -16,34 +16,11 @@ import { audioBufferToWav } from '../utils/wavExport';
 import saveAs from 'file-saver';
 import { ResultsDashboard } from '../components/ResultsDashboard';
 import { ProcessingView } from '../components/ProcessingView';
-import { SonificationResult, ProcessingStep, ConfigSettings, TransformedNoteEvent } from '../types';
+import { SonificationResult, ProcessingStep, ConfigSettings, TransformedNoteEvent, ColorRegion } from '../types';
 import { calculateSHA256, bufferToHex } from '../utils/cryptoUtils';
 import { api } from '../services/api';
 
-interface ColorRegion {
-    id: number;
-    idCode: string;
-    r: number;
-    g: number;
-    b: number;
-    hex: string;
-    pixelIndices: number[];
-    pixelCount: number;
-    percentage: number;
-    centroidX: number;
-    centroidY: number;
-    minX: number;
-    maxX: number;
-    minY: number;
-    maxY: number;
-    L: number;
-    a: number;
-    b_val: number;
-    noteName: string;
-    frequencyHz: number;
-    isDetached: boolean;
-    depthLayer: 'background' | 'middleground' | 'foreground';
-}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  PARAMETRI DI SCANSIONE (ora dinamici via UI)
@@ -338,7 +315,7 @@ export const CamPage: React.FC = () => {
                     if (targetReg) {
                         for (let p = 0; p < count; p++) {
                             const px = pixelList[p];
-                            targetReg.pixelIndices.push(px);
+                            targetReg.pixelIndices!.push(px);
                             regionIdMap[px] = adjacentRegionId;
                         }
                         targetReg.pixelCount += count;
@@ -479,7 +456,7 @@ export const CamPage: React.FC = () => {
         const d        = imgData.data;
 
         for (const region of rList) {
-            for (const idx of region.pixelIndices) {
+            for (const idx of region.pixelIndices!) {
                 d[idx * 4]     = 255;
                 d[idx * 4 + 1] = 255;
                 d[idx * 4 + 2] = 255;
@@ -538,7 +515,7 @@ export const CamPage: React.FC = () => {
                     const d        = imgData.data;
                     
                     // Ripristina i pixel originali
-                    for (const idx of region.pixelIndices) {
+                    for (const idx of region.pixelIndices!) {
                         d[idx * 4]     = backup[idx * 4];
                         d[idx * 4 + 1] = backup[idx * 4 + 1];
                         d[idx * 4 + 2] = backup[idx * 4 + 2];
@@ -664,13 +641,13 @@ export const CamPage: React.FC = () => {
                 const gridH = Math.max(1, Math.ceil((region.maxY - region.minY) / blockSize));
                 
                 const scanSequence = generateScanSequence(gridW, gridH, pattern);
-                const shapePixels = new Set(region.pixelIndices);
+                const shapePixels = new Set(region.pixelIndices!);
                 const backup = pixelDataRef.current!;
                 
                 // O(N) optimization: Map pixels directly to blocks instead of O(BoundingBox) grid scanning
                 const blockDataMap = new Map<number, { sumR: number, sumG: number, sumB: number, count: number }>();
                 
-                for (const pIdx of region.pixelIndices) {
+                for (const pIdx of region.pixelIndices!) {
                     const x = pIdx % w;
                     const y = Math.floor(pIdx / w);
                     
@@ -837,7 +814,14 @@ export const CamPage: React.FC = () => {
                 [] // scan sequence
             );
 
-            setFinalResult(processResult);
+            const finalProcessedResult = {
+                ...processResult,
+                regions: regionsRef.current.map(r => {
+                    const { pixelIndices, ...safeRegion } = r;
+                    return safeRegion;
+                })
+            };
+            setFinalResult(finalProcessedResult);
 
         } catch (e) {
             console.error("Errore export WAV:", e);
@@ -919,7 +903,7 @@ export const CamPage: React.FC = () => {
                         const { w, h } = imageDimRef.current;
                         const imgData = mCtx.getImageData(0, 0, w, h);
                         const d = imgData.data;
-                        for (const idx of region.pixelIndices) {
+                        for (const idx of region.pixelIndices!) {
                             d[idx * 4] = backup[idx * 4];
                             d[idx * 4 + 1] = backup[idx * 4 + 1];
                             d[idx * 4 + 2] = backup[idx * 4 + 2];

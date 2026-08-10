@@ -177,13 +177,14 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
     // Global keyboard shortcuts
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.ctrlKey && e.key.toLowerCase() === 'i') {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
                 e.preventDefault();
+                e.stopPropagation();
                 setIsSettingsOpen(prev => !prev);
             }
         };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
+        document.addEventListener('keydown', handleKeyDown, { capture: true });
+        return () => document.removeEventListener('keydown', handleKeyDown, { capture: true });
     }, []);
 
     // Engine Refs
