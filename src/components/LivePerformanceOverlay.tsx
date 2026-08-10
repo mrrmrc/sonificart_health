@@ -147,6 +147,9 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
     
     // STEM LOCAL STATE
     const [localStems, setLocalStems] = useState<StemMapping[]>(result.stemMappings || []);
+    // Use a ref so the render loop closure always reads the latest stems
+    const stemsRef = useRef<StemMapping[]>(result.stemMappings || []);
+    useEffect(() => { stemsRef.current = localStems; }, [localStems]);
     
     // Force re-render for UI
     const [calibState, setCalibState] = useState(calibRef.current);
@@ -214,20 +217,28 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
             let stemBuffers: AudioBuffer[] = [];
             let useStems = false;
             
-            if (localStems.length > 0) {
+            if (stemsRef.current.length > 0) {
                 // User uploaded local stems via UI
                 try {
+                    console.log('[STEMS] Tentativo caricamento stem:', stemsRef.current.map(s => s.url));
                     const fetchStem = async (stem: StemMapping) => {
+                        // Handle blob: URLs (local file not yet uploaded) vs server URLs
+                        if (stem.url.startsWith('blob:')) {
+                            console.warn('[STEMS] Stem con URL blob - file non caricato sul server:', stem.name);
+                            throw new Error(`Blob URL not supported in playback: ${stem.name}`);
+                        }
                         const fixedUrl = stem.url.startsWith('http') ? stem.url : `${window.location.origin}${stem.url.startsWith('/') ? '' : '/'}${stem.url}`;
+                        console.log('[STEMS] Fetching:', fixedUrl);
                         const res = await fetch(fixedUrl);
-                        if (!res.ok) throw new Error(`Not found: ${fixedUrl}`);
+                        if (!res.ok) throw new Error(`Not found: ${fixedUrl} (status: ${res.status})`);
                         return await ctx.decodeAudioData(await res.arrayBuffer());
                     };
-                    stemBuffers = await Promise.all(localStems.map(fetchStem));
+                    stemBuffers = await Promise.all(stemsRef.current.map(fetchStem));
                     useStems = true;
-                    console.log(`Caricati ${stemBuffers.length} stem dinamici.`);
+                    console.log(`[STEMS] Caricati ${stemBuffers.length} stem dinamici.`);
                 } catch (e) {
-                    console.log("Errore caricamento stem locali", e);
+                    console.error('[STEMS] Errore caricamento stem:', e);
+                    // Non bloccare - fallback alla traccia unita
                 }
             } else {
                 // Fallback hardcoded
@@ -516,35 +527,45 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     };
 
                     // 4. STEM ENGINE MAPPING
+                    const stems = stemsRef.current; // Always use ref, not closure
                     if (engineRef.current.stemGains && engineRef.current.stemGains.length > 0) {
-                        if (localStems.length > 0) {
-                            localStems.forEach((stem, index) => {
+                        if (stems.length > 0) {
+                            // Map configured stems
+                            const defaultBodyParts: BodyPart[] = ['leftHandY', 'rightHandY', 'z', 'leftHandX', 'rightHandX'];
+                            stems.forEach((stem, index) => {
                                 const gainNode = engineRef.current!.stemGains![index];
                                 const pannerNode = engineRef.current!.stemPanners![index];
                                 const filterNode = engineRef.current!.stemFilters![index];
                                 if (!gainNode) return;
                                 
-                                const rawVal = getBodyVal(stem.assignedBodyPart);
-                                applyParam(stem.parameter, rawVal, gainNode, pannerNode, filterNode);
+                                // Use configured mapping, or auto-assign by index as fallback
+                                const bodyPart = stem.assignedBodyPart || defaultBodyParts[index % defaultBodyParts.length];
+                                const parameter = stem.parameter || 'volume';
+                                const rawVal = getBodyVal(bodyPart);
+                                applyParam(parameter, rawVal, gainNode, pannerNode, filterNode);
                             });
-                        } else if (engineRef.current.stemGains.length === 4) {
-                            // Default hardcoded fallback
-                            const leftHandY = m.leftHandY || 0.5;
-                            const leftVol = Math.max(0, Math.min(1, 1.0 - leftHandY));
-                            engineRef.current.stemGains[0].gain.setTargetAtTime(leftVol, ctx.currentTime, 0.1);
-                            engineRef.current.stemGains[1].gain.setTargetAtTime(leftVol, ctx.currentTime, 0.1);
-                            
-                            const rightHandY = m.rightHandY || 0.5;
-                            const rightVol = Math.max(0, Math.min(1, 1.0 - rightHandY));
-                            engineRef.current.stemGains[2].gain.setTargetAtTime(rightVol, ctx.currentTime, 0.1);
-                            engineRef.current.stemGains[3].gain.setTargetAtTime(rightVol, ctx.currentTime, 0.1);
+                        } else {
+                            // Auto-mapping: no user config, use defaults
+                            const defaultBodyParts: BodyPart[] = ['leftHandY', 'rightHandY', 'z', 'leftHandX', 'rightHandX'];
+                            engineRef.current.stemGains.forEach((gainNode, index) => {
+                                const bodyPart = defaultBodyParts[index % defaultBodyParts.length];
+                                const rawVal = getBodyVal(bodyPart);
+                                const vol = Math.max(0, Math.min(1, 1.0 - rawVal));
+                                gainNode.gain.setTargetAtTime(vol, ctx.currentTime, 0.1);
+                            });
                         }
-                    } else if (result.configUsed?.masterMappings) {
+                    } else if (result.configUsed?.masterMappings && result.configUsed.masterMappings.length > 0) {
                         // 5. MASTER TRACK MAPPING (No Stems)
-                        result.configUsed.masterMappings.forEach(mm => {
+                        (result.configUsed.masterMappings as any[]).forEach(mm => {
                             const rawVal = getBodyVal(mm.bodyPart);
                             applyParam(mm.parameter, rawVal, engineRef.current!.autoGain!, engineRef.current!.panner!, engineRef.current!.filter!);
                         });
+                    } else {
+                        // 6. FALLBACK: No config at all - use head yaw for pan, hand height for volume
+                        const defaultVol = Math.max(0, Math.min(1, 1.0 - ((m.leftHandY + m.rightHandY) / 2)));
+                        if (engineRef.current.autoGain) {
+                            engineRef.current.autoGain.gain.setTargetAtTime(defaultVol, ctx.currentTime, 0.1);
+                        }
                     }
 
                 } else {
