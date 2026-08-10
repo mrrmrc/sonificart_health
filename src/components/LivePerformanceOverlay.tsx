@@ -3,14 +3,18 @@ import { SonificationResult, ColorRegion, StemMapping, BodyPart, AudioParameter 
 import { api } from '../services/api';
 import WebcamService, { BodyMetrics } from '../services/WebcamService';
 import { LOGO_SVG_STRING } from './Logo';
+import { analyzeStem, StemAnalysis } from '../services/AudioAnalysisService';
 
 export interface AudioEngine {
     audioCtx: AudioContext | null;
     source: AudioBufferSourceNode | null;
     stemSources?: AudioBufferSourceNode[];
     stemGains?: GainNode[];
-    stemPanners?: StereoPannerNode[];
+    stem3DPanners?: PannerNode[];     // 8D - 3D panners (one per stem)
+    stemPanners?: StereoPannerNode[]; // Legacy (unused with 8D)
     stemFilters?: BiquadFilterNode[];
+    orbitAngles?: number[];           // 8D - current orbit angle per stem (degrees)
+    orbitParams?: { radius: number; height: number; speed: number }; // 8D orbit shared params
     panner: StereoPannerNode | null;
     filter: BiquadFilterNode | null;
     autoGain: GainNode | null;
@@ -150,6 +154,12 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
     // Use a ref so the render loop closure always reads the latest stems
     const stemsRef = useRef<StemMapping[]>(result.stemMappings || []);
     useEffect(() => { stemsRef.current = localStems; }, [localStems]);
+    
+    // AI Stem Analysis
+    const [stemAnalyses, setStemAnalyses] = useState<StemAnalysis[]>([]);
+    
+    // Live Skeleton Panel
+    const [showSkeletonPanel, setShowSkeletonPanel] = useState(false);
     
     // Force re-render for UI
     const [calibState, setCalibState] = useState(calibRef.current);
@@ -293,9 +303,21 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
             let sourceNode: AudioBufferSourceNode | null = null;
             let stemSources: AudioBufferSourceNode[] = [];
             let stemGains: GainNode[] = [];
-            let stemPanners: StereoPannerNode[] = [];
+            let stemPanners: StereoPannerNode[] = [];   // Legacy / unused with 8D
+            let stem3DPanners: PannerNode[] = [];        // 8D orbit panners
             let stemFilters: BiquadFilterNode[] = [];
             let panner: StereoPannerNode | null = null;
+
+            // 8D: Set listener at origin, listener faces -Z
+            ctx.listener.positionX.value = 0;
+            ctx.listener.positionY.value = 0;
+            ctx.listener.positionZ.value = 0;
+            ctx.listener.forwardX.value = 0;
+            ctx.listener.forwardY.value = 0;
+            ctx.listener.forwardZ.value = -1;
+            ctx.listener.upX.value = 0;
+            ctx.listener.upY.value = 1;
+            ctx.listener.upZ.value = 0;
 
             if (useStems) {
                 for (let i = 0; i < stemBuffers.length; i++) {
@@ -303,26 +325,37 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     src.buffer = stemBuffers[i];
                     
                     const gain = ctx.createGain();
-                    gain.gain.value = 0.5;
+                    gain.gain.value = 0.75;
                     
-                    const stemPanner = ctx.createStereoPanner();
-                    stemPanner.pan.value = 0;
+                    // 8D: Use 3D PannerNode with HRTF
+                    const panner3D = ctx.createPanner();
+                    panner3D.panningModel = 'HRTF';
+                    panner3D.distanceModel = 'inverse';
+                    panner3D.refDistance = 1;
+                    panner3D.maxDistance = 10;
+                    panner3D.rolloffFactor = 1;
+                    // Phase offset: each stem starts at a different position in the orbit
+                    const phaseRad = (i / stemBuffers.length) * Math.PI * 2;
+                    const initRadius = 3.0;
+                    panner3D.positionX.value = Math.sin(phaseRad) * initRadius;
+                    panner3D.positionY.value = 0;
+                    panner3D.positionZ.value = Math.cos(phaseRad) * initRadius;
                     
                     const stemFilter = ctx.createBiquadFilter();
                     stemFilter.type = 'lowpass';
                     stemFilter.frequency.value = 20000;
                     
                     src.connect(gain);
-                    gain.connect(stemPanner);
-                    stemPanner.connect(stemFilter);
+                    gain.connect(panner3D);
+                    panner3D.connect(stemFilter);
                     stemFilter.connect(filter); // connect to master chain
                     
                     stemSources.push(src);
                     stemGains.push(gain);
-                    stemPanners.push(stemPanner);
+                    stem3DPanners.push(panner3D);
                     stemFilters.push(stemFilter);
                 }
-                // We still need a dummy panner for the synth nodes
+                // Dummy stereo panner for synth nodes
                 panner = ctx.createStereoPanner();
                 panner.connect(filter);
             } else {
@@ -362,6 +395,23 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
             if (useStems) {
                 stemSources.forEach(s => s.start(0));
                 setDuration(stemBuffers[0].duration);
+                
+                // AI Analysis in background (non blocking)
+                Promise.all(stemBuffers.map((buf, i) => analyzeStem(buf, i, stemBuffers.length)))
+                    .then(analyses => {
+                        setStemAnalyses(analyses);
+                        // Auto-apply AI mapping if no user mappings set
+                        if (stemsRef.current.length > 0 && stemsRef.current.every(s => !s.assignedBodyPart || s.assignedBodyPart === 'leftHandY')) {
+                            const updated = stemsRef.current.map((stem, i) => ({
+                                ...stem,
+                                assignedBodyPart: analyses[i]?.suggestedBodyPart || stem.assignedBodyPart,
+                                parameter: analyses[i]?.suggestedParameter || stem.parameter,
+                            }));
+                            setLocalStems(updated);
+                        }
+                        console.log('[AI ANALYSIS]', analyses.map(a => a.label));
+                    })
+                    .catch(e => console.warn('Audio analysis skipped:', e));
             } else if (sourceNode && fallbackBuffer) {
                 sourceNode.start(0);
                 setDuration(fallbackBuffer.duration);
@@ -374,6 +424,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 stemSources,
                 stemGains,
                 stemPanners,
+                stem3DPanners,
                 stemFilters,
                 panner,
                 filter,
@@ -383,7 +434,9 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 animationId: 0,
                 imageAspect,
                 startTime: ctx.currentTime,
-                synthNodes: []
+                synthNodes: [],
+                orbitAngles: stem3DPanners.map((_, i) => (i / Math.max(1, stem3DPanners.length)) * 360),
+                orbitParams: { radius: 3.0, height: 0, speed: 1.0 }
             };
 
             // Grid bounds for Overdubbing
@@ -526,45 +579,81 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         }
                     };
 
-                    // 4. STEM ENGINE MAPPING
+                    // 4. STEM ENGINE MAPPING + 8D ORBIT
                     const stems = stemsRef.current; // Always use ref, not closure
-                    if (engineRef.current.stemGains && engineRef.current.stemGains.length > 0) {
-                        if (stems.length > 0) {
-                            // Map configured stems
-                            const defaultBodyParts: BodyPart[] = ['leftHandY', 'rightHandY', 'z', 'leftHandX', 'rightHandX'];
-                            stems.forEach((stem, index) => {
-                                const gainNode = engineRef.current!.stemGains![index];
-                                const pannerNode = engineRef.current!.stemPanners![index];
-                                const filterNode = engineRef.current!.stemFilters![index];
-                                if (!gainNode) return;
-                                
-                                // Use configured mapping, or auto-assign by index as fallback
+                    const eng = engineRef.current;
+                    
+                    if (eng.stemGains && eng.stemGains.length > 0) {
+                        // ---- 8D ORBIT SYSTEM ----
+                        // Body parameters control the orbit geometry
+                        const orbitParams = eng.orbitParams!;
+                        
+                        // Arm span → orbit radius (more open = more spatial)
+                        const targetRadius = 1.5 + (m.armSpan || 0.5) * 4.0; // 1.5 .. 5.5
+                        orbitParams.radius += (targetRadius - orbitParams.radius) * 0.05; // smooth
+                        
+                        // Hands height → orbit elevation
+                        const handsAvgY = (m.leftHandY + m.rightHandY) / 2;
+                        const targetHeight = (0.5 - handsAvgY) * 4.0; // -2 .. +2  (hands up = positive Y)
+                        orbitParams.height += (targetHeight - orbitParams.height) * 0.05;
+                        
+                        // Shoulder tilt → orbit rotation speed
+                        const targetSpeed = 0.3 + Math.abs(m.shoulderTilt || 0) * 3.0; // 0.3..3.3 rev/s
+                        orbitParams.speed += (targetSpeed - orbitParams.speed) * 0.02;
+                        
+                        // Rotate each stem along its orbit
+                        const orbitAngles = eng.orbitAngles!;
+                        const dt = 1 / 60; // ~60fps
+                        
+                        eng.stemGains.forEach((gainNode, index) => {
+                            // Advance orbit angle
+                            orbitAngles[index] = (orbitAngles[index] + orbitParams.speed * dt * (360 / (2 * Math.PI))) % 360;
+                            const angleRad = (orbitAngles[index] * Math.PI) / 180;
+                            
+                            // Update 3D position of this stem's panner
+                            const panner3D = eng.stem3DPanners?.[index];
+                            if (panner3D && ctx.currentTime) {
+                                const t = ctx.currentTime;
+                                panner3D.positionX.setTargetAtTime(Math.sin(angleRad) * orbitParams.radius, t, 0.05);
+                                panner3D.positionY.setTargetAtTime(orbitParams.height, t, 0.1);
+                                panner3D.positionZ.setTargetAtTime(Math.cos(angleRad) * orbitParams.radius, t, 0.05);
+                            }
+                            
+                            // Apply body parameter to gain/filter
+                            const filterNode = eng.stemFilters?.[index];
+                            const defaultBodyParts: BodyPart[] = ['leftHandY', 'rightHandY', 'z', 'armSpan', 'shoulderTilt'];
+                            
+                            if (stems.length > 0 && stems[index]) {
+                                const stem = stems[index];
                                 const bodyPart = stem.assignedBodyPart || defaultBodyParts[index % defaultBodyParts.length];
                                 const parameter = stem.parameter || 'volume';
                                 const rawVal = getBodyVal(bodyPart);
-                                applyParam(parameter, rawVal, gainNode, pannerNode, filterNode);
-                            });
-                        } else {
-                            // Auto-mapping: no user config, use defaults
-                            const defaultBodyParts: BodyPart[] = ['leftHandY', 'rightHandY', 'z', 'leftHandX', 'rightHandX'];
-                            engineRef.current.stemGains.forEach((gainNode, index) => {
+                                applyParam(parameter, rawVal, gainNode, undefined, filterNode);
+                            } else {
+                                // Auto: left and right hands alternate control volume
                                 const bodyPart = defaultBodyParts[index % defaultBodyParts.length];
                                 const rawVal = getBodyVal(bodyPart);
-                                const vol = Math.max(0, Math.min(1, 1.0 - rawVal));
+                                const vol = Math.max(0.05, Math.min(1, 1.0 - rawVal));
                                 gainNode.gain.setTargetAtTime(vol, ctx.currentTime, 0.1);
-                            });
-                        }
+                            }
+                        });
+                        
+                        // Head rotation → listener orientation (adds to 8D effect)
+                        const headYaw = m.yaw || 0;
+                        ctx.listener.forwardX.value = Math.sin(headYaw);
+                        ctx.listener.forwardZ.value = -Math.cos(headYaw);
+                        
                     } else if (result.configUsed?.masterMappings && result.configUsed.masterMappings.length > 0) {
                         // 5. MASTER TRACK MAPPING (No Stems)
                         (result.configUsed.masterMappings as any[]).forEach(mm => {
                             const rawVal = getBodyVal(mm.bodyPart);
-                            applyParam(mm.parameter, rawVal, engineRef.current!.autoGain!, engineRef.current!.panner!, engineRef.current!.filter!);
+                            applyParam(mm.parameter, rawVal, eng.autoGain!, eng.panner!, eng.filter!);
                         });
                     } else {
-                        // 6. FALLBACK: No config at all - use head yaw for pan, hand height for volume
+                        // 6. FALLBACK: hand height controls volume
                         const defaultVol = Math.max(0, Math.min(1, 1.0 - ((m.leftHandY + m.rightHandY) / 2)));
-                        if (engineRef.current.autoGain) {
-                            engineRef.current.autoGain.gain.setTargetAtTime(defaultVol, ctx.currentTime, 0.1);
+                        if (eng.autoGain) {
+                            eng.autoGain.gain.setTargetAtTime(defaultVol, ctx.currentTime, 0.1);
                         }
                     }
 
@@ -906,13 +995,196 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         *
                     </button>
                 ) : (
+                    <>
                     <button
                         onClick={() => setIsSettingsOpen(!isSettingsOpen)}
                         className="absolute top-24 left-6 z-[9999] text-gray-400 hover:text-white bg-black/50 p-3 rounded-full backdrop-blur transition-all border border-transparent hover:border-white/20"
+                        title="Impostazioni"
                     >
                         <i className="fas fa-cog text-xl"></i>
                     </button>
+                    {/* SKELETON PANEL TOGGLE */}
+                    <button
+                        onClick={() => setShowSkeletonPanel(!showSkeletonPanel)}
+                        className={`absolute top-40 left-6 z-[9999] p-3 rounded-full backdrop-blur transition-all border ${showSkeletonPanel ? 'text-cyan-400 bg-cyan-900/40 border-cyan-500/50' : 'text-gray-400 hover:text-white bg-black/50 border-transparent hover:border-white/20'}`}
+                        title="Parametri Skeleton Live"
+                    >
+                        <i className="fas fa-person-running text-xl"></i>
+                    </button>
+                    </>
                 )}
+
+                {/* LIVE SKELETON PANEL */}
+                {showSkeletonPanel && metrics && (
+                    <div className="absolute top-0 right-0 h-full w-80 bg-black/95 backdrop-blur-xl border-l border-white/10 z-[10000] flex flex-col shadow-2xl overflow-y-auto">
+                        {/* Header */}
+                        <div className="p-4 border-b border-white/10 flex justify-between items-center shrink-0">
+                            <div>
+                                <h2 className="text-white font-bold text-sm tracking-widest uppercase flex items-center gap-2">
+                                    <i className="fas fa-person-running text-cyan-400"></i> Skeleton Live
+                                </h2>
+                                <p className="text-gray-500 text-[9px] mt-0.5">Parametri corpo in tempo reale</p>
+                            </div>
+                            <button onClick={() => setShowSkeletonPanel(false)} className="text-gray-500 hover:text-white"><i className="fas fa-times"></i></button>
+                        </div>
+
+                        {/* 8D Orbit Status */}
+                        {localStems.length > 0 && (
+                            <div className="px-4 py-3 border-b border-white/5 bg-gradient-to-r from-purple-900/30 to-blue-900/30">
+                                <div className="text-[9px] font-bold text-purple-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                    <i className="fas fa-circle-notch fa-spin text-purple-300"></i> 8D Orbit Engine
+                                </div>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {[
+                                        { label: 'Raggio', icon: 'fa-expand-arrows-alt', val: Math.min(1, ((metrics.armSpan || 0.5) * 1.5)), color: 'bg-purple-500' },
+                                        { label: 'Altezza', icon: 'fa-arrows-alt-v', val: Math.min(1, Math.abs(0.5 - ((metrics.leftHandY + metrics.rightHandY)/2)) * 2), color: 'bg-blue-500' },
+                                        { label: 'Velocità', icon: 'fa-tachometer-alt', val: Math.min(1, Math.abs(metrics.shoulderTilt || 0) * 2), color: 'bg-indigo-500' },
+                                    ].map(item => (
+                                        <div key={item.label} className="text-center">
+                                            <i className={`fas ${item.icon} text-[8px] text-gray-400 mb-1 block`}></i>
+                                            <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                                                <div className={`h-full ${item.color} rounded-full transition-all duration-100`} style={{ width: `${item.val * 100}%` }}></div>
+                                            </div>
+                                            <span className="text-[8px] text-gray-500 mt-0.5 block">{item.label}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Body Parameters with Live Bars */}
+                        <div className="flex-1 overflow-y-auto p-3 space-y-1">
+                            <div className="text-[9px] font-bold text-gray-500 uppercase tracking-wider mb-2">Parametri Corpo</div>
+                            {([
+                                { key: 'leftHandY', label: 'Mano SX (Altezza)', icon: 'fa-hand-point-left', val: metrics.leftHandY, color: 'bg-cyan-500' },
+                                { key: 'rightHandY', label: 'Mano DX (Altezza)', icon: 'fa-hand-point-right', val: metrics.rightHandY, color: 'bg-pink-500' },
+                                { key: 'leftHandX', label: 'Mano SX (X)', icon: 'fa-arrows-alt-h', val: metrics.leftHandX, color: 'bg-cyan-700' },
+                                { key: 'rightHandX', label: 'Mano DX (X)', icon: 'fa-arrows-alt-h', val: metrics.rightHandX, color: 'bg-pink-700' },
+                                { key: 'armSpan', label: 'Apertura Braccia', icon: 'fa-expand-arrows-alt', val: metrics.armSpan, color: 'bg-yellow-500' },
+                                { key: 'shoulderTilt', label: 'Inclinazione Spalle', icon: 'fa-balance-scale', val: (metrics.shoulderTilt + 1) / 2, color: 'bg-orange-500' },
+                                { key: 'shoulderY', label: 'Spalle (Altezza)', icon: 'fa-arrows-alt-v', val: (metrics.leftShoulderY + metrics.rightShoulderY) / 2, color: 'bg-green-500' },
+                                { key: 'elbowY', label: 'Gomiti (Altezza)', icon: 'fa-arrows-alt-v', val: (metrics.leftElbowY + metrics.rightElbowY) / 2, color: 'bg-teal-500' },
+                                { key: 'headYaw', label: 'Testa (Rotazione Y)', icon: 'fa-head-side', val: (metrics.yaw + 1) / 2, color: 'bg-violet-500' },
+                                { key: 'headPitch', label: 'Testa (Su/Giù)', icon: 'fa-head-side', val: (metrics.pitch + 1) / 2, color: 'bg-fuchsia-500' },
+                                { key: 'z', label: 'Distanza (Z)', icon: 'fa-compress-arrows-alt', val: metrics.z, color: 'bg-red-500' },
+                                { key: 'torsoY', label: 'Busto (Altezza)', icon: 'fa-person', val: metrics.torsoY, color: 'bg-lime-500' },
+                                { key: 'kneeY', label: 'Ginocchia', icon: 'fa-arrows-alt-v', val: (metrics.leftKneeY + metrics.rightKneeY) / 2, color: 'bg-amber-500' },
+                            ] as { key: string, label: string, icon: string, val: number, color: string }[]).map(param => {
+                                // Find which stems are mapped to this param
+                                const mappedStems = localStems.filter(s => s.assignedBodyPart === param.key);
+                                const displayVal = Math.max(0, Math.min(1, param.val || 0));
+                                
+                                return (
+                                    <div key={param.key} className={`py-2 px-2 rounded-lg ${mappedStems.length > 0 ? 'bg-white/5 border border-white/10' : 'opacity-60'}`}>
+                                        <div className="flex items-center justify-between mb-1">
+                                            <span className="text-[9px] font-bold text-gray-300 flex items-center gap-1">
+                                                <i className={`fas ${param.icon} text-[8px] text-gray-500`}></i>
+                                                {param.label}
+                                            </span>
+                                            <span className="text-[9px] font-mono text-gray-400">{displayVal.toFixed(2)}</span>
+                                        </div>
+                                        {/* Live Bar */}
+                                        <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden mb-1">
+                                            <div
+                                                className={`h-full ${param.color} rounded-full transition-all duration-75`}
+                                                style={{ width: `${displayVal * 100}%` }}
+                                            ></div>
+                                        </div>
+                                        {/* Mapped Stems */}
+                                        {mappedStems.length > 0 && (
+                                            <div className="flex flex-wrap gap-1 mt-1">
+                                                {mappedStems.map(s => (
+                                                    <span key={s.id} className="text-[8px] bg-purple-900/60 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded truncate max-w-[120px]" title={s.name}>
+                                                        <i className="fas fa-music mr-1"></i>{s.name}
+                                                        <span className="ml-1 opacity-60">→ {s.parameter}</span>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* AI Analyses Footer */}
+                        {stemAnalyses.length > 0 && (
+                            <div className="p-3 border-t border-white/5 shrink-0">
+                                <div className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                    <i className="fas fa-robot"></i> AI Analisi Stem
+                                </div>
+                                <div className="space-y-1">
+                                    {localStems.map((stem, i) => {
+                                        const analysis = stemAnalyses[i];
+                                        if (!analysis) return null;
+                                        return (
+                                            <div key={stem.id} className="flex items-center gap-2">
+                                                <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></div>
+                                                <span className="text-[9px] text-gray-300 truncate flex-1" title={stem.name}>{stem.name}</span>
+                                                <span className="text-[8px] text-emerald-400 shrink-0">{analysis.label}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Quick Mapping Editor */}
+                        {localStems.length > 0 && (
+                            <div className="p-3 border-t border-white/5 shrink-0">
+                                <div className="text-[9px] font-bold text-yellow-400 uppercase tracking-wider mb-2">
+                                    <i className="fas fa-sliders-h mr-1"></i> Modifica Mappatura
+                                </div>
+                                <div className="space-y-2 max-h-40 overflow-y-auto">
+                                    {localStems.map((stem, i) => (
+                                        <div key={stem.id} className="bg-white/5 p-2 rounded">
+                                            <div className="text-[9px] text-gray-300 truncate mb-1" title={stem.name}>{stem.name}</div>
+                                            <div className="flex gap-1">
+                                                <select
+                                                    value={stem.assignedBodyPart}
+                                                    onChange={(e) => {
+                                                        const updated = [...localStems];
+                                                        updated[i] = { ...updated[i], assignedBodyPart: e.target.value as BodyPart };
+                                                        setLocalStems(updated);
+                                                    }}
+                                                    className="flex-1 bg-black/60 border border-white/10 text-[8px] text-gray-300 p-1 rounded outline-none"
+                                                >
+                                                    <option value="leftHandY">Mano SX (Y)</option>
+                                                    <option value="rightHandY">Mano DX (Y)</option>
+                                                    <option value="leftHandX">Mano SX (X)</option>
+                                                    <option value="rightHandX">Mano DX (X)</option>
+                                                    <option value="armSpan">Apertura Braccia</option>
+                                                    <option value="shoulderTilt">Inclinazione Spalle</option>
+                                                    <option value="shoulderY">Spalle (Altezza)</option>
+                                                    <option value="elbowY">Gomiti</option>
+                                                    <option value="headYaw">Testa (Rotazione)</option>
+                                                    <option value="headPitch">Testa (Su/Giù)</option>
+                                                    <option value="z">Distanza (Z)</option>
+                                                    <option value="torsoY">Busto</option>
+                                                    <option value="kneeY">Ginocchia</option>
+                                                    <option value="handsY">Mani (Media Y)</option>
+                                                </select>
+                                                <select
+                                                    value={stem.parameter}
+                                                    onChange={(e) => {
+                                                        const updated = [...localStems];
+                                                        updated[i] = { ...updated[i], parameter: e.target.value as AudioParameter };
+                                                        setLocalStems(updated);
+                                                    }}
+                                                    className="w-16 bg-black/60 border border-white/10 text-[8px] text-gray-300 p-1 rounded outline-none"
+                                                >
+                                                    <option value="volume">Vol</option>
+                                                    <option value="lowpass">Filter</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+
 
                 {/* SIDEBAR SETTINGS */}
                 <div className={`absolute top-0 left-0 h-full w-80 bg-black/95 backdrop-blur-xl border-r border-white/10 z-[10000] transition-transform duration-300 transform ${isSettingsOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col shadow-2xl`}>
