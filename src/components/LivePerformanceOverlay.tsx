@@ -673,6 +673,9 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                             case 'leftHandX': val = m.leftHandX; break;
                             case 'rightHandX': val = m.rightHandX; break;
                             case 'z': val = m.z; break;
+                            case 'leftHandZ': val = m.leftHandZ; break;
+                            case 'rightHandZ': val = m.rightHandZ; break;
+                            case 'headZ': val = m.headZ; break;
                             case 'headYaw': val = (m.yaw + 1) / 2; break; // Normalize -1..1 to 0..1
                             case 'headPitch': val = (m.pitch + 1) / 2; break;
                             case 'headRoll': val = m.headRoll; break;
@@ -1248,6 +1251,36 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                             <button onClick={() => setShowSkeletonPanel(false)} className="text-gray-500 hover:text-white"><i className="fas fa-times"></i></button>
                         </div>
 
+                        {/* WHO SKELETON AGENT GUIDELINES */}
+                        {(() => {
+                            const whoCategory = result.healthClassification?.primaryCategory;
+                            if (!whoCategory) return null;
+                            const guidelines: Record<string, { parts: string[], rule: string, color: string }> = {
+                                calming: { parts: ['Apertura Braccia → Raggio 8D', 'Energia Corpo → Filtro (Calma)', 'Sguardo Y → Volume', 'Profondità (z) → Riverbero'], rule: 'Movimenti lenti. Più ti allarghi, più il suono si espande. Energia alta → filtro si chiude per calamarti.', color: 'from-blue-900/40 to-cyan-900/40 border-blue-500/30 text-blue-300' },
+                                motivation: { parts: ['Energia Corpo → Velocità Orbita 8D', 'Apertura Braccia → Volume', 'Mano SX Alt. → Stem 1', 'Mano DX Alt. → Stem 2'], rule: 'Movimenti veloci aumentano il ritmo. Più apri le braccia, più forte suona. Energia alta = suono più intenso.', color: 'from-orange-900/40 to-red-900/40 border-orange-500/30 text-orange-300' },
+                                cognitive_motor: { parts: ['Testa (Rotazione) → Pan Stereo', 'Mano SX (x) → Filtro', 'Profondità Mano → Volume', 'Sguardo X → Eco'], rule: 'Ogni gesto preciso controlla un parametro. Movimento della testa orienta il suono nello spazio.', color: 'from-green-900/40 to-teal-900/40 border-green-500/30 text-green-300' },
+                                social_emotional: { parts: ['Apertura (Openness) → Ampiezza', 'Inclinazione Spalle → Vibrato', 'Sguardo Y → Pitch', 'Braccia → Volume'], rule: 'Apertura del corpo = apertura del suono. Più sei aperto e vicino, più il suono ti abbraccia.', color: 'from-pink-900/40 to-rose-900/40 border-pink-500/30 text-pink-300' },
+                                physiological: { parts: ['Profondità (z) → Ritmo', 'Mano DX Alt. → Volume', 'Inclinazione → Tono', 'Sguardo → Riverbero'], rule: 'La distanza dalla telecamera controlla il ritmo. Avvicinati per rallentare, allontanati per accelerare.', color: 'from-violet-900/40 to-purple-900/40 border-violet-500/30 text-violet-300' },
+                            };
+                            const g = guidelines[whoCategory.category] || guidelines.calming;
+                            return (
+                                <div className={`mx-3 my-2 rounded-xl border p-3 bg-gradient-to-br ${g.color}`}>
+                                    <div className={`text-[9px] font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5 ${g.color.split(' ').find(c => c.startsWith('text-'))}`}>
+                                        <i className="fas fa-robot"></i> Skeleton Agent — {whoCategory.label}
+                                    </div>
+                                    <p className="text-[8px] text-gray-300 leading-relaxed mb-2 italic">{g.rule}</p>
+                                    <div className="space-y-0.5">
+                                        {g.parts.map((p, i) => (
+                                            <div key={i} className="flex items-center gap-1.5 text-[8px] text-gray-400">
+                                                <i className="fas fa-arrow-right text-[6px] opacity-50"></i>
+                                                {p}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
                         {/* 8D Orbit Status */}
                         {localStems.length > 0 && (
                             <div className="px-4 py-3 border-b border-white/5 bg-gradient-to-r from-purple-900/30 to-blue-900/30">
@@ -1276,10 +1309,12 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         <div className="flex-1 overflow-y-auto p-3 space-y-1">
                             <div className="text-[9px] font-bold text-gray-500 uppercase tracking-wider mb-2">Parametri Corpo</div>
                             {([
-                                { key: 'leftHandY', label: 'Mano SX (Altezza)', icon: 'fa-hand-point-left', val: metrics.leftHandY, color: 'bg-cyan-500' },
-                                { key: 'rightHandY', label: 'Mano DX (Altezza)', icon: 'fa-hand-point-right', val: metrics.rightHandY, color: 'bg-pink-500' },
+                                { key: 'leftHandY', label: 'Mano SX (Alt.)', icon: 'fa-hand-point-left', val: metrics.leftHandY, color: 'bg-cyan-500' },
+                                { key: 'rightHandY', label: 'Mano DX (Alt.)', icon: 'fa-hand-point-right', val: metrics.rightHandY, color: 'bg-pink-500' },
                                 { key: 'leftHandX', label: 'Mano SX (X)', icon: 'fa-arrows-alt-h', val: metrics.leftHandX, color: 'bg-cyan-700' },
                                 { key: 'rightHandX', label: 'Mano DX (X)', icon: 'fa-arrows-alt-h', val: metrics.rightHandX, color: 'bg-pink-700' },
+                                { key: 'leftHandZ', label: 'Mano SX (Profond.)', icon: 'fa-compress-arrows-alt', val: metrics.leftHandZ, color: 'bg-cyan-300' },
+                                { key: 'rightHandZ', label: 'Mano DX (Profond.)', icon: 'fa-compress-arrows-alt', val: metrics.rightHandZ, color: 'bg-pink-300' },
                                 { key: 'armSpan', label: 'Apertura Braccia', icon: 'fa-expand-arrows-alt', val: metrics.armSpan, color: 'bg-yellow-500' },
                                 { key: 'shoulderTilt', label: 'Inclinazione Spalle', icon: 'fa-balance-scale', val: (metrics.shoulderTilt + 1) / 2, color: 'bg-orange-500' },
                                 { key: 'shoulderY', label: 'Spalle (Altezza)', icon: 'fa-arrows-alt-v', val: (metrics.leftShoulderY + metrics.rightShoulderY) / 2, color: 'bg-green-500' },
@@ -1372,10 +1407,12 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                                     }}
                                                     className="flex-1 bg-black/60 border border-white/10 text-[8px] text-gray-300 p-1 rounded outline-none"
                                                 >
-                                                    <option value="leftHandY">Mano SX (Y)</option>
-                                                    <option value="rightHandY">Mano DX (Y)</option>
+                                                    <option value="leftHandY">Mano SX (Altezza)</option>
+                                                    <option value="rightHandY">Mano DX (Altezza)</option>
                                                     <option value="leftHandX">Mano SX (X)</option>
                                                     <option value="rightHandX">Mano DX (X)</option>
+                                                    <option value="leftHandZ">Mano SX (Profond. z)</option>
+                                                    <option value="rightHandZ">Mano DX (Profond. z)</option>
                                                     <option value="armSpan">Apertura Braccia</option>
                                                     <option value="shoulderTilt">Inclinazione Spalle</option>
                                                     <option value="shoulderY">Spalle (Altezza)</option>

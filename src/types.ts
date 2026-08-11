@@ -292,7 +292,7 @@ export interface ColorRegion {
 }
 
 // --- DYNAMIC STEM ENGINE ---
-export type BodyPart = 'leftHandY' | 'rightHandY' | 'leftHandX' | 'rightHandX' | 'z' | 'headYaw' | 'headPitch' | 'headRoll' | 'gazeX' | 'gazeY' | 'shoulderY' | 'shoulderTilt' | 'elbowY' | 'kneeY' | 'footY' | 'torsoY' | 'torsoX' | 'armSpan' | 'handsY';
+export type BodyPart = 'leftHandY' | 'rightHandY' | 'leftHandX' | 'rightHandX' | 'leftHandZ' | 'rightHandZ' | 'z' | 'headYaw' | 'headPitch' | 'headRoll' | 'gazeX' | 'gazeY' | 'headZ' | 'shoulderY' | 'shoulderTilt' | 'elbowY' | 'kneeY' | 'footY' | 'torsoY' | 'torsoX' | 'armSpan' | 'handsY';
 export type AudioParameter = 'volume' | 'lowpass' | 'pan';
 
 export interface StemMapping {

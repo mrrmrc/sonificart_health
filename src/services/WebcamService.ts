@@ -33,6 +33,10 @@ export interface BodyMetrics {
     // Visualization
     landmarks?: { x: number, y: number, z?: number, visibility?: number }[];
     isActive: boolean;
+    // Per-limb depth
+    leftHandZ: number;
+    rightHandZ: number;
+    headZ: number;
 }
 
 class WebcamService {
@@ -63,6 +67,7 @@ class WebcamService {
         torsoY: 0.5, torsoX: 0.5, shoulderTilt: 0.5,
         armSpan: 0.5,
         energyLevel: 0, openness: 0.5,
+        leftHandZ: 0.5, rightHandZ: 0.5, headZ: 0.5,
         isActive: false
     };
 
@@ -153,11 +158,19 @@ class WebcamService {
         m.z = Math.max(0, Math.min(1, rawZ));
 
         // --- 2. UPPER BODY ---
-        m.leftHandX = leftWrist.x; m.leftHandY = leftWrist.y;
-        m.rightHandX = rightWrist.x; m.rightHandY = rightWrist.y;
+        // NOTE: Mirror fix — webcam mirrors left/right visually, so we swap them
+        // so that "leftHand" in the metrics corresponds to the user's actual LEFT hand
+        m.leftHandX = rightWrist.x; m.leftHandY = rightWrist.y;
+        m.rightHandX = leftWrist.x; m.rightHandY = leftWrist.y;
         
-        m.leftShoulderY = leftShoulder.y; m.rightShoulderY = rightShoulder.y;
-        m.leftElbowY = leftElbow.y; m.rightElbowY = rightElbow.y;
+        // Per-hand depth from mediapipe z (negative = closer to camera)
+        // Normalize: -0.3..+0.3 -> 0..1 (0 = close, 1 = far)
+        m.leftHandZ = Math.max(0, Math.min(1, (rightWrist.z + 0.3) / 0.6));
+        m.rightHandZ = Math.max(0, Math.min(1, (leftWrist.z + 0.3) / 0.6));
+        m.headZ = m.z; // Use shoulder-width based Z for head
+        
+        m.leftShoulderY = rightShoulder.y; m.rightShoulderY = leftShoulder.y;
+        m.leftElbowY = rightElbow.y; m.rightElbowY = leftElbow.y;
         
         const wristDist = Math.hypot(leftWrist.x - rightWrist.x, leftWrist.y - rightWrist.y);
         const armSpanRatio = wristDist / Math.max(0.01, shoulderDist);
@@ -168,8 +181,9 @@ class WebcamService {
         // --- 3. LOWER BODY & TORSO ---
         m.torsoY = (leftHip.y + rightHip.y) / 2;
         m.torsoX = (leftShoulder.x + rightShoulder.x) / 2;
-        m.leftKneeY = leftKnee.y; m.rightKneeY = rightKnee.y;
-        m.leftFootY = leftAnkle.y; m.rightFootY = rightAnkle.y;
+        // Mirror fix for knees/feet too
+        m.leftKneeY = rightKnee.y; m.rightKneeY = leftKnee.y;
+        m.leftFootY = rightAnkle.y; m.rightFootY = leftAnkle.y;
 
         // --- 4. DYNAMICS (Skeleton Agent) ---
         const now = performance.now();
