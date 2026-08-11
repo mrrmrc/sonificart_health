@@ -235,8 +235,8 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
     // AI Stem Analysis
     const [stemAnalyses, setStemAnalyses] = useState<StemAnalysis[]>([]);
     
-    // Live Skeleton Panel
-    const [showSkeletonPanel, setShowSkeletonPanel] = useState(false);
+    // Live Skeleton Panel — auto aperto di default
+    const [showSkeletonPanel, setShowSkeletonPanel] = useState(true);
     
     // Force re-render for UI
     const [calibState, setCalibState] = useState(calibRef.current);
@@ -1209,12 +1209,17 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     >
                         *
                     </button>
+                    {/* Skeleton button visible in kiosk mode */}
                     <button
                         onClick={() => setShowSkeletonPanel(!showSkeletonPanel)}
-                        className={`absolute bottom-4 left-10 z-[9999] opacity-20 hover:opacity-100 transition-all text-xl ${showSkeletonPanel ? 'text-cyan-400' : 'text-gray-800 hover:text-cyan-400'}`}
-                        title="Skeleton Panel Kiosk"
+                        className={`absolute bottom-16 right-6 z-[9999] p-3 rounded-full backdrop-blur-md transition-all border shadow-lg ${
+                            showSkeletonPanel
+                                ? 'text-cyan-300 bg-cyan-900/70 border-cyan-500/70 shadow-cyan-500/30'
+                                : 'text-white/70 bg-black/70 border-white/20 hover:border-cyan-500/50 hover:text-cyan-300'
+                        }`}
+                        title="Skeleton Live Agent"
                     >
-                        +
+                        <i className="fas fa-person-running text-lg"></i>
                     </button>
                     </>
                 ) : (
