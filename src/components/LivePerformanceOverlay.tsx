@@ -206,7 +206,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
     const [expandedSection, setExpandedSection] = useState<'video' | 'audio' | null>(null);
     const [masterVolume, setMasterVolume] = useState(1.0);
     const [isCalibrated, setIsCalibrated] = useState(false);
-    const [visualMode, setVisualMode] = useState<'none' | 'skeleton' | 'transparency'>('none');
+    const [visualMode, setVisualMode] = useState<'none' | 'skeleton' | 'transparency'>('skeleton');
     const visualModeRef = useRef(visualMode);
     useEffect(() => { visualModeRef.current = visualMode; }, [visualMode]);
 
