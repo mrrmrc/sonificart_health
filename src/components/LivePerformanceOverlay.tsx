@@ -503,16 +503,20 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         setStemAnalyses(analyses);
                         // Auto-apply AI mapping if no user mappings set
                         if (stemsRef.current.length > 0 && stemsRef.current.every(s => !s.assignedBodyPart || s.assignedBodyPart === 'leftHandY')) {
-                            const primaryCategory = result.healthClassification?.primaryCategory?.category as HealthCategoryType;
-                            const whoConfig = primaryCategory && WHO_CONFIGS[primaryCategory] ? WHO_CONFIGS[primaryCategory] : null;
-                            const defaultParts = whoConfig ? whoConfig.stemBodyParts : ['leftHandY', 'rightHandY', 'z', 'armSpan', 'shoulderTilt'];
+                            const primaryCategory = result.healthClassification?.primaryCategory?.category as keyof WhoAgentConfig || 'calming';
+                            const catConfig = DEFAULT_WHO_AGENT_CONFIG[primaryCategory] || DEFAULT_WHO_AGENT_CONFIG['calming'];
                             
-                            const updated = stemsRef.current.map((stem, i) => ({
-                                ...stem,
-                                assignedBodyPart: stem.assignedBodyPart || (whoConfig ? defaultParts[i % defaultParts.length] : analyses[i]?.suggestedBodyPart) as BodyPart,
-                                // Forza il parametro a 'pan' o 'lowpass' di default, MAI volume, in modo che il brano parta sempre
-                                parameter: stem.parameter && stem.parameter !== 'volume' ? stem.parameter : (i % 2 === 0 ? 'pan' : 'lowpass'),
-                            }));
+                            const updated = stemsRef.current.map((stem, i) => {
+                                // Trova la regola di stem dalla coreografia WHO (default fallback)
+                                const rule = catConfig.stemMappings.find(r => r.targetStemIndex === i) || catConfig.stemMappings[i % catConfig.stemMappings.length];
+                                
+                                return {
+                                    ...stem,
+                                    // Se c'è una coreografia definita la usiamo, altrimenti fallback ad AI
+                                    assignedBodyPart: rule ? rule.bodyPart : analyses[i]?.suggestedBodyPart as BodyPart,
+                                    parameter: rule ? rule.audioParam : (i % 2 === 0 ? 'pan' : 'lowpass')
+                                };
+                            });
                             setLocalStems(updated);
                         }
                         console.log('[AI ANALYSIS]', analyses.map(a => a.label));
