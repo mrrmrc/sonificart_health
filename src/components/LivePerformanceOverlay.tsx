@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { SonificationResult, ColorRegion, StemMapping, BodyPart, AudioParameter } from '../types';
+import { SonificationResult, ColorRegion, StemMapping, BodyPart, AudioParameter, HealthCategoryType } from '../types';
 import { api } from '../services/api';
 import WebcamService, { BodyMetrics } from '../services/WebcamService';
 import { LOGO_SVG_STRING } from './Logo';
@@ -44,6 +44,83 @@ interface Particle {
     r: number; g: number; b: number; a: number;
     size: number;
 }
+
+// --- WHO VISUAL & MAPPING CONFIGURATION ---
+interface WhoConfig {
+    colors: {
+        torso: { color: string, glow: string },
+        arms: { color: string, glow: string },
+        legs: { color: string, glow: string },
+        hands: { color: string, glow: string },
+        face: { color: string, glow: string },
+        mouth: { color: string, glow: string }
+    },
+    expression: 'smile' | 'neutral' | 'open' | 'soft_smile',
+    stemBodyParts: BodyPart[]
+}
+
+const WHO_CONFIGS: Record<HealthCategoryType, WhoConfig> = {
+    calming: {
+        colors: {
+            torso: { color: '#0ea5e9', glow: '#0284c7' }, // Sky blue
+            arms: { color: '#14b8a6', glow: '#0d9488' }, // Teal
+            legs: { color: '#3b82f6', glow: '#2563eb' }, // Blue
+            hands: { color: '#2dd4bf', glow: '#14b8a6' },
+            face: { color: '#60a5fa', glow: '#3b82f6' },
+            mouth: { color: '#fcd34d', glow: '#fbbf24' }
+        },
+        expression: 'soft_smile',
+        stemBodyParts: ['torsoY', 'handsY', 'headPitch', 'z', 'shoulderY'] // Slow, respiratory/calm movements
+    },
+    physiological: {
+        colors: {
+            torso: { color: '#10b981', glow: '#059669' }, // Emerald
+            arms: { color: '#34d399', glow: '#10b981' }, 
+            legs: { color: '#a7f3d0', glow: '#6ee7b7' },
+            hands: { color: '#6ee7b7', glow: '#34d399' },
+            face: { color: '#f8fafc', glow: '#e2e8f0' }, // White/neutral
+            mouth: { color: '#10b981', glow: '#059669' }
+        },
+        expression: 'neutral',
+        stemBodyParts: ['z', 'headPitch', 'shoulderTilt', 'torsoY', 'handsY'] // Postural, neutral
+    },
+    cognitive_motor: {
+        colors: {
+            torso: { color: '#eab308', glow: '#ca8a04' }, // Yellow
+            arms: { color: '#ec4899', glow: '#db2777' }, // Pink
+            legs: { color: '#06b6d4', glow: '#0891b2' }, // Cyan
+            hands: { color: '#f43f5e', glow: '#e11d48' },
+            face: { color: '#fb923c', glow: '#f97316' },
+            mouth: { color: '#ec4899', glow: '#db2777' }
+        },
+        expression: 'neutral', // Focus
+        stemBodyParts: ['leftHandX', 'rightHandX', 'leftHandY', 'rightHandY', 'kneeY'] // Precision of limbs
+    },
+    social_emotional: {
+        colors: {
+            torso: { color: '#f97316', glow: '#ea580c' }, // Orange
+            arms: { color: '#f43f5e', glow: '#e11d48' }, // Rose
+            legs: { color: '#eab308', glow: '#ca8a04' }, // Yellow
+            hands: { color: '#fbbf24', glow: '#f59e0b' },
+            face: { color: '#fcd34d', glow: '#fbbf24' },
+            mouth: { color: '#ef4444', glow: '#b91c1c' }
+        },
+        expression: 'smile',
+        stemBodyParts: ['headYaw', 'shoulderY', 'armSpan', 'torsoY', 'z'] // Interaction, turning head, opening arms
+    },
+    motivation: {
+        colors: {
+            torso: { color: '#ef4444', glow: '#b91c1c' }, // Red
+            arms: { color: '#f97316', glow: '#ea580c' }, // Orange
+            legs: { color: '#84cc16', glow: '#65a30d' }, // Lime
+            hands: { color: '#eab308', glow: '#ca8a04' },
+            face: { color: '#ef4444', glow: '#b91c1c' },
+            mouth: { color: '#fbbf24', glow: '#f59e0b' }
+        },
+        expression: 'open', // Energetic
+        stemBodyParts: ['armSpan', 'kneeY', 'elbowY', 'shoulderTilt', 'torsoY'] // Ample movements
+    }
+};
 
 // --- I18N TEXTS ---
 const TEXTS = {
@@ -337,8 +414,8 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     panner3D.panningModel = 'HRTF';
                     panner3D.distanceModel = 'inverse';
                     panner3D.refDistance = 1;
-                    panner3D.maxDistance = 10;
-                    panner3D.rolloffFactor = 1;
+                    panner3D.maxDistance = 10000;
+                    panner3D.rolloffFactor = 2; // Aggressive falloff for better 8D separation
                     // Phase offset: each stem starts at a different position in the orbit
                     const phaseRad = (i / stemBuffers.length) * Math.PI * 2;
                     const initRadius = 3.0;
@@ -407,9 +484,13 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         setStemAnalyses(analyses);
                         // Auto-apply AI mapping if no user mappings set
                         if (stemsRef.current.length > 0 && stemsRef.current.every(s => !s.assignedBodyPart || s.assignedBodyPart === 'leftHandY')) {
+                            const primaryCategory = result.healthClassification?.primaryCategory?.category as HealthCategoryType;
+                            const whoConfig = primaryCategory && WHO_CONFIGS[primaryCategory] ? WHO_CONFIGS[primaryCategory] : null;
+                            const defaultParts = whoConfig ? whoConfig.stemBodyParts : ['leftHandY', 'rightHandY', 'z', 'armSpan', 'shoulderTilt'];
+                            
                             const updated = stemsRef.current.map((stem, i) => ({
                                 ...stem,
-                                assignedBodyPart: analyses[i]?.suggestedBodyPart || stem.assignedBodyPart,
+                                assignedBodyPart: whoConfig ? defaultParts[i % defaultParts.length] : (analyses[i]?.suggestedBodyPart || stem.assignedBodyPart),
                                 parameter: analyses[i]?.suggestedParameter || stem.parameter,
                             }));
                             setLocalStems(updated);
@@ -537,9 +618,51 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         engineRef.current.autoGain.gain.setTargetAtTime(volFactor, now, 0.15);
                     }
 
-                    // 2. Panning
-                    const headPan = -(m.yaw * calibRef.current.panSensitivity);
-                    if (engineRef.current.panner) engineRef.current.panner.pan.setTargetAtTime(Math.max(-1, Math.min(1, headPan)), now, 0.1);
+                    // --- SKELETON AGENT LOGIC (NO-STEMS) ---
+                    // Se non ci sono stems, l'agente WHO lavora sui master effects
+                    if (!engineRef.current.stemGains || engineRef.current.stemGains.length === 0) {
+                        const energy = m.energyLevel || 0;
+                        const openness = m.openness || 0.5;
+                        const primaryCat = result.healthClassification?.primaryCategory?.category as HealthCategoryType;
+                        
+                        // Default neutral params
+                        let targetPitch = 1.0;
+                        let filterFreq = 20000;
+                        let targetPan = -(m.yaw * calibRef.current.panSensitivity);
+
+                        if (primaryCat === 'calming') {
+                            // Calming: filter out high frequencies if energy is too high, slow down slightly
+                            filterFreq = energy > 0.3 ? 2000 : 8000;
+                            targetPitch = 1.0 - (energy * 0.1); 
+                        } else if (primaryCat === 'motivation') {
+                            // Motivation: reward energy with pitch up and open filter
+                            filterFreq = 5000 + (energy * 15000);
+                            targetPitch = 1.0 + (energy * 0.15);
+                            targetPan *= (1.0 + energy); // Più escursione stereo
+                        } else if (primaryCat === 'cognitive_motor') {
+                            // Focus: precision
+                            filterFreq = 10000;
+                            targetPitch = 1.0;
+                        } else if (primaryCat === 'social_emotional') {
+                            // Empatia: suono avvolgente basato sull'apertura
+                            filterFreq = 2000 + (openness * 18000);
+                        }
+
+                        // Apply
+                        if (engineRef.current.source) {
+                            engineRef.current.source.playbackRate.setTargetAtTime(targetPitch, now, 0.2);
+                        }
+                        if (engineRef.current.filter) {
+                            engineRef.current.filter.frequency.setTargetAtTime(filterFreq, now, 0.2);
+                        }
+                        if (engineRef.current.panner) {
+                            engineRef.current.panner.pan.setTargetAtTime(Math.max(-1, Math.min(1, targetPan)), now, 0.1);
+                        }
+                    } else {
+                        // Base Panning for stems
+                        const headPan = -(m.yaw * calibRef.current.panSensitivity);
+                        if (engineRef.current.panner) engineRef.current.panner.pan.setTargetAtTime(Math.max(-1, Math.min(1, headPan)), now, 0.1);
+                    }
 
                     // Helper to get body parameter value and apply calibration
                     const getBodyVal = (part: BodyPart) => {
@@ -589,13 +712,32 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     const eng = engineRef.current;
                     
                     if (eng.stemGains && eng.stemGains.length > 0) {
-                        // ---- 8D ORBIT SYSTEM ----
-                        // Body parameters control the orbit geometry
+                        // ---- 8D ORBIT SYSTEM (SKELETON AGENT) ----
                         const orbitParams = eng.orbitParams!;
+                        const primaryCategory = result.healthClassification?.primaryCategory?.category as HealthCategoryType;
                         
-                        // Arm span → orbit radius (more open = more spatial)
-                        const targetRadius = 1.5 + (m.armSpan || 0.5) * 4.0; // 1.5 .. 5.5
-                        orbitParams.radius += (targetRadius - orbitParams.radius) * 0.05; // smooth
+                        let baseRadius = 2.0;
+                        let radiusMod = m.armSpan || 0.5;
+                        let speedMod = 1.0;
+                        
+                        // WHO overrides for Orbit
+                        if (primaryCategory === 'calming') {
+                            baseRadius = 5.0; // Distante e avvolgente
+                            speedMod = 0.3; // Molto lento
+                        } else if (primaryCategory === 'motivation') {
+                            baseRadius = 1.5; // Vicino e in the face
+                            radiusMod = (m.energyLevel || 0) * 2.0; // L'energia allarga e stringe l'orbita
+                            speedMod = 1.0 + (m.energyLevel || 0) * 3.0; // Veloce
+                        } else if (primaryCategory === 'social_emotional') {
+                            radiusMod = m.openness || 0.5; // Si apre se l'utente è aperto
+                        }
+                        
+                        const targetRadius = baseRadius + (radiusMod * 5.0);
+                        orbitParams.radius += (targetRadius - orbitParams.radius) * 0.05;
+                        
+                        // Calculate doppler/orbit step based on speedMod
+                        const baseSpeedDegrees = 1.0;
+                        const orbitStep = baseSpeedDegrees * speedMod;
                         
                         // Hands height → orbit elevation
                         const handsAvgY = (m.leftHandY + m.rightHandY) / 2;
@@ -608,25 +750,27 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         
                         // Rotate each stem along its orbit
                         const orbitAngles = eng.orbitAngles!;
-                        const dt = 1 / 60; // ~60fps
                         
                         eng.stemGains.forEach((gainNode, index) => {
-                            // Advance orbit angle
-                            orbitAngles[index] = (orbitAngles[index] + orbitParams.speed * dt * (360 / (2 * Math.PI))) % 360;
-                            const angleRad = (orbitAngles[index] * Math.PI) / 180;
+                            // Update phase
+                            eng.orbitAngles[index] = (eng.orbitAngles[index] + orbitStep) % 360;
+                            const rad = (eng.orbitAngles[index] * Math.PI) / 180;
                             
                             // Update 3D position of this stem's panner
                             const panner3D = eng.stem3DPanners?.[index];
                             if (panner3D && ctx.currentTime) {
                                 const t = ctx.currentTime;
-                                panner3D.positionX.setTargetAtTime(Math.sin(angleRad) * orbitParams.radius, t, 0.05);
+                                panner3D.positionX.setTargetAtTime(Math.sin(rad) * orbitParams.radius, t, 0.05);
                                 panner3D.positionY.setTargetAtTime(orbitParams.height, t, 0.1);
-                                panner3D.positionZ.setTargetAtTime(Math.cos(angleRad) * orbitParams.radius, t, 0.05);
+                                panner3D.positionZ.setTargetAtTime(Math.cos(rad) * orbitParams.radius, t, 0.05);
                             }
                             
                             // Apply body parameter to gain/filter
                             const filterNode = eng.stemFilters?.[index];
-                            const defaultBodyParts: BodyPart[] = ['leftHandY', 'rightHandY', 'z', 'armSpan', 'shoulderTilt'];
+                            
+                            const primaryCategory = result.healthClassification?.primaryCategory?.category as HealthCategoryType;
+                            const whoConfig = primaryCategory && WHO_CONFIGS[primaryCategory] ? WHO_CONFIGS[primaryCategory] : null;
+                            const defaultBodyParts: BodyPart[] = whoConfig ? whoConfig.stemBodyParts : ['leftHandY', 'rightHandY', 'z', 'armSpan', 'shoulderTilt'];
                             
                             if (stems.length > 0 && stems[index]) {
                                 const stem = stems[index];
@@ -810,38 +954,96 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
 
                     const l = m.landmarks;
 
-                    // 1. Torso (Magenta)
+                    const primaryCat = result.healthClassification?.primaryCategory?.category as HealthCategoryType;
+                    const skelConfig = primaryCat && WHO_CONFIGS[primaryCat] ? WHO_CONFIGS[primaryCat] : {
+                        colors: {
+                            torso: { color: '#d946ef', glow: '#c026d3' },
+                            arms: { color: '#06b6d4', glow: '#0891b2' },
+                            legs: { color: '#3b82f6', glow: '#2563eb' },
+                            hands: { color: '#22d3ee', glow: '#06b6d4' },
+                            face: { color: '#f59e0b', glow: '#d97706' },
+                            mouth: { color: '#ef4444', glow: '#b91c1c' }
+                        },
+                        expression: 'neutral'
+                    };
+
+                    const c = skelConfig.colors;
+
+                    // 1. Torso
                     const torso = [[11, 12], [11, 23], [12, 24], [23, 24]];
-                    torso.forEach(([i, j]) => drawNeonLine(l[i], l[j], '#d946ef', '#c026d3', 6));
+                    torso.forEach(([i, j]) => drawNeonLine(l[i], l[j], c.torso.color, c.torso.glow, 6));
                     
-                    // 2. Arms (Cyan)
+                    // 2. Arms
                     const arms = [[11, 13], [13, 15], [12, 14], [14, 16]];
-                    arms.forEach(([i, j]) => drawNeonLine(l[i], l[j], '#06b6d4', '#0891b2', 5));
+                    arms.forEach(([i, j]) => drawNeonLine(l[i], l[j], c.arms.color, c.arms.glow, 5));
                     
-                    // 3. Legs (Blue)
+                    // 3. Legs
                     const legs = [[23, 25], [25, 27], [27, 29], [29, 31], [31, 27], [24, 26], [26, 28], [28, 30], [30, 32], [32, 28]];
-                    legs.forEach(([i, j]) => drawNeonLine(l[i], l[j], '#3b82f6', '#2563eb', 5));
+                    legs.forEach(([i, j]) => drawNeonLine(l[i], l[j], c.legs.color, c.legs.glow, 5));
 
-                    // 4. Hands detail (Cyan)
+                    // 4. Hands detail
                     const hands = [[15, 17], [15, 19], [15, 21], [17, 19], [16, 18], [16, 20], [16, 22], [18, 20]];
-                    hands.forEach(([i, j]) => drawNeonLine(l[i], l[j], '#22d3ee', '#06b6d4', 3));
+                    hands.forEach(([i, j]) => drawNeonLine(l[i], l[j], c.hands.color, c.hands.glow, 3));
 
-                    // 5. Face detail (Yellow/Orange)
+                    // 5. Face detail
                     // Face outline / structure
                     const face = [[0, 1], [1, 2], [2, 3], [3, 7], [0, 4], [4, 5], [5, 6], [6, 8]];
-                    face.forEach(([i, j]) => drawNeonLine(l[i], l[j], '#f59e0b', '#d97706', 3));
-                    // Mouth
-                    drawNeonLine(l[9], l[10], '#ef4444', '#b91c1c', 4);
+                    face.forEach(([i, j]) => drawNeonLine(l[i], l[j], c.face.color, c.face.glow, 3));
+                    
+                    // Mouth with Expression
+                    const mouthP1 = l[9];
+                    const mouthP2 = l[10];
+                    if (mouthP1 && mouthP2) {
+                        const m1x = cx + (mouthP1.x - 0.5) * renderW;
+                        const m1y = cy + (mouthP1.y - 0.5) * renderH;
+                        const m2x = cx + (mouthP2.x - 0.5) * renderW;
+                        const m2y = cy + (mouthP2.y - 0.5) * renderH;
+                        
+                        context.shadowBlur = 15;
+                        context.shadowColor = c.mouth.glow;
+                        context.strokeStyle = c.mouth.color;
+                        context.lineWidth = 4;
+                        context.beginPath();
+                        
+                        if (skelConfig.expression === 'neutral') {
+                            context.moveTo(m1x, m1y);
+                            context.lineTo(m2x, m2y);
+                        } else {
+                            const midX = (m1x + m2x) / 2;
+                            const midY = (m1y + m2y) / 2;
+                            let curveOffset = 0;
+                            
+                            if (skelConfig.expression === 'smile') curveOffset = 15;
+                            else if (skelConfig.expression === 'soft_smile') curveOffset = 8;
+                            else if (skelConfig.expression === 'open') curveOffset = 25; // more pronounced
+                            
+                            context.moveTo(m1x, m1y);
+                            context.quadraticCurveTo(midX, midY + curveOffset, m2x, m2y);
+                            
+                            if (skelConfig.expression === 'open') {
+                                // Draw lower part of open mouth
+                                context.quadraticCurveTo(midX, midY + (curveOffset*1.8), m1x, m1y);
+                            }
+                        }
+                        
+                        context.stroke();
+                        
+                        // Inner core
+                        context.shadowBlur = 0;
+                        context.strokeStyle = '#ffffff';
+                        context.lineWidth = 4 * 0.4;
+                        context.stroke();
+                    }
                     
                     // Draw joints
                     for (let i = 0; i < 33; i++) {
-                        let color = '#d946ef';
-                        let glow = '#c026d3';
+                        let color = c.torso.color;
+                        let glow = c.torso.glow;
                         let size = 4;
                         
-                        if (i >= 0 && i <= 10) { color = '#f59e0b'; glow = '#d97706'; size = 3; } // Face
-                        if (i >= 13 && i <= 22) { color = '#06b6d4'; glow = '#0891b2'; size = 5; } // Arms/Hands
-                        if (i >= 25) { color = '#3b82f6'; glow = '#2563eb'; size = 5; } // Legs
+                        if (i >= 0 && i <= 10) { color = c.face.color; glow = c.face.glow; size = 3; } // Face
+                        if (i >= 13 && i <= 22) { color = c.arms.color; glow = c.arms.glow; size = 5; } // Arms/Hands
+                        if (i >= 25) { color = c.legs.color; glow = c.legs.glow; size = 5; } // Legs
                         
                         // Highlight Eyes and Nose
                         if (i === 0) size = 6; // Nose

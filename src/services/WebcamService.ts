@@ -22,6 +22,10 @@ export interface BodyMetrics {
     armSpan: number; // Normalized distance between hands
     shoulderTilt: number; // Rotation of shoulders
 
+    // Dynamics (Skeleton Agent)
+    energyLevel: number;
+    openness: number;
+
     // Visualization
     landmarks?: { x: number, y: number, z?: number, visibility?: number }[];
     isActive: boolean;
@@ -38,6 +42,10 @@ class WebcamService {
     private frameCount = 0;
     private accumulators: Partial<Record<keyof BodyMetrics, number>> = {};
 
+    // Dynamics state
+    private lastFrameTime = 0;
+    private prevMetrics: Partial<BodyMetrics> = {};
+
     // Current State
     private metrics: BodyMetrics = {
         yaw: 0, pitch: 0,
@@ -50,6 +58,7 @@ class WebcamService {
         leftFootY: 0.5, rightFootY: 0.5,
         torsoY: 0.5, shoulderTilt: 0.5,
         armSpan: 0.5,
+        energyLevel: 0, openness: 0.5,
         isActive: false
     };
 
@@ -150,6 +159,36 @@ class WebcamService {
         m.torsoY = (leftHip.y + rightHip.y) / 2;
         m.leftKneeY = leftKnee.y; m.rightKneeY = rightKnee.y;
         m.leftFootY = leftAnkle.y; m.rightFootY = rightAnkle.y;
+
+        // --- 4. DYNAMICS (Skeleton Agent) ---
+        const now = performance.now();
+        const dt = now - this.lastFrameTime;
+        this.lastFrameTime = now;
+        
+        let energy = 0;
+        if (this.prevMetrics.leftHandX !== undefined && dt > 0) {
+            const dxL = m.leftHandX - this.prevMetrics.leftHandX!;
+            const dyL = m.leftHandY - this.prevMetrics.leftHandY!;
+            const dxR = m.rightHandX - this.prevMetrics.rightHandX!;
+            const dyR = m.rightHandY - this.prevMetrics.rightHandY!;
+            const dxN = m.x - this.prevMetrics.x!;
+            const dyN = m.y - this.prevMetrics.y!;
+            
+            const dist = Math.hypot(dxL, dyL) + Math.hypot(dxR, dyR) + Math.hypot(dxN, dyN);
+            const rawVelocity = dist / (dt / 1000); // units per second
+            
+            // smooth energy
+            const targetEnergy = Math.min(1, rawVelocity / 3.0); // 3.0 is max expected velocity
+            energy = (m.energyLevel || 0) * 0.8 + targetEnergy * 0.2; 
+        }
+        m.energyLevel = energy;
+
+        // Openness = arm span + upright posture + close distance
+        const targetOpenness = (m.armSpan * 0.7) + (Math.max(0, m.pitch + 1) * 0.15) + (Math.max(0, 1 - m.z) * 0.15);
+        m.openness = (m.openness || 0.5) * 0.9 + Math.min(1, targetOpenness) * 0.1;
+
+        // save prev
+        this.prevMetrics = { leftHandX: m.leftHandX, leftHandY: m.leftHandY, rightHandX: m.rightHandX, rightHandY: m.rightHandY, x: m.x, y: m.y };
 
         m.landmarks = landmarks;
 
