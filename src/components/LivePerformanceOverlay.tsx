@@ -721,6 +721,9 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         }
                     };
 
+                    const stems = stemsRef.current; // Always use ref, not closure
+                    const eng = engineRef.current;
+
                     const lm = liveMappingsRef.current;
                     const isHandled = (target: string, param: AudioParameter) => {
                         return Object.values(lm).some(m => m.target === target && m.parameter === param);
@@ -741,8 +744,6 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
 
 
                     // 4. STEM ENGINE MAPPING + 8D ORBIT
-                    const stems = stemsRef.current; // Always use ref, not closure
-                    const eng = engineRef.current;
                     
                     if (eng.stemGains && eng.stemGains.length > 0) {
                         // ---- 8D ORBIT SYSTEM (SKELETON AGENT) ----
