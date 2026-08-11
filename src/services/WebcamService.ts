@@ -5,6 +5,9 @@ export interface BodyMetrics {
     // Head Position/Rotation
     yaw: number;   
     pitch: number; 
+    headRoll: number;
+    gazeX: number;
+    gazeY: number;
     x: number;     
     y: number;     
     z: number;     
@@ -17,6 +20,7 @@ export interface BodyMetrics {
     leftKneeY: number; rightKneeY: number;
     leftFootY: number; rightFootY: number;
     torsoY: number;
+    torsoX: number;
 
     // Computed
     armSpan: number; // Normalized distance between hands
@@ -48,7 +52,7 @@ class WebcamService {
 
     // Current State
     private metrics: BodyMetrics = {
-        yaw: 0, pitch: 0,
+        yaw: 0, pitch: 0, headRoll: 0, gazeX: 0, gazeY: 0,
         x: 0.5, y: 0.5, z: 0.5,
         leftHandX: 0.5, leftHandY: 0.5,
         rightHandX: 0.5, rightHandY: 0.5,
@@ -56,7 +60,7 @@ class WebcamService {
         leftElbowY: 0.5, rightElbowY: 0.5,
         leftKneeY: 0.5, rightKneeY: 0.5,
         leftFootY: 0.5, rightFootY: 0.5,
-        torsoY: 0.5, shoulderTilt: 0.5,
+        torsoY: 0.5, torsoX: 0.5, shoulderTilt: 0.5,
         armSpan: 0.5,
         energyLevel: 0, openness: 0.5,
         isActive: false
@@ -133,6 +137,12 @@ class WebcamService {
         const midEyeY = (leftEye.y + rightEye.y) / 2;
         const noseOffsetY = nose.y - midEyeY;
         m.pitch = Math.max(-1, Math.min(1, noseOffsetY * 5));
+        
+        m.headRoll = (leftEye.y - rightEye.y + 1) / 2;
+        
+        // Approximate Gaze based on nose offset (simplified)
+        m.gazeX = (m.yaw + 1) / 2;
+        m.gazeY = (m.pitch + 1) / 2;
 
         m.x = nose.x;
         m.y = nose.y;
@@ -157,6 +167,7 @@ class WebcamService {
 
         // --- 3. LOWER BODY & TORSO ---
         m.torsoY = (leftHip.y + rightHip.y) / 2;
+        m.torsoX = (leftShoulder.x + rightShoulder.x) / 2;
         m.leftKneeY = leftKnee.y; m.rightKneeY = rightKnee.y;
         m.leftFootY = leftAnkle.y; m.rightFootY = rightAnkle.y;
 

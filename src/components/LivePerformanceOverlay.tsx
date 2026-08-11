@@ -675,12 +675,16 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                             case 'z': val = m.z; break;
                             case 'headYaw': val = (m.yaw + 1) / 2; break; // Normalize -1..1 to 0..1
                             case 'headPitch': val = (m.pitch + 1) / 2; break;
+                            case 'headRoll': val = m.headRoll; break;
+                            case 'gazeX': val = m.gazeX; break;
+                            case 'gazeY': val = m.gazeY; break;
                             case 'shoulderY': val = (m.leftShoulderY + m.rightShoulderY) / 2; break;
                             case 'shoulderTilt': val = m.shoulderTilt; break;
                             case 'elbowY': val = (m.leftElbowY + m.rightElbowY) / 2; break;
                             case 'kneeY': val = (m.leftKneeY + m.rightKneeY) / 2; break;
                             case 'footY': val = (m.leftFootY + m.rightFootY) / 2; break;
                             case 'torsoY': val = m.torsoY; break;
+                            case 'torsoX': val = m.torsoX; break;
                             case 'armSpan': val = m.armSpan; break;
                             case 'handsY': val = (m.leftHandY + m.rightHandY) / 2; break;
                             default: val = 0.5; break;
@@ -1282,8 +1286,12 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                 { key: 'elbowY', label: 'Gomiti (Altezza)', icon: 'fa-arrows-alt-v', val: (metrics.leftElbowY + metrics.rightElbowY) / 2, color: 'bg-teal-500' },
                                 { key: 'headYaw', label: 'Testa (Rotazione Y)', icon: 'fa-head-side', val: (metrics.yaw + 1) / 2, color: 'bg-violet-500' },
                                 { key: 'headPitch', label: 'Testa (Su/Giù)', icon: 'fa-head-side', val: (metrics.pitch + 1) / 2, color: 'bg-fuchsia-500' },
+                                { key: 'headRoll', label: 'Testa (Inclinazione)', icon: 'fa-undo', val: metrics.headRoll, color: 'bg-rose-500' },
+                                { key: 'gazeX', label: 'Sguardo (X)', icon: 'fa-eye', val: metrics.gazeX, color: 'bg-blue-300' },
+                                { key: 'gazeY', label: 'Sguardo (Y)', icon: 'fa-eye', val: metrics.gazeY, color: 'bg-blue-400' },
                                 { key: 'z', label: 'Distanza (Z)', icon: 'fa-compress-arrows-alt', val: metrics.z, color: 'bg-red-500' },
                                 { key: 'torsoY', label: 'Busto (Altezza)', icon: 'fa-person', val: metrics.torsoY, color: 'bg-lime-500' },
+                                { key: 'torsoX', label: 'Busto (Orizzontale)', icon: 'fa-arrows-alt-h', val: metrics.torsoX, color: 'bg-lime-600' },
                                 { key: 'kneeY', label: 'Ginocchia', icon: 'fa-arrows-alt-v', val: (metrics.leftKneeY + metrics.rightKneeY) / 2, color: 'bg-amber-500' },
                             ] as { key: string, label: string, icon: string, val: number, color: string }[]).map(param => {
                                 // Find which stems are mapped to this param
@@ -1372,10 +1380,14 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                                     <option value="shoulderTilt">Inclinazione Spalle</option>
                                                     <option value="shoulderY">Spalle (Altezza)</option>
                                                     <option value="elbowY">Gomiti</option>
-                                                    <option value="headYaw">Testa (Rotazione)</option>
+                                                    <option value="headYaw">Testa (Rotazione Y)</option>
                                                     <option value="headPitch">Testa (Su/Giù)</option>
+                                                    <option value="headRoll">Testa (Inclinazione)</option>
+                                                    <option value="gazeX">Sguardo (X)</option>
+                                                    <option value="gazeY">Sguardo (Y)</option>
                                                     <option value="z">Distanza (Z)</option>
-                                                    <option value="torsoY">Busto</option>
+                                                    <option value="torsoY">Busto (Altezza)</option>
+                                                    <option value="torsoX">Busto (Orizzontale)</option>
                                                     <option value="kneeY">Ginocchia</option>
                                                     <option value="handsY">Mani (Media Y)</option>
                                                 </select>
