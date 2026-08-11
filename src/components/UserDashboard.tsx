@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { DashboardEntry, User, TransformedNoteEvent, SonificationResult, StemMapping, BodyPart } from '../types';
+import { DashboardEntry, User, TransformedNoteEvent, SonificationResult, StemMapping, BodyPart, AudioParameter } from '../types';
 import { api, USE_MOCK_BACKEND } from '../services/api';
 import { ConfirmationModal } from './ConfirmationModal';
 import { generateSonificationVideo } from '../services/videoService';
@@ -34,7 +34,7 @@ const PublishModal: React.FC<{
     
     const [localStems, setLocalStems] = useState<StemMapping[]>(entry.stemMappings || []);
     const [isUploadingStems, setIsUploadingStems] = useState(false);
-    const [masterMappings, setMasterMappings] = useState<{ bodyPart: BodyPart, parameter: 'volume' | 'lowpass' | 'pan' }[]>(entry.configUsed?.masterMappings || []);
+    const [masterMappings, setMasterMappings] = useState<{ bodyPart: BodyPart, parameter: AudioParameter }[]>(entry.configUsed?.masterMappings || []);
 
     // REFS
     const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -521,6 +521,7 @@ const PublishModal: React.FC<{
                                                                 <option value="volume">Volume</option>
                                                                 <option value="lowpass">Filtro Lowpass</option>
                                                                 <option value="pan">Panning (L/R)</option>
+                                                                <option value="pitch">Velocità/Pitch</option>
                                                             </select>
                                                         </div>
                                                     </div>
@@ -591,6 +592,7 @@ const PublishModal: React.FC<{
                                                         <option value="volume">Volume</option>
                                                         <option value="lowpass">Filtro Lowpass</option>
                                                         <option value="pan">Panning (L/R)</option>
+                                                        <option value="pitch">Velocità/Pitch</option>
                                                     </select>
                                                 </div>
                                             </div>

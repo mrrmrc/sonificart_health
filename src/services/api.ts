@@ -988,6 +988,18 @@ export const api = {
 
 
 
+    getWhoAgentConfig: async (): Promise<any> => {
+        try {
+            const content = await api.getAppSetting('who_agent_config');
+            if (content) return JSON.parse(content);
+        } catch (e) { console.error("Error loading who_agent_config", e); }
+        return null;
+    },
+
+    updateWhoAgentConfig: async (config: any): Promise<void> => {
+        return api.updateAppSetting('who_agent_config', JSON.stringify(config));
+    },
+
     logCookieConsent: async (prefs: { analytics: boolean, marketing: boolean }, uuid: string) => {
         const token = getToken();
         await fetch(`${API_BASE_URL}/index.php?action=log_cookie_consent`, {

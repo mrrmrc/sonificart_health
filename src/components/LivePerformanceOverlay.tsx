@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { SonificationResult, ColorRegion, StemMapping, BodyPart, AudioParameter, HealthCategoryType } from '../types';
+import { SonificationResult, ColorRegion, StemMapping, BodyPart, AudioParameter, HealthCategoryType, WhoAgentConfig, WhoAgentCategoryConfig } from '../types';
 import { api } from '../services/api';
 import WebcamService, { BodyMetrics } from '../services/WebcamService';
 import { LOGO_SVG_STRING } from './Logo';
@@ -235,6 +235,15 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
     // AI Stem Analysis
     const [stemAnalyses, setStemAnalyses] = useState<StemAnalysis[]>([]);
     
+    // Configurable WHO Agent Logic
+    const [agentConfig, setAgentConfig] = useState<WhoAgentConfig | null>(null);
+
+    useEffect(() => {
+        api.getWhoAgentConfig().then(config => {
+            if (config) setAgentConfig(config);
+        }).catch(console.error);
+    }, []);
+
     // Live Skeleton Panel — auto aperto di default
     const [showSkeletonPanel, setShowSkeletonPanel] = useState(true);
     
@@ -627,51 +636,8 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         engineRef.current.autoGain.gain.setTargetAtTime(volFactor, now, 0.15);
                     }
 
-                    // --- SKELETON AGENT LOGIC (NO-STEMS) ---
-                    // Se non ci sono stems, l'agente WHO lavora sui master effects
-                    if (!engineRef.current.stemGains || engineRef.current.stemGains.length === 0) {
-                        const energy = m.energyLevel || 0;
-                        const openness = m.openness || 0.5;
-                        const primaryCat = result.healthClassification?.primaryCategory?.category as HealthCategoryType;
-                        
-                        // Default neutral params
-                        let targetPitch = 1.0;
-                        let filterFreq = 20000;
-                        let targetPan = -(m.yaw * calibRef.current.panSensitivity);
-
-                        if (primaryCat === 'calming') {
-                            // Calming: filter out high frequencies if energy is too high, slow down slightly
-                            filterFreq = energy > 0.3 ? 2000 : 8000;
-                            targetPitch = 1.0 - (energy * 0.1); 
-                        } else if (primaryCat === 'motivation') {
-                            // Motivation: reward energy with pitch up and open filter
-                            filterFreq = 5000 + (energy * 15000);
-                            targetPitch = 1.0 + (energy * 0.15);
-                            targetPan *= (1.0 + energy); // Più escursione stereo
-                        } else if (primaryCat === 'cognitive_motor') {
-                            // Focus: precision
-                            filterFreq = 10000;
-                            targetPitch = 1.0;
-                        } else if (primaryCat === 'social_emotional') {
-                            // Empatia: suono avvolgente basato sull'apertura
-                            filterFreq = 2000 + (openness * 18000);
-                        }
-
-                        // Apply
-                        if (engineRef.current.source) {
-                            engineRef.current.source.playbackRate.setTargetAtTime(targetPitch, now, 0.2);
-                        }
-                        if (engineRef.current.filter) {
-                            engineRef.current.filter.frequency.setTargetAtTime(filterFreq, now, 0.2);
-                        }
-                        if (engineRef.current.panner) {
-                            engineRef.current.panner.pan.setTargetAtTime(Math.max(-1, Math.min(1, targetPan)), now, 0.1);
-                        }
-                    } else {
-                        // Base Panning for stems
-                        const headPan = -(m.yaw * calibRef.current.panSensitivity);
-                        if (engineRef.current.panner) engineRef.current.panner.pan.setTargetAtTime(Math.max(-1, Math.min(1, headPan)), now, 0.1);
-                    }
+                    // --- SKELETON AGENT LOGIC ---
+                    // Logica dinamica configurabile in WhoAgentConfigEditor
 
                     // Helper to get body parameter value and apply calibration
                     const getBodyVal = (part: BodyPart) => {
@@ -720,8 +686,13 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                             const val = Math.max(0, Math.min(1, 1.0 - rawVal));
                             const freq = minFreq * Math.pow(maxFreq / minFreq, val);
                             filterNode.frequency.setTargetAtTime(freq, actx.currentTime, 0.1);
+                        } else if (param === 'pitch' && engineRef.current!.source) {
+                            // Map 0..1 to 0.5x .. 1.5x speed
+                            const pitch = 0.5 + Math.max(0, Math.min(1, 1.0 - rawVal));
+                            engineRef.current!.source.playbackRate.setTargetAtTime(pitch, actx.currentTime, 0.1);
                         }
                     };
+
 
                     // 4. STEM ENGINE MAPPING + 8D ORBIT
                     const stems = stemsRef.current; // Always use ref, not closure
@@ -783,17 +754,28 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                             
                             // Apply body parameter to gain/filter
                             const filterNode = eng.stemFilters?.[index];
+                            const primaryCatKey = result.healthClassification?.primaryCategory?.category as keyof WhoAgentConfig;
+                            const catConfig = agentConfig && primaryCatKey && agentConfig[primaryCatKey] ? agentConfig[primaryCatKey] : null;
                             
-                            const primaryCategory = result.healthClassification?.primaryCategory?.category as HealthCategoryType;
-                            const whoConfig = primaryCategory && WHO_CONFIGS[primaryCategory] ? WHO_CONFIGS[primaryCategory] : null;
-                            const defaultBodyParts: BodyPart[] = whoConfig ? whoConfig.stemBodyParts : ['leftHandY', 'rightHandY', 'z', 'armSpan', 'shoulderTilt'];
+                            let stemRule = stems.length > 0 ? stems[index] : null;
                             
-                            if (stems.length > 0 && stems[index]) {
-                                const stem = stems[index];
-                                const bodyPart = stem.assignedBodyPart || defaultBodyParts[index % defaultBodyParts.length];
-                                const parameter = stem.parameter || 'volume';
-                                const rawVal = getBodyVal(bodyPart);
-                                applyParam(parameter, rawVal, gainNode, undefined, filterNode);
+                            // Fallback to agentConfig if no specific user mapping
+                            if (!stemRule && catConfig?.stemMappings && catConfig.stemMappings.length > 0) {
+                                const rule = catConfig.stemMappings.find(r => r.targetStemIndex === index) || catConfig.stemMappings[index % catConfig.stemMappings.length];
+                                if (rule) {
+                                    stemRule = {
+                                        id: rule.id,
+                                        name: 'Auto',
+                                        url: '',
+                                        assignedBodyPart: rule.bodyPart,
+                                        parameter: rule.audioParam
+                                    };
+                                }
+                            }
+                            
+                            if (stemRule) {
+                                const rawVal = getBodyVal(stemRule.assignedBodyPart);
+                                applyParam(stemRule.parameter, rawVal, gainNode, undefined, filterNode);
                             } else {
                                 // Se non configurato, volume fisso
                                 gainNode.gain.setTargetAtTime(1.0, ctx.currentTime, 0.1);
@@ -805,16 +787,30 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         ctx.listener.forwardX.value = Math.sin(headYaw);
                         ctx.listener.forwardZ.value = -Math.cos(headYaw);
                         
-                    } else if (result.configUsed?.masterMappings && result.configUsed.masterMappings.length > 0) {
-                        // 5. MASTER TRACK MAPPING (No Stems)
-                        (result.configUsed.masterMappings as any[]).forEach(mm => {
-                            const rawVal = getBodyVal(mm.bodyPart);
-                            applyParam(mm.parameter, rawVal, eng.autoGain!, eng.panner!, eng.filter!);
-                        });
                     } else {
-                        // 6. FALLBACK: nessun mapping, volume fisso a 1.0 (brano sempre udibile)
-                        if (eng.autoGain) {
-                            eng.autoGain.gain.setTargetAtTime(1.0, ctx.currentTime, 0.1);
+                        // NO STEMS (Master Track)
+                        let activeMappings: {bodyPart: BodyPart, parameter: AudioParameter}[] = [];
+                        
+                        if (result.configUsed?.masterMappings && result.configUsed.masterMappings.length > 0) {
+                            activeMappings = result.configUsed.masterMappings as any;
+                        } else {
+                            const primaryCatKey = result.healthClassification?.primaryCategory?.category as keyof WhoAgentConfig;
+                            const catConfig = agentConfig && primaryCatKey && agentConfig[primaryCatKey] ? agentConfig[primaryCatKey] : null;
+                            if (catConfig?.masterMappings) {
+                                activeMappings = catConfig.masterMappings.map(r => ({
+                                    bodyPart: r.bodyPart,
+                                    parameter: r.audioParam
+                                }));
+                            }
+                        }
+                        
+                        if (activeMappings.length > 0) {
+                            activeMappings.forEach(mm => {
+                                const rawVal = getBodyVal(mm.bodyPart);
+                                applyParam(mm.parameter, rawVal, eng.autoGain!, eng.panner!, eng.filter!);
+                            });
+                        } else {
+                            if (eng.autoGain) eng.autoGain.gain.setTargetAtTime(1.0, ctx.currentTime, 0.1);
                         }
                     }
 
@@ -1264,27 +1260,45 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         {/* WHO SKELETON AGENT GUIDELINES */}
                         {(() => {
                             const whoCategory = result.healthClassification?.primaryCategory || { category: 'calming', label: 'Calming (Default)' };
-                            const guidelines: Record<string, { parts: string[], rule: string, color: string }> = {
-                                calming: { parts: ['Profondità (Z) → Volume', 'Energia Corpo → Filtro (Calma) & Pitch', 'Testa (Rotazione Y) → Pan Orizzontale'], rule: 'Movimenti calmi mantengono il suono chiaro. Alta energia attiva il filtro per calmarti.', color: 'from-blue-900/40 to-cyan-900/40 border-blue-500/30 text-blue-300' },
-                                motivation: { parts: ['Profondità (Z) → Volume', 'Energia Corpo → Velocità, Filtro & Pan', 'Testa (Rotazione Y) → Pan Orizzontale'], rule: 'Più ti muovi con energia, più il ritmo si alza e il suono diventa spaziale.', color: 'from-orange-900/40 to-red-900/40 border-orange-500/30 text-orange-300' },
-                                cognitive_motor: { parts: ['Profondità (Z) → Volume', 'Testa (Rotazione Y) → Pan Orizzontale'], rule: 'Ogni gesto preciso controlla un parametro. Il movimento della testa orienta il suono.', color: 'from-green-900/40 to-teal-900/40 border-green-500/30 text-green-300' },
-                                social_emotional: { parts: ['Profondità (Z) → Volume', 'Apertura (Openness) → Filtro Brillantezza', 'Testa (Rotazione Y) → Pan Orizzontale'], rule: 'Più apri la postura e le braccia, più il suono si apre.', color: 'from-pink-900/40 to-rose-900/40 border-pink-500/30 text-pink-300' },
-                                physiological: { parts: ['Profondità (Z) → Volume', 'Testa (Rotazione Y) → Pan Orizzontale'], rule: 'Avvicinati o allontanati dalla telecamera per controllare il volume generale del brano.', color: 'from-violet-900/40 to-purple-900/40 border-violet-500/30 text-violet-300' },
-                            };
-                            const g = guidelines[whoCategory.category] || guidelines.calming;
-                            return (
-                                <div className={`mx-3 my-2 rounded-xl border p-3 bg-gradient-to-br ${g.color}`}>
-                                    <div className={`text-[9px] font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5 ${g.color.split(' ').find(c => c.startsWith('text-'))}`}>
-                                        <i className="fas fa-robot"></i> Skeleton Agent — {whoCategory.label}
+                            const primaryCatKey = whoCategory.category as keyof WhoAgentConfig;
+                            
+                            // If agentConfig is loaded and has this category, use it
+                            if (agentConfig && agentConfig[primaryCatKey]) {
+                                const catConfig = agentConfig[primaryCatKey];
+                                return (
+                                    <div className="mx-3 my-2 rounded-xl border p-3 bg-gradient-to-br from-cyan-900/40 to-blue-900/40 border-cyan-500/30">
+                                        <div className="text-[9px] font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5 text-cyan-300">
+                                            <i className="fas fa-robot"></i> Skeleton Agent — {whoCategory.label}
+                                        </div>
+                                        <p className="text-[8px] text-gray-300 leading-relaxed mb-2 italic">{catConfig.description}</p>
+                                        
+                                        <div className="space-y-0.5">
+                                            {/* Render Master Mappings if no stems are active, else render stem mappings */}
+                                            {(!engineRef.current?.stemGains || engineRef.current.stemGains.length === 0) ? (
+                                                catConfig.masterMappings.map((mm, i) => (
+                                                    <div key={`master-${i}`} className="flex items-center gap-1.5 text-[8px] text-gray-400">
+                                                        <i className="fas fa-arrow-right text-[6px] opacity-50"></i>
+                                                        <span className="text-cyan-400">{mm.bodyPart}</span> → {mm.audioParam}
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                catConfig.stemMappings.slice(0, engineRef.current.stemGains.length).map((sm, i) => (
+                                                    <div key={`stem-${i}`} className="flex items-center gap-1.5 text-[8px] text-gray-400">
+                                                        <i className="fas fa-arrow-right text-[6px] opacity-50"></i>
+                                                        Stem {(sm.targetStemIndex ?? i) + 1}: <span className="text-purple-400">{sm.bodyPart}</span> → {sm.audioParam}
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
                                     </div>
-                                    <p className="text-[8px] text-gray-300 leading-relaxed mb-2 italic">{g.rule}</p>
-                                    <div className="space-y-0.5">
-                                        {g.parts.map((p, i) => (
-                                            <div key={i} className="flex items-center gap-1.5 text-[8px] text-gray-400">
-                                                <i className="fas fa-arrow-right text-[6px] opacity-50"></i>
-                                                {p}
-                                            </div>
-                                        ))}
+                                );
+                            }
+                            
+                            // Fallback during loading or if no config
+                            return (
+                                <div className="mx-3 my-2 rounded-xl border p-3 bg-gradient-to-br from-gray-900/40 to-gray-800/40 border-gray-500/30">
+                                    <div className="text-[9px] font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5 text-gray-400">
+                                        <i className="fas fa-spinner fa-spin"></i> Caricamento logica...
                                     </div>
                                 </div>
                             );

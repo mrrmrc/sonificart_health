@@ -292,9 +292,29 @@ export interface ColorRegion {
 }
 
 // --- DYNAMIC STEM ENGINE ---
-export type BodyPart = 'leftHandY' | 'rightHandY' | 'leftHandX' | 'rightHandX' | 'leftHandZ' | 'rightHandZ' | 'z' | 'headYaw' | 'headPitch' | 'headRoll' | 'gazeX' | 'gazeY' | 'headZ' | 'shoulderY' | 'shoulderTilt' | 'elbowY' | 'kneeY' | 'footY' | 'torsoY' | 'torsoX' | 'armSpan' | 'handsY';
-export type AudioParameter = 'volume' | 'lowpass' | 'pan';
+export type BodyPart = 'leftHandY' | 'rightHandY' | 'leftHandX' | 'rightHandX' | 'leftHandZ' | 'rightHandZ' | 'z' | 'headYaw' | 'headPitch' | 'headRoll' | 'gazeX' | 'gazeY' | 'headZ' | 'shoulderY' | 'shoulderTilt' | 'elbowY' | 'kneeY' | 'footY' | 'torsoY' | 'torsoX' | 'armSpan' | 'handsY' | 'energyLevel' | 'openness';
+export type AudioParameter = 'volume' | 'lowpass' | 'pan' | 'pitch';
 
+export interface AgentMappingRule {
+    id: string;
+    bodyPart: BodyPart;
+    audioParam: AudioParameter;
+    targetStemIndex?: number; // If undefined, applies to Master Track. If defined, applies to the N-th stem.
+}
+
+export interface WhoAgentCategoryConfig {
+    description: string;
+    masterMappings: AgentMappingRule[];
+    stemMappings: AgentMappingRule[]; // Default mappings to apply when stems are detected
+}
+
+export interface WhoAgentConfig {
+    calming: WhoAgentCategoryConfig;
+    motivation: WhoAgentCategoryConfig;
+    cognitive_motor: WhoAgentCategoryConfig;
+    social_emotional: WhoAgentCategoryConfig;
+    physiological: WhoAgentCategoryConfig;
+}
 export interface StemMapping {
     id: string;
     name: string;

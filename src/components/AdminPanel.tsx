@@ -3,6 +3,7 @@ import { ShowcaseProject, SystemStats, User, SystemLog } from '../types';
 import { api } from '../services/api';
 import { ConfirmationModal } from './ConfirmationModal';
 import { MusicAiProvider, MusicProviderType, getMusicProviders, saveMusicProviders, testMusicProvider, DEFAULT_SOUNDVERSE_PROVIDER } from '../services/musicAiService';
+import { WhoAgentConfigEditor } from './WhoAgentConfigEditor';
 
 // --- INTERFACCE ---
 interface AccessRequest {
@@ -1388,54 +1389,8 @@ export const AdminPanel: React.FC = () => {
                         </button>
                     </div>
 
-                    {/* SKELETON LIVE AGENT */}
-                    <div className="bg-black/30 p-6 rounded-lg border border-cyan-500/30 mb-6 relative">
-                        <div className="flex justify-between items-center mb-4">
-                            <div>
-                                <h4 className="font-bold text-white flex items-center gap-2">
-                                    <i className="fas fa-person-running text-cyan-400 text-xl"></i>
-                                    Skeleton Live Agent
-                                    <span className="text-[9px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded-full uppercase font-bold ml-1">Attivo in Live</span>
-                                </h4>
-                                <p className="text-xs text-gray-400 mt-1">
-                                    Direttore d'orchestra in tempo reale: legge i movimenti del corpo via telecamera e modula l'audio in base alla categoria WHO.
-                                    <strong className="text-cyan-300"> Si attiva nella Console Live</strong> (icona omino a sinistra o tasto <kbd className="bg-white/10 px-1 rounded text-[9px]">CTRL+K</kbd>).
-                                </p>
-                            </div>
-                            <div className="w-12 h-12 rounded-full bg-cyan-900/50 border border-cyan-500/50 flex items-center justify-center">
-                                <i className="fas fa-person-running text-cyan-400 text-xl"></i>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4">
-                            {[
-                                { cat: 'Calming', color: 'blue', icon: 'fa-water', rule: 'Braccia aperte → suono che si espande. Energia alta → filtro si chiude (ti calma).' },
-                                { cat: 'Motivation', color: 'orange', icon: 'fa-fire', rule: 'Velocità movimenti → ritmo 8D. Salti e gesti ampi → volume alto.' },
-                                { cat: 'Cognitivo', color: 'green', icon: 'fa-brain', rule: 'Rotazione testa → panning stereo. Gesti precisi → filtro e focus.' },
-                                { cat: 'Sociale', color: 'pink', icon: 'fa-heart', rule: 'Apertura corpo → ampiezza sonora. Sguardo → vibrato.' },
-                                { cat: 'Fisiologico', color: 'violet', icon: 'fa-heartbeat', rule: 'Distanza camera → ritmo. Avvicinati per rallentare.' },
-                            ].map(item => (
-                                <div key={item.cat} className={`bg-${item.color}-900/20 border border-${item.color}-500/20 rounded-lg p-3`}>
-                                    <div className={`text-[9px] font-bold text-${item.color}-400 uppercase mb-1 flex items-center gap-1`}>
-                                        <i className={`fas ${item.icon}`}></i> {item.cat}
-                                    </div>
-                                    <p className="text-[9px] text-gray-400 leading-relaxed">{item.rule}</p>
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="bg-black/20 border border-white/5 rounded-lg p-4">
-                            <div className="text-[9px] font-bold text-cyan-400 uppercase mb-2 flex items-center gap-1"><i className="fas fa-list-check"></i> Parametri rilevati</div>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[9px] text-gray-400">
-                                {['Mano SX/DX (X, Y, Profondità)', 'Apertura Braccia', 'Inclinazione Spalle', 'Sguardo (X e Y)', 'Rotazione Testa (Yaw, Pitch, Roll)', 'Distanza Camera (Z)', 'Busto (X, Y)', 'Energia e Openness'].map(p => (
-                                    <div key={p} className="flex items-center gap-1">
-                                        <i className="fas fa-check text-cyan-500 text-[7px]"></i> {p}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                        <p className="text-[9px] text-gray-600 mt-3 italic">* Agente non configurabile: la logica di mappatura è determinata automaticamente dalla categoria WHO e personalizzabile in tempo reale dal pannello Skeleton Live.</p>
-                    </div>
+                    {/* SKELETON LIVE AGENT EDITOR */}
+                    <WhoAgentConfigEditor />
                 </div>
             )}
 
