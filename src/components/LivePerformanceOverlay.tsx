@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { SonificationResult, ColorRegion, StemMapping, BodyPart, AudioParameter, HealthCategoryType, WhoAgentConfig, WhoAgentCategoryConfig, BODY_PARTS_LABELS, AUDIO_PARAMS_LABELS } from '../types';
+import { SonificationResult, ColorRegion, StemMapping, BodyPart, AudioParameter, HealthCategoryType, WhoAgentConfig, WhoAgentCategoryConfig, BODY_PARTS_LABELS, AUDIO_PARAMS_LABELS, DEFAULT_WHO_AGENT_CONFIG } from '../types';
 import { api } from '../services/api';
 import WebcamService, { BodyMetrics } from '../services/WebcamService';
 import { LOGO_SVG_STRING } from './Logo';
@@ -236,11 +236,11 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
     const [stemAnalyses, setStemAnalyses] = useState<StemAnalysis[]>([]);
     
     // Configurable WHO Agent Logic
-    const [agentConfig, setAgentConfig] = useState<WhoAgentConfig | null>(null);
+    const [agentConfig, setAgentConfig] = useState<WhoAgentConfig>(DEFAULT_WHO_AGENT_CONFIG);
 
     useEffect(() => {
         api.getWhoAgentConfig().then(config => {
-            if (config) setAgentConfig(config);
+            if (config) setAgentConfig({ ...DEFAULT_WHO_AGENT_CONFIG, ...config });
         }).catch(console.error);
     }, []);
 

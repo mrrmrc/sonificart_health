@@ -349,6 +349,90 @@ export interface WhoAgentConfig {
     social_emotional: WhoAgentCategoryConfig;
     physiological: WhoAgentCategoryConfig;
 }
+
+/** Curated default choreography used as guaranteed fallback if no DB config exists */
+export const DEFAULT_WHO_AGENT_CONFIG: WhoAgentConfig = {
+    calming: {
+        description: 'Choreography (Calming): Apertura postura schiarisce suono. Mani basse calmano il volume.',
+        masterMappings: [
+            { id: 'c1', bodyPart: 'openness', audioParam: 'lowpass' },
+            { id: 'c2', bodyPart: 'energyLevel', audioParam: 'pitch' },
+            { id: 'c3', bodyPart: 'handsY', audioParam: 'volume' },
+            { id: 'c4', bodyPart: 'headPitch', audioParam: 'lowpass' },
+            { id: 'c5', bodyPart: 'z', audioParam: 'volume' }
+        ],
+        stemMappings: [
+            { id: 'cs1', targetStemIndex: 0, bodyPart: 'leftHandY', audioParam: 'lowpass' },
+            { id: 'cs2', targetStemIndex: 1, bodyPart: 'rightHandY', audioParam: 'volume' },
+            { id: 'cs3', targetStemIndex: 2, bodyPart: 'headRoll', audioParam: 'pan' },
+            { id: 'cs4', targetStemIndex: 3, bodyPart: 'openness', audioParam: 'volume' }
+        ]
+    },
+    motivation: {
+        description: 'Choreography (Motivation): Braccia aperte alzano il volume. Ginocchia e busto creano panning spaziale.',
+        masterMappings: [
+            { id: 'm1', bodyPart: 'energyLevel', audioParam: 'pitch' },
+            { id: 'm2', bodyPart: 'armSpan', audioParam: 'volume' },
+            { id: 'm3', bodyPart: 'kneeY', audioParam: 'lowpass' },
+            { id: 'm4', bodyPart: 'torsoX', audioParam: 'pan' },
+            { id: 'm5', bodyPart: 'headYaw', audioParam: 'pan' }
+        ],
+        stemMappings: [
+            { id: 'ms1', targetStemIndex: 0, bodyPart: 'energyLevel', audioParam: 'pitch' },
+            { id: 'ms2', targetStemIndex: 1, bodyPart: 'leftHandX', audioParam: 'pan' },
+            { id: 'ms3', targetStemIndex: 2, bodyPart: 'rightHandX', audioParam: 'pan' },
+            { id: 'ms4', targetStemIndex: 3, bodyPart: 'armSpan', audioParam: 'volume' }
+        ]
+    },
+    cognitive_motor: {
+        description: 'Choreography (Cognitive): Mano sinistra = pan, mano destra = pitch. Sguardo = filtro.',
+        masterMappings: [
+            { id: 'cm1', bodyPart: 'leftHandX', audioParam: 'pan' },
+            { id: 'cm2', bodyPart: 'rightHandY', audioParam: 'pitch' },
+            { id: 'cm3', bodyPart: 'gazeX', audioParam: 'lowpass' },
+            { id: 'cm4', bodyPart: 'shoulderTilt', audioParam: 'pan' },
+            { id: 'cm5', bodyPart: 'leftHandZ', audioParam: 'volume' }
+        ],
+        stemMappings: [
+            { id: 'cms1', targetStemIndex: 0, bodyPart: 'leftHandX', audioParam: 'pan' },
+            { id: 'cms2', targetStemIndex: 1, bodyPart: 'leftHandY', audioParam: 'pitch' },
+            { id: 'cms3', targetStemIndex: 2, bodyPart: 'rightHandX', audioParam: 'pan' },
+            { id: 'cms4', targetStemIndex: 3, bodyPart: 'rightHandY', audioParam: 'volume' }
+        ]
+    },
+    social_emotional: {
+        description: 'Choreography (Emotional): Aprire braccia riempie il volume. Inclinare testa schiarisce suono.',
+        masterMappings: [
+            { id: 'se1', bodyPart: 'openness', audioParam: 'volume' },
+            { id: 'se2', bodyPart: 'handsY', audioParam: 'lowpass' },
+            { id: 'se3', bodyPart: 'headRoll', audioParam: 'pitch' },
+            { id: 'se4', bodyPart: 'torsoY', audioParam: 'volume' },
+            { id: 'se5', bodyPart: 'armSpan', audioParam: 'pan' }
+        ],
+        stemMappings: [
+            { id: 'ses1', targetStemIndex: 0, bodyPart: 'openness', audioParam: 'volume' },
+            { id: 'ses2', targetStemIndex: 1, bodyPart: 'gazeX', audioParam: 'pan' },
+            { id: 'ses3', targetStemIndex: 2, bodyPart: 'armSpan', audioParam: 'lowpass' },
+            { id: 'ses4', targetStemIndex: 3, bodyPart: 'headPitch', audioParam: 'pitch' }
+        ]
+    },
+    physiological: {
+        description: 'Choreography (Physiological): Distanza = volume. Gomiti = filtro. Ginocchia = pitch. Busto = panning.',
+        masterMappings: [
+            { id: 'ph1', bodyPart: 'z', audioParam: 'volume' },
+            { id: 'ph2', bodyPart: 'elbowY', audioParam: 'lowpass' },
+            { id: 'ph3', bodyPart: 'kneeY', audioParam: 'pitch' },
+            { id: 'ph4', bodyPart: 'shoulderY', audioParam: 'volume' },
+            { id: 'ph5', bodyPart: 'torsoX', audioParam: 'pan' }
+        ],
+        stemMappings: [
+            { id: 'phs1', targetStemIndex: 0, bodyPart: 'footY', audioParam: 'volume' },
+            { id: 'phs2', targetStemIndex: 1, bodyPart: 'elbowY', audioParam: 'lowpass' },
+            { id: 'phs3', targetStemIndex: 2, bodyPart: 'kneeY', audioParam: 'pitch' },
+            { id: 'phs4', targetStemIndex: 3, bodyPart: 'shoulderY', audioParam: 'pan' }
+        ]
+    }
+};
 export interface StemMapping {
     id: string;
     name: string;
