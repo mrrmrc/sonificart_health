@@ -490,8 +490,8 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                             
                             const updated = stemsRef.current.map((stem, i) => ({
                                 ...stem,
-                                assignedBodyPart: whoConfig ? defaultParts[i % defaultParts.length] : (analyses[i]?.suggestedBodyPart || stem.assignedBodyPart),
-                                parameter: analyses[i]?.suggestedParameter || stem.parameter,
+                                assignedBodyPart: (whoConfig ? defaultParts[i % defaultParts.length] : (analyses[i]?.suggestedBodyPart || stem.assignedBodyPart)) as BodyPart,
+                                parameter: (analyses[i]?.suggestedParameter || stem.parameter) as AudioParameter,
                             }));
                             setLocalStems(updated);
                         }
@@ -753,8 +753,8 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         
                         eng.stemGains.forEach((gainNode, index) => {
                             // Update phase
-                            eng.orbitAngles[index] = (eng.orbitAngles[index] + orbitStep) % 360;
-                            const rad = (eng.orbitAngles[index] * Math.PI) / 180;
+                            orbitAngles[index] = (orbitAngles[index] + orbitStep) % 360;
+                            const rad = (orbitAngles[index] * Math.PI) / 180;
                             
                             // Update 3D position of this stem's panner
                             const panner3D = eng.stem3DPanners?.[index];
