@@ -1265,11 +1265,11 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         {(() => {
                             const whoCategory = result.healthClassification?.primaryCategory || { category: 'calming', label: 'Calming (Default)' };
                             const guidelines: Record<string, { parts: string[], rule: string, color: string }> = {
-                                calming: { parts: ['Apertura Braccia → Raggio 8D', 'Energia Corpo → Filtro (Calma)', 'Sguardo Y → Volume', 'Profondità (z) → Riverbero'], rule: 'Movimenti lenti. Più ti allarghi, più il suono si espande. Energia alta → filtro si chiude per calamarti.', color: 'from-blue-900/40 to-cyan-900/40 border-blue-500/30 text-blue-300' },
-                                motivation: { parts: ['Energia Corpo → Velocità Orbita 8D', 'Apertura Braccia → Volume', 'Mano SX Alt. → Stem 1', 'Mano DX Alt. → Stem 2'], rule: 'Movimenti veloci aumentano il ritmo. Più apri le braccia, più forte suona. Energia alta = suono più intenso.', color: 'from-orange-900/40 to-red-900/40 border-orange-500/30 text-orange-300' },
-                                cognitive_motor: { parts: ['Testa (Rotazione) → Pan Stereo', 'Mano SX (x) → Filtro', 'Profondità Mano → Volume', 'Sguardo X → Eco'], rule: 'Ogni gesto preciso controlla un parametro. Movimento della testa orienta il suono nello spazio.', color: 'from-green-900/40 to-teal-900/40 border-green-500/30 text-green-300' },
-                                social_emotional: { parts: ['Apertura (Openness) → Ampiezza', 'Inclinazione Spalle → Vibrato', 'Sguardo Y → Pitch', 'Braccia → Volume'], rule: 'Apertura del corpo = apertura del suono. Più sei aperto e vicino, più il suono ti abbraccia.', color: 'from-pink-900/40 to-rose-900/40 border-pink-500/30 text-pink-300' },
-                                physiological: { parts: ['Profondità (z) → Ritmo', 'Mano DX Alt. → Volume', 'Inclinazione → Tono', 'Sguardo → Riverbero'], rule: 'La distanza dalla telecamera controlla il ritmo. Avvicinati per rallentare, allontanati per accelerare.', color: 'from-violet-900/40 to-purple-900/40 border-violet-500/30 text-violet-300' },
+                                calming: { parts: ['Profondità (Z) → Volume', 'Energia Corpo → Filtro (Calma) & Pitch', 'Testa (Rotazione Y) → Pan Orizzontale'], rule: 'Movimenti calmi mantengono il suono chiaro. Alta energia attiva il filtro per calmarti.', color: 'from-blue-900/40 to-cyan-900/40 border-blue-500/30 text-blue-300' },
+                                motivation: { parts: ['Profondità (Z) → Volume', 'Energia Corpo → Velocità, Filtro & Pan', 'Testa (Rotazione Y) → Pan Orizzontale'], rule: 'Più ti muovi con energia, più il ritmo si alza e il suono diventa spaziale.', color: 'from-orange-900/40 to-red-900/40 border-orange-500/30 text-orange-300' },
+                                cognitive_motor: { parts: ['Profondità (Z) → Volume', 'Testa (Rotazione Y) → Pan Orizzontale'], rule: 'Ogni gesto preciso controlla un parametro. Il movimento della testa orienta il suono.', color: 'from-green-900/40 to-teal-900/40 border-green-500/30 text-green-300' },
+                                social_emotional: { parts: ['Profondità (Z) → Volume', 'Apertura (Openness) → Filtro Brillantezza', 'Testa (Rotazione Y) → Pan Orizzontale'], rule: 'Più apri la postura e le braccia, più il suono si apre.', color: 'from-pink-900/40 to-rose-900/40 border-pink-500/30 text-pink-300' },
+                                physiological: { parts: ['Profondità (Z) → Volume', 'Testa (Rotazione Y) → Pan Orizzontale'], rule: 'Avvicinati o allontanati dalla telecamera per controllare il volume generale del brano.', color: 'from-violet-900/40 to-purple-900/40 border-violet-500/30 text-violet-300' },
                             };
                             const g = guidelines[whoCategory.category] || guidelines.calming;
                             return (
@@ -1374,6 +1374,8 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         <div className="flex-1 overflow-y-auto p-3 space-y-1">
                             <div className="text-[9px] font-bold text-gray-500 uppercase tracking-wider mb-2">Parametri Corpo</div>
                             {([
+                                { key: 'energyLevel', label: 'Energia Corpo', icon: 'fa-bolt', val: metrics.energyLevel || 0, color: 'bg-yellow-400' },
+                                { key: 'openness', label: 'Apertura Postura', icon: 'fa-people-arrows', val: metrics.openness || 0.5, color: 'bg-indigo-400' },
                                 { key: 'leftHandY', label: 'Mano SX (Alt.)', icon: 'fa-hand-point-left', val: metrics.leftHandY, color: 'bg-cyan-500' },
                                 { key: 'rightHandY', label: 'Mano DX (Alt.)', icon: 'fa-hand-point-right', val: metrics.rightHandY, color: 'bg-pink-500' },
                                 { key: 'leftHandX', label: 'Mano SX (X)', icon: 'fa-arrows-alt-h', val: metrics.leftHandX, color: 'bg-cyan-700' },
@@ -1425,6 +1427,32 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                                 ))}
                                             </div>
                                         )}
+                                        {/* Master Track Fallback Mappings */}
+                                        {localStems.length === 0 && (() => {
+                                            const cat = result.healthClassification?.primaryCategory?.category as string || 'calming';
+                                            let fallbackParam = '';
+                                            
+                                            // Always assigned parameters
+                                            if (param.key === 'z') fallbackParam = 'Volume Generale';
+                                            if (param.key === 'headYaw') fallbackParam = 'Pan Orizzontale';
+                                            
+                                            // Category specific parameters
+                                            if (cat === 'calming' && param.key === 'energyLevel') fallbackParam = 'Filtro (Calma) & Pitch';
+                                            if (cat === 'motivation' && param.key === 'energyLevel') fallbackParam = 'Filtro, Velocità & Pan';
+                                            if (cat === 'social_emotional' && param.key === 'openness') fallbackParam = 'Filtro (Brillantezza)';
+
+                                            if (fallbackParam) {
+                                                return (
+                                                    <div className="flex flex-wrap gap-1 mt-1">
+                                                        <span className="text-[8px] bg-emerald-900/60 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded truncate">
+                                                            <i className="fas fa-layer-group mr-1"></i>Master Track
+                                                            <span className="ml-1 opacity-60">→ {fallbackParam}</span>
+                                                        </span>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
                                     </div>
                                 );
                             })}
