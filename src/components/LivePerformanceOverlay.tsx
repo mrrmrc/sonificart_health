@@ -430,11 +430,12 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     panner3D.distanceModel = 'inverse';
                     panner3D.refDistance = 1;
                     panner3D.maxDistance = 10000;
-                    panner3D.rolloffFactor = 2; // Aggressive falloff for better 8D separation
+                    panner3D.rolloffFactor = 5; // Molto aggressivo per enfatizzare lo spostamento 8D
                     // Phase offset: each stem starts at a different position in the orbit
                     const phaseRad = (i / stemBuffers.length) * Math.PI * 2;
-                    const initRadius = 3.0;
+                    const initRadius = 5.0; // Raggio più ampio
                     panner3D.positionX.value = Math.sin(phaseRad) * initRadius;
+
                     panner3D.positionY.value = 0;
                     panner3D.positionZ.value = Math.cos(phaseRad) * initRadius;
                     
@@ -793,11 +794,8 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                 const rawVal = getBodyVal(bodyPart);
                                 applyParam(parameter, rawVal, gainNode, undefined, filterNode);
                             } else {
-                                // Auto: left and right hands alternate control volume
-                                const bodyPart = defaultBodyParts[index % defaultBodyParts.length];
-                                const rawVal = getBodyVal(bodyPart);
-                                const vol = Math.max(0.05, Math.min(1, 1.0 - rawVal));
-                                gainNode.gain.setTargetAtTime(vol, ctx.currentTime, 0.1);
+                                // Se non configurato, volume fisso
+                                gainNode.gain.setTargetAtTime(1.0, ctx.currentTime, 0.1);
                             }
                         });
                         
@@ -813,10 +811,9 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                             applyParam(mm.parameter, rawVal, eng.autoGain!, eng.panner!, eng.filter!);
                         });
                     } else {
-                        // 6. FALLBACK: hand height controls volume
-                        const defaultVol = Math.max(0, Math.min(1, 1.0 - ((m.leftHandY + m.rightHandY) / 2)));
+                        // 6. FALLBACK: nessun mapping, volume fisso a 1.0 (brano sempre udibile)
                         if (eng.autoGain) {
-                            eng.autoGain.gain.setTargetAtTime(defaultVol, ctx.currentTime, 0.1);
+                            eng.autoGain.gain.setTargetAtTime(1.0, ctx.currentTime, 0.1);
                         }
                     }
 
@@ -1198,7 +1195,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 </div>
                 <canvas ref={canvasRef} className="absolute inset-0 w-full h-full block z-10 mix-blend-screen" />
 
-                {/* WEBCAM PIP */}
+                {/* WEBCAM PIP - Sempre visibile come "scheletro" in basso a destra */}
                 <div className="absolute bottom-32 right-6 flex flex-col items-center gap-0 z-50 transition-all duration-500 hover:scale-105 opacity-80 hover:opacity-100">
                     <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-cyan-500 shadow-lg bg-black relative">
                         <video ref={videoRef} className="w-full h-full object-cover mirror-mode opacity-100" autoPlay muted playsInline />
@@ -1206,8 +1203,8 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     </div>
                 </div>
 
-                {/* SETTINGS TOGGLE */}
-                {isKiosk ? (
+                {/* SETTINGS TOGGLE (Nascosti in modalità trasparenza) */}
+                {visualMode !== 'transparency' && (isKiosk ? (
                     <>
                     <button
                         onClick={() => setIsSettingsOpen(!isSettingsOpen)}
@@ -1247,7 +1244,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         <i className="fas fa-person-running text-xl"></i>
                     </button>
                     </>
-                )}
+                ))}
 
                 {/* LIVE SKELETON PANEL */}
                 {showSkeletonPanel && metrics && (
@@ -1291,6 +1288,62 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                 </div>
                             );
                         })()}
+
+                        {/* Quick Mapping Editor - Spostato in alto per visibilità */}
+                        {localStems.length > 0 && (
+                            <div className="p-3 border-b border-white/5 bg-gradient-to-br from-yellow-900/20 to-orange-900/20 shrink-0">
+                                <div className="text-[9px] font-bold text-yellow-400 uppercase tracking-wider mb-2">
+                                    <i className="fas fa-sliders-h mr-1"></i> Assegna Movimenti agli Strumenti
+                                </div>
+                                <div className="space-y-2">
+                                    {localStems.map((stem, i) => (
+                                        <div key={stem.id} className="bg-black/40 p-2 rounded border border-white/5">
+                                            <div className="text-[10px] font-bold text-gray-200 truncate mb-1" title={stem.name}><i className="fas fa-music text-purple-400 mr-1"></i>{stem.name}</div>
+                                            <div className="flex flex-col gap-1.5">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[8px] text-gray-400 w-12">Movimento:</span>
+                                                    <select
+                                                        value={stem.assignedBodyPart}
+                                                        onChange={(e) => {
+                                                            const updated = [...localStems];
+                                                            updated[i] = { ...updated[i], assignedBodyPart: e.target.value as BodyPart };
+                                                            setLocalStems(updated);
+                                                        }}
+                                                        className="flex-1 bg-white/10 border border-white/20 text-[9px] text-white p-1 rounded outline-none"
+                                                    >
+                                                        <option value="leftHandY">Mano SX (Su/Giù)</option>
+                                                        <option value="rightHandY">Mano DX (Su/Giù)</option>
+                                                        <option value="leftHandX">Mano SX (Sx/Dx)</option>
+                                                        <option value="rightHandX">Mano DX (Sx/Dx)</option>
+                                                        <option value="armSpan">Apertura Braccia</option>
+                                                        <option value="shoulderTilt">Inclinazione Spalle</option>
+                                                        <option value="headYaw">Rotazione Testa</option>
+                                                        <option value="gazeX">Sguardo (Sx/Dx)</option>
+                                                        <option value="z">Distanza dalla Telecamera</option>
+                                                    </select>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[8px] text-gray-400 w-12">Effetto:</span>
+                                                    <select
+                                                        value={stem.parameter}
+                                                        onChange={(e) => {
+                                                            const updated = [...localStems];
+                                                            updated[i] = { ...updated[i], parameter: e.target.value as AudioParameter };
+                                                            setLocalStems(updated);
+                                                        }}
+                                                        className="flex-1 bg-white/10 border border-white/20 text-[9px] text-white p-1 rounded outline-none"
+                                                    >
+                                                        <option value="volume">Volume</option>
+                                                        <option value="pan">Pan (Destra/Sinistra)</option>
+                                                        <option value="lowpass">Filtro (Muffler)</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         {/* 8D Orbit Status */}
                         {localStems.length > 0 && (
@@ -1397,70 +1450,8 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                 </div>
                             </div>
                         )}
-
-                        {/* Quick Mapping Editor */}
-                        {localStems.length > 0 && (
-                            <div className="p-3 border-t border-white/5 shrink-0">
-                                <div className="text-[9px] font-bold text-yellow-400 uppercase tracking-wider mb-2">
-                                    <i className="fas fa-sliders-h mr-1"></i> Modifica Mappatura
-                                </div>
-                                <div className="space-y-2 max-h-40 overflow-y-auto">
-                                    {localStems.map((stem, i) => (
-                                        <div key={stem.id} className="bg-white/5 p-2 rounded">
-                                            <div className="text-[9px] text-gray-300 truncate mb-1" title={stem.name}>{stem.name}</div>
-                                            <div className="flex gap-1">
-                                                <select
-                                                    value={stem.assignedBodyPart}
-                                                    onChange={(e) => {
-                                                        const updated = [...localStems];
-                                                        updated[i] = { ...updated[i], assignedBodyPart: e.target.value as BodyPart };
-                                                        setLocalStems(updated);
-                                                    }}
-                                                    className="flex-1 bg-black/60 border border-white/10 text-[8px] text-gray-300 p-1 rounded outline-none"
-                                                >
-                                                    <option value="leftHandY">Mano SX (Altezza)</option>
-                                                    <option value="rightHandY">Mano DX (Altezza)</option>
-                                                    <option value="leftHandX">Mano SX (X)</option>
-                                                    <option value="rightHandX">Mano DX (X)</option>
-                                                    <option value="leftHandZ">Mano SX (Profond. z)</option>
-                                                    <option value="rightHandZ">Mano DX (Profond. z)</option>
-                                                    <option value="armSpan">Apertura Braccia</option>
-                                                    <option value="shoulderTilt">Inclinazione Spalle</option>
-                                                    <option value="shoulderY">Spalle (Altezza)</option>
-                                                    <option value="elbowY">Gomiti</option>
-                                                    <option value="headYaw">Testa (Rotazione Y)</option>
-                                                    <option value="headPitch">Testa (Su/Giù)</option>
-                                                    <option value="headRoll">Testa (Inclinazione)</option>
-                                                    <option value="gazeX">Sguardo (X)</option>
-                                                    <option value="gazeY">Sguardo (Y)</option>
-                                                    <option value="z">Distanza (Z)</option>
-                                                    <option value="torsoY">Busto (Altezza)</option>
-                                                    <option value="torsoX">Busto (Orizzontale)</option>
-                                                    <option value="kneeY">Ginocchia</option>
-                                                    <option value="handsY">Mani (Media Y)</option>
-                                                </select>
-                                                <select
-                                                    value={stem.parameter}
-                                                    onChange={(e) => {
-                                                        const updated = [...localStems];
-                                                        updated[i] = { ...updated[i], parameter: e.target.value as AudioParameter };
-                                                        setLocalStems(updated);
-                                                    }}
-                                                    className="w-16 bg-black/60 border border-white/10 text-[8px] text-gray-300 p-1 rounded outline-none"
-                                                >
-                                                    <option value="volume">Vol</option>
-                                                    <option value="lowpass">Filter</option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
                     </div>
                 )}
-
-
 
                 {/* SIDEBAR SETTINGS */}
                 <div className={`absolute top-0 left-0 h-full w-80 bg-black/95 backdrop-blur-xl border-r border-white/10 z-[10000] transition-transform duration-300 transform ${isSettingsOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col shadow-2xl`}>
