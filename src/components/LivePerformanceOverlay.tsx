@@ -507,10 +507,8 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         console.log('[AI ANALYSIS]', analyses.map(a => a.label));
                     })
                     .catch(e => console.warn('Audio analysis skipped:', e));
-            } else if (sourceNode && fallbackBuffer) {
-                sourceNode.start(0);
-                setDuration(fallbackBuffer.duration);
             }
+
             setIsPlaying(true);
 
             engineRef.current = {
