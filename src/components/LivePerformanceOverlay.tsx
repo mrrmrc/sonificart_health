@@ -348,11 +348,13 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 }
             }
 
-            // Fallback decode
+            // Always decode the master track (fallbackBuffer) so it can play alongside stems
             let fallbackBuffer: AudioBuffer | null = null;
-            if (!useStems) {
+            try {
                 const arrayBuffer = await audioBlob.arrayBuffer();
                 fallbackBuffer = await ctx.decodeAudioData(arrayBuffer);
+            } catch(e) {
+                console.error("Could not decode master track", e);
             }
 
             // NODE GRAPH FOR MASTER EFFECTS
@@ -401,6 +403,19 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
             ctx.listener.upY.value = 1;
             ctx.listener.upZ.value = 0;
 
+            // ALWAYS init master track
+            sourceNode = ctx.createBufferSource();
+            sourceNode.buffer = fallbackBuffer;
+            panner = ctx.createStereoPanner();
+            
+            // If we have stems, master track is background, otherwise it's foreground
+            const masterGainNode = ctx.createGain();
+            masterGainNode.gain.value = useStems ? 0.4 : 1.0; // Master track lower volume when stems are present
+            
+            sourceNode.connect(panner);
+            panner.connect(masterGainNode);
+            masterGainNode.connect(filter);
+
             if (useStems) {
                 for (let i = 0; i < stemBuffers.length; i++) {
                     const src = ctx.createBufferSource();
@@ -437,15 +452,6 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     stem3DPanners.push(panner3D);
                     stemFilters.push(stemFilter);
                 }
-                // Dummy stereo panner for synth nodes
-                panner = ctx.createStereoPanner();
-                panner.connect(filter);
-            } else {
-                sourceNode = ctx.createBufferSource();
-                sourceNode.buffer = fallbackBuffer;
-                panner = ctx.createStereoPanner();
-                sourceNode.connect(panner);
-                panner.connect(filter);
             }
 
             // 2. Init Webcam
@@ -474,9 +480,12 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
             const logoStub = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(LOGO_SVG_STRING)));
             const logoImg = await loadImage(logoStub);
 
+            // Always start master track
+            if (sourceNode) sourceNode.start(0);
+            setDuration(fallbackBuffer ? fallbackBuffer.duration : (useStems && stemBuffers.length > 0 ? stemBuffers[0].duration : 0));
+
             if (useStems) {
                 stemSources.forEach(s => s.start(0));
-                setDuration(stemBuffers[0].duration);
                 
                 // AI Analysis in background (non blocking)
                 Promise.all(stemBuffers.map((buf, i) => analyzeStem(buf, i, stemBuffers.length)))
@@ -1258,8 +1267,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
 
                         {/* WHO SKELETON AGENT GUIDELINES */}
                         {(() => {
-                            const whoCategory = result.healthClassification?.primaryCategory;
-                            if (!whoCategory) return null;
+                            const whoCategory = result.healthClassification?.primaryCategory || { category: 'calming', label: 'Calming (Default)' };
                             const guidelines: Record<string, { parts: string[], rule: string, color: string }> = {
                                 calming: { parts: ['Apertura Braccia → Raggio 8D', 'Energia Corpo → Filtro (Calma)', 'Sguardo Y → Volume', 'Profondità (z) → Riverbero'], rule: 'Movimenti lenti. Più ti allarghi, più il suono si espande. Energia alta → filtro si chiude per calamarti.', color: 'from-blue-900/40 to-cyan-900/40 border-blue-500/30 text-blue-300' },
                                 motivation: { parts: ['Energia Corpo → Velocità Orbita 8D', 'Apertura Braccia → Volume', 'Mano SX Alt. → Stem 1', 'Mano DX Alt. → Stem 2'], rule: 'Movimenti veloci aumentano il ritmo. Più apri le braccia, più forte suona. Energia alta = suono più intenso.', color: 'from-orange-900/40 to-red-900/40 border-orange-500/30 text-orange-300' },
