@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
-import { WhoAgentConfig, WhoAgentCategoryConfig, AgentMappingRule, BodyPart, AudioParameter } from '../types';
+import { WhoAgentConfig, WhoAgentCategoryConfig, AgentMappingRule, BodyPart, AudioParameter, BODY_PARTS_LABELS, AUDIO_PARAMS_LABELS } from '../types';
 
 const defaultAgentConfig: WhoAgentConfig = {
     calming: {
@@ -61,39 +61,7 @@ const defaultAgentConfig: WhoAgentConfig = {
     }
 };
 
-const BODY_PARTS: Record<BodyPart, string> = {
-    leftHandY: 'Mano SX (Alt.)',
-    rightHandY: 'Mano DX (Alt.)',
-    leftHandX: 'Mano SX (X)',
-    rightHandX: 'Mano DX (X)',
-    leftHandZ: 'Mano SX (Profond.)',
-    rightHandZ: 'Mano DX (Profond.)',
-    z: 'Distanza (Z)',
-    headYaw: 'Testa (Rotazione Y)',
-    headPitch: 'Testa (Su/Giù)',
-    headRoll: 'Testa (Inclinazione)',
-    gazeX: 'Sguardo (X)',
-    gazeY: 'Sguardo (Y)',
-    headZ: 'Testa (Profond.)',
-    shoulderY: 'Spalle (Altezza)',
-    shoulderTilt: 'Inclinazione Spalle',
-    elbowY: 'Gomiti (Altezza)',
-    kneeY: 'Ginocchia',
-    footY: 'Piedi',
-    torsoY: 'Busto (Altezza)',
-    torsoX: 'Busto (Orizzontale)',
-    armSpan: 'Apertura Braccia',
-    handsY: 'Mani (Mediana Y)',
-    energyLevel: 'Energia Corpo',
-    openness: 'Apertura Postura'
-};
 
-const AUDIO_PARAMS: Record<AudioParameter, string> = {
-    volume: 'Volume',
-    lowpass: 'Filtro (Muffler)',
-    pan: 'Pan (Destra/Sinistra)',
-    pitch: 'Velocità / Pitch'
-};
 
 export const WhoAgentConfigEditor: React.FC = () => {
     const [config, setConfig] = useState<WhoAgentConfig>(defaultAgentConfig);
@@ -201,7 +169,7 @@ export const WhoAgentConfigEditor: React.FC = () => {
                                 onChange={(e) => updateMapping(type, rule.id, 'bodyPart', e.target.value)}
                                 className="flex-1 min-w-[120px] bg-black/40 border border-white/10 p-1.5 rounded text-white text-[9px] outline-none"
                             >
-                                {Object.entries(BODY_PARTS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                                {Object.entries(BODY_PARTS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
                             </select>
                             <i className="fas fa-arrow-right text-[8px] text-gray-500"></i>
                             <select
@@ -209,7 +177,7 @@ export const WhoAgentConfigEditor: React.FC = () => {
                                 onChange={(e) => updateMapping(type, rule.id, 'audioParam', e.target.value)}
                                 className="flex-1 min-w-[120px] bg-black/40 border border-white/10 p-1.5 rounded text-white text-[9px] outline-none"
                             >
-                                {Object.entries(AUDIO_PARAMS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                                {Object.entries(AUDIO_PARAMS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
                             </select>
 
                             {type === 'stemMappings' && (

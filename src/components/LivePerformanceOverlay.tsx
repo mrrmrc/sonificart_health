@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { SonificationResult, ColorRegion, StemMapping, BodyPart, AudioParameter, HealthCategoryType, WhoAgentConfig, WhoAgentCategoryConfig } from '../types';
+import { SonificationResult, ColorRegion, StemMapping, BodyPart, AudioParameter, HealthCategoryType, WhoAgentConfig, WhoAgentCategoryConfig, BODY_PARTS_LABELS, AUDIO_PARAMS_LABELS } from '../types';
 import { api } from '../services/api';
 import WebcamService, { BodyMetrics } from '../services/WebcamService';
 import { LOGO_SVG_STRING } from './Logo';
@@ -1326,15 +1326,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                                         }}
                                                         className="flex-1 bg-white/10 border border-white/20 text-[9px] text-white p-1 rounded outline-none"
                                                     >
-                                                        <option value="leftHandY">Mano SX (Su/Giù)</option>
-                                                        <option value="rightHandY">Mano DX (Su/Giù)</option>
-                                                        <option value="leftHandX">Mano SX (Sx/Dx)</option>
-                                                        <option value="rightHandX">Mano DX (Sx/Dx)</option>
-                                                        <option value="armSpan">Apertura Braccia</option>
-                                                        <option value="shoulderTilt">Inclinazione Spalle</option>
-                                                        <option value="headYaw">Rotazione Testa</option>
-                                                        <option value="gazeX">Sguardo (Sx/Dx)</option>
-                                                        <option value="z">Distanza dalla Telecamera</option>
+                                                        {Object.entries(BODY_PARTS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
                                                     </select>
                                                 </div>
                                                 <div className="flex items-center gap-2">
@@ -1348,9 +1340,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                                         }}
                                                         className="flex-1 bg-white/10 border border-white/20 text-[9px] text-white p-1 rounded outline-none"
                                                     >
-                                                        <option value="volume">Volume</option>
-                                                        <option value="pan">Pan (Destra/Sinistra)</option>
-                                                        <option value="lowpass">Filtro (Muffler)</option>
+                                                        {Object.entries(AUDIO_PARAMS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
                                                     </select>
                                                 </div>
                                             </div>

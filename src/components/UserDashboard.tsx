@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { DashboardEntry, User, TransformedNoteEvent, SonificationResult, StemMapping, BodyPart, AudioParameter } from '../types';
+import { DashboardEntry, User, TransformedNoteEvent, SonificationResult, StemMapping, BodyPart, AudioParameter, BODY_PARTS_LABELS, AUDIO_PARAMS_LABELS } from '../types';
 import { api, USE_MOCK_BACKEND } from '../services/api';
 import { ConfirmationModal } from './ConfirmationModal';
 import { generateSonificationVideo } from '../services/videoService';
@@ -493,21 +493,7 @@ const PublishModal: React.FC<{
                                                                 }}
                                                                 className="bg-black/50 border border-white/10 text-[9px] text-gray-300 p-1 rounded flex-1 outline-none uppercase font-bold"
                                                             >
-                                                                <option value="leftHandY">Mano SX (Y)</option>
-                                                                <option value="rightHandY">Mano DX (Y)</option>
-                                                                <option value="leftHandX">Mano SX (X)</option>
-                                                                <option value="rightHandX">Mano DX (X)</option>
-                                                                <option value="z">Distanza (Z)</option>
-                                                                <option value="headYaw">Testa (Rotazione X)</option>
-                                                                <option value="headPitch">Testa (Rotazione Y)</option>
-                                                                <option value="shoulderY">Spalle (Altezza)</option>
-                                                                <option value="shoulderTilt">Spalle (Inclinazione)</option>
-                                                                <option value="elbowY">Gomiti (Altezza)</option>
-                                                                <option value="kneeY">Ginocchia (Altezza)</option>
-                                                                <option value="footY">Piedi (Altezza)</option>
-                                                                <option value="torsoY">Busto (Altezza)</option>
-                                                                <option value="armSpan">Apertura Braccia</option>
-                                                                <option value="handsY">Mani (Altezza Media)</option>
+                                                                {Object.entries(BODY_PARTS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
                                                             </select>
                                                             <select 
                                                                 value={mm.parameter}
@@ -518,10 +504,7 @@ const PublishModal: React.FC<{
                                                                 }}
                                                                 className="bg-black/50 border border-white/10 text-[9px] text-gray-300 p-1 rounded flex-1 outline-none uppercase font-bold"
                                                             >
-                                                                <option value="volume">Volume</option>
-                                                                <option value="lowpass">Filtro Lowpass</option>
-                                                                <option value="pan">Panning (L/R)</option>
-                                                                <option value="pitch">Velocità/Pitch</option>
+                                                                {Object.entries(AUDIO_PARAMS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
                                                             </select>
                                                         </div>
                                                     </div>
@@ -564,21 +547,7 @@ const PublishModal: React.FC<{
                                                         }}
                                                         className="bg-black/50 border border-white/10 text-[9px] text-gray-300 p-1 rounded flex-1 outline-none uppercase font-bold"
                                                     >
-                                                        <option value="leftHandY">Mano SX (Y)</option>
-                                                        <option value="rightHandY">Mano DX (Y)</option>
-                                                        <option value="leftHandX">Mano SX (X)</option>
-                                                        <option value="rightHandX">Mano DX (X)</option>
-                                                        <option value="z">Distanza (Z)</option>
-                                                        <option value="headYaw">Testa (Rotazione X)</option>
-                                                        <option value="headPitch">Testa (Rotazione Y)</option>
-                                                        <option value="shoulderY">Spalle (Altezza)</option>
-                                                        <option value="shoulderTilt">Spalle (Inclinazione)</option>
-                                                        <option value="elbowY">Gomiti (Altezza)</option>
-                                                        <option value="kneeY">Ginocchia (Altezza)</option>
-                                                        <option value="footY">Piedi (Altezza)</option>
-                                                        <option value="torsoY">Busto (Altezza)</option>
-                                                        <option value="armSpan">Apertura Braccia</option>
-                                                        <option value="handsY">Mani (Altezza Media)</option>
+                                                        {Object.entries(BODY_PARTS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
                                                     </select>
                                                     <select 
                                                         value={stem.parameter}
@@ -589,10 +558,7 @@ const PublishModal: React.FC<{
                                                         }}
                                                         className="bg-black/50 border border-white/10 text-[9px] text-gray-300 p-1 rounded flex-1 outline-none uppercase font-bold"
                                                     >
-                                                        <option value="volume">Volume</option>
-                                                        <option value="lowpass">Filtro Lowpass</option>
-                                                        <option value="pan">Panning (L/R)</option>
-                                                        <option value="pitch">Velocità/Pitch</option>
+                                                        {Object.entries(AUDIO_PARAMS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
                                                     </select>
                                                 </div>
                                             </div>

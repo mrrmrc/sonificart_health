@@ -295,6 +295,40 @@ export interface ColorRegion {
 export type BodyPart = 'leftHandY' | 'rightHandY' | 'leftHandX' | 'rightHandX' | 'leftHandZ' | 'rightHandZ' | 'z' | 'headYaw' | 'headPitch' | 'headRoll' | 'gazeX' | 'gazeY' | 'headZ' | 'shoulderY' | 'shoulderTilt' | 'elbowY' | 'kneeY' | 'footY' | 'torsoY' | 'torsoX' | 'armSpan' | 'handsY' | 'energyLevel' | 'openness';
 export type AudioParameter = 'volume' | 'lowpass' | 'pan' | 'pitch';
 
+export const BODY_PARTS_LABELS: Record<BodyPart, string> = {
+    leftHandY: 'Mano SX (Alt.)',
+    rightHandY: 'Mano DX (Alt.)',
+    leftHandX: 'Mano SX (X)',
+    rightHandX: 'Mano DX (X)',
+    leftHandZ: 'Mano SX (Profond.)',
+    rightHandZ: 'Mano DX (Profond.)',
+    z: 'Distanza (Z)',
+    headYaw: 'Testa (Rotazione Y)',
+    headPitch: 'Testa (Su/Giù)',
+    headRoll: 'Testa (Inclinazione)',
+    gazeX: 'Sguardo (X)',
+    gazeY: 'Sguardo (Y)',
+    headZ: 'Testa (Profond.)',
+    shoulderY: 'Spalle (Altezza)',
+    shoulderTilt: 'Inclinazione Spalle',
+    elbowY: 'Gomiti (Altezza)',
+    kneeY: 'Ginocchia',
+    footY: 'Piedi',
+    torsoY: 'Busto (Altezza)',
+    torsoX: 'Busto (Orizzontale)',
+    armSpan: 'Apertura Braccia',
+    handsY: 'Mani (Mediana Y)',
+    energyLevel: 'Energia Corpo',
+    openness: 'Apertura Postura'
+};
+
+export const AUDIO_PARAMS_LABELS: Record<AudioParameter, string> = {
+    volume: 'Volume',
+    lowpass: 'Filtro (Muffler)',
+    pan: 'Pan (Destra/Sinistra)',
+    pitch: 'Velocità / Pitch'
+};
+
 export interface AgentMappingRule {
     id: string;
     bodyPart: BodyPart;
