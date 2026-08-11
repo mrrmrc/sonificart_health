@@ -500,8 +500,9 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                             
                             const updated = stemsRef.current.map((stem, i) => ({
                                 ...stem,
-                                assignedBodyPart: (whoConfig ? defaultParts[i % defaultParts.length] : (analyses[i]?.suggestedBodyPart || stem.assignedBodyPart)) as BodyPart,
-                                parameter: (analyses[i]?.suggestedParameter || stem.parameter) as AudioParameter,
+                                assignedBodyPart: stem.assignedBodyPart || (whoConfig ? defaultParts[i % defaultParts.length] : analyses[i]?.suggestedBodyPart) as BodyPart,
+                                // Forza il parametro a 'pan' o 'lowpass' di default, MAI volume, in modo che il brano parta sempre
+                                parameter: stem.parameter && stem.parameter !== 'volume' ? stem.parameter : (i % 2 === 0 ? 'pan' : 'lowpass'),
                             }));
                             setLocalStems(updated);
                         }
@@ -1247,7 +1248,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 ))}
 
                 {/* LIVE SKELETON PANEL */}
-                {showSkeletonPanel && metrics && (
+                {visualMode !== 'transparency' && showSkeletonPanel && metrics && (
                     <div className="absolute top-0 right-0 h-full w-80 bg-black/95 backdrop-blur-xl border-l border-white/10 z-[10000] flex flex-col shadow-2xl overflow-y-auto">
                         {/* Header */}
                         <div className="p-4 border-b border-white/10 flex justify-between items-center shrink-0">
@@ -1452,8 +1453,9 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         )}
                     </div>
                 )}
-
+                
                 {/* SIDEBAR SETTINGS */}
+                {visualMode !== 'transparency' && (
                 <div className={`absolute top-0 left-0 h-full w-80 bg-black/95 backdrop-blur-xl border-r border-white/10 z-[10000] transition-transform duration-300 transform ${isSettingsOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col shadow-2xl`}>
 
                     {/* Header */}
@@ -1532,7 +1534,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                 </button>
                                 <button
                                     onClick={() => setVisualMode('transparency')}
-                                    className={`flex-1 py-2 rounded text-xs font-bold transition-all ${visualMode === 'transparency' ? 'bg-pink-600 text-white' : 'bg-white/10 text-gray-400 hover:bg-white/20'}`}
+                                    className={`flex-1 py-2 rounded text-xs font-bold transition-all ${visualMode as string === 'transparency' ? 'bg-pink-600 text-white' : 'bg-white/10 text-gray-400 hover:bg-white/20'}`}
                                 >
                                     Transparent
                                 </button>
@@ -1574,8 +1576,8 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         </button>
                     </div>
                 </div>
+                )}
                 
-
                 {/* ERROR BANNER */}
                 {error && (
                     <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[80] bg-red-900/90 text-white px-8 py-4 rounded-xl flex items-center gap-4">
