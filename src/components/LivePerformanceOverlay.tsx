@@ -247,6 +247,27 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
     // Live Skeleton Panel — auto aperto di default
     const [showSkeletonPanel, setShowSkeletonPanel] = useState(true);
     
+    // Manual Live Mappings
+    type LiveMappingTarget = 'master' | string;
+    interface LiveMapping { target: LiveMappingTarget; parameter: AudioParameter; }
+    const [liveMappings, setLiveMappings] = useState<Record<string, LiveMapping>>({});
+    const liveMappingsRef = useRef(liveMappings);
+    useEffect(() => { liveMappingsRef.current = liveMappings; }, [liveMappings]);
+
+    // Audio Player State
+    const [playbackState, setPlaybackState] = useState<'playing' | 'paused'>('playing');
+
+    const togglePlayback = () => {
+        if (!engineRef.current?.audioCtx) return;
+        if (playbackState === 'playing') {
+            engineRef.current.audioCtx.suspend();
+            setPlaybackState('paused');
+        } else {
+            engineRef.current.audioCtx.resume();
+            setPlaybackState('playing');
+        }
+    };
+
     // Force re-render for UI
     const [calibState, setCalibState] = useState(calibRef.current);
     const smoothCam = useRef({ x: 0, y: 0, z: -1.0, tiltX: 0, tiltY: 0 });
@@ -697,9 +718,26 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         } else if (param === 'pitch' && engineRef.current!.source) {
                             // Full range: 0 = 0.5x, 1 = 1.8x speed — clear difference
                             const pitch = 0.5 + (clampedVal * 1.3);
-                            engineRef.current!.source.playbackRate.setTargetAtTime(pitch, actx.currentTime, 0.1);
                         }
                     };
+
+                    const lm = liveMappingsRef.current;
+                    const isHandled = (target: string, param: AudioParameter) => {
+                        return Object.values(lm).some(m => m.target === target && m.parameter === param);
+                    };
+
+                    // ---- APPLY CUSTOM LIVE MAPPINGS ----
+                    Object.entries(lm).forEach(([bodyPart, mapping]) => {
+                        const rawVal = getBodyVal(bodyPart as BodyPart);
+                        if (mapping.target === 'master') {
+                            applyParam(mapping.parameter, rawVal, eng.autoGain || undefined, eng.panner || undefined, eng.filter || undefined);
+                        } else {
+                            const stemIdx = stemsRef.current.findIndex(s => s.id === mapping.target);
+                            if (stemIdx >= 0) {
+                                applyParam(mapping.parameter, rawVal, eng.stemGains?.[stemIdx] || undefined, eng.stemPanners?.[stemIdx] || undefined, eng.stemFilters?.[stemIdx] || undefined);
+                            }
+                        }
+                    });
 
 
                     // 4. STEM ENGINE MAPPING + 8D ORBIT
@@ -781,12 +819,14 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                 }
                             }
                             
-                            if (stemRule) {
+                            if (stemRule && !isHandled(stemRule.id, stemRule.parameter)) {
                                 const rawVal = getBodyVal(stemRule.assignedBodyPart);
                                 applyParam(stemRule.parameter, rawVal, gainNode, undefined, filterNode);
-                            } else {
-                                // Se non configurato, volume fisso
-                                gainNode.gain.setTargetAtTime(1.0, ctx.currentTime, 0.1);
+                            } else if (!stemRule) {
+                                // Se non configurato e non gestito manualmente, volume fisso
+                                if (!isHandled(stems[index]?.id || `stem_${index}`, 'volume')) {
+                                    gainNode.gain.setTargetAtTime(1.0, ctx.currentTime, 0.1);
+                                }
                             }
                         });
                         
@@ -814,8 +854,10 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         
                         if (activeMappings.length > 0) {
                             activeMappings.forEach(mm => {
-                                const rawVal = getBodyVal(mm.bodyPart);
-                                applyParam(mm.parameter, rawVal, eng.autoGain!, eng.panner!, eng.filter!);
+                                if (!isHandled('master', mm.parameter)) {
+                                    const rawVal = getBodyVal(mm.bodyPart);
+                                    applyParam(mm.parameter, rawVal, eng.autoGain || undefined, eng.panner || undefined, eng.filter || undefined);
+                                }
                             });
                         }
                         // Note: if no mappings found, baseline volume from distance-Z above is already applied
@@ -1438,8 +1480,57 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                                 ))}
                                             </div>
                                         )}
-                                        {/* Master Track Fallback Mappings */}
-                                        {(!engineRef.current?.stemGains || engineRef.current.stemGains.length === 0) && (() => {
+                                        {/* Live Custom Mapping Controls */}
+                                        <div className="mt-2 flex gap-1 items-center bg-black/40 p-1 rounded border border-white/10">
+                                            <select 
+                                                className="bg-transparent text-[8px] text-gray-300 outline-none flex-1 truncate uppercase"
+                                                value={liveMappings[param.key]?.target || ''}
+                                                onChange={(e) => {
+                                                    const newTarget = e.target.value;
+                                                    setLiveMappings(prev => {
+                                                        const updated = { ...prev };
+                                                        if (!newTarget) delete updated[param.key];
+                                                        else {
+                                                            updated[param.key] = {
+                                                                target: newTarget as LiveMappingTarget,
+                                                                parameter: prev[param.key]?.parameter || 'volume'
+                                                            };
+                                                        }
+                                                        return updated;
+                                                    });
+                                                }}
+                                            >
+                                                <option value="" className="bg-gray-900 text-gray-500">-- Disabilitato --</option>
+                                                <option value="master" className="bg-emerald-900 text-emerald-300">Master Track</option>
+                                                {localStems.map(s => (
+                                                    <option key={s.id} value={s.id} className="bg-purple-900 text-purple-300">{s.name}</option>
+                                                ))}
+                                            </select>
+                                            
+                                            {liveMappings[param.key] && (
+                                                <select 
+                                                    className="bg-transparent text-[8px] text-gray-300 outline-none flex-1 uppercase border-l border-white/10 pl-1 ml-1"
+                                                    value={liveMappings[param.key].parameter}
+                                                    onChange={(e) => {
+                                                        setLiveMappings(prev => ({
+                                                            ...prev,
+                                                            [param.key]: {
+                                                                ...prev[param.key],
+                                                                parameter: e.target.value as AudioParameter
+                                                            }
+                                                        }));
+                                                    }}
+                                                >
+                                                    <option value="volume" className="bg-gray-900">Volume</option>
+                                                    <option value="pan" className="bg-gray-900">Pan Orizz.</option>
+                                                    <option value="lowpass" className="bg-gray-900">Filtro</option>
+                                                    <option value="pitch" className="bg-gray-900">Pitch/Vel</option>
+                                                </select>
+                                            )}
+                                        </div>
+
+                                        {/* Master Track Fallback Mappings (Visible only if not manually overridden) */}
+                                        {!liveMappings[param.key] && (!engineRef.current?.stemGains || engineRef.current.stemGains.length === 0) && (() => {
                                             const cat = result.healthClassification?.primaryCategory?.category as keyof WhoAgentConfig || 'calming';
                                             const catConfig = agentConfig && agentConfig[cat];
                                             if (!catConfig) return null;
@@ -1507,6 +1598,29 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                 <InputSlider label={t.gazeX || 'Sguardo X (Pan)'} value={calibState.gazeAudioX} max={3} onChange={(v) => updateCalib('gazeAudioX', v)} color="text-cyan-400" />
                                 <InputSlider label={t.gazeY || 'Sguardo Y (Tono)'} value={calibState.gazeAudioY} max={3} onChange={(v) => updateCalib('gazeAudioY', v)} color="text-cyan-200" />
                             </div>
+                        </div>
+
+
+                    </div>
+                )}
+
+                {/* BOTTOM AUDIO PLAYER (Always Visible during playback) */}
+                {visualMode !== 'transparency' && (
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[10000] bg-black/80 backdrop-blur-md border border-white/20 rounded-full px-6 py-3 flex items-center gap-6 shadow-2xl">
+                        <button 
+                            onClick={togglePlayback} 
+                            className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center hover:bg-gray-200 hover:scale-105 transition-all shadow-[0_0_20px_rgba(255,255,255,0.3)]"
+                        >
+                            <i className={`fas ${playbackState === 'playing' ? 'fa-pause' : 'fa-play'} text-xl ml-1`}></i>
+                        </button>
+                        <div className="flex flex-col">
+                            <span className="text-white font-bold text-sm tracking-wide">
+                                {playbackState === 'playing' ? 'PERFORMANCE LIVE' : 'IN PAUSA'}
+                            </span>
+                            <span className="text-gray-400 text-[10px] uppercase tracking-widest flex items-center gap-2">
+                                <span className={`w-2 h-2 rounded-full ${playbackState === 'playing' ? 'bg-red-500 animate-pulse' : 'bg-gray-500'}`}></span>
+                                Engine {playbackState}
+                            </span>
                         </div>
                     </div>
                 )}
