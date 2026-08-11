@@ -1432,26 +1432,29 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                             </div>
                                         )}
                                         {/* Master Track Fallback Mappings */}
-                                        {localStems.length === 0 && (() => {
-                                            const cat = result.healthClassification?.primaryCategory?.category as string || 'calming';
-                                            let fallbackParam = '';
+                                        {(!engineRef.current?.stemGains || engineRef.current.stemGains.length === 0) && (() => {
+                                            const cat = result.healthClassification?.primaryCategory?.category as keyof WhoAgentConfig || 'calming';
+                                            const catConfig = agentConfig && agentConfig[cat];
+                                            if (!catConfig) return null;
                                             
-                                            // Always assigned parameters
-                                            if (param.key === 'z') fallbackParam = 'Volume Generale';
-                                            if (param.key === 'headYaw') fallbackParam = 'Pan Orizzontale';
+                                            // Find mapping for this body part
+                                            let fallbackParams: string[] = [];
                                             
-                                            // Category specific parameters
-                                            if (cat === 'calming' && param.key === 'energyLevel') fallbackParam = 'Filtro (Calma) & Pitch';
-                                            if (cat === 'motivation' && param.key === 'energyLevel') fallbackParam = 'Filtro, Velocità & Pan';
-                                            if (cat === 'social_emotional' && param.key === 'openness') fallbackParam = 'Filtro (Brillantezza)';
+                                            if (result.configUsed?.masterMappings && result.configUsed.masterMappings.length > 0) {
+                                                fallbackParams = result.configUsed.masterMappings.filter((m: any) => m.bodyPart === param.key).map((m: any) => m.parameter);
+                                            } else if (catConfig.masterMappings) {
+                                                fallbackParams = catConfig.masterMappings.filter(m => m.bodyPart === param.key).map(m => m.audioParam);
+                                            }
 
-                                            if (fallbackParam) {
+                                            if (fallbackParams.length > 0) {
                                                 return (
                                                     <div className="flex flex-wrap gap-1 mt-1">
-                                                        <span className="text-[8px] bg-emerald-900/60 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded truncate">
-                                                            <i className="fas fa-layer-group mr-1"></i>Master Track
-                                                            <span className="ml-1 opacity-60">→ {fallbackParam}</span>
-                                                        </span>
+                                                        {fallbackParams.map((fp, idx) => (
+                                                            <span key={idx} className="text-[8px] bg-emerald-900/60 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded truncate">
+                                                                <i className="fas fa-layer-group mr-1"></i>Master Track
+                                                                <span className="ml-1 opacity-60">→ {fp}</span>
+                                                            </span>
+                                                        ))}
                                                     </div>
                                                 );
                                             }
@@ -1483,6 +1486,21 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                 </div>
                             </div>
                         )}
+                        
+                        {/* CAMERA CONTROLS MOVED HERE */}
+                        <div className="p-3 border-t border-white/5 bg-blue-900/10">
+                            <label className="block text-[10px] font-bold text-blue-400 mb-3 uppercase tracking-wider flex items-center gap-2">
+                                <i className="fas fa-camera"></i> Camera Sensitivity
+                            </label>
+                            <div className="space-y-3">
+                                <InputSlider label={t.zoom || 'Zoom (Prossimità)'} value={calibState.zoomSensitivity} max={2} onChange={(v) => updateCalib('zoomSensitivity', v)} color="text-blue-400" />
+                                <InputSlider label={t.tilt || 'Inclinazione (Pitch)'} value={calibState.tiltSensitivity} max={100} step={1} onChange={(v) => updateCalib('tiltSensitivity', v)} color="text-gray-300" />
+                                <InputSlider label={t.pan || 'Movimento Orizzontale'} value={calibState.panSensitivity} max={10} onChange={(v) => updateCalib('panSensitivity', v)} color="text-gray-300" />
+                                <InputSlider label={t.dist || 'Sensibilità Distanza'} value={calibState.distAudio} max={2} onChange={(v) => updateCalib('distAudio', v)} color="text-blue-400" />
+                                <InputSlider label={t.gazeX || 'Sguardo X (Pan)'} value={calibState.gazeAudioX} max={3} onChange={(v) => updateCalib('gazeAudioX', v)} color="text-cyan-400" />
+                                <InputSlider label={t.gazeY || 'Sguardo Y (Tono)'} value={calibState.gazeAudioY} max={3} onChange={(v) => updateCalib('gazeAudioY', v)} color="text-cyan-200" />
+                            </div>
+                        </div>
                     </div>
                 )}
                 
@@ -1572,23 +1590,6 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                 </button>
                             </div>
                         </div>
-
-                        {/* 3. CAMERA CONTROLS */}
-                        <div className="border-t border-white/5 pt-4">
-                            <label className="block text-xs font-bold text-blue-400 mb-2 uppercase tracking-wider flex items-center gap-2">
-                                <i className="fas fa-camera"></i> Camera Sensitivity
-                            </label>
-                            <div className="mt-4 space-y-4">
-                                <InputSlider label={t.zoom || 'Zoom'} value={calibState.zoomSensitivity} max={2} onChange={(v) => updateCalib('zoomSensitivity', v)} color="text-blue-400" />
-                                <InputSlider label={t.tilt || 'Tilt'} value={calibState.tiltSensitivity} max={100} step={1} onChange={(v) => updateCalib('tiltSensitivity', v)} color="text-gray-300" />
-                                <InputSlider label={t.pan || 'Pan'} value={calibState.panSensitivity} max={10} onChange={(v) => updateCalib('panSensitivity', v)} color="text-gray-300" />
-                                <InputSlider label={t.dist || 'Volume (Distance)'} value={calibState.distAudio} max={2} onChange={(v) => updateCalib('distAudio', v)} color="text-blue-400" />
-                                <InputSlider label={t.gazeX || 'Pan (Gaze X)'} value={calibState.gazeAudioX} max={3} onChange={(v) => updateCalib('gazeAudioX', v)} color="text-cyan-400" />
-                                <InputSlider label={t.gazeY || 'Filter (Gaze Y)'} value={calibState.gazeAudioY} max={3} onChange={(v) => updateCalib('gazeAudioY', v)} color="text-cyan-200" />
-                            </div>
-                        </div>
-
-
                     </div>
 
                     {/* Footer Actions */}
