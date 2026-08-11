@@ -4,59 +4,83 @@ import { WhoAgentConfig, WhoAgentCategoryConfig, AgentMappingRule, BodyPart, Aud
 
 const defaultAgentConfig: WhoAgentConfig = {
     calming: {
-        description: 'Movimenti calmi mantengono il suono chiaro. Alta energia attiva il filtro per calmarti.',
+        description: 'Choreography (Calming): Respira profondamente. L\'apertura della postura schiarisce il suono. Mani basse e movimenti lenti calmano il volume.',
         masterMappings: [
-            { id: '1', bodyPart: 'z', audioParam: 'volume' },
-            { id: '2', bodyPart: 'energyLevel', audioParam: 'lowpass' },
-            { id: '3', bodyPart: 'energyLevel', audioParam: 'pitch' },
-            { id: '4', bodyPart: 'headYaw', audioParam: 'pan' }
+            { id: 'c1', bodyPart: 'openness', audioParam: 'lowpass' },
+            { id: 'c2', bodyPart: 'energyLevel', audioParam: 'pitch' },
+            { id: 'c3', bodyPart: 'handsY', audioParam: 'volume' },
+            { id: 'c4', bodyPart: 'headPitch', audioParam: 'lowpass' },
+            { id: 'c5', bodyPart: 'z', audioParam: 'volume' }
         ],
         stemMappings: [
-            { id: '5', bodyPart: 'headYaw', audioParam: 'pan' }
+            { id: 'cs1', targetStemIndex: 0, bodyPart: 'leftHandY', audioParam: 'lowpass' },
+            { id: 'cs2', targetStemIndex: 1, bodyPart: 'rightHandY', audioParam: 'volume' },
+            { id: 'cs3', targetStemIndex: 2, bodyPart: 'headRoll', audioParam: 'pan' },
+            { id: 'cs4', targetStemIndex: 3, bodyPart: 'openness', audioParam: 'volume' }
         ]
     },
     motivation: {
-        description: 'Più ti muovi con energia, più il ritmo si alza e il suono diventa spaziale.',
+        description: 'Choreography (Motivation): Energia e potenza! Alzare ginocchia e braccia alza il ritmo e apre il filtro. Usa la forza per variare il suono!',
         masterMappings: [
-            { id: '6', bodyPart: 'z', audioParam: 'volume' },
-            { id: '7', bodyPart: 'energyLevel', audioParam: 'lowpass' },
-            { id: '8', bodyPart: 'energyLevel', audioParam: 'pitch' },
-            { id: '9', bodyPart: 'energyLevel', audioParam: 'pan' },
-            { id: '10', bodyPart: 'headYaw', audioParam: 'pan' }
+            { id: 'm1', bodyPart: 'energyLevel', audioParam: 'pitch' },
+            { id: 'm2', bodyPart: 'armSpan', audioParam: 'volume' },
+            { id: 'm3', bodyPart: 'kneeY', audioParam: 'lowpass' },
+            { id: 'm4', bodyPart: 'torsoX', audioParam: 'pan' },
+            { id: 'm5', bodyPart: 'headYaw', audioParam: 'pan' }
         ],
         stemMappings: [
-            { id: '11', bodyPart: 'headYaw', audioParam: 'pan' }
+            { id: 'ms1', targetStemIndex: 0, bodyPart: 'energyLevel', audioParam: 'pitch' },
+            { id: 'ms2', targetStemIndex: 1, bodyPart: 'leftHandX', audioParam: 'pan' },
+            { id: 'ms3', targetStemIndex: 2, bodyPart: 'rightHandX', audioParam: 'pan' },
+            { id: 'ms4', targetStemIndex: 3, bodyPart: 'armSpan', audioParam: 'volume' }
         ]
     },
     cognitive_motor: {
-        description: 'Ogni gesto preciso controlla un parametro. Il movimento della testa orienta il suono.',
+        description: 'Choreography (Cognitive): Precisione spaziale. Ogni mano è indipendente. Lo sguardo (X) muove il filtro, e le spalle gestiscono l\'equilibrio (Pan).',
         masterMappings: [
-            { id: '12', bodyPart: 'z', audioParam: 'volume' },
-            { id: '13', bodyPart: 'headYaw', audioParam: 'pan' }
+            { id: 'cm1', bodyPart: 'leftHandX', audioParam: 'pan' },
+            { id: 'cm2', bodyPart: 'rightHandY', audioParam: 'pitch' },
+            { id: 'cm3', bodyPart: 'gazeX', audioParam: 'lowpass' },
+            { id: 'cm4', bodyPart: 'shoulderTilt', audioParam: 'pan' },
+            { id: 'cm5', bodyPart: 'leftHandZ', audioParam: 'volume' }
         ],
         stemMappings: [
-            { id: '14', bodyPart: 'headYaw', audioParam: 'pan' }
+            { id: 'cms1', targetStemIndex: 0, bodyPart: 'leftHandX', audioParam: 'pan' },
+            { id: 'cms2', targetStemIndex: 1, bodyPart: 'leftHandY', audioParam: 'pitch' },
+            { id: 'cms3', targetStemIndex: 2, bodyPart: 'rightHandX', audioParam: 'pan' },
+            { id: 'cms4', targetStemIndex: 3, bodyPart: 'rightHandY', audioParam: 'volume' }
         ]
     },
     social_emotional: {
-        description: 'Più apri la postura e le braccia, più il suono si apre.',
+        description: 'Choreography (Emotional): Espressione empatica. Aprire le braccia riempie la stanza di volume. Alzare le mani al petto e inclinare la testa schiarisce il suono.',
         masterMappings: [
-            { id: '15', bodyPart: 'z', audioParam: 'volume' },
-            { id: '16', bodyPart: 'openness', audioParam: 'lowpass' },
-            { id: '17', bodyPart: 'headYaw', audioParam: 'pan' }
+            { id: 'se1', bodyPart: 'openness', audioParam: 'volume' },
+            { id: 'se2', bodyPart: 'handsY', audioParam: 'lowpass' },
+            { id: 'se3', bodyPart: 'headRoll', audioParam: 'pitch' },
+            { id: 'se4', bodyPart: 'torsoY', audioParam: 'volume' },
+            { id: 'se5', bodyPart: 'armSpan', audioParam: 'pan' }
         ],
         stemMappings: [
-            { id: '18', bodyPart: 'headYaw', audioParam: 'pan' }
+            { id: 'ses1', targetStemIndex: 0, bodyPart: 'openness', audioParam: 'volume' },
+            { id: 'ses2', targetStemIndex: 1, bodyPart: 'gazeX', audioParam: 'pan' },
+            { id: 'ses3', targetStemIndex: 2, bodyPart: 'armSpan', audioParam: 'lowpass' },
+            { id: 'ses4', targetStemIndex: 3, bodyPart: 'headPitch', audioParam: 'pitch' }
         ]
     },
     physiological: {
-        description: 'Avvicinati o allontanati dalla telecamera per controllare il volume generale del brano.',
+        description: 'Choreography (Physiological): Gross-motor skill test. Gomiti alti, movimenti delle ginocchia e piegamenti del busto per controllare l\'intero arrangiamento audio.',
         masterMappings: [
-            { id: '19', bodyPart: 'z', audioParam: 'volume' },
-            { id: '20', bodyPart: 'headYaw', audioParam: 'pan' }
+            { id: 'ph1', bodyPart: 'z', audioParam: 'volume' },
+            { id: 'ph2', bodyPart: 'elbowY', audioParam: 'lowpass' },
+            { id: 'ph3', bodyPart: 'kneeY', audioParam: 'pitch' },
+            { id: 'ph4', bodyPart: 'shoulderY', audioParam: 'volume' },
+            { id: 'ph5', bodyPart: 'torsoX', audioParam: 'pan' }
         ],
         stemMappings: [
-            { id: '21', bodyPart: 'headYaw', audioParam: 'pan' }
+            { id: 'phs1', targetStemIndex: 0, bodyPart: 'footY', audioParam: 'volume' },
+            { id: 'phs2', targetStemIndex: 1, bodyPart: 'elbowY', audioParam: 'lowpass' },
+            { id: 'phs3', targetStemIndex: 2, bodyPart: 'kneeY', audioParam: 'pitch' },
+            { id: 'phs4', targetStemIndex: 3, bodyPart: 'shoulderY', audioParam: 'pan' }
         ]
     }
 };
@@ -105,6 +129,12 @@ export const WhoAgentConfigEditor: React.FC = () => {
             ...prev,
             [activeTab]: { ...prev[activeTab], description: desc }
         }));
+    };
+
+    const resetToDefault = () => {
+        if (confirm("Sei sicuro di voler ripristinare la coreografia di default progettata dal direttore artistico? Tutte le tue modifiche andranno perse.")) {
+            setConfig(defaultAgentConfig);
+        }
     };
 
     const addMapping = (type: 'masterMappings' | 'stemMappings') => {
@@ -222,10 +252,15 @@ export const WhoAgentConfigEditor: React.FC = () => {
                         Configura la logica di mappatura automatica dei parametri del corpo sugli effetti audio. Questa logica viene applicata nel pannello Live Console.
                     </p>
                 </div>
-                <button onClick={saveConfig} disabled={isSaving} className="bg-cyan-600 text-white px-4 py-2 rounded font-bold text-[10px] hover:bg-cyan-500 transition-colors uppercase tracking-widest flex items-center gap-2">
-                    {isSaving ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-save"></i>}
-                    Salva Configurazione
-                </button>
+                <div className="flex gap-2">
+                    <button onClick={resetToDefault} className="bg-gray-700 text-white px-4 py-2 rounded font-bold text-[10px] hover:bg-gray-600 transition-colors uppercase tracking-widest flex items-center gap-2">
+                        <i className="fas fa-undo"></i> Ripristina Default
+                    </button>
+                    <button onClick={saveConfig} disabled={isSaving} className="bg-cyan-600 text-white px-4 py-2 rounded font-bold text-[10px] hover:bg-cyan-500 transition-colors uppercase tracking-widest flex items-center gap-2">
+                        {isSaving ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-save"></i>}
+                        Salva Configurazione
+                    </button>
+                </div>
             </div>
 
             <div className="flex border-b border-white/10 mb-4 overflow-x-auto">
