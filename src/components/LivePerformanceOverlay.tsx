@@ -632,8 +632,11 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         volFactor = Math.min(2.5, 1.0 + (Math.abs(zDiff) * sensitivity));
                     }
 
+                    // Distance/Z volume — only apply if skeleton agent will NOT handle volume
+                    // (skeleton agent takes full priority if active)
+                    const _skeletonWillHandleVolume = true; // always defer to skeleton; set gain only as baseline
                     if (engineRef.current.autoGain) {
-                        engineRef.current.autoGain.gain.setTargetAtTime(volFactor, now, 0.15);
+                        engineRef.current.autoGain.gain.setTargetAtTime(volFactor, now, 0.5); // slow baseline only
                     }
 
                     // --- SKELETON AGENT LOGIC ---
@@ -670,25 +673,26 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         return val || 0.5;
                     };
 
+
                     const applyParam = (param: AudioParameter, rawVal: number, gainNode?: GainNode, pannerNode?: StereoPannerNode, filterNode?: BiquadFilterNode) => {
                         const actx = engineRef.current!.audioCtx!;
+                        const clampedVal = Math.max(0, Math.min(1, rawVal));
                         if (param === 'volume' && gainNode) {
-                            const vol = Math.max(0, Math.min(1, 1.0 - rawVal)); // Y up = louder
-                            gainNode.gain.setTargetAtTime(vol, actx.currentTime, 0.1);
+                            // Full range 0..1.5 — not 1-rawVal which was limiting range
+                            const vol = clampedVal * 1.5;
+                            gainNode.gain.setTargetAtTime(vol, actx.currentTime, 0.08);
                         } else if (param === 'pan' && pannerNode) {
-                            const pan = (rawVal * 2) - 1; // 0..1 -> -1..1
-                            pannerNode.pan.setTargetAtTime(pan, actx.currentTime, 0.1);
+                            const pan = (clampedVal * 2) - 1; // 0..1 -> -1..1
+                            pannerNode.pan.setTargetAtTime(pan, actx.currentTime, 0.08);
                         } else if (param === 'lowpass' && filterNode) {
-                            // Map 0..1 to 200Hz .. 20000Hz exponentially
-                            const minFreq = 200;
-                            const maxFreq = 20000;
-                            // 1.0 - rawVal so that hands up = open filter, hands down = muffled
-                            const val = Math.max(0, Math.min(1, 1.0 - rawVal));
-                            const freq = minFreq * Math.pow(maxFreq / minFreq, val);
-                            filterNode.frequency.setTargetAtTime(freq, actx.currentTime, 0.1);
+                            // Full range: 0 = 150Hz (very muffled), 1 = 22000Hz (fully open)
+                            const minFreq = 150;
+                            const maxFreq = 22000;
+                            const freq = minFreq * Math.pow(maxFreq / minFreq, clampedVal);
+                            filterNode.frequency.setTargetAtTime(freq, actx.currentTime, 0.08);
                         } else if (param === 'pitch' && engineRef.current!.source) {
-                            // Map 0..1 to 0.5x .. 1.5x speed
-                            const pitch = 0.5 + Math.max(0, Math.min(1, 1.0 - rawVal));
+                            // Full range: 0 = 0.5x, 1 = 1.8x speed — clear difference
+                            const pitch = 0.5 + (clampedVal * 1.3);
                             engineRef.current!.source.playbackRate.setTargetAtTime(pitch, actx.currentTime, 0.1);
                         }
                     };
@@ -788,20 +792,20 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         ctx.listener.forwardZ.value = -Math.cos(headYaw);
                         
                     } else {
-                        // NO STEMS (Master Track)
+                        // NO STEMS (Master Track) — always use agentConfig first, then configUsed fallback
                         let activeMappings: {bodyPart: BodyPart, parameter: AudioParameter}[] = [];
                         
-                        if (result.configUsed?.masterMappings && result.configUsed.masterMappings.length > 0) {
+                        // Priority 1: Live agentConfig (from WhoAgentConfigEditor / DEFAULT)
+                        const primaryCatKey = result.healthClassification?.primaryCategory?.category as keyof WhoAgentConfig || 'calming';
+                        const catConfig = agentConfig[primaryCatKey];
+                        if (catConfig?.masterMappings && catConfig.masterMappings.length > 0) {
+                            activeMappings = catConfig.masterMappings.map(r => ({
+                                bodyPart: r.bodyPart,
+                                parameter: r.audioParam
+                            }));
+                        } else if (result.configUsed?.masterMappings && result.configUsed.masterMappings.length > 0) {
+                            // Priority 2: Old per-result config
                             activeMappings = result.configUsed.masterMappings as any;
-                        } else {
-                            const primaryCatKey = result.healthClassification?.primaryCategory?.category as keyof WhoAgentConfig;
-                            const catConfig = agentConfig && primaryCatKey && agentConfig[primaryCatKey] ? agentConfig[primaryCatKey] : null;
-                            if (catConfig?.masterMappings) {
-                                activeMappings = catConfig.masterMappings.map(r => ({
-                                    bodyPart: r.bodyPart,
-                                    parameter: r.audioParam
-                                }));
-                            }
                         }
                         
                         if (activeMappings.length > 0) {
@@ -809,9 +813,8 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                 const rawVal = getBodyVal(mm.bodyPart);
                                 applyParam(mm.parameter, rawVal, eng.autoGain!, eng.panner!, eng.filter!);
                             });
-                        } else {
-                            if (eng.autoGain) eng.autoGain.gain.setTargetAtTime(1.0, ctx.currentTime, 0.1);
                         }
+                        // Note: if no mappings found, baseline volume from distance-Z above is already applied
                     }
 
                 } else {
