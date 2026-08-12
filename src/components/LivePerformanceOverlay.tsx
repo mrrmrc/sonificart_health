@@ -13,10 +13,14 @@ export interface AudioEngine {
     stem3DPanners?: PannerNode[];     // 8D - 3D panners (one per stem)
     stemPanners?: StereoPannerNode[]; // Legacy (unused with 8D)
     stemFilters?: BiquadFilterNode[];
+    stemDelays?: DelayNode[];
+    stemDistortions?: WaveShaperNode[];
     orbitAngles?: number[];           // 8D - current orbit angle per stem (degrees)
     orbitParams?: { radius: number; height: number; speed: number }; // 8D orbit shared params
     panner: StereoPannerNode | null;
     filter: BiquadFilterNode | null;
+    masterDelay?: DelayNode;
+    masterDistortion?: WaveShaperNode;
     autoGain: GainNode | null;
     masterGain: GainNode | null;
     analyser: AnalyserNode | null;
@@ -537,11 +541,30 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 console.error("Could not decode master track", e);
             }
 
+            // AUDIO HELPERS
+            const makeDistortionCurve = (amount: number = 0) => {
+                const k = typeof amount === 'number' ? amount : 50;
+                const n_samples = 44100;
+                const curve = new Float32Array(n_samples);
+                const deg = Math.PI / 180;
+                for (let i = 0; i < n_samples; ++i) {
+                    const x = (i * 2) / n_samples - 1;
+                    curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
+                }
+                return curve;
+            };
+
             // NODE GRAPH FOR MASTER EFFECTS
             const filter = ctx.createBiquadFilter();
             filter.type = 'lowpass';
             filter.frequency.value = 20000;
             filter.Q.value = 1.0;
+
+            const masterDistortion = ctx.createWaveShaper();
+            masterDistortion.curve = makeDistortionCurve(0);
+            
+            const masterDelay = ctx.createDelay(1.0);
+            masterDelay.delayTime.value = 0;
 
             const highShelf = ctx.createBiquadFilter();
             highShelf.type = 'highshelf';
@@ -558,7 +581,9 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
             analyser.fftSize = 256;
 
             // Route master chain
-            filter.connect(highShelf);
+            filter.connect(masterDistortion);
+            masterDistortion.connect(masterDelay);
+            masterDelay.connect(highShelf);
             highShelf.connect(autoGain);
             autoGain.connect(masterGain);
             masterGain.connect(analyser);
@@ -567,6 +592,8 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
             let sourceNode: AudioBufferSourceNode | null = null;
             let stemSources: AudioBufferSourceNode[] = [];
             let stemGains: GainNode[] = [];
+            let stemDelays: DelayNode[] = [];
+            let stemDistortions: WaveShaperNode[] = [];
             let stemPanners: StereoPannerNode[] = [];   // Legacy / unused with 8D
             let stem3DPanners: PannerNode[] = [];        // 8D orbit panners
             let stemFilters: BiquadFilterNode[] = [];
@@ -625,15 +652,26 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     stemFilter.type = 'lowpass';
                     stemFilter.frequency.value = 20000;
                     
+                    const stemDistortion = ctx.createWaveShaper();
+                    stemDistortion.curve = makeDistortionCurve(0);
+                    const stemDelay = ctx.createDelay(1.0);
+                    stemDelay.delayTime.value = 0;
+                    
                     src.connect(gain);
                     gain.connect(panner3D);
                     panner3D.connect(stemFilter);
-                    stemFilter.connect(filter); // connect to master chain
+                    stemFilter.connect(stemDistortion);
+                    stemDistortion.connect(stemDelay);
+                    stemDelay.connect(filter); // connect to master chain
                     
                     stemSources.push(src);
                     stemGains.push(gain);
                     stem3DPanners.push(panner3D);
                     stemFilters.push(stemFilter);
+                    
+
+                    stemDelays.push(stemDelay);
+                    stemDistortions.push(stemDistortion);
                 }
             }
 
@@ -707,6 +745,10 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 stemPanners,
                 stem3DPanners,
                 stemFilters,
+                stemDelays,
+                stemDistortions,
+                masterDelay,
+                masterDistortion,
                 panner,
                 filter,
                 autoGain,
@@ -856,7 +898,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     };
 
 
-                    const applyParam = (param: AudioParameter, rawVal: number, gainNode?: GainNode, pannerNode?: StereoPannerNode, filterNode?: BiquadFilterNode) => {
+                    const applyParam = (param: AudioParameter, rawVal: number, gainNode?: GainNode, pannerNode?: StereoPannerNode, filterNode?: BiquadFilterNode, delayNode?: DelayNode, distNode?: WaveShaperNode) => {
                         const actx = engineRef.current!.audioCtx!;
                         const clampedVal = Math.max(0, Math.min(1, rawVal));
                         if (param === 'volume' && gainNode) {
@@ -875,6 +917,12 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         } else if (param === 'pitch' && engineRef.current!.source) {
                             // Full range: 0 = 0.5x, 1 = 1.8x speed — clear difference
                             const pitch = 0.5 + (clampedVal * 1.3);
+                        } else if (param === 'delay' && delayNode) {
+                            // 0 to 0.8 seconds delay
+                            const dTime = clampedVal * 0.8;
+                            delayNode.delayTime.setTargetAtTime(dTime, actx.currentTime, 0.08);
+                        } else if (param === 'distortion' && distNode) {
+                            distNode.curve = makeDistortionCurve(clampedVal * 100);
                         }
                     };
 
@@ -890,11 +938,11 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     Object.entries(lm).forEach(([bodyPart, mapping]) => {
                         const rawVal = getBodyVal(bodyPart as BodyPart);
                         if (mapping.target === 'master') {
-                            applyParam(mapping.parameter, rawVal, eng.autoGain || undefined, eng.panner || undefined, eng.filter || undefined);
+                            applyParam(mapping.parameter, rawVal, eng.autoGain || undefined, eng.panner || undefined, eng.filter || undefined, eng.masterDelay, eng.masterDistortion);
                         } else {
                             const stemIdx = stemsRef.current.findIndex(s => s.id === mapping.target);
                             if (stemIdx >= 0) {
-                                applyParam(mapping.parameter, rawVal, eng.stemGains?.[stemIdx] || undefined, eng.stemPanners?.[stemIdx] || undefined, eng.stemFilters?.[stemIdx] || undefined);
+                                applyParam(mapping.parameter, rawVal, eng.stemGains?.[stemIdx] || undefined, eng.stemPanners?.[stemIdx] || undefined, eng.stemFilters?.[stemIdx] || undefined, eng.stemDelays?.[stemIdx], eng.stemDistortions?.[stemIdx]);
                             }
                         }
                     });
@@ -979,7 +1027,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                             
                             if (stemRule && !isHandled(stemRule.id, stemRule.parameter)) {
                                 const rawVal = getBodyVal(stemRule.assignedBodyPart);
-                                applyParam(stemRule.parameter, rawVal, gainNode, undefined, filterNode);
+                                applyParam(stemRule.parameter, rawVal, gainNode, undefined, filterNode, eng.stemDelays?.[index], eng.stemDistortions?.[index]);
                             } else if (!stemRule) {
                                 // Se non configurato e non gestito manualmente, volume fisso
                                 if (!isHandled(stems[index]?.id || `stem_${index}`, 'volume')) {
@@ -1014,7 +1062,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                             activeMappings.forEach(mm => {
                                 if (!isHandled('master', mm.parameter)) {
                                     const rawVal = getBodyVal(mm.bodyPart);
-                                    applyParam(mm.parameter, rawVal, eng.autoGain || undefined, eng.panner || undefined, eng.filter || undefined);
+                                    applyParam(mm.parameter, rawVal, eng.autoGain || undefined, eng.panner || undefined, eng.filter || undefined, eng.masterDelay, eng.masterDistortion);
                                 }
                             });
                         }
