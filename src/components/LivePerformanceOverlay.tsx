@@ -178,6 +178,16 @@ const TEXTS = {
     }
 };
 
+const OBSERVER_GESTURES: { key: BodyPart, label: string, icon: string }[] = [
+    { key: 'gazeX', label: 'Sguardo Orizz. (X)', icon: 'fa-eye' },
+    { key: 'gazeY', label: 'Sguardo Vert. (Y)', icon: 'fa-eye' },
+    { key: 'headYaw', label: 'Testa (Rotazione)', icon: 'fa-head-side' },
+    { key: 'headPitch', label: 'Testa (Su/Giù)', icon: 'fa-head-side' },
+    { key: 'headRoll', label: 'Testa (Inclinazione)', icon: 'fa-undo' },
+    { key: 'z', label: 'Distanza (Avvicinamento)', icon: 'fa-compress-arrows-alt' },
+    { key: 'openness', label: 'Apertura Postura', icon: 'fa-people-arrows' }
+];
+
 export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onClose, title, author, description, date, mode = 'modal', isAdmin = false, id }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -1354,51 +1364,95 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                             );
                         })()}
 
-                        {/* Quick Mapping Editor - Spostato in alto per visibilità */}
-                        {localStems.length > 0 && (
-                            <div className="p-3 border-b border-white/5 bg-gradient-to-br from-yellow-900/20 to-orange-900/20 shrink-0">
-                                <div className="text-[9px] font-bold text-yellow-400 uppercase tracking-wider mb-2">
-                                    <i className="fas fa-sliders-h mr-1"></i> Assegna Movimenti agli Strumenti
-                                </div>
-                                <div className="space-y-2">
-                                    {localStems.map((stem, i) => (
-                                        <div key={stem.id} className="bg-black/40 p-2 rounded border border-white/5">
-                                            <div className="text-[10px] font-bold text-gray-200 truncate mb-1" title={stem.name}><i className="fas fa-music text-purple-400 mr-1"></i>{stem.name}</div>
-                                            <div className="flex flex-col gap-1.5">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-[8px] text-gray-400 w-12">Movimento:</span>
-                                                    <select
-                                                        value={stem.assignedBodyPart}
-                                                        onChange={(e) => {
-                                                            const updated = [...localStems];
-                                                            updated[i] = { ...updated[i], assignedBodyPart: e.target.value as BodyPart };
-                                                            setLocalStems(updated);
-                                                        }}
-                                                        className="flex-1 bg-white/10 border border-white/20 text-[9px] text-white p-1 rounded outline-none"
-                                                    >
-                                                        {Object.entries(BODY_PARTS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                                                    </select>
+                        {/* Quick Mapping Editor - Inverted Paradigm */}
+                        <div className="p-3 border-b border-white/5 bg-gradient-to-br from-yellow-900/20 to-orange-900/20 shrink-0">
+                            <div className="text-[9px] font-bold text-yellow-400 uppercase tracking-wider mb-2">
+                                <i className="fas fa-eye mr-1"></i> Movimenti dell'Osservatore
+                            </div>
+                            <div className="space-y-2">
+                                {OBSERVER_GESTURES.map((gesture) => {
+                                    // Get real-time value for the progress bar
+                                    let rawVal = 0.5;
+                                    if (metrics) {
+                                        switch (gesture.key) {
+                                            case 'gazeX': rawVal = metrics.gazeX; break;
+                                            case 'gazeY': rawVal = metrics.gazeY; break;
+                                            case 'headYaw': rawVal = (metrics.yaw + 1) / 2; break;
+                                            case 'headPitch': rawVal = (metrics.pitch + 1) / 2; break;
+                                            case 'headRoll': rawVal = metrics.headRoll; break;
+                                            case 'z': rawVal = metrics.z; break;
+                                            case 'openness': rawVal = metrics.openness || 0.5; break;
+                                        }
+                                    }
+                                    const displayVal = Math.max(0, Math.min(1, rawVal));
+                                    
+                                    const currentMapping = liveMappings[gesture.key];
+
+                                    return (
+                                        <div key={gesture.key} className="bg-black/40 p-2 rounded border border-white/5">
+                                            <div className="flex justify-between items-center mb-1">
+                                                <div className="text-[10px] font-bold text-gray-200 truncate flex items-center gap-1.5" title={gesture.label}>
+                                                    <i className={`fas ${gesture.icon} text-cyan-400`}></i> {gesture.label}
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-[8px] text-gray-400 w-12">Effetto:</span>
-                                                    <select
-                                                        value={stem.parameter}
-                                                        onChange={(e) => {
-                                                            const updated = [...localStems];
-                                                            updated[i] = { ...updated[i], parameter: e.target.value as AudioParameter };
-                                                            setLocalStems(updated);
-                                                        }}
-                                                        className="flex-1 bg-white/10 border border-white/20 text-[9px] text-white p-1 rounded outline-none"
-                                                    >
-                                                        {Object.entries(AUDIO_PARAMS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                                                    </select>
+                                                <div className="w-16 h-1 bg-white/10 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-cyan-400 rounded-full transition-all duration-75" style={{ width: `${displayVal * 100}%` }}></div>
                                                 </div>
                                             </div>
+                                            <div className="flex flex-col gap-1.5">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[8px] text-gray-400 w-12">Target:</span>
+                                                    <select
+                                                        value={currentMapping?.target || ''}
+                                                        onChange={(e) => {
+                                                            const newTarget = e.target.value;
+                                                            setLiveMappings(prev => {
+                                                                const updated = { ...prev };
+                                                                if (!newTarget) {
+                                                                    delete updated[gesture.key];
+                                                                } else {
+                                                                    updated[gesture.key] = {
+                                                                        target: newTarget,
+                                                                        parameter: currentMapping?.parameter || 'volume'
+                                                                    };
+                                                                }
+                                                                return updated;
+                                                            });
+                                                        }}
+                                                        className="flex-1 bg-white/10 border border-white/20 text-[9px] text-white p-1 rounded outline-none"
+                                                    >
+                                                        <option value="">-- Nessuno --</option>
+                                                        <option value="master">Master Track (Tutti)</option>
+                                                        {localStems.map((stem, i) => (
+                                                            <option key={stem.id} value={stem.id}>Stem {i+1}: {stem.name}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                {currentMapping?.target && (
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[8px] text-gray-400 w-12">Effetto:</span>
+                                                        <select
+                                                            value={currentMapping.parameter}
+                                                            onChange={(e) => {
+                                                                setLiveMappings(prev => ({
+                                                                    ...prev,
+                                                                    [gesture.key]: {
+                                                                        ...prev[gesture.key],
+                                                                        parameter: e.target.value as AudioParameter
+                                                                    }
+                                                                }));
+                                                            }}
+                                                            className="flex-1 bg-white/10 border border-white/20 text-[9px] text-white p-1 rounded outline-none"
+                                                        >
+                                                            {Object.entries(AUDIO_PARAMS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                                                        </select>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
-                                    ))}
-                                </div>
+                                    );
+                                })}
                             </div>
-                        )}
+                        </div>
 
                         {/* 8D Orbit Status */}
                         {localStems.length > 0 && (
