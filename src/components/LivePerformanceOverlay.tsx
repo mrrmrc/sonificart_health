@@ -277,6 +277,11 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
         distAudio: 1.0
     });
     
+    // Master Audio Toggle
+    const [useMasterAudio, setUseMasterAudio] = useState(result.configUsed?.useMasterAudio ?? true);
+    const useMasterAudioRef = useRef(useMasterAudio);
+    useEffect(() => { useMasterAudioRef.current = useMasterAudio; }, [useMasterAudio]);
+    
     // STEM LOCAL STATE
     const [localStems, setLocalStems] = useState<StemMapping[]>(result.stemMappings || []);
     // Use a ref so the render loop closure always reads the latest stems
@@ -305,7 +310,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
     const liveMappingsRef = useRef(liveMappings);
     useEffect(() => { liveMappingsRef.current = liveMappings; }, [liveMappings]);
 
-    // Initialize liveMappings with agentConfig defaults
+    // Initialize liveMappings
     useEffect(() => {
         if (!agentConfig || !result) return;
         const primaryCatKey = result.healthClassification?.primaryCategory?.category as keyof WhoAgentConfig || 'calming';
@@ -313,21 +318,39 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
         if (!catConfig) return;
 
         const initialMappings: Record<string, LiveMapping> = {};
+        let hasCustomMappings = false;
         
-        // Add master mappings
-        catConfig.masterMappings.forEach(mm => {
-            initialMappings[mm.bodyPart] = { target: 'master', parameter: mm.audioParam };
-        });
-
-        // Add stem mappings (assuming targetStemIndex matches localStems index)
-        catConfig.stemMappings.forEach(sm => {
-            if (sm.targetStemIndex !== undefined && localStems[sm.targetStemIndex]) {
-                const stemId = localStems[sm.targetStemIndex].id;
-                initialMappings[sm.bodyPart] = { target: stemId, parameter: sm.audioParam };
+        // 1. Try to load saved mappings from database history item (result.configUsed)
+        if (result.configUsed?.masterMappings && result.configUsed.masterMappings.length > 0) {
+            result.configUsed.masterMappings.forEach((mm: any) => {
+                initialMappings[mm.bodyPart] = { target: 'master', parameter: mm.parameter || mm.audioParam };
+                hasCustomMappings = true;
+            });
+        }
+        
+        localStems.forEach(stem => {
+            if (stem.assignedBodyPart) {
+                // If the parameter isn't saved, default to 'volume' for stems
+                initialMappings[stem.assignedBodyPart] = { target: stem.id, parameter: (stem as any).parameter || 'volume' };
+                hasCustomMappings = true;
             }
         });
 
-        // Only set if we haven't modified it yet manually (or just overwrite on load)
+        // 2. If no custom mappings found, fallback to WHO agent defaults
+        if (!hasCustomMappings) {
+            catConfig.masterMappings.forEach(mm => {
+                initialMappings[mm.bodyPart] = { target: 'master', parameter: mm.audioParam };
+            });
+
+            catConfig.stemMappings.forEach(sm => {
+                if (sm.targetStemIndex !== undefined && localStems[sm.targetStemIndex]) {
+                    const stemId = localStems[sm.targetStemIndex].id;
+                    initialMappings[sm.bodyPart] = { target: stemId, parameter: sm.audioParam };
+                }
+            });
+        }
+
+        // Only set if we haven't modified it yet manually
         setLiveMappings(prev => Object.keys(prev).length > 0 ? prev : initialMappings);
     }, [agentConfig, result, localStems]);
 
@@ -412,14 +435,15 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     setLocalStems(updatedStems);
                 }
                 
-                // Update master mappings
+                // Update master mappings and settings
                 const masterMappingsList = Object.entries(liveMappings)
                     .filter(([_, m]) => m.target === 'master')
                     .map(([bp, m]) => ({ bodyPart: bp, parameter: m.parameter }));
                 
                 await api.updateHistoryItemConfig(id, {
                     ...result.configUsed,
-                    masterMappings: masterMappingsList
+                    masterMappings: masterMappingsList,
+                    useMasterAudio: useMasterAudioRef.current
                 });
             } catch (e) {
                 console.error("Failed to save mappings", e);
@@ -777,7 +801,8 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     // (skeleton agent takes full priority if active)
                     const _skeletonWillHandleVolume = true; // always defer to skeleton; set gain only as baseline
                     if (engineRef.current.autoGain) {
-                        engineRef.current.autoGain.gain.setTargetAtTime(volFactor, now, 0.5); // slow baseline only
+                        const targetVol = useMasterAudioRef.current ? volFactor : 0;
+                        engineRef.current.autoGain.gain.setTargetAtTime(targetVol, now, 0.5); // slow baseline only
                     }
 
                     // --- SKELETON AGENT LOGIC ---
@@ -1827,6 +1852,24 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         {/* 1. MASTER VOLUME & AUTO CALIB */}
                         <div className="space-y-6">
 
+                            {/* Usa Melodia Principale */}
+                            <div className="bg-white/5 p-4 rounded-lg border border-white/10">
+                                <label className="flex items-center justify-between cursor-pointer">
+                                    <div className="flex flex-col">
+                                        <span className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-1 flex items-center gap-2">
+                                            <i className="fas fa-music text-cyan-400"></i> Traccia Master
+                                        </span>
+                                        <span className="text-[10px] text-gray-500">Riproduci melodia principale o solo stems</span>
+                                    </div>
+                                    <input
+                                        type="checkbox"
+                                        checked={useMasterAudio}
+                                        onChange={(e) => setUseMasterAudio(e.target.checked)}
+                                        className="w-5 h-5 rounded border-gray-600 bg-gray-700 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-gray-900"
+                                    />
+                                </label>
+                            </div>
+
                             {/* Master Vol */}
                             <div>
                                 <label className="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider">{t.masterVol}</label>
@@ -1905,12 +1948,15 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                             onClick={async () => {
                                 try {
                                     if (id) {
-                                        await api.updateHistoryItemConfig(id, calibState);
+                                        await api.updateHistoryItemConfig(id, {
+                                            ...calibState,
+                                            useMasterAudio: useMasterAudio
+                                        });
                                         alert(t.configSaved);
                                     }
                                 } catch (e) { alert("Error: " + e); }
                             }}
-                            className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-[10px] font-bold tracking-widest uppercase transition-all text-white"
+                            className="w-full py-3 bg-white/10 hover:bg-white/20 text-white rounded text-xs font-bold tracking-widest uppercase transition-all"
                         >
                             {t.save}
                         </button>
