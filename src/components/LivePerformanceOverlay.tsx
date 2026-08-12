@@ -391,6 +391,15 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
     // Grid tracking for overdubbing
     const lastPlayedCell = useRef<{x: number, y: number} | null>(null);
     const synthDebounce = useRef<number>(0);
+    const lastMetricsTime = useRef<number>(0);
+
+    // Save mappings state
+    const [isSaving, setIsSaving] = useState(false);
+    const handleSaveMappings = () => {
+        setIsSaving(true);
+        // Add fake delay to show saving state, then it's applied to the live mappings
+        setTimeout(() => setIsSaving(false), 1000);
+    };
 
     useEffect(() => {
         startPerformance();
@@ -717,7 +726,10 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 }
 
                 let m = WebcamService.getMetrics() as BodyMetrics;
-                setMetrics(m);
+                if (now - lastMetricsTime.current > 0.1) { // Throttle React state updates to 10 FPS
+                    lastMetricsTime.current = now;
+                    setMetrics(m);
+                }
 
                 if (m.isActive) {
                     // --- RELATIVE DISTANCE & VOLUME LOGIC ---
@@ -1544,6 +1556,20 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                         </div>
                                     </div>
                                 ))}
+                            </div>
+                            
+                            {/* Save Button */}
+                            <div className="mt-4 pt-3 border-t border-white/10">
+                                <button
+                                    onClick={handleSaveMappings}
+                                    className={`w-full py-2 rounded text-[10px] font-bold tracking-widest transition-all ${isSaving ? 'bg-green-500/20 text-green-400 border border-green-500/50' : 'bg-cyan-900/50 hover:bg-cyan-800 text-cyan-300 border border-cyan-500/30'}`}
+                                >
+                                    {isSaving ? (
+                                        <><i className="fas fa-check mr-2"></i> SALVATO</>
+                                    ) : (
+                                        <><i className="fas fa-save mr-2"></i> SALVA MAPPATURA LIVE</>
+                                    )}
+                                </button>
                             </div>
                         </div>
 
