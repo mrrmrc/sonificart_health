@@ -295,8 +295,8 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
         }).catch(console.error);
     }, []);
 
-    // Live Skeleton Panel — auto aperto di default
-    const [showSkeletonPanel, setShowSkeletonPanel] = useState(true);
+    // Live Skeleton Panel — auto chiuso di default
+    const [showSkeletonPanel, setShowSkeletonPanel] = useState(false);
     
     // Manual Live Mappings
     type LiveMappingTarget = 'master' | string;
@@ -395,9 +395,36 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
 
     // Save mappings state
     const [isSaving, setIsSaving] = useState(false);
-    const handleSaveMappings = () => {
+    const handleSaveMappings = async () => {
         setIsSaving(true);
-        // Add fake delay to show saving state, then it's applied to the live mappings
+        if (id) {
+            try {
+                // Update specific stems mappings
+                const updatedStems = localStems.map(stem => {
+                    const mappingEntry = Object.entries(liveMappings).find(([_, m]) => m.target === stem.id);
+                    if (mappingEntry) {
+                        return { ...stem, assignedBodyPart: mappingEntry[0] as any, parameter: mappingEntry[1].parameter };
+                    }
+                    return stem;
+                });
+                if (updatedStems.length > 0) {
+                    await api.updateHistoryItemStemsMapping(id, updatedStems);
+                    setLocalStems(updatedStems);
+                }
+                
+                // Update master mappings
+                const masterMappingsList = Object.entries(liveMappings)
+                    .filter(([_, m]) => m.target === 'master')
+                    .map(([bp, m]) => ({ bodyPart: bp, parameter: m.parameter }));
+                
+                await api.updateHistoryItemConfig(id, {
+                    ...result.configUsed,
+                    masterMappings: masterMappingsList
+                });
+            } catch (e) {
+                console.error("Failed to save mappings", e);
+            }
+        }
         setTimeout(() => setIsSaving(false), 1000);
     };
 
@@ -1331,8 +1358,8 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 </div>
                 <canvas ref={canvasRef} className="absolute inset-0 w-full h-full block z-10 mix-blend-screen" />
 
-                {/* WEBCAM PIP - Sempre visibile come "scheletro" in basso a destra */}
-                <div className="absolute bottom-32 right-6 flex flex-col items-center gap-0 z-50 transition-all duration-500 hover:scale-105 opacity-80 hover:opacity-100">
+                {/* WEBCAM PIP - Nascosto come richiesto (ma funzionante in background) */}
+                <div className="absolute bottom-32 right-6 flex-col items-center gap-0 z-50 opacity-0 pointer-events-none hidden">
                     <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-cyan-500 shadow-lg bg-black relative">
                         <video ref={videoRef} className="w-full h-full object-cover mirror-mode opacity-100" autoPlay muted playsInline />
                         <canvas ref={faceLinkCanvasRef} width={640} height={480} className="absolute inset-0 w-full h-full pointer-events-none" />
@@ -1349,18 +1376,6 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     >
                         *
                     </button>
-                    {/* Skeleton button visible in kiosk mode */}
-                    <button
-                        onClick={() => setShowSkeletonPanel(!showSkeletonPanel)}
-                        className={`absolute bottom-16 right-6 z-[9999] p-3 rounded-full backdrop-blur-md transition-all border shadow-lg ${
-                            showSkeletonPanel
-                                ? 'text-cyan-300 bg-cyan-900/70 border-cyan-500/70 shadow-cyan-500/30'
-                                : 'text-white/70 bg-black/70 border-white/20 hover:border-cyan-500/50 hover:text-cyan-300'
-                        }`}
-                        title="Skeleton Live Agent"
-                    >
-                        <i className="fas fa-person-running text-lg"></i>
-                    </button>
                     </>
                 ) : (
                     <>
@@ -1370,14 +1385,6 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         title="Impostazioni"
                     >
                         <i className="fas fa-cog text-xl"></i>
-                    </button>
-                    {/* SKELETON PANEL TOGGLE */}
-                    <button
-                        onClick={() => setShowSkeletonPanel(!showSkeletonPanel)}
-                        className={`absolute top-40 left-6 z-[9999] p-3 rounded-full backdrop-blur transition-all border ${showSkeletonPanel ? 'text-cyan-400 bg-cyan-900/40 border-cyan-500/50' : 'text-gray-400 hover:text-white bg-black/50 border-transparent hover:border-white/20'}`}
-                        title="Parametri Skeleton Live"
-                    >
-                        <i className="fas fa-person-running text-xl"></i>
                     </button>
                     </>
                 ))}
@@ -1783,11 +1790,11 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[10000] bg-black/80 backdrop-blur-md border border-white/20 rounded-full px-6 py-3 flex items-center gap-6 shadow-2xl">
                         <button 
                             onClick={togglePlayback} 
-                            className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center hover:bg-gray-200 hover:scale-105 transition-all shadow-[0_0_20px_rgba(255,255,255,0.3)]"
+                            className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center hover:bg-gray-200 hover:scale-105 transition-all shadow-[0_0_20px_rgba(255,255,255,0.3)] shrink-0"
                         >
                             <i className={`fas ${playbackState === 'playing' ? 'fa-pause' : 'fa-play'} text-xl ml-1`}></i>
                         </button>
-                        <div className="flex flex-col">
+                        <div className="flex flex-col shrink-0">
                             <span className="text-white font-bold text-sm tracking-wide">
                                 {playbackState === 'playing' ? 'PERFORMANCE LIVE' : 'IN PAUSA'}
                             </span>
@@ -1795,6 +1802,11 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                 <span className={`w-2 h-2 rounded-full ${playbackState === 'playing' ? 'bg-red-500 animate-pulse' : 'bg-gray-500'}`}></span>
                                 Engine {playbackState}
                             </span>
+                        </div>
+                        
+                        {/* SPECTRUM VISUALIZER IN BOTTOM BAR */}
+                        <div className="h-10 w-64 ml-2 border-l border-white/10 pl-6 flex items-center">
+                            <canvas ref={spectrumCanvasRef} width={200} height={40} className="w-full h-full opacity-80" />
                         </div>
                     </div>
                 )}
