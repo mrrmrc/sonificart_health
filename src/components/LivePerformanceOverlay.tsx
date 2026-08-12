@@ -577,7 +577,9 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
             
             // If we have stems, master track is background, otherwise it's foreground
             const masterGainNode = ctx.createGain();
-            masterGainNode.gain.value = useStems ? 0.4 : 1.0; // Master track lower volume when stems are present
+            let initialMasterGain = useStems ? 0.4 : 1.0;
+            if (!useMasterAudioRef.current) initialMasterGain = 0;
+            masterGainNode.gain.value = initialMasterGain;
             
             sourceNode.connect(panner);
             panner.connect(masterGainNode);
@@ -1426,6 +1428,22 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                 <p className="text-gray-500 text-[9px] mt-0.5">Parametri corpo in tempo reale</p>
                             </div>
                             <button onClick={() => setShowSkeletonPanel(false)} className="text-gray-500 hover:text-white"><i className="fas fa-times"></i></button>
+                        </div>
+
+                        {/* MASTER TRACK TOGGLE */}
+                        <div className="p-4 border-b border-white/10 flex items-center justify-between shrink-0 bg-black/40">
+                            <div>
+                                <div className="text-[10px] font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                    <i className="fas fa-music text-cyan-400"></i> Traccia Master
+                                </div>
+                                <div className="text-[9px] text-gray-500 mt-0.5">Attiva o disattiva l'audio di base.</div>
+                            </div>
+                            <button
+                                onClick={() => setUseMasterAudio(!useMasterAudio)}
+                                className={`w-10 h-5 rounded-full relative transition-colors ${useMasterAudio ? 'bg-cyan-500' : 'bg-gray-700'}`}
+                            >
+                                <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${useMasterAudio ? 'left-6' : 'left-1'}`} />
+                            </button>
                         </div>
 
                         {/* WHO SKELETON AGENT GUIDELINES */}
