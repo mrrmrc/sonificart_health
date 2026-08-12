@@ -24,6 +24,7 @@ export interface AudioEngine {
     startTime: number;
     animationId: number;
     synthNodes: {osc: OscillatorNode, gain: GainNode}[];
+    masterTrackGain: GainNode | null;
 }
 
 interface Props {
@@ -281,6 +282,18 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
     const [useMasterAudio, setUseMasterAudio] = useState(result.configUsed?.useMasterAudio ?? true);
     const useMasterAudioRef = useRef(useMasterAudio);
     useEffect(() => { useMasterAudioRef.current = useMasterAudio; }, [useMasterAudio]);
+    
+    // Dynamically update master track volume
+    useEffect(() => {
+        if (engineRef.current?.masterTrackGain) {
+            const hasStems = engineRef.current.stemSources && engineRef.current.stemSources.length > 0;
+            engineRef.current.masterTrackGain.gain.setTargetAtTime(
+                useMasterAudio ? (hasStems ? 0.4 : 1.0) : 0,
+                engineRef.current.audioCtx!.currentTime,
+                0.1
+            );
+        }
+    }, [useMasterAudio]);
     
     // STEM LOCAL STATE
     const [localStems, setLocalStems] = useState<StemMapping[]>(result.stemMappings || []);
@@ -703,6 +716,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 imageAspect,
                 startTime: ctx.currentTime,
                 synthNodes: [],
+                masterTrackGain: masterGainNode,
                 orbitAngles: stem3DPanners.map((_, i) => (i / Math.max(1, stem3DPanners.length)) * 360),
                 orbitParams: { radius: 3.0, height: 0, speed: 1.0 }
             };
@@ -1191,6 +1205,70 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     const face = [[0, 1], [1, 2], [2, 3], [3, 7], [0, 4], [4, 5], [5, 6], [6, 8]];
                     face.forEach(([i, j]) => drawNeonLine(l[i], l[j], c.face.color, c.face.glow, 3));
                     
+                    // Eyebrows & Eyes based on expression
+                    const leftEye = l[2];
+                    const rightEye = l[5];
+                    if (leftEye && rightEye) {
+                        const leX = cx + (leftEye.x - 0.5) * renderW;
+                        const leY = cy + (leftEye.y - 0.5) * renderH;
+                        const reX = cx + (rightEye.x - 0.5) * renderW;
+                        const reY = cy + (rightEye.y - 0.5) * renderH;
+                        
+                        context.shadowBlur = 10;
+                        context.shadowColor = c.face.glow;
+                        context.strokeStyle = c.face.color;
+                        context.lineWidth = 3;
+                        
+                        // Eyebrows
+                        let browOffset = 15;
+                        let browCurve = 0;
+                        if (skelConfig.expression === 'smile' || skelConfig.expression === 'soft_smile') {
+                            browOffset = 20;
+                            browCurve = -10; // arched up
+                        } else if (skelConfig.expression === 'open') {
+                            browOffset = 25;
+                            browCurve = -15; // surprised, arched high
+                        } else {
+                            browOffset = 15;
+                            browCurve = 0; // neutral flat
+                        }
+                        
+                        // Left Brow
+                        context.beginPath();
+                        context.moveTo(leX - 10, leY - browOffset);
+                        context.quadraticCurveTo(leX, leY - browOffset + browCurve, leX + 10, leY - browOffset);
+                        context.stroke();
+                        
+                        // Right Brow
+                        context.beginPath();
+                        context.moveTo(reX - 10, reY - browOffset);
+                        context.quadraticCurveTo(reX, reY - browOffset + browCurve, reX + 10, reY - browOffset);
+                        context.stroke();
+                        
+                        // Eye Shapes (replacing dots if expression is specific)
+                        if (skelConfig.expression === 'smile' || skelConfig.expression === 'soft_smile') {
+                            // Happy eyes ^ ^
+                            context.beginPath();
+                            context.moveTo(leX - 8, leY);
+                            context.quadraticCurveTo(leX, leY - 8, leX + 8, leY);
+                            context.stroke();
+                            
+                            context.beginPath();
+                            context.moveTo(reX - 8, reY);
+                            context.quadraticCurveTo(reX, reY - 8, reX + 8, reY);
+                            context.stroke();
+                        } else if (skelConfig.expression === 'open') {
+                            // Wide eyes O O
+                            context.beginPath();
+                            context.arc(leX, leY, 8, 0, Math.PI * 2);
+                            context.stroke();
+                            
+                            context.beginPath();
+                            context.arc(reX, reY, 8, 0, Math.PI * 2);
+                            context.stroke();
+                        }
+                    }
+                    
                     // Mouth with Expression
                     const mouthP1 = l[9];
                     const mouthP2 = l[10];
@@ -1248,9 +1326,15 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         
                         // Highlight Eyes and Nose
                         if (i === 0) size = 6; // Nose
-                        if (i === 2 || i === 5) { color = '#10b981'; glow = '#059669'; size = 6; } // Eyes
+                        if (i === 2 || i === 5) { 
+                            if (skelConfig.expression === 'neutral') {
+                                color = '#10b981'; glow = '#059669'; size = 6; 
+                            } else {
+                                size = 0; // Custom eyes are drawn above for non-neutral
+                            }
+                        }
                         
-                        drawNeonPoint(l[i], size, color, glow);
+                        if (size > 0) drawNeonPoint(l[i], size, color, glow);
                     }
                     
                     context.restore();
