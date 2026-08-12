@@ -294,7 +294,7 @@ export interface ColorRegion {
 
 // --- DYNAMIC STEM ENGINE ---
 export type BodyPart = 'leftHandY' | 'rightHandY' | 'leftHandX' | 'rightHandX' | 'leftHandZ' | 'rightHandZ' | 'z' | 'headYaw' | 'headPitch' | 'headRoll' | 'gazeX' | 'gazeY' | 'headZ' | 'shoulderY' | 'shoulderTilt' | 'elbowY' | 'kneeY' | 'footY' | 'torsoY' | 'torsoX' | 'armSpan' | 'handsY' | 'energyLevel' | 'openness';
-export type AudioParameter = 'volume' | 'lowpass' | 'pan' | 'pitch';
+export type AudioParameter = 'volume' | 'lowpass' | 'pan' | 'pitch' | 'delay' | 'reverb' | 'distortion';
 
 export const BODY_PARTS_LABELS: Record<BodyPart, string> = {
     leftHandY: 'Mano SX (Alt.)',
@@ -327,7 +327,10 @@ export const AUDIO_PARAMS_LABELS: Record<AudioParameter, string> = {
     volume: 'Volume',
     lowpass: 'Filtro (Muffler)',
     pan: 'Pan (Destra/Sinistra)',
-    pitch: 'Velocità / Pitch'
+    pitch: 'Velocità / Pitch',
+    delay: 'Eco (Delay)',
+    reverb: 'Reverbero (Spazio)',
+    distortion: 'Distorsione (Saturazione)'
 };
 
 export interface AgentMappingRule {

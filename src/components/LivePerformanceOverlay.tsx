@@ -1663,26 +1663,26 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                                                     ))}
                                                                 </select>
                                                             </div>
-                                                            {currentMapping?.target && (
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="text-[8px] text-gray-400 w-12">Effetto:</span>
-                                                                    <select
-                                                                        value={currentMapping.parameter}
-                                                                        onChange={(e) => {
-                                                                            setLiveMappings(prev => ({
-                                                                                ...prev,
-                                                                                [gesture.key]: {
-                                                                                    ...prev[gesture.key],
-                                                                                    parameter: e.target.value as AudioParameter
-                                                                                }
-                                                                            }));
-                                                                        }}
-                                                                        className="flex-1 bg-cyan-950/50 border border-cyan-500/50 text-[9px] text-white p-1 rounded outline-none"
-                                                                    >
-                                                                        {Object.entries(AUDIO_PARAMS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                                                                    </select>
-                                                                </div>
-                                                            )}
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-[8px] text-gray-400 w-12">Effetto:</span>
+                                                                <select
+                                                                    value={currentMapping?.parameter || 'volume'}
+                                                                    disabled={!currentMapping?.target}
+                                                                    onChange={(e) => {
+                                                                        if (!currentMapping?.target) return;
+                                                                        setLiveMappings(prev => ({
+                                                                            ...prev,
+                                                                            [gesture.key]: {
+                                                                                ...prev[gesture.key],
+                                                                                parameter: e.target.value as AudioParameter
+                                                                            }
+                                                                        }));
+                                                                    }}
+                                                                    className={`flex-1 text-[9px] p-1 rounded outline-none ${currentMapping?.target ? 'bg-cyan-950/50 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-gray-500 cursor-not-allowed'}`}
+                                                                >
+                                                                    {Object.entries(AUDIO_PARAMS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                                                                </select>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 );
