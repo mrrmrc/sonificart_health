@@ -40,6 +40,7 @@ export interface ConfigSettings {
     useHealthAgent?: boolean;
     healthEnrichment?: string;
     masterMappings?: { bodyPart: BodyPart, parameter: AudioParameter }[];
+    useMasterAudio?: boolean;
 }
 
 export interface MusicalGenre {
