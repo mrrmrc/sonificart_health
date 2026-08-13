@@ -300,7 +300,14 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
     }, [useMasterAudio]);
     
     // STEM LOCAL STATE
-    const [localStems, setLocalStems] = useState<StemMapping[]>(result.stemMappings || []);
+    const [localStems, setLocalStems] = useState<StemMapping[]>(
+        result.stemMappings && result.stemMappings.length > 0 ? result.stemMappings : [
+            { id: 'drums', name: 'Drums', url: '/stems/drums.mp3', assignedBodyPart: 'leftHandY', parameter: 'volume' },
+            { id: 'bass', name: 'Bass', url: '/stems/bass.mp3', assignedBodyPart: 'rightHandY', parameter: 'volume' },
+            { id: 'vox', name: 'Vox', url: '/stems/vox.mp3', assignedBodyPart: 'headYaw', parameter: 'volume' },
+            { id: 'other', name: 'Other', url: '/stems/other.mp3', assignedBodyPart: 'z', parameter: 'volume' }
+        ]
+    );
     // Use a ref so the render loop closure always reads the latest stems
     const stemsRef = useRef<StemMapping[]>(result.stemMappings || []);
     useEffect(() => { stemsRef.current = localStems; }, [localStems]);
@@ -933,6 +940,9 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     const isHandled = (target: string, param: AudioParameter) => {
                         return Object.values(lm).some(m => m.target === target && m.parameter === param);
                     };
+                    const isGestureOverridden = (bodyPart: string) => {
+                        return !!lm[bodyPart as BodyPart];
+                    };
 
                     // ---- APPLY CUSTOM LIVE MAPPINGS ----
                     Object.entries(lm).forEach(([bodyPart, mapping]) => {
@@ -1025,7 +1035,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                 }
                             }
                             
-                            if (stemRule && !isHandled(stemRule.id, stemRule.parameter)) {
+                            if (stemRule && !isHandled(stemRule.id, stemRule.parameter) && !isGestureOverridden(stemRule.assignedBodyPart)) {
                                 const rawVal = getBodyVal(stemRule.assignedBodyPart);
                                 applyParam(stemRule.parameter, rawVal, gainNode, undefined, filterNode, eng.stemDelays?.[index], eng.stemDistortions?.[index]);
                             } else if (!stemRule) {
@@ -1060,7 +1070,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         
                         if (activeMappings.length > 0) {
                             activeMappings.forEach(mm => {
-                                if (!isHandled('master', mm.parameter)) {
+                                if (!isHandled('master', mm.parameter) && !isGestureOverridden(mm.bodyPart)) {
                                     const rawVal = getBodyVal(mm.bodyPart);
                                     applyParam(mm.parameter, rawVal, eng.autoGain || undefined, eng.panner || undefined, eng.filter || undefined, eng.masterDelay, eng.masterDistortion);
                                 }
@@ -1692,7 +1702,10 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                                                         setLiveMappings(prev => {
                                                                             const updated = { ...prev };
                                                                             if (!newTarget) {
-                                                                                delete updated[gesture.key];
+                                                                                updated[gesture.key] = {
+                                                                                    target: '',
+                                                                                    parameter: currentMapping?.parameter || 'volume'
+                                                                                };
                                                                             } else {
                                                                                 updated[gesture.key] = {
                                                                                     target: newTarget,
@@ -1705,10 +1718,19 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                                                     className={`flex-1 border text-[9px] p-1 rounded outline-none ${currentMapping ? 'bg-cyan-950/50 border-cyan-500/50 text-white' : 'bg-white/5 border-white/10 text-gray-400'}`}
                                                                 >
                                                                     <option value="">-- Nessuno (Ignora) --</option>
-                                                                    <option value="master">Master Track (Tutti)</option>
-                                                                    {localStems.map((stem, i) => (
-                                                                        <option key={stem.id} value={stem.id}>Stem {i+1}: {stem.name}</option>
-                                                                    ))}
+                                                                    <option value="master">Mix Globale (Master Bus)</option>
+                                                                    {localStems.length === 0 && (
+                                                                        <optgroup label="Singolo Stem (Nessun multitraccia)">
+                                                                            <option value="master">Traccia Base Unica</option>
+                                                                        </optgroup>
+                                                                    )}
+                                                                    {localStems.length > 0 && (
+                                                                        <optgroup label="Stem Individuali">
+                                                                            {localStems.map((stem, i) => (
+                                                                                <option key={stem.id} value={stem.id}>Stem {i+1}: {stem.name}</option>
+                                                                            ))}
+                                                                        </optgroup>
+                                                                    )}
                                                                 </select>
                                                             </div>
                                                             <div className="flex items-center gap-2">
@@ -1857,9 +1879,12 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                                 }}
                                             >
                                                 <option value="" className="bg-gray-900 text-gray-500">-- Disabilitato --</option>
-                                                <option value="master" className="bg-emerald-900 text-emerald-300">Master Track</option>
+                                                <option value="master" className="bg-emerald-900 text-emerald-300">Mix Globale (Master)</option>
+                                                {localStems.length === 0 && (
+                                                    <option value="master" className="bg-purple-900 text-purple-300">Traccia Base Unica</option>
+                                                )}
                                                 {localStems.map(s => (
-                                                    <option key={s.id} value={s.id} className="bg-purple-900 text-purple-300">{s.name}</option>
+                                                    <option key={s.id} value={s.id} className="bg-purple-900 text-purple-300">Stem: {s.name}</option>
                                                 ))}
                                             </select>
                                             
