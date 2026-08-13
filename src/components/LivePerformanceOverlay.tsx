@@ -944,6 +944,8 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         const rawVal = getBodyVal(bodyPart as BodyPart);
                         if (mapping.target === 'master') {
                             applyParam(mapping.parameter, rawVal, eng.autoGain || undefined, eng.panner || undefined, eng.filter || undefined, eng.masterDelay, eng.masterDistortion);
+                        } else if (mapping.target === 'base_track') {
+                            applyParam(mapping.parameter, rawVal, eng.masterTrackGain || undefined, eng.panner || undefined, undefined, undefined, undefined);
                         } else {
                             const stemIdx = stemsRef.current.findIndex(s => s.id === mapping.target);
                             if (stemIdx >= 0) {
@@ -1716,7 +1718,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                                                     <option value="master">Mix Globale (Master Bus)</option>
                                                                     {localStems.length === 0 && (
                                                                         <optgroup label="Singolo Stem (Nessun multitraccia)">
-                                                                            <option value="master">Traccia Base Unica</option>
+                                                                            <option value="base_track">Traccia Base Unica</option>
                                                                         </optgroup>
                                                                     )}
                                                                     {localStems.length > 0 && (
@@ -1876,7 +1878,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                                 <option value="" className="bg-gray-900 text-gray-500">-- Disabilitato --</option>
                                                 <option value="master" className="bg-emerald-900 text-emerald-300">Mix Globale (Master)</option>
                                                 {localStems.length === 0 && (
-                                                    <option value="master" className="bg-purple-900 text-purple-300">Traccia Base Unica</option>
+                                                    <option value="base_track" className="bg-purple-900 text-purple-300">Traccia Base Unica</option>
                                                 )}
                                                 {localStems.map(s => (
                                                     <option key={s.id} value={s.id} className="bg-purple-900 text-purple-300">Stem: {s.name}</option>
