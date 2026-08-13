@@ -42,6 +42,7 @@ export interface ConfigSettings {
     advancedMappings?: Record<string, any>;
     masterMappings?: { bodyPart: BodyPart, parameter: AudioParameter }[];
     useMasterAudio?: boolean;
+    masterAudioVolume?: number;
 }
 
 export interface MusicalGenre {
@@ -294,7 +295,7 @@ export interface ColorRegion {
 }
 
 // --- DYNAMIC STEM ENGINE ---
-export type BodyPart = 'leftHandY' | 'rightHandY' | 'leftHandX' | 'rightHandX' | 'leftHandZ' | 'rightHandZ' | 'z' | 'headYaw' | 'headPitch' | 'headRoll' | 'gazeX' | 'gazeY' | 'headZ' | 'shoulderY' | 'shoulderTilt' | 'elbowY' | 'kneeY' | 'footY' | 'torsoY' | 'torsoX' | 'armSpan' | 'handsY' | 'energyLevel' | 'openness';
+export type BodyPart = 'leftHandY' | 'rightHandY' | 'leftHandX' | 'rightHandX' | 'leftHandZ' | 'rightHandZ' | 'z' | 'headYaw' | 'headPitch' | 'headRoll' | 'gazeX' | 'gazeY' | 'headZ' | 'shoulderY' | 'shoulderTilt' | 'elbowY' | 'kneeY' | 'footY' | 'torsoY' | 'torsoX' | 'armSpan' | 'handsY' | 'energyLevel' | 'openness' | 'smile' | 'mouthOpen' | 'eyebrows';
 export type AudioParameter = 'volume' | 'lowpass' | 'pan' | 'pitch' | 'delay' | 'reverb' | 'distortion';
 
 export const BODY_PARTS_LABELS: Record<BodyPart, string> = {
@@ -321,7 +322,10 @@ export const BODY_PARTS_LABELS: Record<BodyPart, string> = {
     armSpan: 'Apertura Braccia',
     handsY: 'Mani (Mediana Y)',
     energyLevel: 'Energia Corpo',
-    openness: 'Apertura Postura'
+    openness: 'Apertura Postura',
+    smile: 'Sorriso',
+    mouthOpen: 'Apertura Bocca',
+    eyebrows: 'Sopracciglia (Su/Giù)'
 };
 
 export const AUDIO_PARAMS_LABELS: Record<AudioParameter, string> = {

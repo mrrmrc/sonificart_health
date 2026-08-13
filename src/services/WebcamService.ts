@@ -1,4 +1,5 @@
 import { Pose } from '@mediapipe/pose';
+import { FaceMesh } from '@mediapipe/face_mesh';
 import { Camera } from '@mediapipe/camera_utils';
 
 export interface BodyMetrics {
@@ -30,6 +31,11 @@ export interface BodyMetrics {
     energyLevel: number;
     openness: number;
 
+    // Facial Expressions
+    smile: number;
+    mouthOpen: number;
+    eyebrows: number;
+
     // Visualization
     landmarks?: { x: number, y: number, z?: number, visibility?: number }[];
     isActive: boolean;
@@ -41,6 +47,7 @@ export interface BodyMetrics {
 
 class WebcamService {
     private pose: Pose | null = null;
+    private faceMesh: FaceMesh | null = null;
     private camera: Camera | null = null;
     private videoElement: HTMLVideoElement | null = null;
 
@@ -67,6 +74,7 @@ class WebcamService {
         torsoY: 0.5, torsoX: 0.5, shoulderTilt: 0.5,
         armSpan: 0.5,
         energyLevel: 0, openness: 0.5,
+        smile: 0, mouthOpen: 0, eyebrows: 0.5,
         leftHandZ: 0.5, rightHandZ: 0.5, headZ: 0.5,
         isActive: false
     };
@@ -81,9 +89,22 @@ class WebcamService {
             minTrackingConfidence: 0.5
         });
         this.pose.onResults(this.onResults.bind(this));
+
+        this.faceMesh = new FaceMesh({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` });
+        this.faceMesh.setOptions({
+            maxNumFaces: 1,
+            refineLandmarks: true,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+        this.faceMesh.onResults(this.onFaceResults.bind(this));
+
         this.camera = new Camera(this.videoElement, {
             onFrame: async () => {
-                if (this.pose && this.videoElement) await this.pose.send({ image: this.videoElement });
+                if (this.videoElement) {
+                    if (this.pose) await this.pose.send({ image: this.videoElement });
+                    if (this.faceMesh) await this.faceMesh.send({ image: this.videoElement });
+                }
             },
             width: 640, height: 480
         });
@@ -230,9 +251,44 @@ class WebcamService {
         return { ...this.metrics };
     }
 
+    private onFaceResults(results: any) {
+        if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) return;
+        const landmarks = results.multiFaceLandmarks[0];
+
+        // Rilevamento Sorriso (distanza tra angoli della bocca vs larghezza del viso)
+        const mouthLeft = landmarks[61];
+        const mouthRight = landmarks[291];
+        const faceLeft = landmarks[234];
+        const faceRight = landmarks[454];
+        
+        const mouthWidth = Math.hypot(mouthLeft.x - mouthRight.x, mouthLeft.y - mouthRight.y);
+        const faceWidth = Math.hypot(faceLeft.x - faceRight.x, faceLeft.y - faceRight.y);
+        const smileRatio = mouthWidth / faceWidth;
+        // Normalizza (tipicamente varia da ~0.3 (neutro) a ~0.45 (sorriso largo))
+        this.metrics.smile = Math.max(0, Math.min(1, (smileRatio - 0.3) / 0.15));
+
+        // Rilevamento Apertura Bocca (distanza labbro superiore/inferiore)
+        const upperLipTop = landmarks[13];
+        const lowerLipBottom = landmarks[14];
+        const mouthHeight = Math.hypot(upperLipTop.x - lowerLipBottom.x, upperLipTop.y - lowerLipBottom.y);
+        const mouthOpenRatio = mouthHeight / faceWidth;
+        // Normalizza (varia da ~0.0 (chiusa) a ~0.15 (aperta))
+        this.metrics.mouthOpen = Math.max(0, Math.min(1, mouthOpenRatio / 0.12));
+
+        // Rilevamento Sopracciglia (distanza tra occhio e sopracciglio)
+        const leftEyeTop = landmarks[159];
+        const leftEyebrowTop = landmarks[52];
+        const eyebrowDist = Math.hypot(leftEyeTop.x - leftEyebrowTop.x, leftEyeTop.y - leftEyebrowTop.y);
+        const eyebrowRatio = eyebrowDist / faceWidth;
+        // Normalizza (varia da ~0.08 (aggrottate) a ~0.15 (alzate))
+        // 0.5 = neutro, > 0.5 = alzate, < 0.5 = aggrottate
+        this.metrics.eyebrows = Math.max(0, Math.min(1, (eyebrowRatio - 0.08) / 0.07));
+    }
+
     public stop() {
         if (this.camera) this.camera.stop();
         if (this.pose) this.pose.close();
+        if (this.faceMesh) this.faceMesh.close();
         this.metrics.isActive = false;
         if (this.videoElement && this.videoElement.srcObject) {
             const stream = this.videoElement.srcObject as MediaStream;

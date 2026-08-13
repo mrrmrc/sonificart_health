@@ -286,6 +286,10 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
     const [useMasterAudio, setUseMasterAudio] = useState(result.configUsed?.useMasterAudio ?? true);
     const useMasterAudioRef = useRef(useMasterAudio);
     useEffect(() => { useMasterAudioRef.current = useMasterAudio; }, [useMasterAudio]);
+
+    const [masterAudioVolume, setMasterAudioVolume] = useState(result.configUsed?.masterAudioVolume ?? 100);
+    const masterAudioVolumeRef = useRef(masterAudioVolume);
+    useEffect(() => { masterAudioVolumeRef.current = masterAudioVolume; }, [masterAudioVolume]);
     
     // Removed static useEffect for useMasterAudio - now handled dynamically in onTimeUpdate
     
@@ -486,7 +490,8 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     ...result.configUsed,
                     masterMappings: masterMappingsList,
                     advancedMappings: liveMappings,
-                    useMasterAudio: useMasterAudioRef.current
+                    useMasterAudio: useMasterAudioRef.current,
+                    masterAudioVolume: masterAudioVolumeRef.current
                 });
             } catch (e) {
                 console.error("Failed to save mappings", e);
@@ -887,13 +892,16 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
 
                     if (engineRef.current.masterTrackGain) {
                         const hasStems = engineRef.current.stemSources && engineRef.current.stemSources.length > 0;
-                        let targetMasterGain = useMasterAudioRef.current ? (hasStems ? 0.4 : 1.0) : 0;
+                        const defaultGain = hasStems ? 0.4 : 1.0;
+                        const userGain = masterAudioVolumeRef.current / 100;
+                        // Multiply the default gain by the user's manual slider 
+                        let targetMasterGain = useMasterAudioRef.current ? (defaultGain * userGain) : 0;
                         
                         // FOOLPROOF UX FIX:
                         // If they turned off the master track, but mapped its volume to their skeleton, 
                         // they intend for the skeleton to act as the gate. So we MUST unmute the source!
                         if (!useMasterAudioRef.current && isMasterVolumeMapped) {
-                            targetMasterGain = hasStems ? 0.4 : 1.0;
+                            targetMasterGain = (defaultGain * userGain);
                         }
                         
                         // Use direct assignment to prevent exponential curve reset bug when called every frame
@@ -937,6 +945,9 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                             case 'torsoX': val = m.torsoX; break;
                             case 'armSpan': val = m.armSpan; break;
                             case 'handsY': val = (m.leftHandY + m.rightHandY) / 2; break;
+                            case 'smile': val = m.smile || 0; break;
+                            case 'mouthOpen': val = m.mouthOpen || 0; break;
+                            case 'eyebrows': val = m.eyebrows || 0.5; break;
                             default: val = 0.5; break;
                         }
                         return val || 0.5;
@@ -1629,20 +1640,33 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                             <button onClick={() => setShowSkeletonPanel(false)} className="text-gray-500 hover:text-white"><i className="fas fa-times"></i></button>
                         </div>
 
-                        {/* MASTER TRACK TOGGLE */}
-                        <div className="p-4 border-b border-white/10 flex items-center justify-between shrink-0 bg-black/40">
-                            <div>
-                                <div className="text-[10px] font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                                    <i className="fas fa-music text-cyan-400"></i> Traccia Master
+                        {/* MASTER TRACK SETTINGS */}
+                        <div className="p-4 border-b border-white/10 flex flex-col gap-3 shrink-0 bg-black/40">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-[10px] font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                        <i className="fas fa-music text-cyan-400"></i> Traccia Master
+                                    </div>
+                                    <div className="text-[9px] text-gray-500 mt-0.5">Attiva o disattiva l'audio di base.</div>
                                 </div>
-                                <div className="text-[9px] text-gray-500 mt-0.5">Attiva o disattiva l'audio di base.</div>
+                                <button
+                                    onClick={() => setUseMasterAudio(!useMasterAudio)}
+                                    className={`w-10 h-5 rounded-full relative transition-colors ${useMasterAudio ? 'bg-cyan-500' : 'bg-gray-700'}`}
+                                >
+                                    <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${useMasterAudio ? 'left-6' : 'left-1'}`} />
+                                </button>
                             </div>
-                            <button
-                                onClick={() => setUseMasterAudio(!useMasterAudio)}
-                                className={`w-10 h-5 rounded-full relative transition-colors ${useMasterAudio ? 'bg-cyan-500' : 'bg-gray-700'}`}
-                            >
-                                <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${useMasterAudio ? 'left-6' : 'left-1'}`} />
-                            </button>
+                            
+                            <div className="flex items-center gap-3">
+                                <i className="fas fa-volume-up text-gray-500 text-xs"></i>
+                                <input
+                                    type="range" min="0" max="100"
+                                    value={masterAudioVolume}
+                                    onChange={(e) => setMasterAudioVolume(parseInt(e.target.value))}
+                                    className="w-full h-1 bg-gray-700 rounded-full appearance-none cursor-pointer accent-cyan-500"
+                                />
+                                <span className="text-[10px] font-mono text-gray-400 w-8 text-right">{masterAudioVolume}%</span>
+                            </div>
                         </div>
 
                         {/* WHO SKELETON AGENT GUIDELINES */}
@@ -1733,6 +1757,9 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                                         case 'handsY': rawVal = (metrics.leftHandY + metrics.rightHandY) / 2; break;
                                                         case 'energyLevel': rawVal = metrics.energyLevel || 0; break;
                                                         case 'openness': rawVal = metrics.openness || 0.5; break;
+                                                        case 'smile': rawVal = metrics.smile || 0; break;
+                                                        case 'mouthOpen': rawVal = metrics.mouthOpen || 0; break;
+                                                        case 'eyebrows': rawVal = metrics.eyebrows || 0.5; break;
                                                     }
                                                 }
                                                 const displayVal = Math.max(0, Math.min(1, rawVal));
@@ -1893,6 +1920,9 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                 { key: 'headYaw', label: 'Testa (Rotazione Y)', icon: 'fa-head-side', val: (metrics.yaw + 1) / 2, color: 'bg-violet-500' },
                                 { key: 'headPitch', label: 'Testa (Su/Giù)', icon: 'fa-head-side', val: (metrics.pitch + 1) / 2, color: 'bg-fuchsia-500' },
                                 { key: 'headRoll', label: 'Testa (Inclinazione)', icon: 'fa-undo', val: metrics.headRoll, color: 'bg-rose-500' },
+                                { key: 'smile', label: 'Sorriso', icon: 'fa-smile', val: metrics.smile, color: 'bg-pink-400' },
+                                { key: 'mouthOpen', label: 'Apertura Bocca', icon: 'fa-surprise', val: metrics.mouthOpen, color: 'bg-red-400' },
+                                { key: 'eyebrows', label: 'Sopracciglia', icon: 'fa-flushed', val: metrics.eyebrows, color: 'bg-yellow-300' },
                                 { key: 'gazeX', label: 'Sguardo (X)', icon: 'fa-eye', val: metrics.gazeX, color: 'bg-blue-300' },
                                 { key: 'gazeY', label: 'Sguardo (Y)', icon: 'fa-eye', val: metrics.gazeY, color: 'bg-blue-400' },
                                 { key: 'z', label: 'Distanza (Z)', icon: 'fa-compress-arrows-alt', val: metrics.z, color: 'bg-red-500' },
