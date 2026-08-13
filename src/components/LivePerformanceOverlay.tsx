@@ -287,17 +287,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
     const useMasterAudioRef = useRef(useMasterAudio);
     useEffect(() => { useMasterAudioRef.current = useMasterAudio; }, [useMasterAudio]);
     
-    // Dynamically update master track volume
-    useEffect(() => {
-        if (engineRef.current?.masterTrackGain) {
-            const hasStems = engineRef.current.stemSources && engineRef.current.stemSources.length > 0;
-            engineRef.current.masterTrackGain.gain.setTargetAtTime(
-                useMasterAudio ? (hasStems ? 0.4 : 1.0) : 0,
-                engineRef.current.audioCtx!.currentTime,
-                0.1
-            );
-        }
-    }, [useMasterAudio]);
+    // Removed static useEffect for useMasterAudio - now handled dynamically in onTimeUpdate
     
     // STEM LOCAL STATE
     const [localStems, setLocalStems] = useState<StemMapping[]>(
@@ -858,8 +848,23 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     }
 
                     // Distance/Z volume — only apply if skeleton agent will NOT handle volume
-                    // (skeleton agent takes full priority if active)
-                    const _skeletonWillHandleVolume = true; // always defer to skeleton; set gain only as baseline
+                    const lm = liveMappingsRef.current;
+                    const isMasterVolumeMapped = Object.values(lm).some(map => (map.target === 'master' || map.target === 'base_track') && map.parameter === 'volume');
+
+                    if (engineRef.current.masterTrackGain) {
+                        const hasStems = engineRef.current.stemSources && engineRef.current.stemSources.length > 0;
+                        let targetMasterGain = useMasterAudioRef.current ? (hasStems ? 0.4 : 1.0) : 0;
+                        
+                        // FOOLPROOF UX FIX:
+                        // If they turned off the master track, but mapped its volume to their skeleton, 
+                        // they intend for the skeleton to act as the gate. So we MUST unmute the source!
+                        if (!useMasterAudioRef.current && isMasterVolumeMapped) {
+                            targetMasterGain = hasStems ? 0.4 : 1.0;
+                        }
+                        
+                        engineRef.current.masterTrackGain.gain.setTargetAtTime(targetMasterGain, now, 0.1);
+                    }
+
                     if (engineRef.current.autoGain) {
                         const targetVol = volFactor; // Do not depend on useMasterAudioRef, otherwise stems get muted too
                         engineRef.current.autoGain.gain.setTargetAtTime(targetVol, now, 0.5); // slow baseline only
