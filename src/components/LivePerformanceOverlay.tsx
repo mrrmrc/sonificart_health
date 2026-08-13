@@ -301,12 +301,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
     
     // STEM LOCAL STATE
     const [localStems, setLocalStems] = useState<StemMapping[]>(
-        result.stemMappings && result.stemMappings.length > 0 ? result.stemMappings : [
-            { id: 'drums', name: 'Drums', url: '/stems/drums.mp3', assignedBodyPart: 'leftHandY', parameter: 'volume' },
-            { id: 'bass', name: 'Bass', url: '/stems/bass.mp3', assignedBodyPart: 'rightHandY', parameter: 'volume' },
-            { id: 'vox', name: 'Vox', url: '/stems/vox.mp3', assignedBodyPart: 'headYaw', parameter: 'volume' },
-            { id: 'other', name: 'Other', url: '/stems/other.mp3', assignedBodyPart: 'z', parameter: 'volume' }
-        ]
+        result.stemMappings && result.stemMappings.length > 0 ? result.stemMappings : []
     );
     // Use a ref so the render loop closure always reads the latest stems
     const stemsRef = useRef<StemMapping[]>(result.stemMappings || []);
@@ -866,7 +861,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     // (skeleton agent takes full priority if active)
                     const _skeletonWillHandleVolume = true; // always defer to skeleton; set gain only as baseline
                     if (engineRef.current.autoGain) {
-                        const targetVol = useMasterAudioRef.current ? volFactor : 0;
+                        const targetVol = volFactor; // Do not depend on useMasterAudioRef, otherwise stems get muted too
                         engineRef.current.autoGain.gain.setTargetAtTime(targetVol, now, 0.5); // slow baseline only
                     }
 
