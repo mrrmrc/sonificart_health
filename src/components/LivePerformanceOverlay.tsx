@@ -862,12 +862,16 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                             targetMasterGain = hasStems ? 0.4 : 1.0;
                         }
                         
-                        engineRef.current.masterTrackGain.gain.setTargetAtTime(targetMasterGain, now, 0.1);
+                        // Use direct assignment to prevent exponential curve reset bug when called every frame
+                        engineRef.current.masterTrackGain.gain.value = targetMasterGain;
                     }
 
                     if (engineRef.current.autoGain) {
-                        const targetVol = volFactor; // Do not depend on useMasterAudioRef, otherwise stems get muted too
-                        engineRef.current.autoGain.gain.setTargetAtTime(targetVol, now, 0.5); // slow baseline only
+                        // Skip setting baseline if volume is explicitly mapped to prevent fighting with applyParam
+                        if (!isMasterVolumeMapped) {
+                            const targetVol = volFactor;
+                            engineRef.current.autoGain.gain.setTargetAtTime(targetVol, now, 0.5); 
+                        }
                     }
 
                     // --- SKELETON AGENT LOGIC ---
