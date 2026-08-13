@@ -314,7 +314,12 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
     
     // Manual Live Mappings
     type LiveMappingTarget = 'master' | string;
-    interface LiveMapping { target: LiveMappingTarget; parameter: AudioParameter; }
+    interface LiveMapping { 
+        target: LiveMappingTarget | ''; 
+        volumeIntensity: number; 
+        effectParameter: AudioParameter | ''; 
+        effectIntensity: number; 
+    }
     const [liveMappings, setLiveMappings] = useState<Record<string, LiveMapping>>({});
     const liveMappingsRef = useRef(liveMappings);
     useEffect(() => { liveMappingsRef.current = liveMappings; }, [liveMappings]);
@@ -330,17 +335,32 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
         let hasCustomMappings = false;
         
         // 1. Try to load saved mappings from database history item (result.configUsed)
-        if (result.configUsed?.masterMappings && result.configUsed.masterMappings.length > 0) {
+        if (result.configUsed?.advancedMappings) {
+            Object.assign(initialMappings, result.configUsed.advancedMappings);
+            hasCustomMappings = true;
+        } else if (result.configUsed?.masterMappings && result.configUsed.masterMappings.length > 0) {
             result.configUsed.masterMappings.forEach((mm: any) => {
-                initialMappings[mm.bodyPart] = { target: 'master', parameter: mm.parameter || mm.audioParam };
+                const param = mm.parameter || mm.audioParam;
+                initialMappings[mm.bodyPart] = { 
+                    target: 'master', 
+                    volumeIntensity: param === 'volume' ? 100 : 0, 
+                    effectParameter: param === 'volume' ? '' : param, 
+                    effectIntensity: 100 
+                };
                 hasCustomMappings = true;
             });
         }
         
         localStems.forEach(stem => {
-            if (stem.assignedBodyPart) {
+            if (stem.assignedBodyPart && !result.configUsed?.advancedMappings) {
                 // If the parameter isn't saved, default to 'volume' for stems
-                initialMappings[stem.assignedBodyPart] = { target: stem.id, parameter: (stem as any).parameter || 'volume' };
+                const param = (stem as any).parameter || 'volume';
+                initialMappings[stem.assignedBodyPart] = { 
+                    target: stem.id, 
+                    volumeIntensity: param === 'volume' ? 100 : 0, 
+                    effectParameter: param === 'volume' ? '' : param, 
+                    effectIntensity: 100 
+                };
                 hasCustomMappings = true;
             }
         });
@@ -348,13 +368,25 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
         // 2. If no custom mappings found, fallback to WHO agent defaults
         if (!hasCustomMappings) {
             catConfig.masterMappings.forEach(mm => {
-                initialMappings[mm.bodyPart] = { target: 'master', parameter: mm.audioParam };
+                const param = mm.audioParam;
+                initialMappings[mm.bodyPart] = { 
+                    target: 'master', 
+                    volumeIntensity: param === 'volume' ? 100 : 0, 
+                    effectParameter: param === 'volume' ? '' : param, 
+                    effectIntensity: 100 
+                };
             });
 
             catConfig.stemMappings.forEach(sm => {
                 if (sm.targetStemIndex !== undefined && localStems[sm.targetStemIndex]) {
                     const stemId = localStems[sm.targetStemIndex].id;
-                    initialMappings[sm.bodyPart] = { target: stemId, parameter: sm.audioParam };
+                    const param = sm.audioParam;
+                    initialMappings[sm.bodyPart] = { 
+                        target: stemId, 
+                        volumeIntensity: param === 'volume' ? 100 : 0, 
+                        effectParameter: param === 'volume' ? '' : param, 
+                        effectIntensity: 100 
+                    };
                 }
             });
         }
@@ -435,7 +467,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 const updatedStems = localStems.map(stem => {
                     const mappingEntry = Object.entries(liveMappings).find(([_, m]) => m.target === stem.id);
                     if (mappingEntry) {
-                        return { ...stem, assignedBodyPart: mappingEntry[0] as any, parameter: mappingEntry[1].parameter };
+                        return { ...stem, assignedBodyPart: mappingEntry[0] as any, parameter: mappingEntry[1].effectParameter || 'volume' };
                     }
                     return stem;
                 });
@@ -445,13 +477,15 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 }
                 
                 // Update master mappings and settings
+                // Update master mappings and settings
                 const masterMappingsList = Object.entries(liveMappings)
                     .filter(([_, m]) => m.target === 'master')
-                    .map(([bp, m]) => ({ bodyPart: bp, parameter: m.parameter }));
+                    .map(([bp, m]) => ({ bodyPart: bp, parameter: m.effectParameter || 'volume' }));
                 
                 await api.updateHistoryItemConfig(id, {
                     ...result.configUsed,
                     masterMappings: masterMappingsList,
+                    advancedMappings: liveMappings,
                     useMasterAudio: useMasterAudioRef.current
                 });
             } catch (e) {
@@ -849,7 +883,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
 
                     // Distance/Z volume — only apply if skeleton agent will NOT handle volume
                     const lm = liveMappingsRef.current;
-                    const isMasterVolumeMapped = Object.values(lm).some(map => (map.target === 'master' || map.target === 'base_track') && map.parameter === 'volume');
+                    const isMasterVolumeMapped = Object.values(lm).some(map => (map.target === 'master' || map.target === 'base_track') && (map.volumeIntensity ?? 0) > 0);
 
                     if (engineRef.current.masterTrackGain) {
                         const hasStems = engineRef.current.stemSources && engineRef.current.stemSources.length > 0;
@@ -940,9 +974,12 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     const stems = stemsRef.current; // Always use ref, not closure
                     const eng = engineRef.current;
 
-                    const lm = liveMappingsRef.current;
                     const isHandled = (target: string, param: AudioParameter) => {
-                        return Object.values(lm).some(m => m.target === target && m.parameter === param);
+                        return Object.values(lm).some(m => {
+                            if (m.target !== target) return false;
+                            if (param === 'volume') return (m.volumeIntensity ?? 0) > 0;
+                            return m.effectParameter === param && (m.effectIntensity ?? 0) > 0;
+                        });
                     };
                     const isGestureOverridden = (bodyPart: string) => {
                         return !!lm[bodyPart as BodyPart];
@@ -951,15 +988,29 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     // ---- APPLY CUSTOM LIVE MAPPINGS ----
                     Object.entries(lm).forEach(([bodyPart, mapping]) => {
                         const rawVal = getBodyVal(bodyPart as BodyPart);
-                        if (mapping.target === 'master') {
-                            applyParam(mapping.parameter, rawVal, eng.autoGain || undefined, eng.panner || undefined, eng.filter || undefined, eng.masterDelay, eng.masterDistortion);
-                        } else if (mapping.target === 'base_track') {
-                            applyParam(mapping.parameter, rawVal, eng.masterTrackGain || undefined, eng.panner || undefined, undefined, undefined, undefined);
-                        } else {
-                            const stemIdx = stemsRef.current.findIndex(s => s.id === mapping.target);
-                            if (stemIdx >= 0) {
-                                applyParam(mapping.parameter, rawVal, eng.stemGains?.[stemIdx] || undefined, eng.stemPanners?.[stemIdx] || undefined, eng.stemFilters?.[stemIdx] || undefined, eng.stemDelays?.[stemIdx], eng.stemDistortions?.[stemIdx]);
+                        
+                        const applyToTarget = (targetString: string, paramType: AudioParameter, intensityVal: number) => {
+                            if (!paramType || intensityVal === 0) return;
+                            const scaledVal = rawVal * (intensityVal / 100);
+                            
+                            if (targetString === 'master') {
+                                applyParam(paramType, scaledVal, eng.autoGain || undefined, eng.panner || undefined, eng.filter || undefined, eng.masterDelay, eng.masterDistortion);
+                            } else if (targetString === 'base_track') {
+                                applyParam(paramType, scaledVal, eng.masterTrackGain || undefined, eng.panner || undefined, undefined, undefined, undefined);
+                            } else {
+                                const stemIdx = stemsRef.current.findIndex(s => s.id === targetString);
+                                if (stemIdx >= 0) {
+                                    applyParam(paramType, scaledVal, eng.stemGains?.[stemIdx] || undefined, eng.stemPanners?.[stemIdx] || undefined, eng.stemFilters?.[stemIdx] || undefined, eng.stemDelays?.[stemIdx], eng.stemDistortions?.[stemIdx]);
+                                }
                             }
+                        };
+                        
+                        if (mapping.target) {
+                            applyToTarget(mapping.target, 'volume', mapping.volumeIntensity ?? 100);
+                        }
+                        if (mapping.effectParameter) {
+                            const effectTarget = mapping.target || 'master';
+                            applyToTarget(effectTarget, mapping.effectParameter as AudioParameter, mapping.effectIntensity ?? 100);
                         }
                     });
 
@@ -1707,21 +1758,15 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                                                         const newTarget = e.target.value;
                                                                         setLiveMappings(prev => {
                                                                             const updated = { ...prev };
-                                                                            if (!newTarget) {
-                                                                                updated[gesture.key] = {
-                                                                                    target: '',
-                                                                                    parameter: currentMapping?.parameter || 'volume'
-                                                                                };
+                                                                            if (!updated[gesture.key]) {
+                                                                                updated[gesture.key] = { target: newTarget, volumeIntensity: 100, effectParameter: '', effectIntensity: 100 };
                                                                             } else {
-                                                                                updated[gesture.key] = {
-                                                                                    target: newTarget,
-                                                                                    parameter: currentMapping?.parameter || 'volume'
-                                                                                };
+                                                                                updated[gesture.key] = { ...updated[gesture.key], target: newTarget };
                                                                             }
                                                                             return updated;
                                                                         });
                                                                     }}
-                                                                    className={`flex-1 border text-[9px] p-1 rounded outline-none ${currentMapping ? 'bg-cyan-950/50 border-cyan-500/50 text-white' : 'bg-white/5 border-white/10 text-gray-400'}`}
+                                                                    className={`flex-1 border text-[9px] p-1 rounded outline-none ${currentMapping?.target ? 'bg-cyan-950/50 border-cyan-500/50 text-white' : 'bg-white/5 border-white/10 text-gray-400'}`}
                                                                 >
                                                                     <option value="">-- Nessuno (Ignora) --</option>
                                                                     <option value="master">Mix Globale (Master Bus)</option>
@@ -1739,26 +1784,48 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                                                     )}
                                                                 </select>
                                                             </div>
-                                                            <div className="flex items-center gap-2">
+                                                            {currentMapping?.target && (
+                                                                <div className="flex items-center gap-2 mt-0.5">
+                                                                    <span className="text-[8px] text-gray-400 w-12">Livello Vol:</span>
+                                                                    <input type="range" min="0" max="100" 
+                                                                        value={currentMapping.volumeIntensity ?? 100} 
+                                                                        onChange={(e) => setLiveMappings(prev => ({...prev, [gesture.key]: {...prev[gesture.key], volumeIntensity: parseInt(e.target.value)}}))} 
+                                                                        className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer" />
+                                                                    <span className="text-[8px] text-gray-400 w-6 text-right">{currentMapping.volumeIntensity ?? 100}%</span>
+                                                                </div>
+                                                            )}
+                                                            <div className="flex items-center gap-2 mt-0.5">
                                                                 <span className="text-[8px] text-gray-400 w-12">Effetto:</span>
                                                                 <select
-                                                                    value={currentMapping?.parameter || 'volume'}
-                                                                    disabled={!currentMapping?.target}
+                                                                    value={currentMapping?.effectParameter || ''}
                                                                     onChange={(e) => {
-                                                                        if (!currentMapping?.target) return;
-                                                                        setLiveMappings(prev => ({
-                                                                            ...prev,
-                                                                            [gesture.key]: {
-                                                                                ...prev[gesture.key],
-                                                                                parameter: e.target.value as AudioParameter
+                                                                        const newEffect = e.target.value as AudioParameter | '';
+                                                                        setLiveMappings(prev => {
+                                                                            const updated = { ...prev };
+                                                                            if (!updated[gesture.key]) {
+                                                                                updated[gesture.key] = { target: '', volumeIntensity: 100, effectParameter: newEffect, effectIntensity: 100 };
+                                                                            } else {
+                                                                                updated[gesture.key] = { ...updated[gesture.key], effectParameter: newEffect };
                                                                             }
-                                                                        }));
+                                                                            return updated;
+                                                                        });
                                                                     }}
-                                                                    className={`flex-1 text-[9px] p-1 rounded outline-none ${currentMapping?.target ? 'bg-cyan-950/50 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-gray-500 cursor-not-allowed'}`}
+                                                                    className={`flex-1 text-[9px] p-1 rounded outline-none ${currentMapping?.effectParameter ? 'bg-cyan-950/50 border border-cyan-500/50 text-white' : 'bg-white/5 border border-white/10 text-gray-500'}`}
                                                                 >
-                                                                    {Object.entries(AUDIO_PARAMS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                                                                    <option value="">-- Nessuno (Ignora) --</option>
+                                                                    {Object.entries(AUDIO_PARAMS_LABELS).filter(([k]) => k !== 'volume').map(([key, label]) => <option key={key} value={key}>{label}</option>)}
                                                                 </select>
                                                             </div>
+                                                            {currentMapping?.effectParameter && (
+                                                                <div className="flex items-center gap-2 mt-0.5">
+                                                                    <span className="text-[8px] text-gray-400 w-12">Liv. Effetto:</span>
+                                                                    <input type="range" min="0" max="100" 
+                                                                        value={currentMapping.effectIntensity ?? 100} 
+                                                                        onChange={(e) => setLiveMappings(prev => ({...prev, [gesture.key]: {...prev[gesture.key], effectIntensity: parseInt(e.target.value)}}))} 
+                                                                        className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer" />
+                                                                    <span className="text-[8px] text-gray-400 w-6 text-right">{currentMapping.effectIntensity ?? 100}%</span>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 );
@@ -1865,54 +1932,83 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                             </div>
                                         )}
                                         {/* Live Custom Mapping Controls */}
-                                        <div className="mt-2 flex gap-1 items-center bg-black/40 p-1 rounded border border-white/10">
-                                            <select 
-                                                className="bg-transparent text-[8px] text-gray-300 outline-none flex-1 truncate uppercase"
-                                                value={liveMappings[param.key]?.target || ''}
-                                                onChange={(e) => {
-                                                    const newTarget = e.target.value;
-                                                    setLiveMappings(prev => {
-                                                        const updated = { ...prev };
-                                                        if (!newTarget) delete updated[param.key];
-                                                        else {
-                                                            updated[param.key] = {
-                                                                target: newTarget as LiveMappingTarget,
-                                                                parameter: prev[param.key]?.parameter || 'volume'
-                                                            };
-                                                        }
-                                                        return updated;
-                                                    });
-                                                }}
-                                            >
-                                                <option value="" className="bg-gray-900 text-gray-500">-- Disabilitato --</option>
-                                                <option value="master" className="bg-emerald-900 text-emerald-300">Mix Globale (Master)</option>
-                                                {localStems.length === 0 && (
-                                                    <option value="base_track" className="bg-purple-900 text-purple-300">Traccia Base Unica</option>
-                                                )}
-                                                {localStems.map(s => (
-                                                    <option key={s.id} value={s.id} className="bg-purple-900 text-purple-300">Stem: {s.name}</option>
-                                                ))}
-                                            </select>
-                                            
-                                            {liveMappings[param.key] && (
+                                        <div className="mt-2 flex flex-col gap-1.5 bg-black/40 p-1.5 rounded border border-white/10">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[8px] text-gray-400 w-12">Target:</span>
                                                 <select 
-                                                    className="bg-transparent text-[8px] text-gray-300 outline-none flex-1 uppercase border-l border-white/10 pl-1 ml-1"
-                                                    value={liveMappings[param.key].parameter}
+                                                    className="bg-transparent text-[8px] text-gray-300 outline-none flex-1 truncate uppercase border border-white/10 rounded p-0.5"
+                                                    value={liveMappings[param.key]?.target || ''}
                                                     onChange={(e) => {
-                                                        setLiveMappings(prev => ({
-                                                            ...prev,
-                                                            [param.key]: {
-                                                                ...prev[param.key],
-                                                                parameter: e.target.value as AudioParameter
+                                                        const newTarget = e.target.value;
+                                                        setLiveMappings(prev => {
+                                                            const updated = { ...prev };
+                                                            if (!updated[param.key]) {
+                                                                updated[param.key] = { target: newTarget, volumeIntensity: 100, effectParameter: '', effectIntensity: 100 };
+                                                            } else {
+                                                                updated[param.key] = { ...updated[param.key], target: newTarget };
                                                             }
-                                                        }));
+                                                            return updated;
+                                                        });
                                                     }}
                                                 >
-                                                    <option value="volume" className="bg-gray-900">Volume</option>
+                                                    <option value="" className="bg-gray-900 text-gray-500">-- Disabilitato --</option>
+                                                    <option value="master" className="bg-emerald-900 text-emerald-300">Mix Globale (Master)</option>
+                                                    {localStems.length === 0 && (
+                                                        <option value="base_track" className="bg-purple-900 text-purple-300">Traccia Base Unica</option>
+                                                    )}
+                                                    {localStems.map(s => (
+                                                        <option key={s.id} value={s.id} className="bg-purple-900 text-purple-300">Stem: {s.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            
+                                            {liveMappings[param.key]?.target && (
+                                                <div className="flex items-center gap-2 mt-0.5">
+                                                    <span className="text-[8px] text-gray-400 w-12">Liv. Vol:</span>
+                                                    <input type="range" min="0" max="100" 
+                                                        value={liveMappings[param.key].volumeIntensity ?? 100} 
+                                                        onChange={(e) => setLiveMappings(prev => ({...prev, [param.key]: {...prev[param.key], volumeIntensity: parseInt(e.target.value)}}))} 
+                                                        className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer" />
+                                                    <span className="text-[8px] text-gray-400 w-6 text-right">{liveMappings[param.key].volumeIntensity ?? 100}%</span>
+                                                </div>
+                                            )}
+
+                                            <div className="flex items-center gap-2 mt-0.5">
+                                                <span className="text-[8px] text-gray-400 w-12">Effetto:</span>
+                                                <select 
+                                                    className="bg-transparent text-[8px] text-gray-300 outline-none flex-1 uppercase border border-white/10 rounded p-0.5"
+                                                    value={liveMappings[param.key]?.effectParameter || ''}
+                                                    onChange={(e) => {
+                                                        const newEffect = e.target.value as AudioParameter | '';
+                                                        setLiveMappings(prev => {
+                                                            const updated = { ...prev };
+                                                            if (!updated[param.key]) {
+                                                                updated[param.key] = { target: '', volumeIntensity: 100, effectParameter: newEffect, effectIntensity: 100 };
+                                                            } else {
+                                                                updated[param.key] = { ...updated[param.key], effectParameter: newEffect };
+                                                            }
+                                                            return updated;
+                                                        });
+                                                    }}
+                                                >
+                                                    <option value="" className="bg-gray-900 text-gray-500">-- Nessuno --</option>
                                                     <option value="pan" className="bg-gray-900">Pan Orizz.</option>
                                                     <option value="lowpass" className="bg-gray-900">Filtro</option>
                                                     <option value="pitch" className="bg-gray-900">Pitch/Vel</option>
+                                                    <option value="delay" className="bg-gray-900">Delay</option>
+                                                    <option value="distortion" className="bg-gray-900">Distorsione</option>
                                                 </select>
+                                            </div>
+
+                                            {liveMappings[param.key]?.effectParameter && (
+                                                <div className="flex items-center gap-2 mt-0.5">
+                                                    <span className="text-[8px] text-gray-400 w-12">Liv. Eff:</span>
+                                                    <input type="range" min="0" max="100" 
+                                                        value={liveMappings[param.key].effectIntensity ?? 100} 
+                                                        onChange={(e) => setLiveMappings(prev => ({...prev, [param.key]: {...prev[param.key], effectIntensity: parseInt(e.target.value)}}))} 
+                                                        className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer" />
+                                                    <span className="text-[8px] text-gray-400 w-6 text-right">{liveMappings[param.key].effectIntensity ?? 100}%</span>
+                                                </div>
                                             )}
                                         </div>
 

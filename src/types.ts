@@ -39,6 +39,7 @@ export interface ConfigSettings {
     accompanimentInstrument: InstrumentType;
     useHealthAgent?: boolean;
     healthEnrichment?: string;
+    advancedMappings?: Record<string, any>;
     masterMappings?: { bodyPart: BodyPart, parameter: AudioParameter }[];
     useMasterAudio?: boolean;
 }
