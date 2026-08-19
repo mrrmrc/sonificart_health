@@ -963,8 +963,20 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                         const actx = engineRef.current!.audioCtx!;
                         const clampedVal = Math.max(0, Math.min(1, rawVal));
                         if (param === 'volume' && gainNode) {
-                            // Full range 0..1.5 — not 1-rawVal which was limiting range
-                            const vol = clampedVal * 1.5;
+                            let vol = clampedVal * 1.5;
+                            vol = vol * (masterAudioVolumeRef.current / 100);
+                            
+                            // Mute stems if master track is off, UNLESS it's explicitly mapped by the user
+                            if (!useMasterAudioRef.current && gainNode !== engineRef.current!.masterTrackGain && gainNode !== engineRef.current!.autoGain) {
+                                const stemIndex = eng.stemGains?.indexOf(gainNode);
+                                const targetId = stemIndex !== undefined && stemIndex >= 0 ? (stemsRef.current[stemIndex]?.id || `stem_${stemIndex}`) : null;
+                                const userMapped = targetId ? Object.values(lm).some(m => m.target === targetId && (m.volumeIntensity ?? 0) > 0) : false;
+                                
+                                if (!userMapped) {
+                                    vol = 0;
+                                }
+                            }
+                            
                             gainNode.gain.setTargetAtTime(vol, actx.currentTime, 0.08);
                         } else if (param === 'pan' && pannerNode) {
                             const pan = (clampedVal * 2) - 1; // 0..1 -> -1..1
@@ -1108,15 +1120,18 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                                 }
                             }
                             
+                            const isUserVolumeMapped = isHandled(stems[index]?.id || `stem_${index}`, 'volume');
+                            const isAiVolumeMapped = stemRule && stemRule.parameter === 'volume' && !isUserVolumeMapped && !isGestureOverridden(stemRule.assignedBodyPart);
+                            
                             if (stemRule && !isHandled(stemRule.id, stemRule.parameter) && !isGestureOverridden(stemRule.assignedBodyPart)) {
                                 const rawVal = getBodyVal(stemRule.assignedBodyPart);
                                 applyParam(stemRule.parameter, rawVal, gainNode, undefined, filterNode, eng.stemDelays?.[index], eng.stemDistortions?.[index]);
-                            } else {
-                                // Default stem baseline volumes
-                                if (!isHandled(stems[index]?.id || `stem_${index}`, 'volume')) {
-                                    const fallbackVol = useMasterAudioRef.current ? 1.0 : 0;
-                                    gainNode.gain.setTargetAtTime(fallbackVol, ctx.currentTime, 0.1);
-                                }
+                            }
+                            
+                            // Default stem baseline volumes
+                            if (!isUserVolumeMapped && !isAiVolumeMapped) {
+                                const fallbackVol = useMasterAudioRef.current ? 1.0 * (masterAudioVolumeRef.current / 100) : 0;
+                                gainNode.gain.setTargetAtTime(fallbackVol, ctx.currentTime, 0.1);
                             }
                         });
                         
@@ -1368,112 +1383,114 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     }
                     
                     // Eyebrows & Eyes based on expression
-                    const leftEye = l[2];
-                    const rightEye = l[5];
-                    if (leftEye && rightEye) {
-                        const leX = cx + (leftEye.x - 0.5) * renderW;
-                        const leY = cy + (leftEye.y - 0.5) * renderH;
-                        const reX = cx + (rightEye.x - 0.5) * renderW;
-                        const reY = cy + (rightEye.y - 0.5) * renderH;
-                        
-                        context.shadowBlur = 10;
-                        context.shadowColor = c.face.glow;
-                        context.strokeStyle = c.face.color;
-                        context.lineWidth = 3;
-                        
-                        // Eyebrows
-                        let browOffset = 15;
-                        let browCurve = 0;
-                        if (skelConfig.expression === 'smile' || skelConfig.expression === 'soft_smile') {
-                            browOffset = 20;
-                            browCurve = -10; // arched up
-                        } else if (skelConfig.expression === 'open') {
-                            browOffset = 25;
-                            browCurve = -15; // surprised, arched high
-                        } else {
-                            browOffset = 15;
-                            browCurve = 0; // neutral flat
-                        }
-                        
-                        // Left Brow
-                        context.beginPath();
-                        context.moveTo(leX - 10, leY - browOffset);
-                        context.quadraticCurveTo(leX, leY - browOffset + browCurve, leX + 10, leY - browOffset);
-                        context.stroke();
-                        
-                        // Right Brow
-                        context.beginPath();
-                        context.moveTo(reX - 10, reY - browOffset);
-                        context.quadraticCurveTo(reX, reY - browOffset + browCurve, reX + 10, reY - browOffset);
-                        context.stroke();
-                        
-                        // Eye Shapes (replacing dots if expression is specific)
-                        if (skelConfig.expression === 'smile' || skelConfig.expression === 'soft_smile') {
-                            // Happy eyes ^ ^
+                    if (!m.faceLandmarks) {
+                        const leftEye = l[2];
+                        const rightEye = l[5];
+                        if (leftEye && rightEye) {
+                            const leX = cx + (leftEye.x - 0.5) * renderW;
+                            const leY = cy + (leftEye.y - 0.5) * renderH;
+                            const reX = cx + (rightEye.x - 0.5) * renderW;
+                            const reY = cy + (rightEye.y - 0.5) * renderH;
+                            
+                            context.shadowBlur = 10;
+                            context.shadowColor = c.face.glow;
+                            context.strokeStyle = c.face.color;
+                            context.lineWidth = 3;
+                            
+                            // Eyebrows
+                            let browOffset = 15;
+                            let browCurve = 0;
+                            if (skelConfig.expression === 'smile' || skelConfig.expression === 'soft_smile') {
+                                browOffset = 20;
+                                browCurve = -10; // arched up
+                            } else if (skelConfig.expression === 'open') {
+                                browOffset = 25;
+                                browCurve = -15; // surprised, arched high
+                            } else {
+                                browOffset = 15;
+                                browCurve = 0; // neutral flat
+                            }
+                            
+                            // Left Brow
                             context.beginPath();
-                            context.moveTo(leX - 8, leY);
-                            context.quadraticCurveTo(leX, leY - 8, leX + 8, leY);
+                            context.moveTo(leX - 10, leY - browOffset);
+                            context.quadraticCurveTo(leX, leY - browOffset + browCurve, leX + 10, leY - browOffset);
                             context.stroke();
                             
+                            // Right Brow
                             context.beginPath();
-                            context.moveTo(reX - 8, reY);
-                            context.quadraticCurveTo(reX, reY - 8, reX + 8, reY);
-                            context.stroke();
-                        } else if (skelConfig.expression === 'open') {
-                            // Wide eyes O O
-                            context.beginPath();
-                            context.arc(leX, leY, 8, 0, Math.PI * 2);
+                            context.moveTo(reX - 10, reY - browOffset);
+                            context.quadraticCurveTo(reX, reY - browOffset + browCurve, reX + 10, reY - browOffset);
                             context.stroke();
                             
-                            context.beginPath();
-                            context.arc(reX, reY, 8, 0, Math.PI * 2);
-                            context.stroke();
-                        }
-                    }
-                    
-                    // Mouth with Expression
-                    const mouthP1 = l[9];
-                    const mouthP2 = l[10];
-                    if (mouthP1 && mouthP2) {
-                        const m1x = cx + (mouthP1.x - 0.5) * renderW;
-                        const m1y = cy + (mouthP1.y - 0.5) * renderH;
-                        const m2x = cx + (mouthP2.x - 0.5) * renderW;
-                        const m2y = cy + (mouthP2.y - 0.5) * renderH;
-                        
-                        context.shadowBlur = 15;
-                        context.shadowColor = c.mouth.glow;
-                        context.strokeStyle = c.mouth.color;
-                        context.lineWidth = 4;
-                        context.beginPath();
-                        
-                        if (skelConfig.expression === 'neutral') {
-                            context.moveTo(m1x, m1y);
-                            context.lineTo(m2x, m2y);
-                        } else {
-                            const midX = (m1x + m2x) / 2;
-                            const midY = (m1y + m2y) / 2;
-                            let curveOffset = 0;
-                            
-                            if (skelConfig.expression === 'smile') curveOffset = 15;
-                            else if (skelConfig.expression === 'soft_smile') curveOffset = 8;
-                            else if (skelConfig.expression === 'open') curveOffset = 25; // more pronounced
-                            
-                            context.moveTo(m1x, m1y);
-                            context.quadraticCurveTo(midX, midY + curveOffset, m2x, m2y);
-                            
-                            if (skelConfig.expression === 'open') {
-                                // Draw lower part of open mouth
-                                context.quadraticCurveTo(midX, midY + (curveOffset*1.8), m1x, m1y);
+                            // Eye Shapes (replacing dots if expression is specific)
+                            if (skelConfig.expression === 'smile' || skelConfig.expression === 'soft_smile') {
+                                // Happy eyes ^ ^
+                                context.beginPath();
+                                context.moveTo(leX - 8, leY);
+                                context.quadraticCurveTo(leX, leY - 8, leX + 8, leY);
+                                context.stroke();
+                                
+                                context.beginPath();
+                                context.moveTo(reX - 8, reY);
+                                context.quadraticCurveTo(reX, reY - 8, reX + 8, reY);
+                                context.stroke();
+                            } else if (skelConfig.expression === 'open') {
+                                // Wide eyes O O
+                                context.beginPath();
+                                context.arc(leX, leY, 8, 0, Math.PI * 2);
+                                context.stroke();
+                                
+                                context.beginPath();
+                                context.arc(reX, reY, 8, 0, Math.PI * 2);
+                                context.stroke();
                             }
                         }
                         
-                        context.stroke();
-                        
-                        // Inner core
-                        context.shadowBlur = 0;
-                        context.strokeStyle = '#ffffff';
-                        context.lineWidth = 4 * 0.4;
-                        context.stroke();
+                        // Mouth with Expression
+                        const mouthP1 = l[9];
+                        const mouthP2 = l[10];
+                        if (mouthP1 && mouthP2) {
+                            const m1x = cx + (mouthP1.x - 0.5) * renderW;
+                            const m1y = cy + (mouthP1.y - 0.5) * renderH;
+                            const m2x = cx + (mouthP2.x - 0.5) * renderW;
+                            const m2y = cy + (mouthP2.y - 0.5) * renderH;
+                            
+                            context.shadowBlur = 15;
+                            context.shadowColor = c.mouth.glow;
+                            context.strokeStyle = c.mouth.color;
+                            context.lineWidth = 4;
+                            context.beginPath();
+                            
+                            if (skelConfig.expression === 'neutral') {
+                                context.moveTo(m1x, m1y);
+                                context.lineTo(m2x, m2y);
+                            } else {
+                                const midX = (m1x + m2x) / 2;
+                                const midY = (m1y + m2y) / 2;
+                                let curveOffset = 0;
+                                
+                                if (skelConfig.expression === 'smile') curveOffset = 15;
+                                else if (skelConfig.expression === 'soft_smile') curveOffset = 8;
+                                else if (skelConfig.expression === 'open') curveOffset = 25; // more pronounced
+                                
+                                context.moveTo(m1x, m1y);
+                                context.quadraticCurveTo(midX, midY + curveOffset, m2x, m2y);
+                                
+                                if (skelConfig.expression === 'open') {
+                                    // Draw lower part of open mouth
+                                    context.quadraticCurveTo(midX, midY + (curveOffset*1.8), m1x, m1y);
+                                }
+                            }
+                            
+                            context.stroke();
+                            
+                            // Inner core
+                            context.shadowBlur = 0;
+                            context.strokeStyle = '#ffffff';
+                            context.lineWidth = 4 * 0.4;
+                            context.stroke();
+                        }
                     }
                     
                     // Draw joints
