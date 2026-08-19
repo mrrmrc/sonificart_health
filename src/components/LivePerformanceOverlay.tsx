@@ -484,7 +484,7 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                 // Update master mappings and settings
                 const masterMappingsList = Object.entries(liveMappings)
                     .filter(([_, m]) => m.target === 'master')
-                    .map(([bp, m]) => ({ bodyPart: bp, parameter: m.effectParameter || 'volume' }));
+                    .map(([bp, m]) => ({ bodyPart: bp as any, parameter: m.effectParameter || 'volume' }));
                 
                 const newConfig = {
                     ...result.configUsed,
@@ -1754,8 +1754,21 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
 
                         {/* Quick Mapping Editor - Inverted Paradigm Categorized */}
                         <div className="p-3 border-b border-white/5 bg-gradient-to-br from-yellow-900/20 to-orange-900/20 shrink-0">
-                            <div className="text-[9px] font-bold text-yellow-400 uppercase tracking-wider mb-3">
-                                <i className="fas fa-eye mr-1"></i> Rilevazioni Skeleton & Assegnazioni AI
+                            <div className="flex justify-between items-center mb-3">
+                                <div className="text-[9px] font-bold text-yellow-400 uppercase tracking-wider">
+                                    <i className="fas fa-eye mr-1"></i> Rilevazioni Skeleton & Assegnazioni AI
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        if (window.confirm('Vuoi resettare tutte le mappature per impostarle manualmente?')) {
+                                            setLiveMappings({});
+                                        }
+                                    }}
+                                    className="text-[8px] bg-red-900/50 hover:bg-red-800 text-red-300 px-2 py-1 rounded border border-red-500/30 transition-colors flex items-center gap-1"
+                                    title="Azzera tutte le mappature AI"
+                                >
+                                    <i className="fas fa-trash-alt"></i> RESET
+                                </button>
                             </div>
                             <div className="space-y-4">
                                 {OBSERVER_GESTURES_CATEGORIZED.map((category) => (
