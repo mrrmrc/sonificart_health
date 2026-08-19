@@ -486,13 +486,18 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     .filter(([_, m]) => m.target === 'master')
                     .map(([bp, m]) => ({ bodyPart: bp, parameter: m.effectParameter || 'volume' }));
                 
-                await api.updateHistoryItemConfig(id, {
+                const newConfig = {
                     ...result.configUsed,
                     masterMappings: masterMappingsList,
                     advancedMappings: liveMappings,
                     useMasterAudio: useMasterAudioRef.current,
                     masterAudioVolume: masterAudioVolumeRef.current
-                });
+                };
+                
+                await api.updateHistoryItemConfig(id, newConfig);
+                
+                // Mutate the result object in memory so if the overlay is closed and reopened, it retains the saved settings
+                result.configUsed = newConfig;
             } catch (e) {
                 console.error("Failed to save mappings", e);
             }
@@ -1106,10 +1111,11 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                             if (stemRule && !isHandled(stemRule.id, stemRule.parameter) && !isGestureOverridden(stemRule.assignedBodyPart)) {
                                 const rawVal = getBodyVal(stemRule.assignedBodyPart);
                                 applyParam(stemRule.parameter, rawVal, gainNode, undefined, filterNode, eng.stemDelays?.[index], eng.stemDistortions?.[index]);
-                            } else if (!stemRule) {
-                                // Se non configurato e non gestito manualmente, volume fisso
+                            } else {
+                                // Default stem baseline volumes
                                 if (!isHandled(stems[index]?.id || `stem_${index}`, 'volume')) {
-                                    gainNode.gain.setTargetAtTime(1.0, ctx.currentTime, 0.1);
+                                    const fallbackVol = useMasterAudioRef.current ? 1.0 : 0;
+                                    gainNode.gain.setTargetAtTime(fallbackVol, ctx.currentTime, 0.1);
                                 }
                             }
                         });
@@ -1323,13 +1329,43 @@ export const LivePerformanceOverlay: React.FC<Props> = ({ result, audioBlob, onC
                     legs.forEach(([i, j]) => drawNeonLine(l[i], l[j], c.legs.color, c.legs.glow, 5));
 
                     // 4. Hands detail
-                    const hands = [[15, 17], [15, 19], [15, 21], [17, 19], [16, 18], [16, 20], [16, 22], [18, 20]];
-                    hands.forEach(([i, j]) => drawNeonLine(l[i], l[j], c.hands.color, c.hands.glow, 3));
+                    if (m.leftHandLandmarks) {
+                        const hl = m.leftHandLandmarks;
+                        const handConnections = [[0,1],[1,2],[2,3],[3,4], [0,5],[5,6],[6,7],[7,8], [5,9],[9,10],[10,11],[11,12], [9,13],[13,14],[14,15],[15,16], [13,17],[17,18],[18,19],[19,20], [0,17]];
+                        handConnections.forEach(([i, j]) => drawNeonLine(hl[i], hl[j], c.hands.color, c.hands.glow, 2));
+                        hl.forEach(p => drawNeonPoint(p, 1, c.hands.color, c.hands.glow));
+                    } else {
+                        const hands = [[15, 17], [15, 19], [15, 21], [17, 19], [16, 18], [16, 20], [16, 22], [18, 20]];
+                        hands.forEach(([i, j]) => drawNeonLine(l[i], l[j], c.hands.color, c.hands.glow, 3));
+                    }
+                    
+                    if (m.rightHandLandmarks) {
+                        const hl = m.rightHandLandmarks;
+                        const handConnections = [[0,1],[1,2],[2,3],[3,4], [0,5],[5,6],[6,7],[7,8], [5,9],[9,10],[10,11],[11,12], [9,13],[13,14],[14,15],[15,16], [13,17],[17,18],[18,19],[19,20], [0,17]];
+                        handConnections.forEach(([i, j]) => drawNeonLine(hl[i], hl[j], c.hands.color, c.hands.glow, 2));
+                        hl.forEach(p => drawNeonPoint(p, 1, c.hands.color, c.hands.glow));
+                    }
 
                     // 5. Face detail
                     // Face outline / structure
-                    const face = [[0, 1], [1, 2], [2, 3], [3, 7], [0, 4], [4, 5], [5, 6], [6, 8]];
-                    face.forEach(([i, j]) => drawNeonLine(l[i], l[j], c.face.color, c.face.glow, 3));
+                    if (m.faceLandmarks) {
+                        // Just draw the contour and main features for performance
+                        const fl = m.faceLandmarks;
+                        const lipsOuter = [61,146,91,181,84,17,314,405,321,375,291,308,324,318,402,317,14,87,178,88,95,78,61];
+                        const lipsInner = [78,95,88,178,87,14,317,402,318,324,308,291,375,321,405,314,17,84,181,91,146,61,78];
+                        const leftEye = [33,7,163,144,145,153,154,155,133,173,157,158,159,160,161,246,33];
+                        const rightEye = [362,398,384,385,386,387,388,466,263,249,390,391,392,393,394,395,362];
+                        const faceOval = [10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109,10];
+                        
+                        [lipsOuter, lipsInner, leftEye, rightEye, faceOval].forEach(feature => {
+                            for(let i=0; i<feature.length-1; i++) {
+                                drawNeonLine(fl[feature[i]], fl[feature[i+1]], c.face.color, c.face.glow, 2);
+                            }
+                        });
+                    } else {
+                        const face = [[0, 1], [1, 2], [2, 3], [3, 7], [0, 4], [4, 5], [5, 6], [6, 8]];
+                        face.forEach(([i, j]) => drawNeonLine(l[i], l[j], c.face.color, c.face.glow, 3));
+                    }
                     
                     // Eyebrows & Eyes based on expression
                     const leftEye = l[2];

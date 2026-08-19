@@ -1,5 +1,4 @@
-import { Pose } from '@mediapipe/pose';
-import { FaceMesh } from '@mediapipe/face_mesh';
+import { Holistic } from '@mediapipe/holistic';
 import { Camera } from '@mediapipe/camera_utils';
 
 export interface BodyMetrics {
@@ -38,6 +37,9 @@ export interface BodyMetrics {
 
     // Visualization
     landmarks?: { x: number, y: number, z?: number, visibility?: number }[];
+    faceLandmarks?: { x: number, y: number, z?: number, visibility?: number }[];
+    leftHandLandmarks?: { x: number, y: number, z?: number, visibility?: number }[];
+    rightHandLandmarks?: { x: number, y: number, z?: number, visibility?: number }[];
     isActive: boolean;
     // Per-limb depth
     leftHandZ: number;
@@ -46,8 +48,7 @@ export interface BodyMetrics {
 }
 
 class WebcamService {
-    private pose: Pose | null = null;
-    private faceMesh: FaceMesh | null = null;
+    private holistic: Holistic | null = null;
     private camera: Camera | null = null;
     private videoElement: HTMLVideoElement | null = null;
 
@@ -81,29 +82,20 @@ class WebcamService {
 
     public async initialize(videoElement: HTMLVideoElement): Promise<void> {
         this.videoElement = videoElement;
-        this.pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
-        this.pose.setOptions({
+        this.holistic = new Holistic({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}` });
+        this.holistic.setOptions({
             modelComplexity: 1,
             smoothLandmarks: true,
             minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
+            minTrackingConfidence: 0.5,
+            refineFaceLandmarks: true
         });
-        this.pose.onResults(this.onResults.bind(this));
-
-        this.faceMesh = new FaceMesh({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` });
-        this.faceMesh.setOptions({
-            maxNumFaces: 1,
-            refineLandmarks: true,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
-        });
-        this.faceMesh.onResults(this.onFaceResults.bind(this));
+        this.holistic.onResults(this.onResults.bind(this));
 
         this.camera = new Camera(this.videoElement, {
             onFrame: async () => {
                 if (this.videoElement) {
-                    if (this.pose) await this.pose.send({ image: this.videoElement });
-                    if (this.faceMesh) await this.faceMesh.send({ image: this.videoElement });
+                    if (this.holistic) await this.holistic.send({ image: this.videoElement });
                 }
             },
             width: 640, height: 480
@@ -237,6 +229,9 @@ class WebcamService {
         this.prevMetrics = { leftHandX: m.leftHandX, leftHandY: m.leftHandY, rightHandX: m.rightHandX, rightHandY: m.rightHandY, x: m.x, y: m.y };
 
         m.landmarks = landmarks;
+        m.faceLandmarks = results.faceLandmarks;
+        m.leftHandLandmarks = results.leftHandLandmarks; // Note: MediaPipe returns left/right relative to the camera image
+        m.rightHandLandmarks = results.rightHandLandmarks; // Since we mirror them visually, we might need to swap them if they look wrong
 
         if (this.isCalibrating) {
             this.frameCount++;
@@ -245,15 +240,16 @@ class WebcamService {
                 this.accumulators[key] = (this.accumulators[key] || 0) + (m[key] as number);
             });
         }
+        
+        this.onFaceResults(results.faceLandmarks);
     }
 
     public getMetrics(): BodyMetrics {
         return { ...this.metrics };
     }
 
-    private onFaceResults(results: any) {
-        if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) return;
-        const landmarks = results.multiFaceLandmarks[0];
+    private onFaceResults(landmarks: any) {
+        if (!landmarks || landmarks.length === 0) return;
 
         // Rilevamento Sorriso (distanza tra angoli della bocca vs larghezza del viso)
         const mouthLeft = landmarks[61];
@@ -287,8 +283,7 @@ class WebcamService {
 
     public stop() {
         if (this.camera) this.camera.stop();
-        if (this.pose) this.pose.close();
-        if (this.faceMesh) this.faceMesh.close();
+        if (this.holistic) this.holistic.close();
         this.metrics.isActive = false;
         if (this.videoElement && this.videoElement.srcObject) {
             const stream = this.videoElement.srcObject as MediaStream;
